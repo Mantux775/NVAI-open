@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NV-AI for PhotoCraft</title>
+<link rel="icon" href="icon.ico">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<!-- Texte: Englisch steht im HTML, Deutsch in data-de (bzw. data-de-title, data-de-placeholder,
+     data-de-aria-label). panel.js setzt je nach Sprache t(Deutsch, English) ein. -->
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 2.5l1.8 5.2 5.2 1.8-5.2 1.8L11 16.5l-1.8-5.2L4 9.5l5.2-1.8z"/>
+      <path d="M18.5 14l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/>
+    </svg>
+    <span class="name">NV-AI</span><span class="sub" data-de="für PhotoCraft">for PhotoCraft</span>
+  </div>
+  <div class="top-actions">
+    <button class="pill" id="pc-pill" type="button" title="PhotoCraft"><i class="dot"></i>PhotoCraft</button>
+    <button class="pill" id="nv-pill" type="button" title="NV-AI"><i class="dot"></i>NV-AI</button>
+    <button class="icon-btn" id="pin" type="button" hidden aria-pressed="true" title="Keep window on top">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6-3 1-4 4 1 5-2 1-4-4-5 5-1-1 5-5-4-4 1-2 5 1 4-4z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="notice" id="notice" hidden></section>
+
+  <section class="doc" id="doc" aria-live="polite">
+    <svg class="doc-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 2h8l5 5v15H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M14 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>
+    <div class="doc-text">
+      <div class="doc-name" id="doc-name">No document</div>
+      <div class="doc-meta" id="doc-meta">–</div>
+    </div>
+  </section>
+
+  <div class="modes" role="tablist" aria-label="Mode" data-de-aria-label="Modus">
+    <button role="tab" type="button" data-mode="fill">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2.4"/><path d="M12 7.5l1.2 3.3 3.3 1.2-3.3 1.2L12 16.5l-1.2-3.3L7.5 12l3.3-1.2z"/></svg>
+      <span data-de="Füllen">Fill</span>
+    </button>
+    <button role="tab" type="button" data-mode="generate">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 17l4.5-5 3 3.2L15.5 13 18 17z"/><circle cx="15.5" cy="8.5" r="1.6"/></svg>
+      <span data-de="Generieren">Generate</span>
+    </button>
+    <button role="tab" type="button" data-mode="refine">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3.5-1 10-10-2.5-2.5-10 10z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 5.5l2.5-2.5L19 5.5 16.5 8z"/><path d="M19 13l.8 2.2 2.2.8-2.2.8L19 19l-.8-2.2L16 16l2.2-.8z"/></svg>
+      <span data-de="Überarbeiten">Refine</span>
+    </button>
+  </div>
+  <p class="mode-hint" id="mode-hint"></p>
+  <p class="model-hint" id="model-hint" hidden></p>
+
+  <div class="field">
+    <textarea id="prompt" rows="4" spellcheck="true" aria-label="Prompt"></textarea>
+    <div class="field-foot">
+      <span class="tip" id="prompt-tip"></span>
+      <span class="count" id="prompt-count"></span>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <label class="field">
+      <span class="label" data-de="Modell">Model</span>
+      <select id="model"><option value="">Active model</option></select>
+    </label>
+    <div class="field">
+      <span class="label" id="variants-label" data-de="Varianten">Variants</span>
+      <div class="seg" id="variants" role="radiogroup" aria-labelledby="variants-label">
+        <button type="button" role="radio" data-n="1">1</button>
+        <button type="button" role="radio" data-n="2">2</button>
+        <button type="button" role="radio" data-n="3">3</button>
+        <button type="button" role="radio" data-n="4">4</button>
+      </div>
+    </div>
+  </div>
+
+  <label class="field" id="strength-field">
+    <span class="label"><span data-de="Stärke">Strength</span> <output id="strength-out"></output></span>
+    <input type="range" id="strength" min="0.1" max="0.95" step="0.05" value="0.5">
+    <span class="range-labels"><span data-de="behutsam">subtle</span><span data-de="deutlich">clear</span><span data-de="fast neu">almost new</span></span>
+  </label>
+
+  <details class="advanced" id="advanced">
+    <summary data-de="Erweitert">Advanced</summary>
+    <label class="field">
+      <span class="label" data-de="Negativ-Prompt">Negative prompt</span>
+      <textarea id="negative" rows="2"></textarea>
+    </label>
+    <div class="grid3">
+      <label class="field"><span class="label" data-de="Schritte">Steps</span><input id="steps" type="number" min="1" max="150" placeholder="default" data-de-placeholder="Standard"></label>
+      <label class="field"><span class="label">CFG</span><input id="cfg" type="number" min="0" max="30" step="0.5" placeholder="default" data-de-placeholder="Standard"></label>
+      <label class="field"><span class="label">Seed</span><input id="seed" type="number" min="0" placeholder="random" data-de-placeholder="zufällig"></label>
+    </div>
+    <label class="field" id="margin-field">
+      <span class="label"><span data-de="Kontext um die Auswahl">Context around the selection</span> <output id="margin-out"></output></span>
+      <input type="range" id="margin" min="0.1" max="1" step="0.05" value="0.35">
+    </label>
+    <label class="check"><input type="checkbox" id="native"> <span data-de="Native Auflösung des Modells">Native model resolution</span> <span class="muted" data-de="(mehr Detail, etwa doppelte Zeit)">(more detail, about twice the time)</span></label>
+    <label class="check"><input type="checkbox" id="hires"> <span data-de="Hires-Durchgang">Hires pass</span> <span class="muted" data-de="(feinere Details, etwa 50 % länger)">(finer details, about 50% longer)</span></label>
+    <label class="check"><input type="checkbox" id="auto-place" checked> <span data-de="Erste Variante sofort in PhotoCraft einfügen">Place the first variant in PhotoCraft right away</span></label>
+  </details>
+
+  <button class="primary" id="go" type="button"><span id="go-label">Generate</span><kbd data-de="Strg ↵">Ctrl ↵</kbd></button>
+
+  <section class="progress" id="progress" hidden>
+    <div class="bar"><span id="bar"></span></div>
+    <div class="progress-row">
+      <span id="stage">…</span>
+      <button class="link" id="cancel" type="button" data-de="Abbrechen">Cancel</button>
+    </div>
+  </section>
+
+  <div class="error" id="error" role="alert" hidden></div>
+
+  <section class="results" id="results" hidden>
+    <div class="section-head">
+      <h2 id="results-title">Result</h2>
+      <span class="meta" id="results-meta"></span>
+    </div>
+    <p class="task-warning" id="task-warning" hidden></p>
+    <div class="variants" id="variant-grid"></div>
+    <details class="caption" id="caption" hidden>
+      <summary data-de="Bildbeschreibung des Upsamplers">Image description by the upsampler</summary>
+      <p id="caption-text"></p>
+    </details>
+    <p class="hint" id="results-hint"><span data-de="Klick auf eine Variante tauscht sie in PhotoCraft aus ·">Click a variant to swap it in PhotoCraft ·</span> <b>+</b> <span data-de="legt sie zusätzlich als Ebene an.">adds it as an extra layer.</span></p>
+  </section>
+
+  <section class="history" id="history" hidden>
+    <div class="section-head"><h2 data-de="Verlauf">History</h2></div>
+    <ol id="history-list"></ol>
+  </section>
+</main>
+
+<footer class="foot">
+  <button class="link" id="open-nvai" type="button" data-de="NV-AI-Oberfläche öffnen">Open NV-AI</button>
+  <span class="foot-right">
+    <span class="muted" id="version"></span>
+    <select id="language" title="Language / Sprache" aria-label="Language / Sprache">
+      <option value="auto" data-de="Automatisch">Automatic</option>
+      <option value="en">English</option>
+      <option value="de">Deutsch</option>
+    </select>
+  </span>
+</footer>
+
+<script src="panel.js"></script>
+</body>
+</html>

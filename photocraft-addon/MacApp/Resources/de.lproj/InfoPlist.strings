@@ -1,0 +1,4 @@
+/* Name und Hinweise auf deutschen Systemen (Finder, Menüs von macOS). */
+"CFBundleDisplayName" = "NV-AI für PhotoCraft";
+"CFBundleName" = "NV-AI für PhotoCraft";
+"NSLocalNetworkUsageDescription" = "NV-AI für PhotoCraft verbindet sich mit NV-AI, wenn es auf einem anderen Rechner im Netz läuft.";

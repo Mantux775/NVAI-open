@@ -1,0 +1,155 @@
+"""Third-party packages of the add-on and their licenses – read from the installed packages.
+
+    python tools/third_party.py [--out THIRD_PARTY.md] [--texts <folder>]
+
+Reads the packages pinned in requirements.lock and their metadata (License-Expression, License,
+classifiers, license files) from the running Python environment; the versions must match the
+lock. Also lists binaries bundled inside the wheels and checks the Swift packages for external
+dependencies. With --texts the license files are copied next to it (for THIRD_PARTY_NOTICES).
+"""
+from __future__ import annotations
+
+import re
+import shutil
+import sys
+from importlib import metadata
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+LICENSE_FILE = re.compile(r"(LICEN[CS]E|COPYING|NOTICE|AUTHORS)", re.IGNORECASE)
+BINARY = (".dll", ".pyd", ".so", ".dylib", ".jar", ".exe")
+
+
+def pinned() -> list[tuple[str, str]]:
+    text = (ROOT / "requirements.lock").read_text(encoding="utf-8")
+    return re.findall(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\]+)", text, re.MULTILINE)
+
+
+def license_of(dist: metadata.Distribution, files: list) -> str:
+    meta = dist.metadata
+    if meta.get("License-Expression"):
+        return meta["License-Expression"]
+    classifiers = [c.split("::")[-1].strip() for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
+    field = (meta.get("License") or "").strip()
+    if field and "\n" not in field and len(field) < 80:
+        return field if not classifiers else f"{field} ({', '.join(classifiers)})"
+    if classifiers:
+        return ", ".join(classifiers)
+    # Ohne Angabe in den Metadaten: am Lizenztext erkennen.
+    text = Path(files[0].locate()).read_text(encoding="utf-8", errors="replace")[:600] if files else ""
+    if "Permission is hereby granted, free of charge" in text:
+        return "MIT (from the license text)"
+    if "Apache License" in text:
+        return "Apache-2.0 (from the license text)"
+    return "see license file" if field or files else "unknown"
+
+
+def source_of(dist: metadata.Distribution) -> str:
+    meta = dist.metadata
+    urls = {}
+    for entry in meta.get_all("Project-URL") or []:
+        label, _, url = entry.partition(",")
+        urls[label.strip().lower()] = url.strip()
+    for key in ("source", "sources", "source code", "repository", "homepage", "home"):
+        if key in urls:
+            return urls[key]
+    return meta.get("Home-page") or ""
+
+
+def webview2_version() -> str | None:
+    """Version der WebView2-SDK-Dateien, die pywebview mitbringt (nur unter Windows lesbar)."""
+    try:
+        dist = metadata.distribution("pywebview")
+        sys.path.insert(0, str(ROOT))
+        from bridge import winutil
+    except (metadata.PackageNotFoundError, ImportError, OSError):
+        return None
+    for f in dist.files or []:
+        if f.name == "Microsoft.Web.WebView2.Core.dll":
+            return winutil.file_version(f.locate())
+    return None
+
+
+def swift_dependencies() -> list[str]:
+    found = []
+    for package in (ROOT / "PhotoCraftKit" / "Package.swift", ROOT / "MacApp" / "Package.swift"):
+        for dep in re.findall(r"\.package\(([^)]*)\)", package.read_text(encoding="utf-8")):
+            if "path:" not in dep:  # lokale Pakete dieses Repositorys zählen nicht
+                found.append(f"{package.parent.name}: {dep.strip()}")
+    return found
+
+
+def main(argv: list[str]) -> int:
+    out = Path(argv[argv.index("--out") + 1]) if "--out" in argv else None
+    texts = Path(argv[argv.index("--texts") + 1]) if "--texts" in argv else None
+    rows, binaries, problems = [], [], []
+    for name, version in pinned():
+        try:
+            dist = metadata.distribution(name)
+        except metadata.PackageNotFoundError:
+            problems.append(f"{name} is not installed")
+            continue
+        if dist.version != version:
+            problems.append(f"{name}: installed {dist.version}, lock {version}")
+        files = [f for f in dist.files or [] if LICENSE_FILE.search(f.name)]
+        rows.append((dist.metadata["Name"], dist.version, license_of(dist, files), source_of(dist), [f.name for f in files]))
+        # Nur, was im Paket selbst liegt – Scripts\*.exe erzeugt der Installer.
+        bundled = sorted({f.name for f in dist.files or []
+                          if f.name.lower().endswith(BINARY) and not str(f).startswith("..")})
+        if bundled:
+            binaries.append((dist.metadata["Name"], bundled))
+        if texts:
+            texts.mkdir(parents=True, exist_ok=True)
+            for f in files:
+                shutil.copyfile(f.locate(), texts / f"{dist.metadata['Name']}-{dist.version}-{f.name}")
+    if problems:
+        print("Not matching the lock:\n  " + "\n  ".join(problems), file=sys.stderr)
+        return 1
+
+    lines = [
+        "# Third-party software in NV-AI for PhotoCraft",
+        "",
+        "Generated by `python tools/third_party.py` from the installed packages pinned in `requirements.lock`",
+        "(Windows bridge, Python 3.12). The setup installs them from PyPI with `uv pip sync --require-hashes`.",
+        "",
+        "| Package | Version | License | Source | License files |",
+        "|---|---|---|---|---|",
+    ]
+    for name, version, lic, src, files in sorted(rows, key=lambda r: r[0].lower()):
+        lines.append(f"| {name} | {version} | {lic} | {src} | {', '.join(files) or '–'} |")
+    lines += ["", "## Binaries bundled inside these packages", ""]
+    for name, bundled in binaries:
+        lines.append(f"- **{name}**: {', '.join(bundled)}")
+    webview2 = webview2_version()
+    if webview2:
+        lines += [
+            "",
+            f"The Microsoft.Web.WebView2.* DLLs and WebView2Loader.dll in pywebview are the Microsoft WebView2 SDK "
+            f"{webview2}. The wheel contains no license file for them; the SDK license (BSD-3-Clause, "
+            f"\"Copyright (C) Microsoft Corporation\") is published at "
+            f"https://www.nuget.org/packages/Microsoft.Web.WebView2/{webview2}/License – its notice has to "
+            "accompany binary redistributions.",
+        ]
+    swift = swift_dependencies()
+    lines += [
+        "",
+        "## Other parts",
+        "",
+        "- **Swift (PhotoCraftKit, Mac app):** " + ("; ".join(swift) if swift else
+                                                   "no third-party Swift packages – only Apple system frameworks."),
+        "- **Panel (HTML/CSS/JS):** no third-party libraries, fonts or images; icons are drawn in this repository.",
+        "- **Not bundled, required at runtime:** Python 3.12 (installed by the setup via uv), Microsoft Edge",
+        "  WebView2 Runtime (Windows, for the panel window), PhotoCraft (installed by the user).",
+        "",
+    ]
+    text = "\n".join(lines)
+    if out:
+        out.write_text(text, encoding="utf-8")
+        print(f"{out}: {len(rows)} packages")
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

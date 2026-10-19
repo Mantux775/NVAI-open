@@ -1,0 +1,6 @@
+# Line endings: shell scripts run on the Mac and must stay LF, even after a checkout on
+# Windows; cmd.exe can misread labels in batch files with LF line endings.
+* text=auto
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf

@@ -1,0 +1,22 @@
+[project]
+name = "nvai-photocraft-addon"
+version = "0.3.0"
+description = "NV-AI as the local AI for PhotoCraft: generative fill, image generation, refine"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+    "pillow>=10.0",
+    "pywebview>=5.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+# Starlette rät beim TestClient zu httpx2; die Brücke selbst nutzt httpx.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]

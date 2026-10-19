@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Mac-App (auf dem Mac gebaut)
+MacApp/.build/
+MacApp/build/
+
+# Add-on für das Windows-Setup (tools/build_addon.py)
+dist/

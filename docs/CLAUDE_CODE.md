@@ -1,0 +1,566 @@
+# Using NV-AI from Claude Code
+
+NV-AI includes an MCP server, `nvai`, that makes local media generation on your own NVIDIA GPU
+available to Claude Code: images, audio, video and 3D meshes for game assets, as a replacement
+for paid cloud generation. The MCP server is a thin client of the NV-AI REST server, so the web
+UI and Claude Code behave identically and share the same job queue.
+
+This guide covers setup, the tools, and practical advice on model choice, prompts, sizes and
+settings. Run times were measured on an RTX 5060 Ti 16 GB. The advice is written so that you can
+also paste the parts you need into a project's `CLAUDE.md`.
+
+## Setup
+
+### The server must be running
+
+All tools talk to `http://127.0.0.1:8100`. If the server is not running, every tool fails.
+
+- **Windows setup:** Start menu → **NV-AI** starts it, **Quit NV-AI** shuts it down.
+- **Source checkout:**
+
+```powershell
+scripts\start.ps1        # reports if one is already running
+scripts\stop.ps1         # stops NV-AI and ComfyUI specifically
+```
+
+**Always call `health` first.** It shows in one go whether the GPU backend is running, which
+model is active per category, how full the queues are, and whether the 3D worker is set up.
+
+The GPU backend (ComfyUI) starts automatically with the first job — this costs ~30 s once.
+Don't treat it as an error.
+
+### Registering the MCP server
+
+Register the server once at user scope, so that it is available in every Claude Code project:
+
+```
+claude mcp add --scope user nvai -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+```
+
+`<install folder>` is the repository folder of a source checkout, or the program folder of the
+Windows setup (default `%LOCALAPPDATA%\Programs\NV-AI`).
+
+With the Windows setup, also pass your data folder. The MCP server builds the file paths it
+returns from `NVAI_DATA_DIR` and otherwise assumes `data` inside the install folder, which is not
+where the setup keeps its data (default `%LOCALAPPDATA%\NV-AI`):
+
+```
+claude mcp add --scope user nvai -e "NVAI_DATA_DIR=<data folder>" -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+```
+
+If NV-AI listens on a port other than 8100, pass its address the same way, for example
+`-e "NVAI_API_URL=http://127.0.0.1:8101"`.
+
+After an NV-AI update, a running Claude Code session only sees the new tool descriptions after
+`/mcp` and reconnecting.
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| `health` | Always first. Backend, active models, queues |
+| `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros/cons and `features` |
+| `download_model` / `delete_model` / `set_active_model` | Model management |
+| `generate_image` | Image → file paths |
+| `generate_audio` | SFX or music → file paths |
+| `generate_video` | Short clip → file paths |
+| `image_to_3d` | Image asset → GLB mesh |
+| `text_to_3d` | Text → image → GLB mesh in one go |
+| `list_assets` / `delete_asset` / `clear_history` | History |
+| `copy_asset` | Copy an asset to `Assets/Generated/` or similar |
+
+All `generate_*` tools **block until done** and return absolute file paths.
+
+## Workflow
+
+1. `health` — is everything running, is a model of the needed category active?
+2. If one is missing: `list_models(kind=...)` → `download_model` → `set_active_model`
+3. Generate
+4. `copy_asset` into the target project, or pass the path straight to `Unity_ImportExternalModel`
+
+When a model is missing, **don't guess** — `list_models` shows size, VRAM requirement and
+license. Downloads are several GB; ask the user first.
+
+## Run times (measured on an RTX 5060 Ti 16 GB)
+
+| Task | Model | Time |
+|---|---|---|
+| Image 1024², 28 steps | SDXL Base | ~20 s |
+| Image 1024², 8 steps | Qwen-Image-2512 NVFP4 + Lightning | ~17 s, first run ~28 s |
+| Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 NVFP4 | ~98 s |
+| Image 1328² (Qwen native), 50 steps | Qwen-Image-2512 NVFP4 | ~197 s |
+| Image 1024², new prompt (upsampler + 16 steps) | FLUX 3 Klein NVFP4 | ~30 s |
+| Image 1024², known prompt, new seed | FLUX 3 Klein NVFP4 | 13–16 s, four images ~37 s |
+| Image 1440² / editing with a reference image | FLUX 3 Klein NVFP4 | ~26 s / ~45 s |
+| Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
+| Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
+| Video 832×480, 25 frames | Wan 2.1 T2V 1.3B | ~120 s |
+| Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
+
+The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the
+user up front instead of leaving them waiting.
+
+## Images
+
+### Model choice: the two recommended models
+
+- **Qwen-Image-2512, full version `qwen-image-2512-nvfp4`** (50 steps, cfg 4) — first choice for
+  **final assets**, **text in the image** and **structural details**. Crate lettering comes out
+  letter-perfect; with the same seed, this version ran a crate's rope handles through drilled
+  holes, while Lightning laid them on the wood without any attachment. Apache-2.0, 20B parameters
+  in NVFP4. `negative_prompt` works; empty = Qwen's recommended one from the model card (set by
+  the server). For more detail, use Qwen's **native sizes** (1328², 1056 × 1584, 1584 × 1056 …):
+  measured finer rope twist and wood grain at twice the time (197 instead of 98 s).
+  `qwen-image-2512-lightning` (8 steps, cfg 1) only for drafts and composition tests.
+- **FLUX 3 Image Klein, `flux3-klein-nvfp4`** (Black Forest Labs, 16 steps, cfg 1) — when working
+  with **reference images**: edit an image ("replace the rope handles with iron handles, keep
+  everything else unchanged"), keep a character consistent across several images, combine
+  subjects from up to ten images. Plus placement by bounding box. A bundled **upsampler** first
+  expands every prompt into a full image description — that is what the model is trained on; the
+  final description is stored in the asset as `caption`. `negative_prompt` has no effect.
+  **Mind the license** (see [Licenses](#licenses--before-using-assets-in-a-game-you-sell)):
+  commercial use only below US$5 million revenue, and every image must be reviewed before it is
+  published.
+  Strong in testing: editing left the source unchanged except for the modified handles, three
+  crates landed exactly at their box positions, text came out error-free three times out of
+  three, five of five soldiers stood fully inside the frame. Weak: whatever the prompt leaves
+  open, the upsampler invents — a greatcoat worn as a cape on the soldiers, lace-up shoes instead
+  of marching boots, ropes hanging loosely across the front instead of handle loops. Without a
+  style it plans a photo.
+  `flux3-klein-base-nvfp4` is the undistilled version (50 steps, cfg 3.5, the negative prompt
+  works) — according to BFL mainly intended for fine-tuning; in testing 53 instead of 13 s
+  without a visible gain.
+- **`flux3-klein-int8`** — the same FLUX 3 in BFL's INT8 version for cards without FP4 units
+  (RTX 20/30/40, from 8 GB according to BFL). On an RTX 50 card such as the RTX 5060 Ti, the
+  NVFP4 version is the right one. `list_models` marks what suits the detected card with
+  `recommended` and explains in `gpu_note` when a format does not run in hardware there.
+
+What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under
+`features`: whether the negative prompt works, reference images, upsampler, recommended sizes,
+prompt hint. The web UI's **Generate** page shows and hides its controls accordingly. In detail,
+with REST examples and all test findings: [MODELS.md](MODELS.md).
+
+The web UI finds more models under **Models → Search Hugging Face** (REST: `/api/models/search`,
+`/api/models/inspect`). Each file is checked before downloading; SDXL and SD 1.5 checkpoints
+(Juggernaut, Pony, Illustrious …) can be downloaded. These are multi-GB downloads as well — ask
+the user first.
+
+NVFP4 needs PyTorch **cu130** in the ComfyUI venv (`setup_comfyui.ps1` installs it); with cu128
+everything is three to five times slower, because ComfyUI then disables its fast NVFP4 kernels.
+FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.41.3).
+
+### Prompts for Qwen and FLUX 3
+
+Both read the prompt with a language model (Qwen2.5-VL-7B and Qwen3-VL-4B respectively), not
+with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`) do **not** apply to them.
+
+- **Full English sentences.** First medium and style, then the subject with material, color and
+  condition, then lighting and background. Long prompts are no problem.
+- **State the construction explicitly**, otherwise it gets invented: *"rope handles pass through
+  drilled holes in the side boards"*, *"the lid is held by two iron hinges at the back"*.
+- **Text in quotation marks**, verbatim, with position and type: *"black stenciled letters on
+  the front read \"MUNITION 7,92\""*.
+- **No weighting brackets** — for the language-model encoder they are noise, and the FLUX 3
+  upsampler carries them into its description.
+- **FLUX 3:** short and complete is enough — **style first** (otherwise it becomes a photo),
+  then subject, count, arrangement, construction, text. The upsampler writes 100–350 words from
+  it and fills every gap by itself: specify clothing, shoes and fastenings explicitly if they
+  have to be right. If the image is wrong, read `caption` first: if the error was already there,
+  extend the prompt instead of rerolling. Use `upsample_prompt=False` only when the prompt itself
+  is already a full description in this style — without the upsampler, the test crate came out
+  plainer.
+- **FLUX 3 with reference images** (`reference_asset_ids`, up to 10): say "the first image",
+  "the second image" in the prompt. Editing = say what changes and what stays the same.
+- **FLUX 3 boxes:** append a table to the end of the prompt:
+  `[{"id": "crate_1", "bbox": [top, left, bottom, right], "desc": "…"}]` on a 0–1000 grid. Do
+  **not** cite the ids in the text as `<crate_1>` — the upsampler does that, and the boxes stay
+  fixed. If the text cites all ids, it counts as a finished description and goes to the model
+  without the upsampler (that is how BFL's reference code does it). The boxes steer position and
+  size but are not a hard mask.
+
+### Decide first: scene or isolated object?
+
+The two cases need different sizes and different prompts.
+
+**Narrative scene** (several objects, an action, a mood). Rules:
+
+- **Never count — arrange.** "exactly one truck" has no effect — the number of objects comes from
+  the initial noise, not from the number in the text. Instead: *"the front tanker truck rolls
+  through the barrier. Behind it a line of separate tanker trucks waits nose to tail, each with
+  its own dark cab."* Without "separate"/"each with its own", similar objects merge into a single
+  impossible contraption.
+- **Style and lighting at the start**, in sentences of their own. Say positively what it *is*:
+  *"A painted illustration in oil on canvas with visible brush strokes."* instead of "not a
+  photo".
+- **One sentence per image element.** Qwen, FLUX 3, Chroma and LongCat cope with long prompts;
+  a single colon-laden sentence with five statements, on the other hand, gets squashed together.
+  With FLUX 3, a box table can additionally pin down the arrangement.
+- **State the time of day explicitly**, otherwise you end up at dusk.
+- With ~8 simultaneous conditions, no model hits everything on the first try — even the best stay
+  below 31 %. Generate several candidates and pick one.
+
+**Isolated object or figure** → continue with the size rules below.
+
+### People in the image — two measured traps
+
+**Figures need pixels.** At 1024×1024, a person in the middle ground is about 80 px tall — that
+produces blobs instead of faces, and feet go missing entirely. Measured with the same prompt and
+seed, shapeless figures turned into clean people as soon as three things came together:
+`width=1216, height=832`, `steps=26` and **`hires=True`**.
+
+Remember: **as soon as people are recognizable in the image, use `hires=True`.** It is the most
+effective single switch against missing feet and broken faces. `steps=16` is only enough for
+dark, atmospheric scenes without faces. (Measured with Chroma. FLUX 3 has no second pass —
+choose a larger size directly there; the model works natively up to 4K.)
+
+**Style bans in the negative prompt flatten the look.** Terms like `loose brushwork,
+impressionistic, sketch, visible pencil lines, smudged, unfinished` forbid any visible paint
+texture — what remains is smooth cel shading. Equally contradictory: `photographic detail` in the
+positive and `photorealistic` in the negative prompt. Keep the negative prompt to ~10 terms.
+
+**State people's origin explicitly.** Without it, the figures' appearance varies; in testing,
+the same prompt produced European faces one time and South Asian faces another. With it, every
+variant was unambiguous. The effective pattern is **region + facial features**:
+
+```
+Two Central European dock workers with pale northern European features, ...
+```
+
+"German soldier" alone hardly steers appearance; "with pale northern European features" does.
+This applies in both directions — for a Pacific setting, the matching description belongs in the
+prompt just as explicitly.
+
+### The size matters more than the prompt
+
+**A standing figure belongs in portrait format.** In a square, it is more likely to lose legs or
+feet, and it simply gets fewer pixels for the part that matters. The image format should match
+the subject's silhouette — portrait for standing figures, landscape for vehicles.
+
+| Size | Use for |
+|---|---|
+| **832 × 1216** | standing figures, soldiers, characters |
+| 896 × 1152 | figures, less extreme portrait format |
+| **1024 × 1024** | objects, icons, symbols |
+| **1216 × 832** | vehicles, buildings in side view |
+| 1344 × 768 | wide scenes, panoramas |
+| 512 × 512 | sprites, tiles |
+
+These are all around 1 megapixel and suit every model. Beyond that, it depends on the model:
+
+- **Qwen** is trained at ~1.76 MP: 1328 × 1328, 1056 × 1584 (figures), 1584 × 1056 (vehicles),
+  1104 × 1472, 1472 × 1104, 928 × 1664, 1664 × 928. Measured: more detail at twice the time.
+- **FLUX 3** works natively up to 4K; the API allows up to 2048 × 2048. Sides must be multiples
+  of 16.
+- Older models (Chroma, SDXL) become noticeably incoherent above 1 MP.
+
+`features.sizes` in `list_models` lists the sizes for each model.
+
+### Prompt patterns
+
+For **Qwen and FLUX 3** — full sentences, no brackets:
+
+```
+Figure:   "Studio photograph of a single WW2 German infantry soldier in full body, standing
+           at attention in strict side view, both boots fully inside the frame. Weathered
+           field grey uniform, steel helmet, rifle slung over the shoulder. Plain light grey
+           background, even soft studio light."
+Object:   "Studio product photograph of a weathered wooden ammunition crate. Black stenciled
+           letters on the front read \"MUNITION 7,92\". Rope handles pass through drilled
+           holes in the side boards. Plain light grey background, soft even light."
+FLUX 3,   prompt="Replace the rope handles with forged iron handles bolted to the side
+editing:         boards; keep everything else unchanged", reference_asset_ids=[crate]
+```
+
+For **CLIP models** (SDXL, Pony, Illustrious, FLUX.1, Chroma with T5):
+
+```
+Figure:   "a WW2 German infantry soldier, (full body:1.2), standing at attention,
+           (feet inside the frame:1.2), strict side view, weathered field grey
+           uniform, plain light grey background, even studio lighting"
+negative: "(cropped:1.3), cut off, multiple figures, text, watermark, blurry"
+```
+
+- **Weighting only works there**: `(term:1.3)` emphasizes, `(term:0.7)` dampens. Apply it to
+  composition anchors, not to style.
+- **Stay under ~55 words** (CLIP only): the global conditioning vector is built from the first
+  77 tokens.
+
+For all models:
+
+- **Name exactly one view.** "side view" and "three-quarter" together produce exactly the
+  distortions you want to avoid.
+- **Common type designations** ("Panzer IV", "Sherman M4", "Sd.Kfz. 251") call up a learned
+  shape instead of a free interpolation.
+- **Plan hands out of the picture** instead of describing them: a medium shot instead of a
+  close-up, hands on the rifle or gloved. "five fingers" in the prompt doesn't help.
+- **`batch_size=4`** instead of four calls: one model load instead of four. Anatomy errors are a
+  failure rate — generating several candidates and taking the best is the most effective method.
+
+### The quality switches
+
+| Parameter | When |
+|---|---|
+| Qwen's native sizes | final assets with Qwen: 1328², 1056 × 1584, etc. More detail, twice the time |
+| `hires=True` | anything with hands, faces, fine technical detail (not with FLUX 3). Recomputes details in a second pass. Costs ~50 % more time |
+| `reference_asset_ids` | FLUX 3: change an almost-right image in a targeted way instead of rerolling |
+| `image_asset_id` + `denoise` | other models: refine an almost-right image. 0.3 gentle, 0.5 noticeable. With FLUX 3 the image becomes the first reference |
+| `image_asset_id` + `mask_asset_id` + `denoise=1.0` | regenerate only one area (inpainting): white in the mask is recomputed, black is kept, gray levels blend smoothly. Upload the mask via `POST /api/upload`. Measured with full Qwen: lettering cleanly replaced, 0.6 out of 255 deviation outside the mask. In testing, Lightning (cfg 1) mostly just continued the surroundings. FLUX 3 can't do masks (`features.mask`) |
+| `steps=16` | with Chroma instead of the default 26 — measured 58 instead of 90 s at the same quality |
+| `batch_size=4` | whenever you want to choose. One model load instead of four |
+
+`slg` only has an effect with SD 3.5 models, and `controlnet_*` only with SD 3.5 Large and the SD
+3.5 ControlNets from the catalog. No ControlNets are integrated for Qwen, FLUX 3, Chroma or
+LongCat.
+
+### Historical vehicles — honest expectations
+
+With tanks, aircraft and ships, no prompt helps against wrong geometry: **no model knows the
+silhouette of a Panzer IV.** Tested — two seeds with an identical prompt produced two completely
+different invented vehicles, both cleanly drawn, both historically wrong.
+
+It follows that **more seeds don't help here.** Unlike with figures, the model is not rolling
+between good and bad but between different fantasy vehicles. Tell the user that instead of
+rerolling ten times.
+
+When historical accuracy matters, you need a template (blueprint, three-view drawing, blockout)
+and a matching ControlNet. None is currently integrated for Qwen, FLUX 3, Chroma or LongCat. FLUX
+3 does take a photo or drawing as a reference image, but according to BFL references fix the
+content, not the shape — they don't replace a ControlNet.
+
+### Other models in the catalog
+
+- **Chroma1-HD (fp8)** — best painterly style, best atmosphere, `negative_prompt` works
+  (cfg 4.0), Apache-2.0, unfiltered. Run it with `steps=16`
+- **LongCat-Image** — when an **action** must be visible; it hits actions most reliably, but
+  easily turns photorealistic. `negative_prompt` works
+- **FLUX.1 schnell** — fast for previews, but `negative_prompt` has **no effect** (cfg 1.0):
+  phrase exclusions positively there
+- **Chroma1-HD (bf16)** — don't use it; it doesn't fit into 16 GB and is slower with the same
+  result
+- **SDXL Base / Juggernaut** — largest LoRA ecosystem, fast and frugal
+- **Illustrious / NoobAI** — stylized, 2D; they need **Danbooru tags**, not sentences
+- **Pony V6 XL** — characters, needs `score_9, score_8_up, …` in the prompt
+
+### What doesn't help
+
+- **"bad anatomy", "extra fingers", "mutated hands"** in the negative prompt — SD 1.5 folklore
+  with no counterpart in these models' training. It only dilutes the rest of the negative
+  prompt.
+- **Cranking up CFG** — burnt colors, not better shapes. Keep the model default
+  (`features.cfg`).
+- **`karras` or `exponential` as scheduler** — they squeeze the shape-forming phase into a few
+  giant steps and make deformations worse.
+- **More steps than the model default** — buys detail, not structure. Whether a figure has two
+  legs is decided after a third of the steps. (A distilled version like Qwen Lightning is a
+  different matter: compared with the original, it really does lose construction.)
+
+## Audio
+
+Two fundamentally different models — adapt the prompt style accordingly:
+
+**Stable Audio Open** → sound effects and ambience. Describe the **sound**, not the music:
+
+```
+"heavy metal sword clash, single impact, bright metallic ring, dry studio recording"
+"footsteps on gravel, close mic, no music"
+"rain on canvas tent, distant thunder, loop"
+```
+
+Up to 47 s. For loops, generate generously and let the user trim.
+
+**ACE-Step** → music with structure and vocals. **Genre tags**, comma-separated, plus optional
+`lyrics`:
+
+```
+prompt: "epic orchestral, choir, war drums, cinematic, minor key"
+lyrics: ""            # empty = instrumental
+```
+
+`seconds` controls the length. Short SFX: 3–8 s. Music: 30–120 s.
+
+## Video
+
+```
+prompt: "a burning torch mounted on a dark stone wall, flame flickering,
+         warm light, slow subtle camera push in"
+```
+
+- **Describe motion explicitly** — without a motion cue, little happens.
+- Leave `negative_prompt` empty; the default is already sensible.
+- **832×480 is the cheapest Wan default.** 720p costs many times as much.
+- `frames` is rounded to **4n+1** (Wan) or 8n+1 (LTX). 49 frames at 16 fps ≈ 3 s.
+- Output is **WEBM/VP9** — plays in the browser; convert it for Unity if needed.
+
+Model choice for text-to-video: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for
+quality (13 GB VRAM — don't keep anything else loaded), **LTX-Video** when speed matters.
+
+### Image to video
+
+Bring an existing image to life instead of generating one from nothing — pass `image_asset_id`
+to `generate_video`:
+
+```
+1. generate_image("a woman in a red dress standing on a beach at sunset, cinematic")
+2. list_assets(kind="image", limit=1)      → asset_id
+3. generate_video(prompt="gentle wind moves her dress and hair, slow camera push in",
+                  image_asset_id=asset_id, model_id="wan22-i2v-a14b",
+                  width=832, height=480, frames=49)
+```
+
+Rules that make the difference:
+
+- **Describe only the motion in the prompt.** The image is already there; retelling it costs
+  prompt budget and gains nothing.
+- **Match the start image's aspect ratio.** A different `width`/`height` is hard-cropped or
+  scaled.
+- Without `image_asset_id`, an I2V model fails with a clear message — it doesn't guess.
+
+| Model | Use for |
+|---|---|
+| **Wan 2.2 I2V A14B** | First choice. Best motion, Apache-2.0, 720p possible |
+| **Wan 2.1 I2V 480p 14B** | 10 GB smaller, no expert switch — otherwise weaker |
+| **Wan 2.2 TI2V 5B** | Does both; I2V with a start image, T2V without |
+| **HunyuanVideo 1.5 I2V** | Testing only — license, see below |
+
+**Wan 2.2 I2V A14B loads two experts one after the other** (high-noise for motion, low-noise for
+details). That costs a model switch in the middle of the run — expect considerably more time than
+with text-to-video, and tell the user beforehand.
+
+### HunyuanVideo 1.5 — for experiments only
+
+Technically strong (DiT only 7.8 GB, very good motion), but the **Tencent Hunyuan Community
+License does not cover the EU, the UK and South Korea.** Elsewhere commercial use is allowed below
+100 million monthly active users. Unusable for anyone in those regions.
+
+If the user generates with it, treat the result as a mood board or comparison and point out that
+an asset to be shipped has to be regenerated with Wan (Apache-2.0). `negative_prompt` has no
+effect on either Hunyuan entry — they are CFG-distilled (cfg 1.0).
+
+## Image to 3D
+
+Two stages: first generate a suitable image, then run `image_to_3d` on it. TripoSG comes with
+the Windows setup's full installation; TRELLIS.2 is only available when installing from source
+(see [INSTALL.md](INSTALL.md#optional-3d-workers)).
+
+**There is no text prompt for the mesh stage.** TRELLIS.2 and TripoSG work purely from the image.
+The prompt affects the *image*, and the image fully determines the mesh.
+
+That's why `text_to_3d(prompt)` is the most convenient route: it generates image and mesh in one
+pass and automatically appends what the reconstruction needs.
+
+```
+text_to_3d("a weathered stone gargoyle", faces=60000)
+```
+
+Manually, in two steps:
+
+```
+1. generate_image("a single wooden barrel, medieval game asset, centered, isolated on
+                   plain light grey background, floating, no ground, no shadow, product shot")
+2. list_assets(kind="image", limit=1)      → asset_id
+3. image_to_3d(asset_id, faces=40000)
+```
+
+**What's in the image ends up in the mesh.** The most common mistakes and their consequences:
+
+| In the image | In the mesh |
+|---|---|
+| Floor, table edge, ground | an extra ground plate under the object |
+| Cast shadow under the object | a flat plate under the model |
+| Gradient background, vignette, fog | floating strands and thin pillars |
+| Two objects or a sprite sheet | fused nonsense |
+
+**A base that belongs to the object is not an error.** A sphinx statue stands on its stone slab,
+a monument on its pedestal — that belongs in the mesh. Exclude only what the object is
+additionally *placed* on: floor, table, cast shadow.
+
+So the image prompt should include: `the complete object including any base that belongs to it,
+plain flat background, no cast shadow, not standing on a floor or table`.
+And the negative prompt: `cast shadow, floor, ground plane, table surface, environment` —
+**not** `pedestal` or `base`, which would prompt away the object's own base.
+
+Two adjustments if it still goes wrong:
+
+- **`background_mode="birefnet"`** (default) uses a segmentation model and gives much cleaner
+  edges than `"flood"`, which only removes connected border areas of similar color and fails on
+  soft gradients.
+- **`clean_specks=True`** (default) throws out floating fragments. It only catches loose parts —
+  whatever sticks to the main body has to be prevented through the image.
+
+Two models with clearly different results:
+
+| | TripoSG | TRELLIS.2-4B |
+|---|---|---|
+| Output | geometry only | **geometry + PBR textures** |
+| Time | ~60 s warm | ~145 s |
+| VRAM | ~10 GB | ~14 GB |
+| License | MIT | MIT |
+
+**TRELLIS.2** delivers albedo and metallic/roughness as real 2048² bitmaps with UVs — that makes
+an asset usable without manual texturing. Parameters: `texture_size` (1024/2048/4096) and `faces`
+(default 100,000). The voxel resolution stays at 512³; 1024³ doesn't fit into 16 GB.
+
+**TripoSG** is faster and more frugal, but delivers an untextured mesh. Useful if you put your
+own materials on it anyway. `faces=-1` keeps the full mesh (~200k, usually too much for Unity),
+otherwise 10,000–40,000.
+
+Neither mesh is guaranteed to be watertight, and both benefit from retopology before they go into
+a game. Tell the user that instead of passing off a raw result as a finished asset.
+
+## VRAM: one card, one model
+
+16 GB holds exactly one model. The server serializes GPU jobs itself — but:
+
+- Before a model that needs >13 GB of VRAM (Wan 2.2 I2V A14B, Chroma bf16), it pays to call
+  `POST /api/backend/free` or use the **Free VRAM** button in the web UI.
+- `image_to_3d` frees ComfyUI's memory **automatically** before TripoSG loads. After that, the
+  next image job needs a fresh model load — plan for it: generate all images first, then all
+  meshes.
+- Downloads run in a **separate queue** and don't block the GPU.
+
+## Licenses — before using assets in a game you sell
+
+`list_models` returns `commercial_ok`. Critical cases:
+
+- **FLUX.1 dev** — non-commercial. Fine for mood boards, not for shipping assets. Replacement:
+  **FLUX.1 schnell** (Apache-2.0).
+- **HunyuanVideo 1.5** (T2V and I2V) — Tencent Hunyuan Community License: not licensed in
+  the EU, UK and South Korea (elsewhere commercial use up to 100 million monthly users). Marked with a red exclamation mark in the web UI. Replacement:
+  **Wan 2.2 I2V A14B** or **Wan 2.1 T2V** (both Apache-2.0).
+- **Hunyuan3D** — the same Tencent family, critical for the EU. Replacement: **TripoSG** (MIT).
+- **Stability Community License** (SD 3.5, Stable Audio Open) — commercial use up to US$1 million
+  in revenue.
+- **FLUX Kommunity License v1.0** (FLUX 3 Image Klein) — images may be used commercially only by
+  "Qualifying Users" below US$5 million annual revenue, including affiliated companies.
+  Conditions (section 2.e): a content filter **or** reviewing every image for unlawful and
+  infringing content before publishing it; AI labeling where the law requires it. BFL can
+  terminate the license at any time by notice (8.b). The images must not be used to train any
+  other image model (4.b). No EU exclusion. The repo is gated — accept the license on Hugging
+  Face and store a token. Without these conditions: **Qwen-Image-2512** (Apache-2.0).
+- Unproblematic: SDXL, FLUX schnell, ACE-Step, Wan (all variants), Chroma, TripoSG, TRELLIS.2.
+
+When in doubt, point the user to the license instead of generating silently. This is not legal
+advice; the original license text is authoritative.
+
+## Reading errors correctly
+
+- **`clip input is invalid: None`** → The checkpoint has no text encoder; the model is missing
+  files. `list_models` shows which. Don't tinker with the prompt.
+- **`No <kind> model installed`** → `list_models(kind=...)`, then suggest a download.
+- **`… is an image-to-video model — please provide a start image`** → `image_asset_id` is
+  missing. Either generate an image and pass its asset ID, or choose a T2V model.
+- **Timeout while starting the backend** → `GET /api/backend/log` (or `?worker=triposg`) shows
+  the real reason.
+- **Job stays `queued`** → A GPU job is already running. Downloads don't block.
+
+## Getting assets into the game
+
+```
+copy_asset(asset_id, "C:/path/to/UnityProject/Assets/Generated/")
+```
+
+Unity imports it on its own. For meshes, `Unity_ImportExternalModel` with the path returned by
+`image_to_3d` is the more direct route.
+
+A sensible location: `Assets/Generated/Textures|Audio|Video|Meshes/`. Don't mix generated assets
+into existing folders without asking.

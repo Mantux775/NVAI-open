@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- Hardened Runtime ohne Ausnahmen: keine Sandbox (Developer-ID-Verteilung), kein JIT.
+     MLX übersetzt seine Kernel für die GPU, das braucht keine CPU-JIT-Ausnahme. -->
+<dict/>
+</plist>

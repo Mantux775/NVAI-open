@@ -1,0 +1,204 @@
+# NVAI-open
+
+Local image, audio, video and 3D generation on your own computer. No cloud, no subscription, no account.
+
+**Download version 0.3.0**
+
+| | |
+|---|---|
+| **Windows 10/11** with an NVIDIA graphics card | [NV-AI-Setup-0.3.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.3.0/NV-AI-Setup-0.3.0.exe) |
+| **macOS 15+** on Apple Silicon (signed and notarized) | NV-AI-0.3.0.dmg follows shortly – Apple is still checking the signed build. / Wird in Kürze nachgereicht. |
+
+All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
+
+[English](#english) · [Deutsch](#deutsch)
+
+---
+
+## English
+
+### Hi
+
+I vibe-coded this app because I needed it myself, and I'd like to share it.
+
+A bit about me: I used to build small web apps for everyday needs and did all sorts of little projects with Raspberry Pis. The usual IT admin life. NV-AI started the same way: I wanted to make images, sounds and 3D models for my own game projects without paying per picture or sending everything to the cloud.
+
+It has only been tested on my modest hardware: a Windows PC with an RTX 5060 Ti (16 GB) and 64 GB RAM, and a Mac mini M1 with 8 GB. Feedback is very welcome, please open an [issue](https://github.com/Mantux775/NVAI-open/issues). Just keep in mind that I have a full-time job, so answers and fixes can take a while.
+
+NV-AI was built primarily in German. The English interface and docs are new, so you may still find German code comments or a clumsy phrase here and there. Hints are welcome. German stays available as an option in all apps.
+
+### What it does
+
+**On Windows** (NVIDIA graphics card) NV-AI runs a small local server with a web interface in your browser:
+
+- **Images**: FLUX 3 Image Klein, Qwen-Image-2512 and more. Text to image, editing with reference images, inpainting with a mask.
+- **3D models**: turn an image into a 3D mesh (GLB) with TripoSG.
+- **Audio and video**: sound effects and music (Stable Audio Open, ACE-Step), short clips (Wan, LTX-Video).
+- **Model manager**: downloads models from Hugging Face, suggests the ones that fit your graphics card, and has a search for more models. Before anything is downloaded, NV-AI checks whether the file will actually run.
+- **Claude Code**: an MCP server, so Claude can generate assets for you directly (see [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)).
+
+**On the Mac** (Apple Silicon) NV-AI is a native app. It runs FLUX.2 Klein 4B with MLX: generate, refine, fill with a mask, and use up to three reference images. Smaller Stable Diffusion models run through Core ML.
+
+**PhotoCraft add-on**: [PhotoCraft](https://github.com/storytold/photocraft) is a great open-source photo editor. The optional add-on connects it to NV-AI. Select an area in PhotoCraft and fill it, generate something new or rework it, and the result comes back as a layer with a mask. Thanks a lot to the PhotoCraft developers for building such a well-scriptable editor. The add-on needs PhotoCraft 0.10.0 or newer.
+
+Everything runs on your own machine. Models are downloaded from Hugging Face the first time you use them.
+
+### FLUX 3 Image Klein: the new favorite
+
+FLUX 3 Image Klein from Black Forest Labs came out in October 2026 and it works really well. It is fast (about 30 seconds for a new prompt on my RTX 5060 Ti, around 15 seconds when you only change the seed), and it does something none of the other models here can do: it edits images. Give it a picture, say what should change and what should stay, and it keeps the rest of the image intact.
+
+![FLUX 3 edits an image: rope handles replaced with iron handles, everything else unchanged](docs/images/flux3-edit.jpg)
+
+*Prompt: "Replace the rope handles with forged iron handles bolted to the side boards; keep everything else unchanged." One reference image, 44 seconds.*
+
+It also takes up to ten reference images, keeps characters consistent across pictures, and lets you place objects with bounding boxes. A built-in prompt upsampler turns a short prompt into a full image description before rendering.
+
+On RTX 50 cards NV-AI uses the NVFP4 version. On RTX 20, 30 and 40 cards it recommends the official INT8 version instead, which according to Black Forest Labs runs on 8 GB cards.
+
+### Where Qwen-Image-2512 is better
+
+Qwen-Image-2512 is slower (about 100 seconds at full quality), but it has its strengths:
+
+- **Construction details**: how things are built usually makes more sense. In my tests, rope handles went through drilled holes and boots matched the outfit.
+- **Text**: lettering comes out reliably.
+- **License**: Apache-2.0, without the revenue limit and review duty of the FLUX license.
+
+Same prompt and seed, left FLUX 3, right Qwen-Image-2512:
+
+![Wooden crate with stenciled text](docs/images/compare-crate.jpg)
+*"Studio product photograph of a weathered wooden crate. Black stenciled letters on the front read "NVAI OPEN". Rope handles pass through drilled holes in the side boards. Plain light grey background, soft even light."*
+
+![Bakery sign](docs/images/compare-sign.jpg)
+*"A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall."*
+
+![Explorer, full body](docs/images/compare-explorer.jpg)
+*"Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light."*
+
+![Lighthouse as an oil painting](docs/images/compare-lighthouse.jpg)
+*"A painted illustration in oil on canvas with visible brush strokes. A lighthouse stands on a rocky coast at dusk, waves crash against the rocks, and warm light glows in the lantern room. A small red fishing boat returns to the harbor. The sky fades from orange to deep blue."*
+
+Times are from my RTX 5060 Ti. All images in this README were generated with NV-AI.
+
+### 3D: from an image to a model
+
+Make an image of an object, then turn it into a 3D mesh. TripoSG (MIT license) builds the geometry in about one to one and a half minutes on my card. The result is a GLB file you can use in Unity, Blender or a game engine of your choice. It is an untextured mesh, so plan some cleanup (retopology) before it goes into a game.
+
+![From image to 3D mesh](docs/images/image-to-3d.jpg)
+
+3D is part of the Windows setup (choose "Full installation"). TRELLIS.2 with PBR textures is available when you install from source.
+
+### iOS app (closed beta)
+
+There is also an iOS app with a 3D model scanner that turns photos of real objects into 3D models. It is in closed beta for now. If enough people are interested, I'll make it public, so tell me in an issue if you would use it.
+
+### Requirements
+
+| | Windows | macOS |
+|---|---|---|
+| System | Windows 10 (2004+) or 11, 64-bit | macOS 15 or newer, Apple Silicon |
+| Graphics / memory | NVIDIA card with driver 580.88+, 12 GB+ VRAM recommended (8 GB works with the INT8 models) | 16 GB RAM or more recommended (8 GB works for small images) |
+| Disk | about 10 GB for the program, plus 5 to 30 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
+| Internet | for setup (about 3 GB) and model downloads | for model downloads |
+
+The Windows setup is not code-signed yet, so Windows may show "Windows protected your PC". Click "More info", then "Run anyway". Details: [docs/INSTALL.md](docs/INSTALL.md).
+
+### Licenses
+
+The code in this repository is under the [MIT License](LICENSE): do whatever you want with it. Third-party components keep their own licenses, see [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). ComfyUI (GPL-3.0) is shipped as a separate program with its full source code.
+
+Models are not part of this repository. Each model has its own license, which NV-AI shows in its model list. Two to know about:
+
+- **FLUX 3 Image Klein**: FLUX Kommunity License. Commercial use of the images only below USD 5 million annual revenue, and every image has to be checked before publishing.
+- **Qwen-Image-2512** and **FLUX.2 Klein 4B**: Apache-2.0.
+
+### More
+
+- [docs/INSTALL.md](docs/INSTALL.md): installing, building from source, the PhotoCraft add-on
+- [docs/MODELS.md](docs/MODELS.md): the image models in detail, prompt tips, test results
+- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NV-AI from Claude Code
+- [photocraft-addon/](photocraft-addon/): source of the PhotoCraft add-on
+
+---
+
+## Deutsch
+
+### Hallo
+
+Ich habe diese App aus eigenem Bedarf „vibegecodet“ und möchte sie mit anderen teilen.
+
+Kurz zu mir: Früher habe ich kleine Webapps für alltägliche Bedürfnisse gebastelt und mit dem Raspberry Pi diverse kleine Projekte umgesetzt. Der Alltag in der IT als Admin eben. NV-AI ist genauso entstanden: Ich wollte Bilder, Sounds und 3D-Modelle für meine eigenen Spieleprojekte erzeugen, ohne pro Bild zu zahlen oder alles in die Cloud zu schicken.
+
+Getestet ist die App nur auf meiner bescheidenen Hardware: einem Windows-PC mit RTX 5060 Ti (16 GB) und 64 GB RAM und einem Mac mini M1 mit 8 GB. Über Feedback freue ich mich sehr, am besten als [Issue](https://github.com/Mantux775/NVAI-open/issues). Bitte habt Verständnis, dass ich einen Vollzeitjob habe. Antworten und Korrekturen können also etwas dauern.
+
+NV-AI ist primär auf Deutsch entstanden. Die englische Oberfläche und Doku sind neu, deshalb finden sich im Code noch deutsche Kommentare. Deutsch bleibt in allen Apps als Sprache wählbar.
+
+### Was es kann
+
+**Unter Windows** (NVIDIA-Grafikkarte) läuft NV-AI als kleiner lokaler Server mit Weboberfläche im Browser:
+
+- **Bilder**: FLUX 3 Image Klein, Qwen-Image-2512 und weitere. Text zu Bild, Bearbeiten mit Referenzbildern, Füllen mit Maske.
+- **3D-Modelle**: aus einem Bild ein 3D-Modell (GLB) mit TripoSG.
+- **Audio und Video**: Soundeffekte und Musik (Stable Audio Open, ACE-Step), kurze Clips (Wan, LTX-Video).
+- **Modellverwaltung**: lädt Modelle von Hugging Face, schlägt die zur Grafikkarte passenden vor und hat eine Suche nach weiteren Modellen. Vor jedem Download prüft NV-AI, ob die Datei hier überhaupt läuft.
+- **Claude Code**: ein MCP-Server, über den Claude direkt Assets erzeugen kann (siehe [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)).
+
+**Auf dem Mac** (Apple Silicon) ist NV-AI eine native App. Sie rechnet FLUX.2 Klein 4B mit MLX: Generieren, Überarbeiten, Füllen mit Maske und bis zu drei Referenzbilder. Kleinere Stable-Diffusion-Modelle laufen über Core ML.
+
+**PhotoCraft-Add-on**: [PhotoCraft](https://github.com/storytold/photocraft) ist ein toller Open-Source-Bildeditor. Das optionale Add-on verbindet ihn mit NV-AI. Einen Bereich in PhotoCraft auswählen und füllen, neu generieren oder überarbeiten, das Ergebnis kommt als Ebene mit Maske zurück. Vielen Dank an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor. Das Add-on braucht PhotoCraft ab Version 0.10.0.
+
+Alles läuft auf dem eigenen Rechner. Modelle lädt NV-AI bei der ersten Nutzung von Hugging Face.
+
+### FLUX 3 Image Klein: der neue Favorit
+
+FLUX 3 Image Klein von Black Forest Labs ist im Oktober 2026 erschienen und funktioniert richtig gut. Es ist schnell (auf meiner RTX 5060 Ti rund 30 Sekunden bei einem neuen Prompt, etwa 15 Sekunden, wenn nur der Seed wechselt), und es kann etwas, was die anderen Modelle hier nicht können: Bilder bearbeiten. Man gibt ein Bild vor, sagt, was sich ändern und was bleiben soll, und der Rest des Bildes bleibt erhalten (Beispiel oben im englischen Teil).
+
+Dazu nimmt es bis zu zehn Referenzbilder, hält Figuren über mehrere Bilder gleich und platziert Objekte per Bounding-Box. Ein eingebauter Prompt-Upsampler baut einen kurzen Prompt vorher zur vollständigen Bildbeschreibung aus.
+
+Auf RTX-50-Karten nutzt NV-AI die NVFP4-Fassung. Auf RTX 20, 30 und 40 empfiehlt es stattdessen die offizielle INT8-Fassung, die laut Black Forest Labs schon auf 8-GB-Karten läuft.
+
+### Wo Qwen-Image-2512 besser ist
+
+Qwen-Image-2512 ist langsamer (rund 100 Sekunden in voller Qualität), hat aber seine Stärken:
+
+- **Konstruktive Details**: Wie Dinge gebaut sind, stimmt meist besser. In meinen Tests liefen Seilgriffe durch gebohrte Löcher, und die Stiefel passten zur Kleidung.
+- **Schrift**: Beschriftungen kommen zuverlässig.
+- **Lizenz**: Apache-2.0, ohne Umsatzgrenze und Prüfpflicht der FLUX-Lizenz.
+
+Die Vergleichsbilder oben im englischen Teil zeigen jeweils denselben Prompt und Seed, links FLUX 3, rechts Qwen-Image-2512. Die Zeiten stammen von meiner RTX 5060 Ti. Alle Bilder in diesem README hat NV-AI erzeugt.
+
+### 3D: vom Bild zum Modell
+
+Erst ein Bild eines Objekts erzeugen, dann daraus ein 3D-Modell machen. TripoSG (MIT-Lizenz) baut die Geometrie auf meiner Karte in etwa ein bis anderthalb Minuten. Heraus kommt eine GLB-Datei für Unity, Blender oder eine andere Engine. Das Modell ist untexturiert und sollte vor dem Einsatz im Spiel noch nachbearbeitet werden (Retopologie).
+
+3D gehört zum Windows-Setup (Auswahl „Vollständige Installation“). TRELLIS.2 mit PBR-Texturen gibt es bei der Installation aus dem Quelltext.
+
+### iOS-App (geschlossene Beta)
+
+Es gibt auch eine iOS-App mit 3D-Modell-Scanner, die aus Fotos echter Gegenstände 3D-Modelle macht. Sie ist vorerst eine geschlossene Beta. Wenn genug Interesse da ist, stelle ich sie öffentlich bereit. Schreibt mir gern in einem Issue, wenn ihr sie nutzen würdet.
+
+### Voraussetzungen
+
+| | Windows | macOS |
+|---|---|---|
+| System | Windows 10 (ab 2004) oder 11, 64 Bit | macOS 15 oder neuer, Apple Silicon |
+| Grafik / Speicher | NVIDIA-Karte mit Treiber ab 580.88, empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen) | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
+| Platte | rund 10 GB für das Programm, dazu 5 bis 30 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
+| Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
+
+Das Windows-Setup ist noch nicht signiert. Windows zeigt deshalb eventuell „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md).
+
+### Lizenzen
+
+Der Code in diesem Repo steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er will. Fremde Komponenten behalten ihre eigenen Lizenzen, siehe [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt). ComfyUI (GPL-3.0) wird als eigenständiges Programm mit vollständigem Quelltext mitgeliefert.
+
+Modelle sind nicht Teil dieses Repos. Jedes Modell hat seine eigene Lizenz, die NV-AI in der Modellliste anzeigt. Zwei sollte man kennen:
+
+- **FLUX 3 Image Klein**: FLUX Kommunity License. Kommerzielle Nutzung der Bilder nur unter 5 Millionen US-Dollar Jahresumsatz, und jedes Bild muss vor der Veröffentlichung geprüft werden.
+- **Qwen-Image-2512** und **FLUX.2 Klein 4B**: Apache-2.0.
+
+### Weiterlesen
+
+- [docs/de/INSTALL.md](docs/de/INSTALL.md): Installation, Bauen aus dem Quelltext, PhotoCraft-Add-on
+- [docs/de/MODELLE.md](docs/de/MODELLE.md): die Bildmodelle im Detail, Prompt-Tipps, Testergebnisse
+- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NV-AI aus Claude Code nutzen (englisch)
+- [photocraft-addon/](photocraft-addon/): Quelltext des PhotoCraft-Add-ons

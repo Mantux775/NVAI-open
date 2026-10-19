@@ -1,0 +1,34 @@
+# Models, generated assets and local data never belong in the repository
+external/
+data/
+**/.venv/
+node_modules/
+frontend/dist/
+packaging/windows/build/
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Mac build output
+mac/NVAIMac/dd/
+mac/NVAIMac/SourcePackages/
+mac/NVAIMac/release/
+mac/NVAIMac/*.xcodeproj/
+photocraft-addon/dist/
+photocraft-addon/**/.build/
+
+.vite/
+*.local
+.DS_Store
+Thumbs.db
+
+# Signing material and secrets
+*.p12
+*.p8
+*.pem
+*.mobileprovision
+.env
+settings.json

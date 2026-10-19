@@ -1,0 +1,3985 @@
+{
+ "version": 1,
+ "generated_by": "tools/export_golden.py",
+ "note": "Replay: Anfragen müssen in Reihenfolge und Inhalt gleich sein; Antworten werden zurückgespielt. Pfade jobs/<task-id>/… liegen im Austauschordner.",
+ "scenarios": {
+  "capture_fill_selection": {
+   "setup": {
+    "documents": [
+     {
+      "name": "Bild.psd",
+      "width": 1200,
+      "height": 800,
+      "selection": [
+       389,
+       239,
+       322,
+       242
+      ]
+     }
+    ],
+    "active": 0,
+    "next_layer_id": 102
+   },
+   "task": {
+    "id": "T-capture_fill_selection",
+    "mode": "fill",
+    "prompt": "a red barn",
+    "margin": 0.35
+   },
+   "notes": "Erfassen",
+   "transcript": [
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.duplicate",
+       "params": {
+        "name": "NV-AI working copy",
+        "mergedOnly": true
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 1,
+       "name": "NV-AI working copy"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.saveSelection",
+       "params": {
+        "name": "NV-AI selection"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "channel": 0,
+       "document": 1,
+       "name": "NV-AI selection"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.crop",
+       "params": {
+        "x": 276,
+        "y": 126,
+        "width": 548,
+        "height": 468
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "x": 276,
+       "y": 126,
+       "width": 548,
+       "height": 468,
+       "documentWidth": 548,
+       "documentHeight": 468,
+       "resolution": 72.0
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-capture_fill_selection/context.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-capture_fill_selection/context.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "channel.duplicate",
+       "params": {
+        "channel": "NV-AI selection",
+        "document": "new"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 2
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-capture_fill_selection/mask.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-capture_fill_selection/mask.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 1
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    }
+   ],
+   "final": {
+    "region": [
+     276,
+     126,
+     548,
+     468
+    ],
+    "selection": [
+     389,
+     239,
+     322,
+     242
+    ],
+    "has_mask": true,
+    "placed_layer": null,
+    "placed_variant": null
+   }
+  },
+  "capture_generate_no_selection": {
+   "setup": {
+    "documents": [
+     {
+      "name": "Bild.psd",
+      "width": 1200,
+      "height": 800,
+      "selection": null
+     }
+    ],
+    "active": 0,
+    "next_layer_id": 102
+   },
+   "task": {
+    "id": "T-capture_generate_no_selection",
+    "mode": "generate",
+    "prompt": "a red barn",
+    "margin": 0.35
+   },
+   "notes": "Erfassen",
+   "transcript": [
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    }
+   ],
+   "final": {
+    "region": [
+     0,
+     0,
+     1200,
+     800
+    ],
+    "selection": null,
+    "has_mask": false,
+    "placed_layer": null,
+    "placed_variant": null
+   }
+  },
+  "capture_refine_selection_third_tab": {
+   "setup": {
+    "documents": [
+     {
+      "name": "Erstes",
+      "width": 640,
+      "height": 480
+     },
+     {
+      "name": "Zweites",
+      "width": 640,
+      "height": 480
+     },
+     {
+      "name": "Bild.psd",
+      "width": 1200,
+      "height": 800,
+      "selection": [
+       389,
+       239,
+       322,
+       242
+      ]
+     }
+    ],
+    "active": 2,
+    "next_layer_id": 104
+   },
+   "task": {
+    "id": "T-capture_refine_selection_third_tab",
+    "mode": "refine",
+    "prompt": "a red barn",
+    "margin": 0.35
+   },
+   "notes": "Erfassen",
+   "transcript": [
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 2,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Zweites",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 2,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 103,
+        "layers": [
+         {
+          "id": 103,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.duplicate",
+       "params": {
+        "name": "NV-AI working copy",
+        "mergedOnly": true
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 3,
+       "name": "NV-AI working copy"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.saveSelection",
+       "params": {
+        "name": "NV-AI selection"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "channel": 0,
+       "document": 3,
+       "name": "NV-AI selection"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.crop",
+       "params": {
+        "x": 373,
+        "y": 223,
+        "width": 354,
+        "height": 274
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "x": 373,
+       "y": 223,
+       "width": 354,
+       "height": 274,
+       "documentWidth": 354,
+       "documentHeight": 274,
+       "resolution": 72.0
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-capture_refine_selection_third_tab/context.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-capture_refine_selection_third_tab/context.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "channel.duplicate",
+       "params": {
+        "channel": "NV-AI selection",
+        "document": "new"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 4
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-capture_refine_selection_third_tab/mask.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-capture_refine_selection_third_tab/mask.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 4
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 3
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 2,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Zweites",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 2,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 103,
+        "layers": [
+         {
+          "id": 103,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    }
+   ],
+   "final": {
+    "region": [
+     373,
+     223,
+     354,
+     274
+    ],
+    "selection": [
+     389,
+     239,
+     322,
+     242
+    ],
+    "has_mask": true,
+    "placed_layer": null,
+    "placed_variant": null
+   }
+  },
+  "fill_place_and_swap": {
+   "setup": {
+    "documents": [
+     {
+      "name": "Bild.psd",
+      "width": 1200,
+      "height": 800,
+      "selection": [
+       389,
+       239,
+       322,
+       242
+      ]
+     }
+    ],
+    "active": 0,
+    "next_layer_id": 102
+   },
+   "task": {
+    "id": "T-fill_place_and_swap",
+    "mode": "fill",
+    "prompt": "a red barn",
+    "margin": 0.35
+   },
+   "notes": "Erfassen, Variante 1 einfügen, Variante 2 tauschen (Auswahl unverändert)",
+   "transcript": [
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.duplicate",
+       "params": {
+        "name": "NV-AI working copy",
+        "mergedOnly": true
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 1,
+       "name": "NV-AI working copy"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.saveSelection",
+       "params": {
+        "name": "NV-AI selection"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "channel": 0,
+       "document": 1,
+       "name": "NV-AI selection"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.crop",
+       "params": {
+        "x": 276,
+        "y": 126,
+        "width": 548,
+        "height": 468
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "x": 276,
+       "y": 126,
+       "width": 548,
+       "height": 468,
+       "documentWidth": 548,
+       "documentHeight": 468,
+       "resolution": 72.0
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-fill_place_and_swap/context.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_place_and_swap/context.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "channel.duplicate",
+       "params": {
+        "channel": "NV-AI selection",
+        "document": "new"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 2
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-fill_place_and_swap/mask.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_place_and_swap/mask.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 1
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 101,
+        "layers": [
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "Bild.psd",
+       "width": 1200,
+       "height": 800,
+       "hasSelection": true,
+       "selectionBounds": [
+        389,
+        239,
+        322,
+        242
+       ],
+       "activeLayer": 101,
+       "layers": [
+        {
+         "id": 101,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          1200,
+          800
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.open",
+      "params": {
+       "path": "jobs/T-fill_place_and_swap/result-1.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_place_and_swap/result-1.png",
+       "name": "result-1.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "result-1.png",
+          "width": 548,
+          "height": 468,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "result-1.png",
+        "width": 548,
+        "height": 468,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 104,
+        "layers": [
+         {
+          "id": 104,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "result-1.png",
+       "width": 548,
+       "height": 468,
+       "hasSelection": false,
+       "selectionBounds": null,
+       "activeLayer": 104,
+       "layers": [
+        {
+         "id": 104,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.copyToDocument",
+       "params": {
+        "document": 0,
+        "source": 1,
+        "layers": [
+         104
+        ],
+        "offset": [
+         276,
+         126
+        ],
+        "name": "NV-AI Fill: a red barn (1)"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 0,
+       "layers": [
+        105
+       ],
+       "offset": [
+        276,
+        126
+       ]
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 1
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.get",
+       "params": {
+        "path": "fileHandling.recentFiles"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": [
+       "jobs/T-fill_place_and_swap/result-1.png"
+      ]
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.set",
+       "params": {
+        "path": "fileHandling.recentFiles",
+        "value": []
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "fileHandling.recentFiles": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 105,
+        "layers": [
+         {
+          "id": 105,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": false,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         },
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.layerMask.revealSelection",
+       "params": {
+        "layer": 105
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 105
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 105,
+        "layers": [
+         {
+          "id": 105,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 105,
+        "layers": [
+         {
+          "id": 105,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "Bild.psd",
+       "width": 1200,
+       "height": 800,
+       "hasSelection": true,
+       "selectionBounds": [
+        389,
+        239,
+        322,
+        242
+       ],
+       "activeLayer": 105,
+       "layers": [
+        {
+         "id": 105,
+         "name": "NV-AI Fill: a red barn (1)",
+         "hasMask": true,
+         "bounds": [
+          276,
+          126,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true,
+         "mask_bounds": [
+          389,
+          239,
+          322,
+          242
+         ]
+        },
+        {
+         "id": 101,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          1200,
+          800
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.select",
+       "params": {
+        "layer": 105
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "app.open",
+      "params": {
+       "path": "jobs/T-fill_place_and_swap/result-2.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_place_and_swap/result-2.png",
+       "name": "result-2.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "result-2.png",
+          "width": 548,
+          "height": 468,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "result-2.png",
+        "width": 548,
+        "height": 468,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 106,
+        "layers": [
+         {
+          "id": 106,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "result-2.png",
+       "width": 548,
+       "height": 468,
+       "hasSelection": false,
+       "selectionBounds": null,
+       "activeLayer": 106,
+       "layers": [
+        {
+         "id": 106,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.copyToDocument",
+       "params": {
+        "document": 0,
+        "source": 1,
+        "layers": [
+         106
+        ],
+        "offset": [
+         276,
+         126
+        ],
+        "name": "NV-AI Fill: a red barn (2)"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 0,
+       "layers": [
+        107
+       ],
+       "offset": [
+        276,
+        126
+       ]
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 1
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.get",
+       "params": {
+        "path": "fileHandling.recentFiles"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": [
+       "jobs/T-fill_place_and_swap/result-2.png"
+      ]
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.set",
+       "params": {
+        "path": "fileHandling.recentFiles",
+        "value": []
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "fileHandling.recentFiles": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 0,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 107,
+        "layers": [
+         {
+          "id": 107,
+          "name": "NV-AI Fill: a red barn (2)",
+          "hasMask": false,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         },
+         {
+          "id": 105,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 101,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.layerMask.revealSelection",
+       "params": {
+        "layer": 107
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 107
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.delete",
+       "params": {
+        "layer": 105
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    }
+   ],
+   "final": {
+    "region": [
+     276,
+     126,
+     548,
+     468
+    ],
+    "selection": [
+     389,
+     239,
+     322,
+     242
+    ],
+    "has_mask": true,
+    "placed_layer": 107,
+    "placed_variant": 1
+   }
+  },
+  "fill_swap_after_selection_change": {
+   "setup": {
+    "documents": [
+     {
+      "name": "Erstes",
+      "width": 640,
+      "height": 480
+     },
+     {
+      "name": "Bild.psd",
+      "width": 1200,
+      "height": 800,
+      "selection": [
+       389,
+       239,
+       322,
+       242
+      ]
+     }
+    ],
+    "active": 1,
+    "next_layer_id": 103
+   },
+   "task": {
+    "id": "T-fill_swap_after_selection_change",
+    "mode": "fill",
+    "prompt": "a red barn",
+    "margin": 0.35
+   },
+   "notes": "wie oben, dann Auswahl geändert und Variante 1 zurückgetauscht (Maske der alten Ebene)",
+   "transcript": [
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 102,
+        "layers": [
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.duplicate",
+       "params": {
+        "name": "NV-AI working copy",
+        "mergedOnly": true
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 2,
+       "name": "NV-AI working copy"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.saveSelection",
+       "params": {
+        "name": "NV-AI selection"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "channel": 0,
+       "document": 2,
+       "name": "NV-AI selection"
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "image.crop",
+       "params": {
+        "x": 276,
+        "y": 126,
+        "width": 548,
+        "height": 468
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "x": 276,
+       "y": 126,
+       "width": 548,
+       "height": 468,
+       "documentWidth": 548,
+       "documentHeight": 468,
+       "resolution": 72.0
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-fill_swap_after_selection_change/context.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_swap_after_selection_change/context.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "channel.duplicate",
+       "params": {
+        "channel": "NV-AI selection",
+        "document": "new"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 3
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.save",
+      "params": {
+       "path": "jobs/T-fill_swap_after_selection_change/mask.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_swap_after_selection_change/mask.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 3
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 102,
+        "layers": [
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 102,
+        "layers": [
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 102,
+        "layers": [
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "Bild.psd",
+       "width": 1200,
+       "height": 800,
+       "hasSelection": true,
+       "selectionBounds": [
+        389,
+        239,
+        322,
+        242
+       ],
+       "activeLayer": 102,
+       "layers": [
+        {
+         "id": 102,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          1200,
+          800
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "app.open",
+      "params": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-1.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-1.png",
+       "name": "result-1.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 2,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         },
+         {
+          "index": 2,
+          "name": "result-1.png",
+          "width": 548,
+          "height": 468,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "result-1.png",
+        "width": 548,
+        "height": 468,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 105,
+        "layers": [
+         {
+          "id": 105,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "result-1.png",
+       "width": 548,
+       "height": 468,
+       "hasSelection": false,
+       "selectionBounds": null,
+       "activeLayer": 105,
+       "layers": [
+        {
+         "id": 105,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.copyToDocument",
+       "params": {
+        "document": 1,
+        "source": 2,
+        "layers": [
+         105
+        ],
+        "offset": [
+         276,
+         126
+        ],
+        "name": "NV-AI Fill: a red barn (1)"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 1,
+       "layers": [
+        106
+       ],
+       "offset": [
+        276,
+        126
+       ]
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.get",
+       "params": {
+        "path": "fileHandling.recentFiles"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": [
+       "jobs/T-fill_swap_after_selection_change/result-1.png"
+      ]
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.set",
+       "params": {
+        "path": "fileHandling.recentFiles",
+        "value": []
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "fileHandling.recentFiles": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 106,
+        "layers": [
+         {
+          "id": 106,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": false,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.layerMask.revealSelection",
+       "params": {
+        "layer": 106
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 106
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 106,
+        "layers": [
+         {
+          "id": 106,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 106,
+        "layers": [
+         {
+          "id": 106,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "Bild.psd",
+       "width": 1200,
+       "height": 800,
+       "hasSelection": true,
+       "selectionBounds": [
+        389,
+        239,
+        322,
+        242
+       ],
+       "activeLayer": 106,
+       "layers": [
+        {
+         "id": 106,
+         "name": "NV-AI Fill: a red barn (1)",
+         "hasMask": true,
+         "bounds": [
+          276,
+          126,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true,
+         "mask_bounds": [
+          389,
+          239,
+          322,
+          242
+         ]
+        },
+        {
+         "id": 102,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          1200,
+          800
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.select",
+       "params": {
+        "layer": 106
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "app.open",
+      "params": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-2.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-2.png",
+       "name": "result-2.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 2,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         },
+         {
+          "index": 2,
+          "name": "result-2.png",
+          "width": 548,
+          "height": 468,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "result-2.png",
+        "width": 548,
+        "height": 468,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 107,
+        "layers": [
+         {
+          "id": 107,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "result-2.png",
+       "width": 548,
+       "height": 468,
+       "hasSelection": false,
+       "selectionBounds": null,
+       "activeLayer": 107,
+       "layers": [
+        {
+         "id": 107,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.copyToDocument",
+       "params": {
+        "document": 1,
+        "source": 2,
+        "layers": [
+         107
+        ],
+        "offset": [
+         276,
+         126
+        ],
+        "name": "NV-AI Fill: a red barn (2)"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 1,
+       "layers": [
+        108
+       ],
+       "offset": [
+        276,
+        126
+       ]
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.get",
+       "params": {
+        "path": "fileHandling.recentFiles"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": [
+       "jobs/T-fill_swap_after_selection_change/result-2.png"
+      ]
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.set",
+       "params": {
+        "path": "fileHandling.recentFiles",
+        "value": []
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "fileHandling.recentFiles": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 108,
+        "layers": [
+         {
+          "id": 108,
+          "name": "NV-AI Fill: a red barn (2)",
+          "hasMask": false,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         },
+         {
+          "id": 106,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.layerMask.revealSelection",
+       "params": {
+        "layer": 108
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 108
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.delete",
+       "params": {
+        "layer": 106
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         10,
+         10,
+         50,
+         50
+        ],
+        "activeLayer": 108,
+        "layers": [
+         {
+          "id": 108,
+          "name": "NV-AI Fill: a red barn (2)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         10,
+         10,
+         50,
+         50
+        ],
+        "activeLayer": 108,
+        "layers": [
+         {
+          "id": 108,
+          "name": "NV-AI Fill: a red barn (2)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "Bild.psd",
+       "width": 1200,
+       "height": 800,
+       "hasSelection": true,
+       "selectionBounds": [
+        10,
+        10,
+        50,
+        50
+       ],
+       "activeLayer": 108,
+       "layers": [
+        {
+         "id": 108,
+         "name": "NV-AI Fill: a red barn (2)",
+         "hasMask": true,
+         "bounds": [
+          276,
+          126,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true,
+         "mask_bounds": [
+          389,
+          239,
+          322,
+          242
+         ]
+        },
+        {
+         "id": 102,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          1200,
+          800
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 108
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.select",
+       "params": {
+        "layer": 108
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "app.open",
+      "params": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-1.png"
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "path": "jobs/T-fill_swap_after_selection_change/result-1.png",
+       "name": "result-1.png",
+       "warnings": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 2,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         },
+         {
+          "index": 2,
+          "name": "result-1.png",
+          "width": 548,
+          "height": 468,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "result-1.png",
+        "width": 548,
+        "height": 468,
+        "hasSelection": false,
+        "selectionBounds": null,
+        "activeLayer": 109,
+        "layers": [
+         {
+          "id": 109,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "document.inspect",
+       "params": {}
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "name": "result-1.png",
+       "width": 548,
+       "height": 468,
+       "hasSelection": false,
+       "selectionBounds": null,
+       "activeLayer": 109,
+       "layers": [
+        {
+         "id": 109,
+         "name": "Background",
+         "hasMask": false,
+         "bounds": [
+          0,
+          0,
+          548,
+          468
+         ],
+         "kind": "Pixel",
+         "visible": true
+        }
+       ],
+       "channels": {
+        "alpha": []
+       }
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.copyToDocument",
+       "params": {
+        "document": 1,
+        "source": 2,
+        "layers": [
+         109
+        ],
+        "offset": [
+         276,
+         126
+        ],
+        "name": "NV-AI Fill: a red barn (1)"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "document": 1,
+       "layers": [
+        110
+       ],
+       "offset": [
+        276,
+        126
+       ]
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "file.close",
+       "params": {
+        "document": 2
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.get",
+       "params": {
+        "path": "fileHandling.recentFiles"
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": [
+       "jobs/T-fill_swap_after_selection_change/result-1.png"
+      ]
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "prefs.set",
+       "params": {
+        "path": "fileHandling.recentFiles",
+        "value": []
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "fileHandling.recentFiles": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "ui.inspect",
+      "params": {}
+     },
+     "response": {
+      "ok": true,
+      "result": {
+       "session": {
+        "active": 1,
+        "documents": [
+         {
+          "index": 0,
+          "name": "Erstes",
+          "width": 640,
+          "height": 480,
+          "dirty": false
+         },
+         {
+          "index": 1,
+          "name": "Bild.psd",
+          "width": 1200,
+          "height": 800,
+          "dirty": false
+         }
+        ]
+       },
+       "document": {
+        "name": "Bild.psd",
+        "width": 1200,
+        "height": 800,
+        "hasSelection": true,
+        "selectionBounds": [
+         389,
+         239,
+         322,
+         242
+        ],
+        "activeLayer": 110,
+        "layers": [
+         {
+          "id": 110,
+          "name": "NV-AI Fill: a red barn (1)",
+          "hasMask": false,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true
+         },
+         {
+          "id": 108,
+          "name": "NV-AI Fill: a red barn (2)",
+          "hasMask": true,
+          "bounds": [
+           276,
+           126,
+           548,
+           468
+          ],
+          "kind": "Pixel",
+          "visible": true,
+          "mask_bounds": [
+           389,
+           239,
+           322,
+           242
+          ]
+         },
+         {
+          "id": 102,
+          "name": "Background",
+          "hasMask": false,
+          "bounds": [
+           0,
+           0,
+           1200,
+           800
+          ],
+          "kind": "Pixel",
+          "visible": true
+         }
+        ],
+        "channels": {
+         "alpha": []
+        }
+       },
+       "dialogs": []
+      }
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.layerMask.revealSelection",
+       "params": {
+        "layer": 110
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "select.loadSelection",
+       "params": {
+        "channel": "mask",
+        "layer": 110
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    },
+    {
+     "request": {
+      "method": "engine.execute",
+      "params": {
+       "command": "layer.delete",
+       "params": {
+        "layer": 108
+       }
+      }
+     },
+     "response": {
+      "ok": true,
+      "result": null
+     }
+    }
+   ],
+   "final": {
+    "region": [
+     276,
+     126,
+     548,
+     468
+    ],
+    "selection": [
+     389,
+     239,
+     322,
+     242
+    ],
+    "has_mask": true,
+    "placed_layer": 110,
+    "placed_variant": 0
+   }
+  }
+ }
+}

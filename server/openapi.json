@@ -1,0 +1,2563 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "NV-AI",
+  "version": "0.3.0",
+  "x-api-version": 1
+ },
+ "paths": {
+  "/api/version": {
+   "get": {
+    "summary": "Version",
+    "description": "Wer antwortet hier, mit welchem Vertrag? Ohne Token abrufbar, damit ein Client\nvor der Anmeldung pruefen kann, ob er richtig ist -- und mit Token, ob er gilt.",
+    "operationId": "version_api_version_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VersionInfo"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/shutdown": {
+   "post": {
+    "summary": "Shutdown",
+    "description": "Beendet NV-AI samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
+    "operationId": "shutdown_api_shutdown_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Shutdown Api Shutdown Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/health": {
+   "get": {
+    "summary": "Health",
+    "operationId": "health_api_health_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Health Api Health Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/backend/start": {
+   "post": {
+    "summary": "Backend Start",
+    "operationId": "backend_start_api_backend_start_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Backend Start Api Backend Start Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/backend/log": {
+   "get": {
+    "summary": "Backend Log",
+    "description": "Letzte Logzeilen eines Backends -- erster Anlaufpunkt, wenn ein Job scheitert.",
+    "operationId": "backend_log_api_backend_log_get",
+    "parameters": [
+     {
+      "name": "lines",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 60,
+       "title": "Lines"
+      }
+     },
+     {
+      "name": "worker",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "comfy",
+       "title": "Worker"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": {
+          "type": "string"
+         },
+         "title": "Response Backend Log Api Backend Log Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/backend/free": {
+   "post": {
+    "summary": "Backend Free",
+    "description": "Gibt den VRAM frei: ComfyUI entladen, Mesh-Worker entladen.",
+    "operationId": "backend_free_api_backend_free_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Backend Free Api Backend Free Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/jobs/current/cancel": {
+   "post": {
+    "summary": "Cancel Current Job",
+    "description": "Stoppt den laufenden GPU-Job. Downloads bleiben unberuehrt.",
+    "operationId": "cancel_current_job_api_jobs_current_cancel_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Cancel Current Job Api Jobs Current Cancel Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models": {
+   "get": {
+    "summary": "Get Models",
+    "operationId": "get_models_api_models_get",
+    "parameters": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ModelInfo"
+         },
+         "title": "Response Get Models Api Models Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings/hf-token": {
+   "get": {
+    "summary": "Hf Token Status",
+    "description": "Ist ein Hugging-Face-Token hinterlegt, und fuer wen? Fuer gated Repos wie FLUX 3.",
+    "operationId": "hf_token_status_api_settings_hf_token_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Hf Token Status Api Settings Hf Token Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "summary": "Set Hf Token",
+    "description": "Prueft den Token bei Hugging Face und speichert ihn wie `hf auth login`.\nNur vom eigenen Rechner -- ein Token ist ein Geheimnis des Nutzers.",
+    "operationId": "set_hf_token_api_settings_hf_token_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Set Hf Token Api Settings Hf Token Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Delete Hf Token",
+    "operationId": "delete_hf_token_api_settings_hf_token_delete",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Delete Hf Token Api Settings Hf Token Delete"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/search": {
+   "get": {
+    "summary": "Search Models",
+    "description": "Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien.",
+    "operationId": "search_models_api_models_search_get",
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Q"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 20,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": true
+         },
+         "title": "Response Search Models Api Models Search Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/inspect": {
+   "get": {
+    "summary": "Inspect Model",
+    "description": "Prueft eine Datei vor dem Laden: Architektur aus dem safetensors-Kopf, Groesse.",
+    "operationId": "inspect_model_api_models_inspect_get",
+    "parameters": [
+     {
+      "name": "repo",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Repo"
+      }
+     },
+     {
+      "name": "file",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "File"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Inspect Model Api Models Inspect Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/download": {
+   "post": {
+    "summary": "Download Model",
+    "operationId": "download_model_api_models_download_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DownloadRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/{model_id}": {
+   "delete": {
+    "summary": "Delete Model",
+    "description": "Loescht die Modelldateien. `forget=true` entfernt zusaetzlich einen\nselbst hinzugefuegten Katalogeintrag.",
+    "operationId": "delete_model_api_models__model_id__delete",
+    "parameters": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Model Id"
+      }
+     },
+     {
+      "name": "forget",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Forget"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DeleteResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/downloads/cancel": {
+   "post": {
+    "summary": "Cancel Downloads",
+    "description": "Bricht alle wartenden und den laufenden Download ab.\n\nWartende Jobs werden uebersprungen, sobald sie drankommen. Der laufende\nDownload steckt in einem Thread und laeuft bis zum Dateiende weiter --\ndanach wird er nicht mehr fortgesetzt.",
+    "operationId": "cancel_downloads_api_downloads_cancel_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Cancel Downloads Api Downloads Cancel Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/cleanup": {
+   "post": {
+    "summary": "Cleanup Partial",
+    "description": "Loescht unvollstaendige Modellinstallationen samt Fragmenten und HF-Cache.",
+    "operationId": "cleanup_partial_api_models_cleanup_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Cleanup Partial Api Models Cleanup Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/{model_id}/favorite": {
+   "post": {
+    "summary": "Toggle Favorite",
+    "description": "Setzt oder entfernt die Favoriten-Markierung. Ohne Rumpf wird umgeschaltet.",
+    "operationId": "toggle_favorite_api_models__model_id__favorite_post",
+    "parameters": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Model Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "type": "object",
+          "additionalProperties": {
+           "type": "boolean"
+          }
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Payload"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Toggle Favorite Api Models  Model Id  Favorite Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/active": {
+   "post": {
+    "summary": "Set Active",
+    "operationId": "set_active_api_models_active_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Payload"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Set Active Api Models Active Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/checkpoints": {
+   "get": {
+    "summary": "Comfy Checkpoints",
+    "description": "Was ComfyUI wirklich sieht -- hilfreich bei 'Modell da, aber nicht nutzbar'.",
+    "operationId": "comfy_checkpoints_api_models_checkpoints_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Comfy Checkpoints Api Models Checkpoints Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/image": {
+   "post": {
+    "summary": "Generate Image",
+    "operationId": "generate_image_api_generate_image_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateImageRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/audio": {
+   "post": {
+    "summary": "Generate Audio",
+    "operationId": "generate_audio_api_generate_audio_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateAudioRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/video": {
+   "post": {
+    "summary": "Generate Video",
+    "operationId": "generate_video_api_generate_video_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateVideoRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/3d": {
+   "post": {
+    "summary": "Generate 3D",
+    "description": "Bild zu Mesh. Laeuft in einem eigenen Worker-Prozess, nicht in ComfyUI.",
+    "operationId": "generate_3d_api_generate_3d_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Generate3DRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/jobs": {
+   "get": {
+    "summary": "Get Jobs",
+    "operationId": "get_jobs_api_jobs_get",
+    "parameters": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 50,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Job"
+         },
+         "title": "Response Get Jobs Api Jobs Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/jobs/{job_id}": {
+   "get": {
+    "summary": "Get Job",
+    "operationId": "get_job_api_jobs__job_id__get",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Delete Job",
+    "description": "Loescht einen Verlaufseintrag mit allen erzeugten Dateien.",
+    "operationId": "delete_job_api_jobs__job_id__delete",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Delete Job Api Jobs  Job Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/jobs/{job_id}/assets": {
+   "get": {
+    "summary": "Get Job Assets",
+    "operationId": "get_job_assets_api_jobs__job_id__assets_get",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Asset"
+         },
+         "title": "Response Get Job Assets Api Jobs  Job Id  Assets Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/assets": {
+   "get": {
+    "summary": "Get Assets",
+    "operationId": "get_assets_api_assets_get",
+    "parameters": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 100,
+       "title": "Limit"
+      }
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 0,
+       "title": "Offset"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Asset"
+         },
+         "title": "Response Get Assets Api Assets Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/assets/{asset_id}": {
+   "get": {
+    "summary": "Get Asset",
+    "operationId": "get_asset_api_assets__asset_id__get",
+    "parameters": [
+     {
+      "name": "asset_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Asset Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Asset"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Delete Asset",
+    "description": "Loescht ein einzelnes Asset samt Datei.",
+    "operationId": "delete_asset_api_assets__asset_id__delete",
+    "parameters": [
+     {
+      "name": "asset_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Asset Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Delete Asset Api Assets  Asset Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/history": {
+   "delete": {
+    "summary": "Clear History",
+    "description": "Leert den Verlauf -- alles oder nur einen Asset-Typ.\nDownload-Jobs bleiben erhalten, die gehoeren zur Modellverwaltung.",
+    "operationId": "clear_history_api_history_delete",
+    "parameters": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Clear History Api History Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/upload": {
+   "post": {
+    "summary": "Upload",
+    "description": "Bild-Upload -- Grundlage fuer den spaeteren Bild-zu-3D-Pfad.",
+    "operationId": "upload_api_upload_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_api_upload_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Asset"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/files/{filename}": {
+   "get": {
+    "summary": "Serve File",
+    "operationId": "serve_file_files__filename__get",
+    "parameters": [
+     {
+      "name": "filename",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Filename"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Die Asset-Datei; der Typ folgt der Endung (png, wav, webm, glb ...)",
+      "content": {
+       "image/*": {},
+       "audio/*": {},
+       "video/*": {},
+       "model/gltf-binary": {},
+       "application/octet-stream": {}
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Asset": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "job_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job Id"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "image",
+       "audio",
+       "video",
+       "mesh",
+       "upload"
+      ],
+      "title": "Kind"
+     },
+     "filename": {
+      "type": "string",
+      "title": "Filename"
+     },
+     "url": {
+      "type": "string",
+      "title": "Url"
+     },
+     "thumb_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Thumb Url"
+     },
+     "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "default": ""
+     },
+     "model_id": {
+      "type": "string",
+      "title": "Model Id",
+      "default": ""
+     },
+     "meta": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Meta",
+      "default": {}
+     },
+     "created_at": {
+      "type": "number",
+      "title": "Created At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "job_id",
+     "kind",
+     "filename",
+     "url",
+     "created_at"
+    ],
+    "title": "Asset"
+   },
+   "Body_upload_api_upload_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_upload_api_upload_post"
+   },
+   "DeleteResult": {
+    "properties": {
+     "model_id": {
+      "type": "string",
+      "title": "Model Id"
+     },
+     "removed": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Removed",
+      "default": []
+     },
+     "freed_gb": {
+      "type": "number",
+      "title": "Freed Gb",
+      "default": 0
+     },
+     "failed": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Failed",
+      "default": []
+     }
+    },
+    "type": "object",
+    "required": [
+     "model_id"
+    ],
+    "title": "DeleteResult"
+   },
+   "DownloadRequest": {
+    "properties": {
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Eintrag aus dem Katalog"
+     },
+     "repo": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Repo",
+      "description": "Freies HF-Repo, falls nicht im Katalog"
+     },
+     "file": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "File"
+     },
+     "target": {
+      "type": "string",
+      "title": "Target",
+      "default": "checkpoints"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "image",
+       "audio",
+       "video",
+       "3d",
+       "controlnet"
+      ],
+      "title": "Kind",
+      "default": "image"
+     },
+     "family": {
+      "type": "string",
+      "title": "Family",
+      "default": "sdxl"
+     },
+     "workflow": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workflow",
+      "default": "sdxl"
+     },
+     "license": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "License"
+     },
+     "size_gb": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Size Gb"
+     },
+     "clean": {
+      "type": "boolean",
+      "title": "Clean",
+      "description": "Alten/unvollstaendigen Stand vorher loeschen und frisch laden",
+      "default": false
+     }
+    },
+    "type": "object",
+    "title": "DownloadRequest"
+   },
+   "Generate3DRequest": {
+    "properties": {
+     "image_asset_id": {
+      "type": "string",
+      "title": "Image Asset Id",
+      "description": "Asset-ID des Quellbilds (Bild oder Upload)"
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id"
+     },
+     "steps": {
+      "type": "integer",
+      "maximum": 200.0,
+      "minimum": 1.0,
+      "title": "Steps",
+      "description": "Nur TripoSG",
+      "default": 50
+     },
+     "guidance": {
+      "type": "number",
+      "maximum": 20.0,
+      "minimum": 0.0,
+      "title": "Guidance",
+      "description": "Nur TripoSG",
+      "default": 7.0
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "faces": {
+      "type": "integer",
+      "title": "Faces",
+      "description": "Zielanzahl Faces nach Reduktion; -1 = volles Mesh (nur TripoSG)",
+      "default": -1
+     },
+     "remove_background": {
+      "type": "boolean",
+      "title": "Remove Background",
+      "description": "Hintergrund automatisch freistellen, wenn kein Alphakanal da ist",
+      "default": true
+     },
+     "resolution": {
+      "type": "integer",
+      "title": "Resolution",
+      "description": "Voxel-Aufloesung. 1024 braucht deutlich mehr als 16 GB VRAM.",
+      "default": 512
+     },
+     "texture_size": {
+      "type": "integer",
+      "maximum": 4096.0,
+      "minimum": 512.0,
+      "title": "Texture Size",
+      "description": "Nur TRELLIS.2: Texturaufloesung",
+      "default": 2048
+     },
+     "background_mode": {
+      "type": "string",
+      "enum": [
+       "birefnet",
+       "flood",
+       "alpha"
+      ],
+      "title": "Background Mode",
+      "description": "Wie freigestellt wird. birefnet = Segmentierungsmodell (sauberste Kanten, verhindert Hintergrund-Artefakte im Mesh); flood = schneller Randfarben-Fuellalgorithmus; alpha = Bild bringt Alphakanal mit.",
+      "default": "birefnet"
+     },
+     "clean_specks": {
+      "type": "boolean",
+      "title": "Clean Specks",
+      "description": "Nur TRELLIS.2: die schwarzen Nadeln entfernen. Verworfen werden kleine UND langgestreckte Teilkoerper; kompakte Kleinteile wie Augen oder Beschlaege bleiben erhalten.",
+      "default": true
+     },
+     "speck_ratio": {
+      "type": "number",
+      "maximum": 0.5,
+      "minimum": 0.0,
+      "title": "Speck Ratio",
+      "description": "Ab welchem Flaechenanteil der groessten Komponente ein Teil als 'klein' gilt. Groesser = aggressiver.",
+      "default": 0.02
+     }
+    },
+    "type": "object",
+    "required": [
+     "image_asset_id"
+    ],
+    "title": "Generate3DRequest"
+   },
+   "GenerateAudioRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "description": "Klangbeschreibung (SFX) oder Genre-Tags (Musik)"
+     },
+     "negative_prompt": {
+      "type": "string",
+      "title": "Negative Prompt",
+      "description": "Was vermieden werden soll",
+      "default": ""
+     },
+     "lyrics": {
+      "type": "string",
+      "title": "Lyrics",
+      "description": "Nur ACE-Step: Songtext. Leer = instrumental",
+      "default": ""
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id"
+     },
+     "seconds": {
+      "type": "number",
+      "maximum": 300.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Seconds",
+      "description": "Laenge in Sekunden",
+      "default": 10.0
+     },
+     "steps": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 200.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Steps"
+     },
+     "cfg": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 30.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cfg"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "bpm": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 240.0,
+        "minimum": 40.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Bpm"
+     },
+     "language": {
+      "type": "string",
+      "title": "Language",
+      "default": "en"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt"
+    ],
+    "title": "GenerateAudioRequest"
+   },
+   "GenerateImageRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "description": "Positiver Prompt"
+     },
+     "negative_prompt": {
+      "type": "string",
+      "title": "Negative Prompt",
+      "description": "Negativer Prompt. Wirkt nur bei Modellen mit CFG > 1 -- features.negative_prompt in /api/models sagt es je Modell",
+      "default": ""
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Modell aus der Registry; None = aktives"
+     },
+     "width": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Width",
+      "default": 1024
+     },
+     "height": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Height",
+      "default": 1024
+     },
+     "steps": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 150.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Steps"
+     },
+     "cfg": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 30.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cfg"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "batch_size": {
+      "type": "integer",
+      "maximum": 8.0,
+      "minimum": 1.0,
+      "title": "Batch Size",
+      "default": 1
+     },
+     "sampler": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sampler"
+     },
+     "scheduler": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Scheduler"
+     },
+     "image_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Asset Id",
+      "description": "Vorhandenes Bild als Ausgangspunkt statt Rauschen"
+     },
+     "denoise": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Denoise",
+      "description": "Nur mit image_asset_id: wie stark ueberarbeitet wird. 0.3 = behutsam, 0.6 = deutlich, 1.0 = das Bild wird verworfen",
+      "default": 1.0
+     },
+     "mask_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mask Asset Id",
+      "description": "Nur mit image_asset_id: Maske, weiss = neu erzeugen, schwarz = behalten. Graustufen gehen stufenlos ueber. Macht aus Bild-zu-Bild ein Inpainting; mit denoise 1.0 entsteht im weissen Bereich voellig neuer Inhalt"
+     },
+     "upsample_prompt": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upsample Prompt",
+      "description": "Nur FLUX 3: den Prompt vorher vom mitgelieferten Upsampler zur vollen Bildbeschreibung ausbauen lassen. None = Modellstandard (an)"
+     },
+     "reference_asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 10,
+      "title": "Reference Asset Ids",
+      "description": "Nur FLUX 3: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt als 'the first image', 'the second image' ansprechen"
+     },
+     "hires": {
+      "type": "boolean",
+      "title": "Hires",
+      "description": "Zweiter Sampling-Durchgang auf hochskaliertem Latent. Rechnet Haende, Gesichter und Details neu",
+      "default": false
+     },
+     "hires_scale": {
+      "type": "number",
+      "maximum": 2.0,
+      "minimum": 1.05,
+      "title": "Hires Scale",
+      "description": "Vergroesserungsfaktor. 1.25 ist auf 16 GB die sichere Stufe",
+      "default": 1.25
+     },
+     "hires_denoise": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.1,
+      "title": "Hires Denoise",
+      "description": "Staerke des zweiten Durchgangs",
+      "default": 0.45
+     },
+     "hires_steps": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 150.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hires Steps",
+      "description": "Schritte im zweiten Durchgang; None = die Haelfte"
+     },
+     "slg": {
+      "type": "boolean",
+      "title": "Slg",
+      "description": "SkipLayerGuidanceSD3: Stabilitys Eingriff fuer stabilere Anatomie. Wirkt nur bei SD3-Modellen, kostet ~7 Prozent Laufzeit",
+      "default": false
+     },
+     "slg_scale": {
+      "type": "number",
+      "maximum": 10.0,
+      "minimum": 0.0,
+      "title": "Slg Scale",
+      "default": 3.0
+     },
+     "slg_layers": {
+      "type": "string",
+      "title": "Slg Layers",
+      "description": "Zu ueberspringende Bloecke",
+      "default": "7, 8, 9"
+     },
+     "slg_start": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Slg Start",
+      "default": 0.01
+     },
+     "slg_end": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Slg End",
+      "default": 0.15
+     },
+     "controlnet_model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Controlnet Model Id",
+      "description": "ControlNet-Eintrag aus dem Katalog, z. B. sd35-controlnet-depth"
+     },
+     "controlnet_image_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Controlnet Image Asset Id",
+      "description": "Referenzbild fuer das ControlNet (Skizze, Blaupause, Foto)"
+     },
+     "controlnet_strength": {
+      "type": "number",
+      "maximum": 2.0,
+      "minimum": 0.0,
+      "title": "Controlnet Strength",
+      "default": 0.7
+     },
+     "controlnet_start": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Controlnet Start",
+      "default": 0.0
+     },
+     "controlnet_end": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Controlnet End",
+      "description": "Ab wann das ControlNet loslaesst. Frueher loslassen = mehr Freiheit im Detail",
+      "default": 0.8
+     },
+     "controlnet_preprocess": {
+      "type": "string",
+      "enum": [
+       "none",
+       "canny"
+      ],
+      "title": "Controlnet Preprocess",
+      "description": "Referenzbild vorverarbeiten. 'canny' erzeugt Kanten aus Foto oder Skizze. 'none' nimmt das Bild unveraendert -- richtig fuer eine fertige Tiefenkarte, etwa aus Blender oder einem Blockout",
+      "default": "none"
+     },
+     "controlnet_canny_low": {
+      "type": "number",
+      "maximum": 0.99,
+      "minimum": 0.01,
+      "title": "Controlnet Canny Low",
+      "default": 0.4
+     },
+     "controlnet_canny_high": {
+      "type": "number",
+      "maximum": 0.99,
+      "minimum": 0.01,
+      "title": "Controlnet Canny High",
+      "default": 0.8
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt"
+    ],
+    "title": "GenerateImageRequest"
+   },
+   "GenerateVideoRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt"
+     },
+     "negative_prompt": {
+      "type": "string",
+      "title": "Negative Prompt",
+      "description": "Leer = modellspezifischer Standard-Negativprompt",
+      "default": ""
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id"
+     },
+     "width": {
+      "type": "integer",
+      "multipleOf": 16.0,
+      "maximum": 1280.0,
+      "minimum": 256.0,
+      "title": "Width",
+      "default": 832
+     },
+     "height": {
+      "type": "integer",
+      "multipleOf": 16.0,
+      "maximum": 1280.0,
+      "minimum": 256.0,
+      "title": "Height",
+      "default": 480
+     },
+     "frames": {
+      "type": "integer",
+      "maximum": 201.0,
+      "minimum": 9.0,
+      "title": "Frames",
+      "description": "Anzahl Frames; bei Wan 4n+1",
+      "default": 49
+     },
+     "fps": {
+      "type": "integer",
+      "maximum": 60.0,
+      "minimum": 1.0,
+      "title": "Fps",
+      "default": 16
+     },
+     "steps": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 100.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Steps"
+     },
+     "cfg": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 30.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cfg"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "image_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Image Asset Id",
+      "description": "Fuer Bild-zu-Video: Asset-ID des Startbilds"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt"
+    ],
+    "title": "GenerateVideoRequest"
+   },
+   "HTTPValidationError": {
+    "properties": {
+     "detail": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationError"
+      },
+      "type": "array",
+      "title": "Detail"
+     }
+    },
+    "type": "object",
+    "title": "HTTPValidationError"
+   },
+   "Job": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "txt2img",
+       "img2img",
+       "txt2audio",
+       "txt2video",
+       "img2video",
+       "img23d",
+       "download"
+      ],
+      "title": "Kind"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "queued",
+       "running",
+       "done",
+       "error",
+       "cancelled"
+      ],
+      "title": "Status"
+     },
+     "progress": {
+      "type": "number",
+      "title": "Progress",
+      "default": 0.0
+     },
+     "stage": {
+      "type": "string",
+      "title": "Stage",
+      "default": ""
+     },
+     "params": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Params",
+      "default": {}
+     },
+     "asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Asset Ids",
+      "default": []
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "created_at": {
+      "type": "number",
+      "title": "Created At"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "status",
+     "created_at"
+    ],
+    "title": "Job"
+   },
+   "ModelFile": {
+    "properties": {
+     "repo": {
+      "type": "string",
+      "title": "Repo"
+     },
+     "file": {
+      "type": "string",
+      "title": "File"
+     },
+     "target": {
+      "type": "string",
+      "title": "Target"
+     },
+     "installed": {
+      "type": "boolean",
+      "title": "Installed",
+      "default": false
+     },
+     "local_path": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Local Path"
+     },
+     "size_gb": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Size Gb"
+     }
+    },
+    "type": "object",
+    "required": [
+     "repo",
+     "file",
+     "target"
+    ],
+    "title": "ModelFile"
+   },
+   "ModelInfo": {
+    "properties": {
+     "id": {
+      "type": "string",
+      "title": "Id"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "kind": {
+      "type": "string",
+      "enum": [
+       "image",
+       "audio",
+       "video",
+       "3d",
+       "controlnet"
+      ],
+      "title": "Kind"
+     },
+     "family": {
+      "type": "string",
+      "title": "Family"
+     },
+     "workflow": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workflow"
+     },
+     "files": {
+      "items": {
+       "$ref": "#/components/schemas/ModelFile"
+      },
+      "type": "array",
+      "title": "Files",
+      "default": []
+     },
+     "size_gb": {
+      "type": "number",
+      "title": "Size Gb"
+     },
+     "vram_gb": {
+      "type": "number",
+      "title": "Vram Gb",
+      "default": 0
+     },
+     "license": {
+      "type": "string",
+      "title": "License"
+     },
+     "commercial_ok": {
+      "type": "boolean",
+      "title": "Commercial Ok"
+     },
+     "warning": {
+      "type": "string",
+      "title": "Warning",
+      "default": ""
+     },
+     "best_for": {
+      "type": "string",
+      "title": "Best For",
+      "default": ""
+     },
+     "description": {
+      "type": "string",
+      "title": "Description",
+      "default": ""
+     },
+     "pros": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Pros",
+      "default": []
+     },
+     "cons": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Cons",
+      "default": []
+     },
+     "installed": {
+      "type": "boolean",
+      "title": "Installed",
+      "default": false
+     },
+     "partially_installed": {
+      "type": "boolean",
+      "title": "Partially Installed",
+      "default": false
+     },
+     "disk_gb": {
+      "type": "number",
+      "title": "Disk Gb",
+      "default": 0
+     },
+     "runnable": {
+      "type": "boolean",
+      "title": "Runnable",
+      "default": false
+     },
+     "favorite": {
+      "type": "boolean",
+      "title": "Favorite",
+      "default": false
+     },
+     "fits_vram": {
+      "type": "string",
+      "title": "Fits Vram",
+      "default": "unklar"
+     },
+     "recommended": {
+      "type": "boolean",
+      "title": "Recommended",
+      "default": false
+     },
+     "gpu_note": {
+      "type": "string",
+      "title": "Gpu Note",
+      "default": ""
+     },
+     "features": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Features",
+      "default": {}
+     }
+    },
+    "type": "object",
+    "required": [
+     "id",
+     "name",
+     "kind",
+     "family",
+     "size_gb",
+     "license",
+     "commercial_ok"
+    ],
+    "title": "ModelInfo"
+   },
+   "ValidationError": {
+    "properties": {
+     "loc": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        }
+       ]
+      },
+      "type": "array",
+      "title": "Location"
+     },
+     "msg": {
+      "type": "string",
+      "title": "Message"
+     },
+     "type": {
+      "type": "string",
+      "title": "Error Type"
+     },
+     "input": {
+      "title": "Input"
+     },
+     "ctx": {
+      "type": "object",
+      "title": "Context"
+     }
+    },
+    "type": "object",
+    "required": [
+     "loc",
+     "msg",
+     "type"
+    ],
+    "title": "ValidationError"
+   },
+   "VersionInfo": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "title": "Name"
+     },
+     "version": {
+      "type": "string",
+      "title": "Version"
+     },
+     "api": {
+      "type": "integer",
+      "title": "Api",
+      "description": "Vertragsversion; steigt nur bei brechenden Aenderungen"
+     },
+     "features": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Features",
+      "description": "Anfragefelder, die dieser Server kennt: mask, references, upsampler ..."
+     },
+     "comfyui": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Comfyui",
+      "description": "Installierte ComfyUI-Version"
+     },
+     "auth": {
+      "type": "string",
+      "enum": [
+       "token",
+       "local"
+      ],
+      "title": "Auth",
+      "description": "token: andere Geraete brauchen X-NVAI-Token; local: nur dieser Rechner"
+     },
+     "authorized": {
+      "type": "boolean",
+      "title": "Authorized",
+      "description": "Kaeme diese Anfrage mit ihrem Token durch?"
+     },
+     "instance": {
+      "type": "string",
+      "title": "Instance",
+      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NV-AI auf dem Port sein eigenes ist.",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "name",
+     "version",
+     "api",
+     "features",
+     "auth",
+     "authorized"
+    ],
+    "title": "VersionInfo",
+    "description": "GET /api/version -- ohne Token abrufbar."
+   }
+  }
+ }
+}

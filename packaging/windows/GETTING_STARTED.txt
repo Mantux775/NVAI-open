@@ -1,0 +1,69 @@
+NV-AI for Windows - Getting Started
+===================================
+
+NV-AI generates images, audio and video locally on your NVIDIA graphics card.
+You use it in your browser at http://127.0.0.1:8100.
+
+Requirements
+------------
+- Windows 10 (version 2004 or later) or Windows 11, 64-bit
+- NVIDIA graphics card, 12 GB of video memory or more recommended, with a
+  current driver (https://www.nvidia.com/drivers). The setup checks this.
+- Internet access during setup (about 3 GB) and for each model (5 to 30 GB)
+- Free disk space: about 10 GB for the program, plus room for the models
+
+When you first run the setup
+----------------------------
+Windows may show "Windows protected your PC". The setup is not signed
+(yet). Click "More info", then "Run anyway".
+
+After copying its files, the setup installs Python, ComfyUI and PyTorch. A
+console window stays open while this happens and closes by itself at the
+end. This takes 5 to 20 minutes.
+
+First steps
+-----------
+1. Open "NV-AI" from the Start menu. Your browser shows the interface.
+2. Under "Models", download an image model. NV-AI suggests models that suit
+   your graphics card.
+3. Under "Generate", enter a prompt. The first job after a start takes an
+   extra 30 to 60 seconds because the model is being loaded.
+
+"Quit NV-AI" in the Start menu shuts everything down and frees the graphics
+card.
+
+FLUX 3 Image Klein
+------------------
+Black Forest Labs puts this model behind a license confirmation.
+For it you need a free account at https://huggingface.co:
+1. Accept the license at
+   https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy
+2. Create a token (read access) at https://huggingface.co/settings/tokens
+3. Enter the token in NV-AI (under "Models").
+License: commercial use only below US$5 million annual revenue; review every
+image before publishing it.
+
+3D models (if installed)
+------------------------
+In NV-AI under "Models", download TripoSG (7.4 GB). Then turn any generated image
+into a 3D mesh (GLB). Best results: one object, plain background, no cast shadow.
+
+PhotoCraft add-on (if installed)
+--------------------------------
+Start menu: "NV-AI for PhotoCraft". It requires PhotoCraft itself:
+https://github.com/storytold/photocraft/releases/latest (version 0.10.0 or newer)
+
+If something goes wrong
+-----------------------
+Please send these files along with your report:
+- %LOCALAPPDATA%\NV-AI\install.log     (setup)
+- %LOCALAPPDATA%\NV-AI\nvai-server.log (server)
+- %LOCALAPPDATA%\NV-AI\comfyui.log     (generation)
+(If you chose a different data folder, they are in that folder.)
+
+"Repair NV-AI" in the Start menu runs the installation steps again.
+
+Uninstalling
+------------
+Via Settings > Apps > NV-AI. Models and images are kept unless you choose to
+delete them during uninstallation.

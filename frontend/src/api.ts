@@ -1,0 +1,408 @@
+// Duenner Typ-Layer ueber die REST-API. Spiegelt server/nvai/schemas.py.
+
+import { getLang, t } from './i18n'
+
+export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
+export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
+/** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. */
+export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet'
+/** Die vier Modi, die wirklich etwas erzeugen. */
+export type GenKind = 'image' | 'audio' | 'video' | '3d'
+
+export interface Job {
+  id: string
+  kind: string
+  status: JobStatus
+  progress: number
+  stage: string
+  params: Record<string, any>
+  asset_ids: string[]
+  error: string | null
+  created_at: number
+  started_at: number | null
+  finished_at: number | null
+}
+
+export interface Asset {
+  id: string
+  job_id: string | null
+  kind: AssetKind
+  filename: string
+  url: string
+  thumb_url: string | null
+  prompt: string
+  model_id: string
+  meta: Record<string, any>
+  created_at: number
+}
+
+export interface ModelFile {
+  repo: string
+  file: string
+  target: string
+  installed: boolean
+  local_path: string | null
+  size_gb: number | null
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+  kind: ModelKind
+  family: string
+  workflow: string | null
+  files: ModelFile[]
+  size_gb: number
+  vram_gb: number
+  license: string
+  commercial_ok: boolean
+  /** Gesetzt, wenn vor dem Einsatz etwas zu beachten ist (z. B. Lizenzausschluss). */
+  warning: string
+  best_for: string
+  description: string
+  pros: string[]
+  cons: string[]
+  installed: boolean
+  partially_installed: boolean
+  disk_gb: number
+  runnable: boolean
+  favorite: boolean
+  /** Passt das Modell auf die erkannte Karte? 'ja' | 'knapp' | 'nein' | 'unklar' */
+  fits_vram: string
+  /** Für die erkannte Kartengeneration empfohlen (RTX 50: NVFP4, sonst INT8). */
+  recommended: boolean
+  /** Hinweis, wenn das Format auf dieser Karte nicht in Hardware rechnet. */
+  gpu_note: string
+  /** Was das Modell beim Generieren kann — steuert die Bedienelemente (registry.features_for). */
+  features: Partial<ModelFeatures>
+}
+
+/** Ein Treffer der Hugging-Face-Suche (GET /api/models/search). */
+export interface HfResult {
+  repo: string
+  downloads: number
+  likes: number
+  license: string
+  gated: boolean
+  pipeline_tag: string
+  /** safetensors-Dateien, die als Checkpoint in Frage kommen */
+  files: string[]
+  /** Warum keine Datei in Frage kommt (Diffusers, GGUF …) */
+  note: string
+}
+
+/** Ergebnis der Prüfung vor dem Laden (GET /api/models/inspect). */
+export interface HfCheck {
+  repo: string
+  file: string
+  ok: boolean
+  family: string | null
+  workflow: string | null
+  size_gb: number | null
+  verdict: string
+}
+
+export interface ModelSize {
+  label: string
+  w: number
+  h: number
+}
+
+export interface ModelFeatures {
+  steps: number
+  cfg: number
+  /** Wirkt der negative Prompt? Nur bei CFG > 1. */
+  negative_prompt: boolean
+  /** Greift, wenn kein eigener Negativprompt angegeben ist. */
+  default_negative: string
+  /** FLUX 3: Prompt-Upsampler baut die Anfrage vorher aus. */
+  upsampler: boolean
+  /** Wie viele Referenzbilder das Modell nimmt (0 = keine). */
+  references: number
+  bbox: boolean
+  img2img: boolean
+  hires: boolean
+  text_rendering: boolean
+  /** Zusätzliche, für dieses Modell empfohlene Formate. */
+  sizes: ModelSize[]
+  prompt_hint: string
+  placeholder: string
+}
+
+export interface Health {
+  ok: boolean
+  comfy_running: boolean
+  gpu: { name: string; vram_total_mb: number; vram_free_mb: number } | null
+  active_models: Record<GenKind, string | null>
+  queue_depth: number
+  current_job: string | null
+  download_queue_depth: number
+  current_download: string | null
+  hf_token: boolean
+  /** Mesh-Worker (TripoSG, TRELLIS.2) je Schlüssel — eingerichtet und laufend. */
+  mesh_workers: Record<string, { name: string; ready: boolean; running: boolean }>
+  /** Was gerade wirklich im VRAM liegt. Leer = nichts geladen. */
+  vram_loaded: { backend: string; model: string }[]
+}
+
+export interface DeleteResult {
+  model_id: string
+  removed: string[]
+  freed_gb: number
+  failed: string[]
+}
+
+export interface ImageParams {
+  prompt: string
+  negative_prompt?: string
+  model_id?: string | null
+  width?: number
+  height?: number
+  steps?: number | null
+  cfg?: number | null
+  seed?: number | null
+  batch_size?: number
+  sampler?: string | null
+  scheduler?: string | null
+  /** Vorhandenes Bild ueberarbeiten statt neu wuerfeln */
+  image_asset_id?: string | null
+  denoise?: number
+  /** Nur FLUX 3: bis zu 10 Referenzbilder, im Prompt "the first image", ... */
+  reference_asset_ids?: string[]
+  /** Nur FLUX 3: Upsampler an (null = Modellstandard) */
+  upsample_prompt?: boolean | null
+  /** Zweiter Sampling-Durchgang auf vergroessertem Latent */
+  hires?: boolean
+  hires_scale?: number
+  hires_denoise?: number
+  /** SkipLayerGuidanceSD3 — wirkt nur bei SD3-Modellen */
+  slg?: boolean
+  slg_scale?: number
+  /** Form aus einer Vorlage erzwingen */
+  controlnet_model_id?: string | null
+  controlnet_image_asset_id?: string | null
+  controlnet_strength?: number
+  controlnet_end?: number
+  controlnet_preprocess?: 'none' | 'canny'
+}
+
+export interface AudioParams {
+  prompt: string
+  negative_prompt?: string
+  lyrics?: string
+  model_id?: string | null
+  seconds?: number
+  steps?: number | null
+  cfg?: number | null
+  seed?: number | null
+  bpm?: number | null
+}
+
+export interface VideoParams {
+  prompt: string
+  negative_prompt?: string
+  model_id?: string | null
+  width?: number
+  height?: number
+  frames?: number
+  fps?: number
+  steps?: number | null
+  cfg?: number | null
+  seed?: number | null
+  /** Startbild fuer Bild-zu-Video. Bei I2V-Modellen Pflicht. */
+  image_asset_id?: string | null
+}
+
+export interface Mesh3DParams {
+  image_asset_id: string
+  model_id?: string | null
+  steps?: number
+  guidance?: number
+  seed?: number | null
+  faces?: number
+  remove_background?: boolean
+  /** Nur TRELLIS.2 */
+  resolution?: number
+  texture_size?: number
+  background_mode?: 'birefnet' | 'flood' | 'alpha'
+  clean_specks?: boolean
+  speck_ratio?: number
+}
+
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      // Der Server antwortet in derselben Sprache (Modelltexte, Hinweise, Fehler).
+      'Accept-Language': getLang(),
+      ...(init?.headers ?? {}),
+    },
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    let detail = body.slice(0, 400)
+    try {
+      detail = JSON.parse(body).detail ?? detail
+    } catch {
+      /* Klartext-Fehler unveraendert lassen */
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<T>
+}
+
+export const api = {
+  health: () => req<Health>('/api/health'),
+  startBackend: () => req<{ started: boolean }>('/api/backend/start', { method: 'POST' }),
+  freeVram: () => req<{ ok: boolean; freed: string[] }>('/api/backend/free', { method: 'POST' }),
+  /** Stoppt den laufenden GPU-Job (Generierung), nicht die Downloads. */
+  cancelCurrentJob: () =>
+    req<{ ok: boolean; job_id?: string; stopped?: string[]; reason?: string }>(
+      '/api/jobs/current/cancel',
+      { method: 'POST' },
+    ),
+  backendLog: () => req<{ log: string }>('/api/backend/log'),
+
+  models: (kind?: ModelKind) => req<ModelInfo[]>(`/api/models${kind ? `?kind=${kind}` : ''}`),
+  /** clean=true löscht einen unvollständigen Stand vorher und lädt frisch. */
+  downloadModel: (model_id: string, clean = false) =>
+    req<Job>('/api/models/download', {
+      method: 'POST',
+      body: JSON.stringify({ model_id, clean }),
+    }),
+  hfTokenStatus: () => req<{ logged_in: boolean; name: string | null }>('/api/settings/hf-token'),
+  setHfToken: (token: string) =>
+    req<{ logged_in: boolean; name: string | null }>('/api/settings/hf-token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  deleteHfToken: () =>
+    req<{ logged_in: boolean; name: string | null }>('/api/settings/hf-token', {
+      method: 'DELETE',
+    }),
+  searchHf: (q: string) => req<HfResult[]>(`/api/models/search?q=${encodeURIComponent(q)}`),
+  inspectHf: (repo: string, file: string) =>
+    req<HfCheck>(
+      `/api/models/inspect?repo=${encodeURIComponent(repo)}&file=${encodeURIComponent(file)}`,
+    ),
+  /** Lädt eine geprüfte Datei aus der Suche und nimmt sie in den Katalog auf. */
+  downloadChecked: (c: HfCheck, license: string) =>
+    req<Job>('/api/models/download', {
+      method: 'POST',
+      body: JSON.stringify({
+        repo: c.repo,
+        file: c.file,
+        target: 'checkpoints',
+        kind: 'image',
+        family: c.family,
+        workflow: c.workflow,
+        license: license || null,
+        size_gb: c.size_gb,
+      }),
+    }),
+  deleteModel: (model_id: string) =>
+    req<DeleteResult>(`/api/models/${model_id}`, { method: 'DELETE' }),
+  cancelDownloads: () =>
+    req<{ ok: boolean; cancelled: number; was_running: string | null }>(
+      '/api/downloads/cancel',
+      { method: 'POST' },
+    ),
+  cleanupPartial: () =>
+    req<{ ok: boolean; cleaned: { model_id: string; name: string }[]; freed_gb: number }>(
+      '/api/models/cleanup',
+      { method: 'POST' },
+    ),
+  setActiveModel: (model_id: string) =>
+    req<{ active_model: string; kind: ModelKind }>('/api/models/active', {
+      method: 'POST',
+      body: JSON.stringify({ model_id }),
+    }),
+  /** Favorit setzen/entfernen. Ohne Wert wird umgeschaltet. */
+  toggleFavorite: (model_id: string, favorite?: boolean) =>
+    req<{ model_id: string; favorite: boolean }>(`/api/models/${model_id}/favorite`, {
+      method: 'POST',
+      body: JSON.stringify(favorite === undefined ? {} : { favorite }),
+    }),
+
+  generateImage: (p: ImageParams) =>
+    req<Job>('/api/generate/image', { method: 'POST', body: JSON.stringify(p) }),
+  generateAudio: (p: AudioParams) =>
+    req<Job>('/api/generate/audio', { method: 'POST', body: JSON.stringify(p) }),
+  generateVideo: (p: VideoParams) =>
+    req<Job>('/api/generate/video', { method: 'POST', body: JSON.stringify(p) }),
+  generate3D: (p: Mesh3DParams) =>
+    req<Job>('/api/generate/3d', { method: 'POST', body: JSON.stringify(p) }),
+
+  /** Bild-Upload als Quelle für Bild→3D. Kein JSON — FormData. */
+  upload: async (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    // Content-Type setzt der Browser selbst (multipart mit Boundary), die Sprache nicht.
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: fd,
+      headers: { 'Accept-Language': getLang() },
+    })
+    if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 300)}`)
+    return (await res.json()) as Asset
+  },
+
+  jobs: (limit = 50) => req<Job[]>(`/api/jobs?limit=${limit}`),
+  job: (id: string) => req<Job>(`/api/jobs/${id}`),
+  jobAssets: (id: string) => req<Asset[]>(`/api/jobs/${id}/assets`),
+  assets: (kind?: string, limit = 100) =>
+    req<Asset[]>(`/api/assets?limit=${limit}${kind ? `&kind=${kind}` : ''}`),
+
+  deleteAsset: (id: string) =>
+    req<{ ok: boolean; freed_mb: number }>(`/api/assets/${id}`, { method: 'DELETE' }),
+  deleteJob: (id: string) =>
+    req<{ ok: boolean; assets: number; freed_mb: number }>(`/api/jobs/${id}`, { method: 'DELETE' }),
+  clearHistory: (kind?: string) =>
+    req<{ ok: boolean; jobs: number; assets: number; freed_mb: number }>(
+      `/api/history${kind ? `?kind=${kind}` : ''}`,
+      { method: 'DELETE' },
+    ),
+}
+
+export type ServerEvent =
+  | { type: 'ping' }
+  | { type: 'job.queued'; job_id: string; kind: string }
+  | { type: 'job.started'; job_id: string }
+  | { type: 'job.progress'; job_id: string; progress: number; stage: string }
+  | { type: 'job.done'; job_id: string; asset_ids: string[] }
+  | { type: 'job.error'; job_id: string; error: string }
+  | { type: 'job.cancelled'; job_id: string }
+
+/** Reconnectender WebSocket auf den Job-Event-Feed. */
+export function connectEvents(onEvent: (e: ServerEvent) => void): () => void {
+  let ws: WebSocket | null = null
+  let closed = false
+  let retry: number | undefined
+
+  const open = () => {
+    if (closed) return
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    ws = new WebSocket(`${proto}://${location.host}/ws`)
+    ws.onmessage = (ev) => onEvent(JSON.parse(ev.data))
+    ws.onclose = () => {
+      if (!closed) retry = window.setTimeout(open, 2000)
+    }
+    ws.onerror = () => ws?.close()
+  }
+  open()
+
+  return () => {
+    closed = true
+    if (retry) clearTimeout(retry)
+    ws?.close()
+  }
+}
+
+export const KIND_LABEL: Record<ModelKind, string> = {
+  image: t('Bild', 'Image'),
+  audio: 'Audio',
+  video: 'Video',
+  '3d': '3D',
+  controlnet: 'ControlNet',
+}

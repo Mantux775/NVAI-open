@@ -1,0 +1,69 @@
+NV-AI für Windows – Erste Schritte
+==================================
+
+NV-AI erzeugt Bilder, Audio und Video lokal auf deiner NVIDIA-Grafikkarte.
+Bedient wird es im Browser unter http://127.0.0.1:8100.
+
+Voraussetzungen
+---------------
+- Windows 10 (2004 oder neuer) oder Windows 11, 64 Bit
+- NVIDIA-Grafikkarte, empfohlen ab 12 GB Grafikspeicher, mit aktuellem Treiber
+  (https://www.nvidia.com/drivers). Das Setup prüft das.
+- Internet beim Einrichten (rund 3 GB) und für jedes Modell (5 bis 30 GB)
+- Freier Speicher: rund 10 GB für das Programm, dazu Platz für die Modelle
+
+Beim ersten Start des Setups
+----------------------------
+Windows zeigt eventuell „Der Computer wurde durch Windows geschützt“. Das Setup
+ist (noch) nicht signiert. Auf „Weitere Informationen“ und dann auf
+„Trotzdem ausführen“ klicken.
+
+Nach dem Kopieren richtet das Setup Python, ComfyUI und PyTorch ein. Dabei ist
+ein Konsolenfenster offen; es schließt sich am Ende selbst. Das dauert
+5 bis 20 Minuten.
+
+Loslegen
+--------
+1. Im Startmenü „NV-AI“ öffnen. Der Browser zeigt die Oberfläche.
+2. Unter „Modelle“ ein Bildmodell laden. NV-AI schlägt passende Modelle für
+   deine Grafikkarte vor.
+3. Unter „Generieren“ einen Prompt eingeben. Der erste Auftrag nach dem Start
+   braucht zusätzlich 30 bis 60 Sekunden, weil das Modell geladen wird.
+
+„NV-AI beenden“ im Startmenü fährt alles herunter und gibt die Grafikkarte frei.
+
+FLUX 3 Image Klein
+------------------
+Dieses Modell liegt bei Black Forest Labs hinter einer Lizenzbestätigung.
+Dafür brauchst du ein kostenloses Konto bei https://huggingface.co:
+1. Auf https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy die
+   Lizenz bestätigen.
+2. Unter https://huggingface.co/settings/tokens einen Token (Lesen) anlegen.
+3. Den Token in NV-AI eintragen.
+Lizenz: kommerziell nur unter 5 Mio. US-$ Jahresumsatz, jedes Bild vor der
+Veröffentlichung prüfen.
+
+3D-Modelle (falls mitinstalliert)
+---------------------------------
+In NV-AI unter „Modelle“ TripoSG laden (7,4 GB). Danach wird aus einem erzeugten Bild
+ein 3D-Modell (GLB). Am besten: ein Objekt, ruhiger Hintergrund, kein Schlagschatten.
+
+PhotoCraft-Add-on (falls mitinstalliert)
+----------------------------------------
+Startmenü: „NV-AI für PhotoCraft“. Es braucht PhotoCraft selbst:
+https://github.com/storytold/photocraft/releases/latest (ab Version 0.10.0)
+
+Wenn etwas nicht klappt
+-----------------------
+Diese Dateien bitte mitschicken:
+- %LOCALAPPDATA%\NV-AI\install.log     (Einrichtung)
+- %LOCALAPPDATA%\NV-AI\nvai-server.log (Server)
+- %LOCALAPPDATA%\NV-AI\comfyui.log     (Rechnen)
+(Bei einem anderen Datenordner liegen sie dort.)
+
+„NV-AI reparieren“ im Startmenü wiederholt die Einrichtung.
+
+Deinstallieren
+--------------
+Über Einstellungen → Apps → NV-AI. Modelle und Bilder bleiben erhalten, es
+sei denn, du wählst beim Deinstallieren das Löschen aus.
