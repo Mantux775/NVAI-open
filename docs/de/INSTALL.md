@@ -36,9 +36,23 @@ den eigenen Benutzer und braucht keine Adminrechte.
 Das Setup prüft Grafikkarte und Treiber und warnt, wenn keine NVIDIA-Karte gefunden wird oder
 der Treiber zu alt ist. Ohne NVIDIA-Karte lässt sich NV-AI installieren, erzeugt aber nichts.
 
+### Experimentell (0.5-Beta): AMD Radeon und mehrere Grafikkarten
+
+- **AMD Radeon:** Das Setup erkennt eine Radeon (und keine NVIDIA-Karte) und installiert PyTorch
+  mit ROCm 7.2.1 von AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, beide
+  mit Hashes). Nötig ist der AMD-Treiber 26.2.2 oder neuer. 3D wird auf AMD übersprungen.
+  „NV-AI reparieren“ erkennt die Karte erneut; `install-runtime.ps1 -Gpu amd|nvidia` erzwingt
+  eine Seite.
+- **Mehrere NVIDIA-Karten:** Unter „Modelle“ → „Grafikkarten“ für Bildmodelle, Sprachmodelle und
+  3D je eine Karte wählen. Bekommen die Sprachmodelle eine eigene Karte, startet NV-AI dafür ein
+  zweites ComfyUI (Port 8189, Protokoll in `comfyui-text.log`). Die Wahl steht in `gpus.json` im
+  Datenordner; wer die Datei löscht, hat wieder alles auf Karte 0.
+- Zum Testen ohne die Hardware: `NVAI_SIMULATE_GPUS=2` meldet die eine Karte doppelt, und
+  `NVAI_TEXT_BACKEND=separate` erzwingt das zweite ComfyUI auf einer einzigen Karte.
+
 ### Windows SmartScreen
 
-Das Setup ist (noch) nicht signiert. Windows zeigt deshalb eventuell **„Der Computer wurde
+Das Setup ist nicht signiert. Windows zeigt deshalb eventuell **„Der Computer wurde
 durch Windows geschützt“**. Auf **„Weitere Informationen“** und dann auf **„Trotzdem
 ausführen“** klicken.
 

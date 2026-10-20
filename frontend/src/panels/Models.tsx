@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, KIND_LABEL, type ModelInfo, type ModelKind, type ServerEvent } from '../api'
 import type { Downloads } from '../downloads'
 import { t } from '../i18n'
+import { GpuSettings } from '../components/GpuSettings'
 import { HfSearch } from './HfSearch'
 import { HfToken } from './HfToken'
 
@@ -207,6 +208,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
 
   return (
     <div className="models">
+      <GpuSettings />
       <div className="model-toolbar">
         <div className="filters">
           {FILTERS.map((f) => (

@@ -20,7 +20,9 @@ from typing import Any, Callable
 import httpx
 import websockets
 
-from . import config
+from urllib.parse import urlparse
+
+from . import config, gpu
 from .i18n import t
 
 ProgressCb = Callable[[float, str], None]
@@ -63,8 +65,12 @@ def _explain(message: str) -> str:
 
 
 # ------------------------------------------------------------ Prozess
-
-_proc: subprocess.Popen | None = None
+#
+# Normalerweise genau ein ComfyUI. Seit 0.5 (experimentell) optional ein zweites fuer
+# die Sprachmodelle (FLUX-3-Upsampler, "Prompt ausbauen"), wenn die auf einer anderen
+# Karte liegen als die Bildmodelle (gpu.separate_text_backend). Beide teilen sich
+# Programm, Modelle und input/, haben aber eigene Benutzer-, Ausgabe- und Temp-Ordner --
+# zwei Prozesse auf derselben ComfyUI-Datenbank vertragen sich nicht.
 
 
 def comfy_python() -> Path:
@@ -86,125 +92,191 @@ def installed_version() -> str | None:
     return None
 
 
-async def is_running(timeout: float = 2.0) -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as c:
-            r = await c.get(f"{config.COMFY_URL}/system_stats")
-            return r.status_code == 200
-    except (httpx.HTTPError, OSError):
+class Backend:
+    """Ein ComfyUI-Prozess: Start, Status, Speicher freigeben, Abbrechen."""
+
+    def __init__(self, key: str, url: str, role: str) -> None:
+        self.key = key
+        self.url = url
+        self.role = role  # Rolle aus gpu.ROLES: auf welcher Karte er rechnet
+        self.port = urlparse(url).port or 8188
+        self.log_path = config.DATA_DIR / ("comfyui.log" if key == "main" else f"comfyui-{key}.log")
+        self._proc: subprocess.Popen | None = None
+        # Welches Modell zuletzt an dieses ComfyUI ging. ComfyUI selbst verraet das
+        # nicht ueber die API, also fuehren wir Buch: gesetzt beim Start eines Jobs,
+        # geloescht beim Freigeben oder Beenden.
+        self.loaded: str | None = None
+
+    async def is_running(self, timeout: float = 2.0) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as c:
+                return (await c.get(f"{self.url}/system_stats")).status_code == 200
+        except (httpx.HTTPError, OSError):
+            return False
+
+    async def system_stats(self, timeout: float = 5.0) -> dict[str, Any] | None:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as c:
+                r = await c.get(f"{self.url}/system_stats")
+                r.raise_for_status()
+                return r.json()
+        except (httpx.HTTPError, OSError):
+            return None
+
+    def start(self) -> subprocess.Popen:
+        """Startet ComfyUI headless als Kindprozess.
+
+        Der Output geht in eine Logdatei, nicht in eine Pipe: ComfyUI schreibt beim
+        Start mehr, als ein Pipe-Puffer fasst, und wuerde sonst beim Schreiben
+        blockieren, solange niemand liest.
+        """
+        if self._proc is not None and self._proc.poll() is None:
+            return self._proc
+        py = comfy_python()
+        if not py.exists():
+            raise RuntimeError(t(
+                f"ComfyUI-venv fehlt: {py}\nBitte scripts/setup_comfyui.ps1 ausfuehren.",
+                f"ComfyUI venv missing: {py}\nPlease run scripts/setup_comfyui.ps1.",
+            ))
+        config.ensure_dirs()
+        log = self.log_path.open("a", encoding="utf-8", errors="replace")
+        log.write(f"\n{'=' * 60}\nStart {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        args = [str(py), "main.py", "--port", str(self.port), "--listen", "127.0.0.1",
+                "--disable-auto-launch"]
+        if config.MODEL_DIR_OVERRIDE:
+            args += ["--models-directory", str(config.COMFY_MODEL_DIR)]
+        if gpu.multi_gpu():
+            # Erst mit mehreren Karten eine feste Karte vorgeben; mit einer bleibt alles
+            # wie vor 0.5. ComfyUI setzt daraus CUDA_VISIBLE_DEVICES (bzw. HIP_*).
+            args += ["--cuda-device", str(gpu.device_for(self.role))]
+        if self.key != "main":
+            own = config.DATA_DIR / f"comfy-{self.key}"
+            for flag, sub in (("--user-directory", "user"), ("--output-directory", "output"),
+                              ("--temp-directory", "temp")):
+                (own / sub).mkdir(parents=True, exist_ok=True)
+                args += [flag, str(own / sub)]
+        log.write(f"Args: {' '.join(args[1:])}\n")
+        log.flush()
+        self._proc = subprocess.Popen(
+            args,
+            cwd=str(config.COMFY_ROOT),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            # Ohne das oeffnet sich unter pythonw (installierte Fassung) ein Konsolenfenster.
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return self._proc
+
+    def log_tail(self, lines: int = 40) -> str:
+        if not self.log_path.exists():
+            return ""
+        content = self.log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return "\n".join(content[-lines:])
+
+    def stop(self) -> None:
+        self.loaded = None
+        if self._proc is not None and self._proc.poll() is None:
+            self._proc.terminate()
+        self._proc = None
+
+    async def wait_until_ready(self, timeout: float = 180.0) -> bool:
+        """ComfyUI braucht beim ersten Start lange (Torch-Import, Modell-Scan)."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if await self.is_running():
+                return True
+            await asyncio.sleep(1.5)
         return False
+
+    async def ensure(self) -> None:
+        """Laeuft er nicht, starten und warten. Wirft mit dem Log-Ende, wenn er nicht kommt."""
+        if await self.is_running():
+            return
+        self.start()
+        if not await self.wait_until_ready():
+            raise RuntimeError(t(
+                f"ComfyUI ({self.key}) kam nicht hoch. Letzte Logzeilen:\n{self.log_tail(15)}",
+                f"ComfyUI ({self.key}) did not come up. Last log lines:\n{self.log_tail(15)}",
+            ))
+
+    async def free_memory(self) -> None:
+        """Modelle aus dem VRAM werfen -- vor dem Umschalten auf den 3D-Worker."""
+        self.loaded = None
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as c:
+                await c.post(f"{self.url}/free", json={"unload_models": True, "free_memory": True})
+        except (httpx.HTTPError, OSError):
+            pass
+
+    async def interrupt(self) -> bool:
+        """Bricht die laufende Generierung ab. Ohne das rechnet ComfyUI weiter, auch
+        wenn wir den Job-Task abbrechen -- die GPU bliebe belegt."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as c:
+                r = await c.post(f"{self.url}/interrupt")
+                return r.status_code < 400
+        except (httpx.HTTPError, OSError):
+            return False
+
+
+MAIN = Backend("main", config.COMFY_URL, "image")
+TEXT = Backend("text", config.COMFY_TEXT_URL, "text")
+
+
+def text_backend() -> Backend:
+    """Wohin Textjobs (Upsampler) gehen: das eigene ComfyUI fuer Sprachmodelle, falls
+    eingerichtet, sonst dasselbe wie fuer Bilder."""
+    return TEXT if gpu.separate_text_backend() else MAIN
+
+
+# Die bisherige Schnittstelle (ein ComfyUI) -- zeigt auf das Bild-Backend.
+LOG_PATH = MAIN.log_path
+
+
+async def is_running(timeout: float = 2.0) -> bool:
+    return await MAIN.is_running(timeout)
 
 
 async def system_stats(timeout: float = 5.0) -> dict[str, Any] | None:
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as c:
-            r = await c.get(f"{config.COMFY_URL}/system_stats")
-            r.raise_for_status()
-            return r.json()
-    except (httpx.HTTPError, OSError):
-        return None
-
-
-LOG_PATH = config.DATA_DIR / "comfyui.log"
+    return await MAIN.system_stats(timeout)
 
 
 def start() -> subprocess.Popen:
-    """Startet ComfyUI headless als Kindprozess.
-
-    Der Output geht in eine Logdatei, nicht in eine Pipe: ComfyUI schreibt beim
-    Start mehr, als ein Pipe-Puffer fasst, und wuerde sonst beim Schreiben
-    blockieren, solange niemand liest.
-    """
-    global _proc
-    if _proc is not None and _proc.poll() is None:
-        return _proc
-    py = comfy_python()
-    if not py.exists():
-        raise RuntimeError(t(
-            f"ComfyUI-venv fehlt: {py}\nBitte scripts/setup_comfyui.ps1 ausfuehren.",
-            f"ComfyUI venv missing: {py}\nPlease run scripts/setup_comfyui.ps1.",
-        ))
-    config.ensure_dirs()
-    log = LOG_PATH.open("a", encoding="utf-8", errors="replace")
-    log.write(f"\n{'=' * 60}\nStart {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-    log.flush()
-    args = [str(py), "main.py", "--port", "8188", "--listen", "127.0.0.1", "--disable-auto-launch"]
-    if config.MODEL_DIR_OVERRIDE:
-        args += ["--models-directory", str(config.COMFY_MODEL_DIR)]
-    _proc = subprocess.Popen(
-        args,
-        cwd=str(config.COMFY_ROOT),
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        # Ohne das oeffnet sich unter pythonw (installierte Fassung) ein Konsolenfenster.
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    return _proc
+    return MAIN.start()
 
 
 def log_tail(lines: int = 40) -> str:
-    if not LOG_PATH.exists():
-        return ""
-    content = LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()
-    return "\n".join(content[-lines:])
+    return MAIN.log_tail(lines)
 
 
 def stop() -> None:
-    global _proc
-    set_loaded_model(None)
-    if _proc is not None and _proc.poll() is None:
-        _proc.terminate()
-    _proc = None
+    """Beendet alle ComfyUI-Prozesse von NV-AI."""
+    MAIN.stop()
+    TEXT.stop()
 
 
 async def wait_until_ready(timeout: float = 180.0) -> bool:
-    """ComfyUI braucht beim ersten Start lange (Torch-Import, Modell-Scan)."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while loop.time() < deadline:
-        if await is_running():
-            return True
-        await asyncio.sleep(1.5)
-    return False
-
-
-# Welches Modell zuletzt an ComfyUI geschickt wurde. ComfyUI selbst verraet das
-# nicht ueber die API, also fuehren wir hier Buch: gesetzt beim Start eines Jobs,
-# geloescht beim Freigeben oder Beenden.
-_loaded_model: str | None = None
+    return await MAIN.wait_until_ready(timeout)
 
 
 def set_loaded_model(name: str | None) -> None:
-    global _loaded_model
-    _loaded_model = name
+    MAIN.loaded = name
 
 
 def loaded_model() -> str | None:
-    return _loaded_model
+    return MAIN.loaded
 
 
 async def free_memory() -> None:
-    """Modelle aus dem VRAM werfen -- vor dem Umschalten auf den 3D-Worker."""
-    set_loaded_model(None)
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as c:
-            await c.post(f"{config.COMFY_URL}/free", json={"unload_models": True, "free_memory": True})
-    except (httpx.HTTPError, OSError):
-        pass
+    """Gibt den VRAM aller laufenden ComfyUI frei."""
+    await MAIN.free_memory()
+    if await TEXT.is_running(timeout=1.0):
+        await TEXT.free_memory()
 
 
 async def interrupt() -> bool:
-    """Bricht die laufende Generierung in ComfyUI ab.
-
-    Ohne das rechnet ComfyUI weiter, auch wenn wir den Job-Task abbrechen --
-    die GPU bliebe belegt.
-    """
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as c:
-            r = await c.post(f"{config.COMFY_URL}/interrupt")
-            return r.status_code < 400
-    except (httpx.HTTPError, OSError):
-        return False
+    return await MAIN.interrupt()
 
 
 async def list_checkpoints() -> list[str]:
@@ -254,14 +326,17 @@ async def run_workflow(
 ) -> list[Path]:
     """Schickt einen Graphen an ComfyUI, verfolgt den Fortschritt und kopiert die
     Ergebnisse nach data/assets/. Gibt die lokalen Pfade zurueck."""
-    files, _ = await _execute(workflow, on_progress, timeout)
+    files, _ = await _execute(workflow, on_progress, timeout, MAIN.url)
     return await _collect(files)
 
 
 async def run_text_workflow(workflow: dict[str, Any], timeout: float = 600.0) -> list[str]:
     """Wie run_workflow, liefert aber Textausgaben (PreviewAny) statt Dateien --
-    gebraucht fuer den Prompt-Upsampler von FLUX 3."""
-    _, texts = await _execute(workflow, None, timeout)
+    gebraucht fuer den Prompt-Upsampler von FLUX 3. Laeuft auf dem Text-Backend."""
+    backend = text_backend()
+    await backend.ensure()
+    backend.loaded = "Prompt-Upsampler"
+    _, texts = await _execute(workflow, None, timeout, backend.url)
     return texts
 
 
@@ -269,11 +344,12 @@ async def _execute(
     workflow: dict[str, Any],
     on_progress: ProgressCb | None,
     timeout: float,
+    base_url: str,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Gemeinsamer Kern: Graph abschicken, Websocket mitlesen, Datei- und Textausgaben
     einsammeln."""
     client_id = uuid.uuid4().hex
-    ws_url = config.COMFY_URL.replace("http://", "ws://").replace("https://", "wss://")
+    ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
 
     # Mehrstufige Graphen (Hires-Fix, Wan 2.2 mit zwei Experten) haben mehr als einen
     # Sampler. ComfyUI zaehlt je Sampler bei 0 los -- ohne diese Aufteilung faellt der
@@ -288,7 +364,7 @@ async def _execute(
     async with websockets.connect(f"{ws_url}/ws?clientId={client_id}", max_size=None) as ws:
         async with httpx.AsyncClient(timeout=60.0) as http:
             r = await http.post(
-                f"{config.COMFY_URL}/prompt", json={"prompt": workflow, "client_id": client_id}
+                f"{base_url}/prompt", json={"prompt": workflow, "client_id": client_id}
             )
             if r.status_code != 200:
                 raise RuntimeError(t(f"ComfyUI lehnte den Workflow ab: {r.text[:500]}",
@@ -332,7 +408,7 @@ async def _execute(
     # Fallback, falls die WS-Nachricht verpasst wurde -- oder ComfyUI die Ausgabe aus
     # seinem Cache nahm und deshalb gar kein "executed" schickte.
     if not outputs and not texts:
-        outputs, texts = await _outputs_from_history(prompt_id)
+        outputs, texts = await _outputs_from_history(prompt_id, base_url)
 
     return outputs, texts
 
@@ -354,10 +430,10 @@ def _files_from_output(node_output: dict[str, Any]) -> list[dict[str, Any]]:
     return found
 
 
-async def _outputs_from_history(prompt_id: str) -> tuple[list[dict[str, Any]], list[str]]:
+async def _outputs_from_history(prompt_id: str, base_url: str) -> tuple[list[dict[str, Any]], list[str]]:
     """Fallback, falls die WS-Nachricht verpasst wurde."""
     async with httpx.AsyncClient(timeout=30.0) as c:
-        r = await c.get(f"{config.COMFY_URL}/history/{prompt_id}")
+        r = await c.get(f"{base_url}/history/{prompt_id}")
         if r.status_code != 200:
             return [], []
         hist = r.json().get(prompt_id, {})

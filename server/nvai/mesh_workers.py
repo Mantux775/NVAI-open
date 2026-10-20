@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from . import config
+from . import config, gpu
 from .i18n import t
 
 WORKER_DIR = Path(__file__).resolve().parent.parent / "workers"
@@ -124,6 +124,9 @@ class MeshWorker:
         env[f"{self.env_prefix}_ROOT"] = str(self.repo_root)
         env[f"{self.env_prefix}_MODEL"] = str(model_dir)
         env[f"{self.env_prefix}_PORT"] = str(self.port)
+        if gpu.multi_gpu():
+            # Mehrere Karten (experimentell seit 0.5): der Worker sieht nur seine.
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu.device_for("mesh"))
 
         self._proc = subprocess.Popen(
             [str(py), str(self.script)],

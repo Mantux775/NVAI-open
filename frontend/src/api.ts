@@ -153,6 +153,21 @@ export interface Health {
   mesh_workers: Record<string, { name: string; ready: boolean; running: boolean }>
   /** Was gerade wirklich im VRAM liegt. Leer = nichts geladen. */
   vram_loaded: { backend: string; model: string }[]
+  /** Alle Karten (experimentell seit 0.5). Fehlt bei älteren Servern. */
+  gpus?: GpuInfo[]
+  /** Eigenes ComfyUI für die Sprachmodelle, wenn sie auf einer anderen Karte liegen. */
+  text_backend?: { separate: boolean; running: boolean; loaded: string | null }
+}
+
+export type GpuRole = 'image' | 'text' | 'mesh'
+
+export interface GpuInfo {
+  index: number
+  vendor: 'nvidia' | 'amd'
+  name: string
+  vram_total_mb: number
+  vram_used_mb: number | null
+  roles: GpuRole[]
 }
 
 export interface DeleteResult {
@@ -266,6 +281,13 @@ export const api = {
   health: () => req<Health>('/api/health'),
   startBackend: () => req<{ started: boolean }>('/api/backend/start', { method: 'POST' }),
   freeVram: () => req<{ ok: boolean; freed: string[] }>('/api/backend/free', { method: 'POST' }),
+  gpus: () =>
+    req<{ gpus: GpuInfo[]; assignment: Record<GpuRole, number>; vendor: 'nvidia' | 'amd' | null;
+      separate_text_backend: boolean }>('/api/gpus'),
+  setGpus: (a: Partial<Record<GpuRole, number>>) =>
+    req<{ assignment: Record<GpuRole, number>; separate_text_backend: boolean }>(
+      '/api/gpus', { method: 'PUT', body: JSON.stringify(a) },
+    ),
   /** Stoppt den laufenden GPU-Job (Generierung), nicht die Downloads. */
   cancelCurrentJob: () =>
     req<{ ok: boolean; job_id?: string; stopped?: string[]; reason?: string }>(

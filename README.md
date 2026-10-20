@@ -120,6 +120,15 @@ Wood grain, wear, the iron handles and the bolts come out well. Lettering does n
 
 There is also an iOS app with a 3D model scanner that turns photos of real objects into 3D models. It is in closed beta for now. If enough people are interested, I'll make it public, so tell me in an issue if you would use it.
 
+### Testers wanted: two graphics cards and AMD Radeon (0.5 beta)
+
+The [0.5 beta](https://github.com/Mantux775/NVAI-open/releases) adds two experimental features that I cannot fully test on my own PC. If you have the hardware, please try them and tell me what works and what does not in the [issues](https://github.com/Mantux775/NVAI-open/issues). The stable version stays 0.4.0.
+
+- **Two (or more) NVIDIA cards:** under "Models", each task gets its own card: image models, language models (the prompt upsampler and "Expand prompt") and 3D. With the language models on a second card, nothing has to be swapped out any more, and "Expand prompt" runs while an image is rendering. Tested here with one card that simulates two; the real speed-up still needs to be measured.
+- **AMD Radeon (ROCm):** the setup detects a Radeon and installs PyTorch with ROCm 7.2.1 from AMD instead of CUDA. Needs AMD driver 26.2.2 or newer and a card on AMD's [compatibility list](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html) (RDNA 3 and RDNA 4, not every model is listed). Image models in INT8 or FP8 should run. The NVFP4 models are an NVIDIA format, and 3D (TripoSG, TRELLIS.2) needs NVIDIA for now. Tested here: the packages install and ComfyUI starts with them, but I have no Radeon to generate on.
+
+Useful in an issue: graphics card(s), driver version, what you tried, and the end of `nvai-server.log` and `comfyui.log` from your data folder.
+
 ### Requirements
 
 | | Windows | macOS |
@@ -129,7 +138,7 @@ There is also an iOS app with a 3D model scanner that turns photos of real objec
 | Disk | about 10 GB for the program, plus 5 to 30 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
 | Internet | for setup (about 3 GB) and model downloads | for model downloads |
 
-The Windows setup is not code-signed yet, so Windows may show "Windows protected your PC". Click "More info", then "Run anyway". Details: [docs/INSTALL.md](docs/INSTALL.md).
+The Windows setup is not code-signed, so Windows may show "Windows protected your PC". Click "More info", then "Run anyway". Details: [docs/INSTALL.md](docs/INSTALL.md).
 
 ### Licenses
 
@@ -266,6 +275,15 @@ Holzmaserung, Abnutzung, die Eisengriffe und die Schrauben kommen gut heraus. Sc
 
 Es gibt auch eine iOS-App mit 3D-Modell-Scanner, die aus Fotos echter Gegenstände 3D-Modelle macht. Sie ist vorerst eine geschlossene Beta. Wenn genug Interesse da ist, stelle ich sie öffentlich bereit. Schreibt mir gern in einem Issue, wenn ihr sie nutzen würdet.
 
+### Tester gesucht: zwei Grafikkarten und AMD Radeon (0.5-Beta)
+
+Die [0.5-Beta](https://github.com/Mantux775/NVAI-open/releases) bringt zwei experimentelle Funktionen, die ich auf meinem eigenen PC nicht vollständig testen kann. Wer die Hardware hat: bitte ausprobieren und in den [Issues](https://github.com/Mantux775/NVAI-open/issues) schreiben, was geht und was nicht. Die stabile Version bleibt 0.4.0.
+
+- **Zwei (oder mehr) NVIDIA-Karten:** Unter „Modelle“ bekommt jede Aufgabe ihre eigene Karte: Bildmodelle, Sprachmodelle (der Prompt-Upsampler und „Prompt ausbauen“) und 3D. Liegen die Sprachmodelle auf einer zweiten Karte, muss nichts mehr umgeladen werden, und „Prompt ausbauen“ läuft, während ein Bild rechnet. Hier getestet mit einer Karte, die zwei simuliert; den echten Gewinn muss noch jemand messen.
+- **AMD Radeon (ROCm):** Das Setup erkennt eine Radeon und installiert statt CUDA das PyTorch mit ROCm 7.2.1 von AMD. Nötig sind der AMD-Treiber 26.2.2 oder neuer und eine Karte auf AMDs [Kompatibilitätsliste](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html) (RDNA 3 und RDNA 4, nicht jedes Modell ist aufgeführt). Bildmodelle in INT8 oder FP8 sollten laufen. Die NVFP4-Modelle sind ein NVIDIA-Format, und 3D (TripoSG, TRELLIS.2) braucht vorerst NVIDIA. Hier getestet: Die Pakete installieren sich und ComfyUI startet damit, aber zum Generieren fehlt mir eine Radeon.
+
+Hilfreich in einem Issue: Grafikkarte(n), Treiberversion, was du probiert hast, und das Ende von `nvai-server.log` und `comfyui.log` aus deinem Datenordner.
+
 ### Voraussetzungen
 
 | | Windows | macOS |
@@ -275,7 +293,7 @@ Es gibt auch eine iOS-App mit 3D-Modell-Scanner, die aus Fotos echter Gegenstän
 | Platte | rund 10 GB für das Programm, dazu 5 bis 30 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
 | Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
 
-Das Windows-Setup ist noch nicht signiert. Windows zeigt deshalb eventuell „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md).
+Das Windows-Setup ist nicht signiert. Windows zeigt deshalb eventuell „Der Computer wurde durch Windows geschützt“: auf „Weitere Informationen“ und dann „Trotzdem ausführen“ klicken. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md).
 
 ### Lizenzen
 

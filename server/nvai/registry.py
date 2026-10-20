@@ -271,6 +271,8 @@ def gpu_advice(entry: dict[str, Any]) -> dict[str, Any]:
     INT8 laeuft ab RTX 20 (7.5) ueberall nativ.
     """
     info = gpu.detect()
+    if info and info.get("vendor") == "amd":
+        return _amd_advice(entry, info)
     cc = info.get("compute_cap") if info else None
     if cc is None:
         return {"recommended": False, "gpu_note": ""}
@@ -288,6 +290,23 @@ def gpu_advice(entry: dict[str, Any]) -> dict[str, Any]:
                  "und läuft langsamer.",
                  f"{info['name']} has no FP8 units: the model is upcast and runs slower.")
     return {"recommended": entry["id"] in picks, "gpu_note": note}
+
+
+def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
+    """AMD-Karten (ROCm, experimentell seit 0.5): dieselben Empfehlungen wie fuer
+    RTX 20/30/40, dazu Hinweise auf das, was dort sicher nicht oder ungetestet laeuft."""
+    if entry.get("kind") == "3d":
+        return {"recommended": False, "gpu_note": t(
+            "3D braucht derzeit eine NVIDIA-Karte: TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen.",
+            "3D currently needs an NVIDIA card: TripoSG and TRELLIS.2 use CUDA extensions.")}
+    note = t(f"Auf {info['name']} (ROCm) noch ungetestet -- Rückmeldungen auf GitHub helfen.",
+             f"Not tested on {info['name']} (ROCm) yet -- feedback on GitHub helps.")
+    if _precision(entry) == "nvfp4":
+        note = t("NVFP4 ist ein NVIDIA-Format: auf AMD wird es Schicht für Schicht entpackt und "
+                 "läuft deutlich langsamer, falls überhaupt. Besser die INT8- oder FP8-Fassung.",
+                 "NVFP4 is an NVIDIA format: on AMD it is unpacked layer by layer and runs much "
+                 "slower, if at all. Better use the INT8 or FP8 version.")
+    return {"recommended": entry["id"] in catalog.RECOMMENDED_OLDER, "gpu_note": note}
 
 
 def list_models(kind: str | None = None) -> list[ModelInfo]:

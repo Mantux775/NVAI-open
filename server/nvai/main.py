@@ -66,6 +66,7 @@ API_FEATURES = [
     "upload",          # POST /api/upload
     "model_search",    # GET /api/models/search und /inspect: Hugging Face mit Pruefung
     "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
+    "gpus",            # GET/PUT /api/gpus: mehrere Karten, Aufgaben je Karte (experimentell)
 ]
 
 
@@ -288,6 +289,13 @@ async def health() -> dict[str, Any]:
         "download_queue_depth": jobs.download_queue_depth(),
         "current_download": jobs.current_download_id(),
         "hf_token": registry.hf_token() is not None,
+        # Alle Karten (experimentell seit 0.5): Hersteller, Speicher, wofuer sie rechnen.
+        "gpus": _gpus_overview(),
+        "text_backend": {
+            "separate": gpu_info.separate_text_backend(),
+            "running": gpu_info.separate_text_backend() and await comfy.TEXT.is_running(timeout=0.5),
+            "loaded": comfy.TEXT.loaded if gpu_info.separate_text_backend() else None,
+        },
         # Wieviel VRAM einem Modell realistisch bleibt, und ab wann es eng wird.
         "vram_budget_gb": gpu_info.budget_gb(),
         # Eine Antwort des Workers heisst: er laeuft. Eine zweite Anfrage dafuer
@@ -313,9 +321,57 @@ async def backend_log(lines: int = 60, worker: str = "comfy") -> dict[str, str]:
     """Letzte Logzeilen eines Backends -- erster Anlaufpunkt, wenn ein Job scheitert."""
     if worker in mesh_workers.BY_WORKFLOW:
         tail = mesh_workers.BY_WORKFLOW[worker].log_tail(lines)
+    elif worker == "text":
+        tail = comfy.TEXT.log_tail(lines)
     else:
         tail = comfy.log_tail(lines)
     return {"log": tail, "worker": worker}
+
+
+# ------------------------------------------------------------- Grafikkarten
+
+def _gpus_overview() -> list[dict[str, Any]]:
+    """Alle Karten mit Belegung und den Aufgaben, die sie gerade haben."""
+    cards = gpu_info.list_gpus()
+    used = gpu_info.usage()
+    roles = gpu_info.assignment()
+    out = []
+    for c in cards:
+        out.append({
+            **c,
+            "vram_used_mb": used.get(c["index"]),
+            "roles": [r for r in gpu_info.ROLES if roles[r] == c["index"]] if len(cards) > 1
+            else list(gpu_info.ROLES),
+        })
+    return out
+
+
+@app.get("/api/gpus")
+async def get_gpus() -> dict[str, Any]:
+    """Karten und Zuordnung: image (Bildmodelle), text (Sprachmodelle: Prompt-Upsampler,
+    Prompt ausbauen), mesh (3D). Experimentell seit 0.5."""
+    return {"gpus": _gpus_overview(), "assignment": gpu_info.assignment(),
+            "vendor": gpu_info.vendor(),
+            "separate_text_backend": gpu_info.separate_text_backend()}
+
+
+@app.put("/api/gpus")
+async def put_gpus(body: dict[str, int]) -> dict[str, Any]:
+    """Neue Zuordnung speichern. Laufende Backends werden beendet und starten beim
+    naechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet."""
+    if jobs.current_job_id():
+        raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
+                                   "A job is running. Please try again afterwards."))
+    try:
+        new = gpu_info.set_assignment(body)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    comfy.stop()
+    for w in mesh_workers.all_workers():
+        if await w.is_running():
+            await w.unload()
+        w.stop()
+    return {"assignment": new, "separate_text_backend": gpu_info.separate_text_backend()}
 
 
 @app.post("/api/backend/free")

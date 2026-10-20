@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, connectEvents, type Health, type ServerEvent } from './api'
+import { api, connectEvents, type GpuRole, type Health, type ServerEvent } from './api'
 import { useDownloads } from './downloads'
 import { getLang, setLang, t, type Lang } from './i18n'
 import { GeneratePanel } from './panels/Generate'
@@ -13,6 +13,12 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'history', label: t('Verlauf', 'History') },
   { id: 'models', label: t('Modelle', 'Models') },
 ]
+
+const ROLE_LABEL: Record<GpuRole, string> = {
+  image: t('Bild', 'Image'),
+  text: t('Text', 'Text'),
+  mesh: '3D',
+}
 
 // Sprachnamen stehen in ihrer eigenen Sprache, damit man sie in jeder Einstellung findet.
 const LANGS: { id: Lang; label: string; name: string }[] = [
@@ -63,7 +69,13 @@ export function App() {
   const totalGb = health?.gpu ? health.gpu.vram_total_mb / 1024 : 0
   const vram = health?.gpu ? `${usedGb.toFixed(1)} / ${totalGb.toFixed(0)} GB` : '–'
   const vramPct = totalGb > 0 ? Math.min(100, (usedGb / totalGb) * 100) : 0
-  const loaded = health?.vram_loaded ?? []
+  const multiGpu = (health?.gpus?.length ?? 0) > 1
+  const loaded = [
+    ...(health?.vram_loaded ?? []),
+    // Eigenes ComfyUI für Sprachmodelle (mehrere Karten): was dort geladen ist.
+    ...(health?.text_backend?.running && health.text_backend.loaded
+      ? [{ backend: 'ComfyUI (Text)', model: health.text_backend.loaded }] : []),
+  ]
   const busy = !!health?.current_job
 
   const stopJob = async () => {
@@ -118,15 +130,35 @@ export function App() {
           <span className={health?.comfy_running ? 'dot ok' : 'dot off'} />
 
           {/* Was liegt im VRAM? Wichtiger als der GPU-Name, deshalb zuerst. */}
-          <span className="vram" title={`${health?.gpu?.name ?? 'GPU'} · ${vram}`}>
-            <span className="vram-bar">
-              <span
-                className={vramPct > 85 ? 'vram-fill high' : 'vram-fill'}
-                style={{ width: `${vramPct}%` }}
-              />
+          {multiGpu ? (
+            // Mehrere Karten (experimentell): je Karte ein Balken und ihre Aufgaben.
+            health!.gpus!.map((g) => {
+              const total = g.vram_total_mb / 1024
+              const used = (g.vram_used_mb ?? 0) / 1024
+              const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0
+              return (
+                <span key={g.index} className="vram" title={`GPU ${g.index}: ${g.name} · ${used.toFixed(1)} / ${total.toFixed(0)} GB`}>
+                  <span className="gpu-roles">
+                    {g.roles.map((r) => ROLE_LABEL[r]).join(' + ') || `GPU ${g.index}`}
+                  </span>
+                  <span className="vram-bar">
+                    <span className={pct > 85 ? 'vram-fill high' : 'vram-fill'} style={{ width: `${pct}%` }} />
+                  </span>
+                  <span className="muted small">{g.vram_used_mb == null ? `${total.toFixed(0)} GB` : `${used.toFixed(1)} / ${total.toFixed(0)} GB`}</span>
+                </span>
+              )
+            })
+          ) : (
+            <span className="vram" title={`${health?.gpu?.name ?? 'GPU'} · ${vram}`}>
+              <span className="vram-bar">
+                <span
+                  className={vramPct > 85 ? 'vram-fill high' : 'vram-fill'}
+                  style={{ width: `${vramPct}%` }}
+                />
+              </span>
+              <span className="muted small">{vram}</span>
             </span>
-            <span className="muted small">{vram}</span>
-          </span>
+          )}
 
           <span className="loaded">
             {loaded.length === 0 ? (

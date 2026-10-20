@@ -5,7 +5,9 @@ $ErrorActionPreference = "Stop"
 
 $targets = @(
     @{ Port = 8100; Match = "nvai.main:app"; Name = "NV-AI-Orchestrator" },
-    @{ Port = 8188; Match = "main.py";       Name = "ComfyUI" }
+    @{ Port = 8188; Match = "main.py";       Name = "ComfyUI" },
+    # Zweites ComfyUI fuer Sprachmodelle (mehrere Grafikkarten, experimentell seit 0.5)
+    @{ Port = 8189; Match = "main.py";       Name = "ComfyUI (Text)" }
 )
 
 foreach ($t in $targets) {

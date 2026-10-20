@@ -633,3 +633,9 @@ kbd {
 .row-gap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .link-btn { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 .link-btn:hover { text-decoration: underline; }
+
+/* Mehrere Grafikkarten (experimentell): Aufgaben je Karte in der Kopfzeile */
+.gpu-roles { font-size: 11px; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+.gpu-settings { margin-bottom: 14px; }
+.gpu-settings h3 { margin-top: 0; }
+.gpu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 10px; }

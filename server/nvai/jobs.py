@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import comfy, config, db, flux3_prompt, i18n, mesh_workers, registry, workflows
+from . import comfy, config, db, flux3_prompt, gpu, i18n, mesh_workers, registry, workflows
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -27,6 +27,9 @@ Handler = Callable[[Job, "JobContext"], Awaitable[list[str]]]
 # 20-GB-Download jede Generierung.
 _gpu_queue: asyncio.Queue[str] | None = None
 _io_queue: asyncio.Queue[str] | None = None
+# Experimentell seit 0.5: Liegen die Sprachmodelle auf einer eigenen Karte, laufen
+# Textjobs ("Prompt ausbauen") in einer eigenen Schlange neben den Bildjobs.
+_text_queue: asyncio.Queue[str] | None = None
 _workers: list[asyncio.Task] = []
 _subscribers: set[asyncio.Queue] = set()
 _handlers: dict[str, Handler] = {}
@@ -40,6 +43,7 @@ _current_gpu_task: asyncio.Task | None = None
 _job_lang: dict[str, str] = {}
 
 IO_KINDS = {"download"}
+TEXT_KINDS = {"expand_prompt"}
 
 
 class JobContext:
@@ -92,6 +96,8 @@ def unsubscribe(q: asyncio.Queue) -> None:
 
 
 def _queue_for(kind: str) -> asyncio.Queue[str]:
+    if kind in TEXT_KINDS and gpu.separate_text_backend() and _text_queue is not None:
+        return _text_queue
     q = _io_queue if kind in IO_KINDS else _gpu_queue
     assert q is not None, t("jobs.start() wurde nicht aufgerufen", "jobs.start() was not called")
     return q
@@ -154,6 +160,8 @@ def model_in_use(model_id: str) -> str | None:
 
 def _set_current(job_kind: str, job_id: str | None) -> None:
     global _current_job_id, _current_download_id
+    if job_kind in TEXT_KINDS and gpu.separate_text_backend():
+        return  # laeuft auf der Textkarte, blockiert die Bildkarte nicht
     if job_kind in IO_KINDS:
         _current_download_id = job_id
     else:
@@ -268,9 +276,11 @@ async def _requeue_orphans() -> None:
 
 
 async def start() -> None:
-    global _gpu_queue, _io_queue
+    global _gpu_queue, _io_queue, _text_queue
     _gpu_queue = asyncio.Queue()
     _io_queue = asyncio.Queue()
+    _text_queue = asyncio.Queue()
+    _workers.append(asyncio.create_task(_worker_loop(_text_queue, "text"), name="nvai-text-worker"))
     _workers.append(asyncio.create_task(_worker_loop(_gpu_queue, "gpu"), name="nvai-gpu-worker"))
     _workers.append(asyncio.create_task(_worker_loop(_io_queue, "io"), name="nvai-io-worker"))
     await _requeue_orphans()
@@ -287,12 +297,20 @@ async def shutdown() -> None:
 
 # --------------------------------------------------------- Handler
 
+def _same_gpu(a: str, b: str) -> bool:
+    """Teilen sich zwei Aufgaben (gpu.ROLES) eine Karte? Mit einer Karte immer."""
+    if not gpu.multi_gpu():
+        return True
+    roles = gpu.assignment()
+    return roles[a] == roles[b]
+
+
 async def _ensure_backend(ctx: JobContext) -> None:
     # Ein Mesh-Worker haelt sein Modell im VRAM, bis er entladen wird. Bliebe er
     # stehen, faende ein grosses Video-Modell keinen Platz mehr -- die Gegenrichtung
-    # macht _img23d bereits.
+    # macht _img23d bereits. Rechnet 3D auf einer anderen Karte, darf er bleiben.
     for w in mesh_workers.all_workers():
-        if await w.is_running():
+        if _same_gpu("mesh", "image") and await w.is_running():
             ctx.progress(0.0, t(f"entlade {w.name}", f"unloading {w.name}"))
             await w.unload()
 
@@ -417,7 +435,9 @@ async def _upsample(prompt: str, upsampler: dict[str, Any], ref_ids: list[str],
     cache_key = flux3_prompt.cache_key(upsampler_file, key, user, ref_ids)
     caption = flux3_prompt.cache_get(cache_key)
     if caption is None:
-        await _ensure_backend(ctx)
+        # Mit eigener Textkarte startet run_text_workflow dieses ComfyUI selbst.
+        if comfy.text_backend() is comfy.MAIN:
+            await _ensure_backend(ctx)
         ctx.progress(0.0, t("Upsampler baut den Prompt aus", "upsampler is expanding the prompt"))
         graph = flux3_prompt.build_graph(upsampler_file, key, user, ref_images)
         texts = await comfy.run_text_workflow(graph)
@@ -656,10 +676,14 @@ async def _img23d(job: Job, ctx: JobContext) -> list[str]:
             f"Run scripts/setup_{worker.key}.ps1.",
         ))
 
-    # 16 GB tragen nur ein Modell.
-    if await comfy.is_running():
+    # 16 GB tragen nur ein Modell -- auf derselben Karte. Mit eigener 3D-Karte bleibt
+    # das Bildmodell geladen.
+    if _same_gpu("mesh", "image") and await comfy.is_running():
         ctx.progress(0.02, t("gebe VRAM von ComfyUI frei", "freeing ComfyUI's VRAM"))
-        await comfy.free_memory()
+        await comfy.MAIN.free_memory()
+    if (gpu.separate_text_backend() and _same_gpu("mesh", "text")
+            and await comfy.TEXT.is_running(timeout=1.0)):
+        await comfy.TEXT.free_memory()
     for other in mesh_workers.all_workers():
         if other is not worker and await other.is_running():
             ctx.progress(0.03, t(f"entlade {other.name}", f"unloading {other.name}"))

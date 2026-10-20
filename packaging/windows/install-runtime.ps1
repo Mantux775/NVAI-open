@@ -2,10 +2,12 @@
   Sets up the Python environments of the installed NV-AI.
   Called by the setup after copying the files; also runs on its own as "Repair NV-AI".
 
-    install-runtime.ps1 -App <install folder> -DataDir <data folder> [-With3D] [-WithAddon]
+    install-runtime.ps1 -App <install folder> -DataDir <data folder> [-With3D] [-WithAddon] [-Gpu auto|nvidia|amd]
 
   Everything comes from the pinned package lists in locks\ (with sha256 hashes): the same
-  versions that were tested. uv fetches Python itself as a standalone build into <App>\python,
+  versions that were tested. NVIDIA: PyTorch with CUDA 13 (comfyui.lock). AMD Radeon
+  (experimental since 0.5): PyTorch with ROCm 7.2.1 from AMD (comfyui-amd-base.lock plus
+  comfyui-rocm.lock); 3D is skipped there because TripoSG needs CUDA. uv fetches Python itself as a standalone build into <App>\python,
   nothing has to be preinstalled. Log: <DataDir>\install.log
   Messages follow the Windows display language (German or English). ASCII only: Windows
   PowerShell 5.1 reads scripts without BOM as ANSI.
@@ -14,7 +16,8 @@ param(
     [Parameter(Mandatory)] [string]$App,
     [Parameter(Mandatory)] [string]$DataDir,
     [switch]$WithAddon,
-    [switch]$With3D
+    [switch]$With3D,
+    [ValidateSet("auto", "nvidia", "amd")] [string]$Gpu = "auto"
 )
 $ErrorActionPreference = "Stop"
 $PythonVersion = "3.12.13"
@@ -38,6 +41,15 @@ $env:UV_PYTHON_PREFERENCE = "only-managed"
 $env:UV_LINK_MODE = "copy"
 
 function Step($text) { Write-Host "`n== $text" -ForegroundColor Cyan }
+
+# Which PyTorch build: NVIDIA wins if both are present (an integrated Radeon next to a GeForce
+# must not switch the whole installation to ROCm).
+function Get-GpuVendor {
+    $names = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    if (($names -match "NVIDIA") -or (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { return "nvidia" }
+    if ($names -match "Radeon|AMD") { return "amd" }
+    return "nvidia"
+}
 
 function Uv {
     # Out-Host: otherwise uv's stdout ends up in the return value of New-Venv.
@@ -69,11 +81,27 @@ try {
     # and external\comfyui are found.
     Uv pip install --python $serverPy --no-deps -e (Join-Path $App "server")
 
-    Step (L "ComfyUI mit PyTorch (CUDA 13) - der grosse Teil" "ComfyUI with PyTorch (CUDA 13) - the big part")
-    $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $App "locks\comfyui.lock") `
-        @("--index-strategy", "unsafe-best-match")
+    $vendor = if ($Gpu -eq "auto") { Get-GpuVendor } else { $Gpu }
+    if ($vendor -eq "amd") {
+        Step (L "ComfyUI mit PyTorch fuer AMD Radeon (ROCm 7.2.1, experimentell) - der grosse Teil" `
+                "ComfyUI with PyTorch for AMD Radeon (ROCm 7.2.1, experimental) - the big part")
+        Write-Host (L "AMD-Grafikkarte erkannt. Noetig ist der AMD-Treiber 26.2.2 oder neuer. Rund 2,5 GB." `
+                      "AMD graphics card detected. Requires AMD driver 26.2.2 or newer. About 2.5 GB.")
+        $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $App "locks\comfyui-amd-base.lock")
+        # PyTorch and the ROCm SDK from AMD: --no-deps, because torch names the rocm meta
+        # package as a dependency, which this list brings along explicitly (with hashes).
+        Uv pip install --python $comfyPy --require-hashes --no-deps -r (Join-Path $App "locks\comfyui-rocm.lock")
+    } else {
+        Step (L "ComfyUI mit PyTorch (CUDA 13) - der grosse Teil" "ComfyUI with PyTorch (CUDA 13) - the big part")
+        $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $App "locks\comfyui.lock") `
+            @("--index-strategy", "unsafe-best-match")
+    }
 
-    if ($With3D) {
+    if ($With3D -and $vendor -eq "amd") {
+        Step (L "3D (TripoSG)" "3D (TripoSG)")
+        Write-Host (L "Uebersprungen: 3D braucht derzeit eine NVIDIA-Karte (CUDA-Erweiterungen)." `
+                      "Skipped: 3D currently needs an NVIDIA card (CUDA extensions).")
+    } elseif ($With3D) {
         # Same PyTorch build as ComfyUI (2.11 + CUDA 13): comes from the cache, no second download.
         Step (L "3D (TripoSG)" "3D (TripoSG)")
         New-Venv (Join-Path $App "external\triposg\.venv") (Join-Path $App "locks\triposg.lock") `
@@ -86,7 +114,12 @@ try {
     }
 
     Step (L "Grafikkarte pruefen" "Checking the graphics card")
-    & $comfyPy -c "import torch; ok = torch.cuda.is_available(); print('CUDA:', ok); print('GPU:', torch.cuda.get_device_name(0) if ok else '-')"
+    # On ROCm, PyTorch reports the Radeon through torch.cuda as well (HIP).
+    & $comfyPy -c "import torch; ok = torch.cuda.is_available(); print('GPU backend:', 'ROCm ' + torch.version.hip if torch.version.hip else 'CUDA', ok); print('GPU:', torch.cuda.get_device_name(0) if ok else '-')"
+    if ($vendor -eq "amd") {
+        Write-Host (L "Zeigt die Zeile oben 'False': AMD-Treiber 26.2.2 oder neuer installieren und 'NV-AI reparieren' starten." `
+                      "If the line above says 'False': install AMD driver 26.2.2 or newer and run 'Repair NV-AI'.")
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Warning (L "PyTorch-Test fehlgeschlagen. NV-AI startet trotzdem; Details im Protokoll." `
                          "PyTorch check failed. NV-AI starts anyway; details in the log.")

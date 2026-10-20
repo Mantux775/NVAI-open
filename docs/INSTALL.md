@@ -37,9 +37,22 @@ The setup checks the graphics card and driver and warns if no NVIDIA card is fou
 driver is too old. Without an NVIDIA card NV-AI can be installed, but it cannot generate
 anything.
 
+### Experimental (0.5 beta): AMD Radeon and several graphics cards
+
+- **AMD Radeon:** the setup detects a Radeon (and no NVIDIA card) and installs PyTorch with
+  ROCm 7.2.1 from AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, both with
+  hashes). Needs AMD driver 26.2.2 or newer. 3D is skipped on AMD. "Repair NV-AI" runs the same
+  detection again; `install-runtime.ps1 -Gpu amd|nvidia` forces one side.
+- **Several NVIDIA cards:** under "Models" → "Graphics cards", choose a card for image models,
+  language models and 3D. If the language models get their own card, NV-AI starts a second
+  ComfyUI for them (port 8189, logs in `comfyui-text.log`). The choice is stored in
+  `gpus.json` in the data folder; deleting it puts everything back on card 0.
+- For testing without the hardware: `NVAI_SIMULATE_GPUS=2` reports the one card twice, and
+  `NVAI_TEXT_BACKEND=separate` forces the second ComfyUI on a single card.
+
 ### Windows SmartScreen
 
-The setup is not code-signed (yet), so Windows may show **"Windows protected your PC"**. Click
+The setup is not code-signed, so Windows may show **"Windows protected your PC"**. Click
 **More info**, then **Run anyway**.
 
 ### Installing

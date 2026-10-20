@@ -62,6 +62,9 @@ COMFY_MODEL_DIR = Path(MODEL_DIR_OVERRIDE) if MODEL_DIR_OVERRIDE else COMFY_ROOT
 # sonst landete TripoSG (7,4 GB) im Datenordner statt auf der gewaehlten Platte.
 MODELS_DIR = Path(MODEL_DIR_OVERRIDE) if MODEL_DIR_OVERRIDE else DATA_DIR / "models"
 COMFY_URL = os.getenv("NVAI_COMFY_URL", "http://127.0.0.1:8188")
+# Zweites ComfyUI fuer die Sprachmodelle, nur wenn sie auf einer eigenen Karte liegen
+# (experimentell seit 0.5, siehe gpu.separate_text_backend).
+COMFY_TEXT_URL = os.getenv("NVAI_COMFY_TEXT_URL", "http://127.0.0.1:8189")
 
 API_HOST = os.getenv("NVAI_HOST", "127.0.0.1")
 API_PORT = int(os.getenv("NVAI_PORT") or _INSTALLED.get("Port") or 8100)
