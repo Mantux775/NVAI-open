@@ -150,7 +150,11 @@ Alles läuft auf dem eigenen Rechner. Modelle lädt NV-AI bei der ersten Nutzung
 
 ### FLUX 3 Image Klein: der neue Favorit
 
-FLUX 3 Image Klein von Black Forest Labs ist im Oktober 2026 erschienen und funktioniert richtig gut. Es ist schnell (auf meiner RTX 5060 Ti rund 30 Sekunden bei einem neuen Prompt, etwa 15 Sekunden, wenn nur der Seed wechselt), und es kann etwas, was die anderen Modelle hier nicht können: Bilder bearbeiten. Man gibt ein Bild vor, sagt, was sich ändern und was bleiben soll, und der Rest des Bildes bleibt erhalten (Beispiel oben im englischen Teil).
+FLUX 3 Image Klein von Black Forest Labs ist im Oktober 2026 erschienen und funktioniert richtig gut. Es ist schnell (auf meiner RTX 5060 Ti rund 30 Sekunden bei einem neuen Prompt, etwa 15 Sekunden, wenn nur der Seed wechselt), und es kann etwas, was die anderen Modelle hier nicht können: Bilder bearbeiten. Man gibt ein Bild vor, sagt, was sich ändern und was bleiben soll, und der Rest des Bildes bleibt erhalten.
+
+![FLUX 3 bearbeitet ein Bild: Seilgriffe durch Eisengriffe ersetzt, alles andere unverändert](docs/images/flux3-edit.jpg)
+
+*Prompt: „Replace the rope handles with forged iron handles bolted to the side boards; keep everything else unchanged.“ Ein Referenzbild, 44 Sekunden.*
 
 Dazu nimmt es bis zu zehn Referenzbilder, hält Figuren über mehrere Bilder gleich und platziert Objekte per Bounding-Box. Ein eingebauter Prompt-Upsampler baut einen kurzen Prompt vorher zur vollständigen Bildbeschreibung aus.
 
@@ -164,11 +168,27 @@ Qwen-Image-2512 ist langsamer (rund 100 Sekunden in voller Qualität), hat aber 
 - **Schrift**: Beschriftungen kommen zuverlässig.
 - **Lizenz**: Apache-2.0, ohne Umsatzgrenze und Prüfpflicht der FLUX-Lizenz.
 
-Die Vergleichsbilder oben im englischen Teil zeigen jeweils denselben Prompt und Seed, links FLUX 3, rechts Qwen-Image-2512. Die Zeiten stammen von meiner RTX 5060 Ti. Alle Bilder in diesem README hat NV-AI erzeugt.
+Gleicher Prompt und Seed, links FLUX 3, rechts Qwen-Image-2512:
+
+![Holzkiste mit Schablonenschrift](docs/images/compare-crate.jpg)
+*Prompt: „Studio product photograph of a weathered wooden crate. Black stenciled letters on the front read "NVAI OPEN". Rope handles pass through drilled holes in the side boards. Plain light grey background, soft even light.“*
+
+![Bäckerschild](docs/images/compare-sign.jpg)
+*Prompt: „A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall.“*
+
+![Entdeckerin, ganze Figur](docs/images/compare-explorer.jpg)
+*Prompt: „Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light.“*
+
+![Leuchtturm als Ölgemälde](docs/images/compare-lighthouse.jpg)
+*Prompt: „A painted illustration in oil on canvas with visible brush strokes. A lighthouse stands on a rocky coast at dusk, waves crash against the rocks, and warm light glows in the lantern room. A small red fishing boat returns to the harbor. The sky fades from orange to deep blue.“*
+
+Die Zeiten stammen von meiner RTX 5060 Ti. Alle Bilder in diesem README hat NV-AI erzeugt.
 
 ### 3D: vom Bild zum Modell
 
 Erst ein Bild eines Objekts erzeugen, dann daraus ein 3D-Modell machen. TripoSG (MIT-Lizenz) baut die Geometrie auf meiner Karte in etwa ein bis anderthalb Minuten. Heraus kommt eine GLB-Datei für Unity, Blender oder eine andere Engine. Das Modell ist untexturiert und sollte vor dem Einsatz im Spiel noch nachbearbeitet werden (Retopologie).
+
+![Vom Bild zum 3D-Modell](docs/images/image-to-3d.jpg)
 
 3D gehört zum Windows-Setup (Auswahl „Vollständige Installation“). TRELLIS.2 mit PBR-Texturen gibt es bei der Installation aus dem Quelltext.
 
