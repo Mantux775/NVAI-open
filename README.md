@@ -32,6 +32,7 @@ NV-AI was built primarily in German. The English interface and docs are new, so 
 **On Windows** (NVIDIA graphics card) NV-AI runs a small local server with a web interface in your browser:
 
 - **Images**: FLUX 3 Image Klein, Qwen-Image-2512 and more. Text to image, editing with reference images, inpainting with a mask.
+- **✨ Expand prompt**: turns a few words into a full image description, for every image model (next version).
 - **3D models**: turn an image into a 3D mesh (GLB) with TripoSG.
 - **Audio and video**: sound effects and music (Stable Audio Open, ACE-Step), short clips (Wan, LTX-Video).
 - **Model manager**: downloads models from Hugging Face, suggests the ones that fit your graphics card, and has a search for more models. Before anything is downloaded, NV-AI checks whether the file will actually run.
@@ -88,6 +89,18 @@ Times were measured on my PC: NVIDIA GeForce RTX 5060 Ti with 16 GB VRAM, 64 GB 
 | Qwen-Image 2.1 (INT8, non-commercial) | 25 | about 21 s |
 
 All images in this README were generated with NV-AI.
+
+### ✨ Expand prompt: from a few words to a real picture
+
+New in the next version. Type a few words, click **✨ Expand prompt**, and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. You read it, remove what you don't want, and generate. It works with every image model, not just FLUX 3, and also in the PhotoCraft add-on on Windows and for Claude Code (`expand_prompt`).
+
+It uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B, Apache-2.0), so FLUX 3 has to be downloaded once. On my RTX 5060 Ti it takes about 15 seconds; the very first time after a start, with ComfyUI starting up, about 35.
+
+Same model, same seed, left only the three words, right the expanded text:
+
+![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded prompt](docs/images/expand-prompt.jpg)
+
+With just the words, Qwen-Image-2512 made a warrior portrait in decorated leather armor. With the expanded text it made a working forge: hearth, anvil, tongs, a glowing bar with sparks, a water bucket and tools on the wall. One catch: whatever your words leave open, the upsampler invents. Here it gave the blacksmith an iron helmet. That is why the text lands in the prompt field first, so you can fix it before anything is generated.
 
 ### 3D: from an image to a model
 
@@ -147,6 +160,7 @@ NV-AI ist primär auf Deutsch entstanden. Die englische Oberfläche und Doku sin
 **Unter Windows** (NVIDIA-Grafikkarte) läuft NV-AI als kleiner lokaler Server mit Weboberfläche im Browser:
 
 - **Bilder**: FLUX 3 Image Klein, Qwen-Image-2512 und weitere. Text zu Bild, Bearbeiten mit Referenzbildern, Füllen mit Maske.
+- **✨ Prompt ausbauen**: macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell (nächste Version).
 - **3D-Modelle**: aus einem Bild ein 3D-Modell (GLB) mit TripoSG.
 - **Audio und Video**: Soundeffekte und Musik (Stable Audio Open, ACE-Step), kurze Clips (Wan, LTX-Video).
 - **Modellverwaltung**: lädt Modelle von Hugging Face, schlägt die zur Grafikkarte passenden vor und hat eine Suche nach weiteren Modellen. Vor jedem Download prüft NV-AI, ob die Datei hier überhaupt läuft.
@@ -203,6 +217,18 @@ Die Zeiten sind auf meinem PC gemessen: NVIDIA GeForce RTX 5060 Ti mit 16 GB VRA
 | Qwen-Image 2.1 (INT8, nicht kommerziell) | 25 | rund 21 s |
 
 Alle Bilder in diesem README hat NV-AI erzeugt.
+
+### ✨ Prompt ausbauen: aus wenigen Worten ein richtiges Bild
+
+Neu in der nächsten Version. Ein paar Worte eintippen, auf **✨ Prompt ausbauen** klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Man liest sie, streicht, was nicht passt, und generiert. Das geht mit jedem Bildmodell, nicht nur mit FLUX 3, und auch im PhotoCraft-Add-on unter Windows und für Claude Code (`expand_prompt`).
+
+Dahinter steckt der Prompt-Upsampler, der mit FLUX 3 Image Klein kommt (Qwen3.5-9B, Apache-2.0). FLUX 3 muss also einmal geladen sein. Auf meiner RTX 5060 Ti dauert das Ausbauen rund 15 Sekunden, beim allerersten Mal nach dem Start, wenn ComfyUI noch hochfährt, rund 35.
+
+Gleiches Modell, gleicher Seed, links nur die drei Worte, rechts der ausgebaute Text:
+
+![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](docs/images/expand-prompt.jpg)
+
+Mit den drei Worten machte Qwen-Image-2512 ein Kriegerporträt in verzierter Lederrüstung. Mit dem ausgebauten Text eine arbeitende Schmiede: Esse, Amboss, Zange, glühendes Eisen mit Funken, Wassereimer und Werkzeug an der Wand. Ein Haken bleibt: Was die eigenen Worte offenlassen, erfindet der Upsampler. Hier setzte er dem Schmied einen Eisenhelm auf. Deshalb landet der Text erst im Prompt-Feld, damit man so etwas vor dem Generieren streichen kann.
 
 ### 3D: vom Bild zum Modell
 
