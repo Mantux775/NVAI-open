@@ -106,9 +106,13 @@ With just the words, Qwen-Image-2512 made a warrior in decorated leather armor h
 
 Make an image of an object, then turn it into a 3D model. **For textures, use TRELLIS.2** (MIT license): it builds the geometry and paints color, metal and roughness as PBR textures (2048²) with UVs, so the GLB file goes straight into Unity, Blender or the game engine of your choice. On my card a model takes about 75 seconds, the first one after a start about two and a half minutes because the model has to load. It needs about 14 GB VRAM and a 16 GB download once. TripoSG (MIT) only builds the grey shape; it is the choice if you put your own materials on anyway.
 
-![From image to textured 3D model](docs/images/image-to-3d.jpg)
+<p align="center">
+  <img src="docs/images/image-to-3d-source.jpg" width="400" alt="Weathered wooden crate with iron handles, generated with FLUX 3">
+  <img src="docs/images/image-to-3d-turntable.gif" width="400" alt="The same crate as a textured 3D model, turning">
+</p>
+<p align="center"><sub>Left the image (FLUX 3), right the 3D model made from it: TRELLIS.2, PBR textures, 95,000 faces.</sub></p>
 
-Wood grain, wear, the iron handles and the bolts come out well. Lettering does not: TRELLIS.2 paints its own texture instead of copying the photo, so "NVAI OPEN" turned into made-up characters, even at the higher 1024 resolution (which took 15 minutes instead of 75 seconds). Put text and decals on afterwards, and plan some cleanup (retopology) before a model goes into a game.
+Wood grain, wear, the iron handles and the bolts come out well. Lettering does not: TRELLIS.2 paints its own texture instead of copying the photo. On this crate "NVAI OPEN" turned into made-up characters, even at the higher 1024 resolution (which took 15 minutes instead of 75 seconds). So I had FLUX 3 remove the lettering from the image first, with a single edit. Put text and decals on afterwards in your engine, and plan some cleanup (retopology) before a model goes into a game.
 
 3D is part of the Windows setup (choose "Full installation"). TRELLIS.2 is available when you install from source; the 3D page of the web interface points this out and offers the download.
 
@@ -248,9 +252,13 @@ Mit den drei Worten machte Qwen-Image-2512 einen Krieger in verzierter Lederrüs
 
 Erst ein Bild eines Objekts erzeugen, dann daraus ein 3D-Modell machen. **Für Texturen TRELLIS.2 nehmen** (MIT-Lizenz): Es baut die Geometrie und malt Farbe, Metall und Rauheit als PBR-Texturen (2048²) mit UVs, die GLB-Datei geht also direkt nach Unity, Blender oder in die Engine der Wahl. Auf meiner Karte dauert ein Modell rund 75 Sekunden, das erste nach dem Start rund zweieinhalb Minuten, weil das Modell erst geladen wird. Es braucht etwa 14 GB VRAM und einmal 16 GB Download. TripoSG (MIT) baut nur die graue Form; das passt, wenn ohnehin eigene Materialien draufkommen.
 
-![Vom Bild zum texturierten 3D-Modell](docs/images/image-to-3d.jpg)
+<p align="center">
+  <img src="docs/images/image-to-3d-source.jpg" width="400" alt="Verwitterte Holzkiste mit Eisengriffen, erzeugt mit FLUX 3">
+  <img src="docs/images/image-to-3d-turntable.gif" width="400" alt="Dieselbe Kiste als texturiertes 3D-Modell, drehend">
+</p>
+<p align="center"><sub>Links das Bild (FLUX 3), rechts das daraus gebaute 3D-Modell: TRELLIS.2, PBR-Texturen, 95.000 Faces.</sub></p>
 
-Holzmaserung, Abnutzung, die Eisengriffe und die Schrauben kommen gut heraus. Schrift nicht: TRELLIS.2 malt die Textur selbst, statt das Foto zu kopieren, deshalb wurde „NVAI OPEN“ zu erfundenen Zeichen, auch in der höheren Auflösung 1024 (die 15 Minuten statt 75 Sekunden brauchte). Schrift und Aufkleber besser nachträglich aufbringen, und vor dem Einsatz im Spiel etwas Nacharbeit einplanen (Retopologie).
+Holzmaserung, Abnutzung, die Eisengriffe und die Schrauben kommen gut heraus. Schrift nicht: TRELLIS.2 malt die Textur selbst, statt das Foto zu kopieren. Auf dieser Kiste wurde „NVAI OPEN“ zu erfundenen Zeichen, auch in der höheren Auflösung 1024 (die 15 Minuten statt 75 Sekunden brauchte). Deshalb hat FLUX 3 die Schrift vorher mit einer einzigen Bearbeitung aus dem Bild entfernt. Schrift und Aufkleber besser nachträglich in der Engine aufbringen, und vor dem Einsatz im Spiel etwas Nacharbeit einplanen (Retopologie).
 
 3D gehört zum Windows-Setup (Auswahl „Vollständige Installation“). TRELLIS.2 gibt es bei der Installation aus dem Quelltext; die 3D-Seite der Weboberfläche weist darauf hin und bietet den Download an.
 
