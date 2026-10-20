@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "x-api-version": 1
  },
  "paths": {
@@ -18,6 +18,27 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/VersionInfo"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/shutdown": {
+   "post": {
+    "summary": "Shutdown",
+    "description": "Beendet NV-AI samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
+    "operationId": "shutdown_api_shutdown_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Shutdown Api Shutdown Post"
         }
        }
       }
@@ -195,6 +216,194 @@
           "$ref": "#/components/schemas/ModelInfo"
          },
          "title": "Response Get Models Api Models Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings/hf-token": {
+   "get": {
+    "summary": "Hf Token Status",
+    "description": "Ist ein Hugging-Face-Token hinterlegt, und fuer wen? Fuer gated Repos wie FLUX 3.",
+    "operationId": "hf_token_status_api_settings_hf_token_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Hf Token Status Api Settings Hf Token Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "summary": "Set Hf Token",
+    "description": "Prueft den Token bei Hugging Face und speichert ihn wie `hf auth login`.\nNur vom eigenen Rechner -- ein Token ist ein Geheimnis des Nutzers.",
+    "operationId": "set_hf_token_api_settings_hf_token_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Set Hf Token Api Settings Hf Token Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Delete Hf Token",
+    "operationId": "delete_hf_token_api_settings_hf_token_delete",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Delete Hf Token Api Settings Hf Token Delete"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/search": {
+   "get": {
+    "summary": "Search Models",
+    "description": "Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien.",
+    "operationId": "search_models_api_models_search_get",
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Q"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 20,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": true
+         },
+         "title": "Response Search Models Api Models Search Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/inspect": {
+   "get": {
+    "summary": "Inspect Model",
+    "description": "Prueft eine Datei vor dem Laden: Architektur aus dem safetensors-Kopf, Groesse.",
+    "operationId": "inspect_model_api_models_inspect_get",
+    "parameters": [
+     {
+      "name": "repo",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Repo"
+      }
+     },
+     {
+      "name": "file",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "File"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Inspect Model Api Models Inspect Get"
         }
        }
       }
@@ -605,6 +814,45 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/prompt/expand": {
+   "post": {
+    "summary": "Expand Prompt",
+    "description": "Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine\nvolle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Nur Text.\n\nBlockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden\nBild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.",
+    "operationId": "expand_prompt_api_prompt_expand_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExpandPromptRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExpandPromptResult"
         }
        }
       }
@@ -1275,6 +1523,28 @@
       "title": "Workflow",
       "default": "sdxl"
      },
+     "license": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "License"
+     },
+     "size_gb": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Size Gb"
+     },
      "clean": {
       "type": "boolean",
       "title": "Clean",
@@ -1284,6 +1554,73 @@
     },
     "type": "object",
     "title": "DownloadRequest"
+   },
+   "ExpandPromptRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Prompt",
+      "description": "Knapper Prompt, der ausgebaut werden soll"
+     },
+     "width": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Width",
+      "description": "Geplantes Format -- der Upsampler richtet den Bildaufbau danach",
+      "default": 1024
+     },
+     "height": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Height",
+      "default": 1024
+     },
+     "reference_asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 10,
+      "title": "Reference Asset Ids",
+      "description": "Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt"
+    ],
+    "title": "ExpandPromptRequest"
+   },
+   "ExpandPromptResult": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "description": "Der eingegebene Prompt"
+     },
+     "expanded": {
+      "type": "string",
+      "title": "Expanded",
+      "description": "Die ausgebaute Bildbeschreibung, fuer jedes Bildmodell"
+     },
+     "seconds": {
+      "type": "number",
+      "title": "Seconds",
+      "description": "Dauer inklusive Warten auf die GPU"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt",
+     "expanded",
+     "seconds"
+    ],
+    "title": "ExpandPromptResult"
    },
    "Generate3DRequest": {
     "properties": {
@@ -1476,6 +1813,37 @@
       ],
       "title": "Bpm"
      },
+     "time_signature": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "2",
+         "3",
+         "4",
+         "6"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Time Signature",
+      "description": "Time signature: 2 = 2/4, 3 = 3/4, 4 = 4/4, 6 = 6/8. Empty = 4/4"
+     },
+     "key_scale": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Key Scale",
+      "description": "Key, e.g. \"Bb major\". Empty = C major"
+     },
      "language": {
       "type": "string",
       "title": "Language",
@@ -1646,7 +2014,7 @@
       "type": "array",
       "maxItems": 10,
       "title": "Reference Asset Ids",
-      "description": "Nur FLUX 3: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt als 'the first image', 'the second image' ansprechen"
+      "description": "Nur FLUX 3 und Qwen-Image 2.1: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt als 'the first image', 'the second image' ansprechen (Qwen-Image 2.1: '<image1>', '<image2>')"
      },
      "hires": {
       "type": "boolean",
@@ -1932,7 +2300,8 @@
        "txt2video",
        "img2video",
        "img23d",
-       "download"
+       "download",
+       "expand_prompt"
       ],
       "title": "Kind"
      },
@@ -2190,6 +2559,16 @@
       "title": "Fits Vram",
       "default": "unklar"
      },
+     "recommended": {
+      "type": "boolean",
+      "title": "Recommended",
+      "default": false
+     },
+     "gpu_note": {
+      "type": "string",
+      "title": "Gpu Note",
+      "default": ""
+     },
      "features": {
       "additionalProperties": true,
       "type": "object",
@@ -2297,6 +2676,12 @@
       "type": "boolean",
       "title": "Authorized",
       "description": "Kaeme diese Anfrage mit ihrem Token durch?"
+     },
+     "instance": {
+      "type": "string",
+      "title": "Instance",
+      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NV-AI auf dem Port sein eigenes ist.",
+      "default": ""
      }
     },
     "type": "object",

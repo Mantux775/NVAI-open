@@ -92,14 +92,25 @@ def _adapt_config(cfg_path: Path) -> list[str]:
     """
     import json
 
+    # Immer vom Original ausgehen: eine frueher angepasste Fassung kann Eintraege
+    # verloren haben, deren Datei erst spaeter dazukam.
+    backup = cfg_path.with_suffix(".json.orig")
     original = cfg_path.read_text(encoding="utf-8")
-    cfg = json.loads(original)
+    cfg = json.loads(backup.read_text(encoding="utf-8") if backup.exists() else original)
     args = cfg.setdefault("args", {})
     changes: list[str] = []
 
     models = args.get("models", {})
     for key, rel in list(models.items()):
-        if not (MODEL_DIR / f"{rel}.safetensors").exists():
+        if (MODEL_DIR / f"{rel}.safetensors").exists():
+            continue
+        # Verweise in ein anderes Repo ("microsoft/TRELLIS-image-large/ckpts/ss_dec_...",
+        # der Sparse-Structure-Decoder): der Katalog legt die Datei nach ckpts/.
+        local = "/".join(rel.split("/")[2:])
+        if local and (MODEL_DIR / f"{local}.safetensors").exists():
+            models[key] = local
+            changes.append(f"{key}=lokal")
+        else:
             models.pop(key)
             changes.append(f"-{key}")
 
@@ -123,7 +134,6 @@ def _adapt_config(cfg_path: Path) -> list[str]:
         changes.append(f"rembg={BIREFNET_MIT}")
 
     if changes:
-        backup = cfg_path.with_suffix(".json.orig")
         if not backup.exists():
             backup.write_text(original, encoding="utf-8")
         cfg_path.write_text(json.dumps(cfg, indent=4), encoding="utf-8")

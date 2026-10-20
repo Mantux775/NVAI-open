@@ -5,7 +5,9 @@ Gigabytes fliessen. Geprueft wird der safetensors-Kopf -- je nach Modell einige 
 KB, per Range-Anfrage -- und daraus die Architektur bestimmt. Zum Laden angeboten wird nur,
 was ein vorhandener Workflow sicher rechnet: vollstaendige SDXL-Checkpoints (dazu
 gehoeren Pony, Illustrious, NoobAI, Juggernaut, RealVis ...) und SD-1.5-Checkpoints.
-Reine Diffusionsmodelle ohne Text-Encoder und VAE, LoRAs und GGUF-Dateien nicht.
+Reine Diffusionsmodelle ohne Text-Encoder und VAE, LoRAs und GGUF-Dateien nicht; die
+Suche erkennt sie aber und sagt, was sie sind (Qwen-Image 2.1, FLUX, Wan, Text-Encoder ...)
+und welches Katalogmodell dieselbe Architektur rechnet.
 """
 from __future__ import annotations
 
@@ -37,32 +39,99 @@ def _auth() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
+# Woran ein Dateiname als Teil eines Modells zu erkennen ist (Ordner im ComfyUI-Layout oder
+# typische Namen). Alles andere gilt als moeglicher Checkpoint und laesst sich pruefen.
+_PART_HINTS: list[tuple[str, tuple[str, ...]]] = [
+    ("lora", ("loras/", "lora")),
+    ("text_encoder", ("text_encoders/", "clip/", "t5xxl", "umt5", "clip_l", "clip_g",
+                      "qwen_2.5_vl", "qwen2.5_vl", "qwen3vl", "qwen3_", "qwen3.5_", "gemma", "llava",
+                      "mistral_3")),
+    ("vae", ("vae/", "vae_", "_vae", "vae.")),
+    ("controlnet", ("controlnet/", "model_patches/", "controlnet")),
+    ("upscaler", ("upscale_models/", "esrgan", "upscaler")),
+    ("diffusion", ("diffusion_models/", "unet/")),
+]
+
+
+def part_kind(path: str) -> str:
+    """Grobe Art einer Datei nach Pfad und Namen: lora, text_encoder, vae, controlnet,
+    upscaler, diffusion -- oder checkpoint, wenn nichts dagegen spricht."""
+    low = path.lower()
+    for kind, hints in _PART_HINTS:
+        if any(h in low for h in hints):
+            return kind
+    return "checkpoint"
+
+
+def _base_model(tags: list[str]) -> str:
+    for prefix in ("base_model:finetune:", "base_model:quantized:", "base_model:"):
+        for tag in tags:
+            if tag.startswith(prefix) and ":" not in tag[len(prefix):]:
+                return tag[len(prefix):]
+    return ""
+
+
 async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Repos samt ihren safetensors-Dateien, jede Datei mit ihrer vermuteten Art.
+
+    `files` sind moegliche Checkpoints (pruefbar, vielleicht ladbar), `parts` die erkannten
+    Modellteile. `kind` sagt, was das Repo im Ganzen ist: "checkpoint", "parts" (Teile eines
+    neueren Modells wie Qwen, FLUX, Wan), "lora" oder "other" (nichts Ladbares).
+    """
     params = [("search", query), ("limit", str(limit)), ("sort", "downloads"), ("direction", "-1")]
     params += [("expand[]", x) for x in
-               ("siblings", "cardData", "downloads", "likes", "gated", "pipeline_tag")]
+               ("siblings", "cardData", "downloads", "likes", "gated", "pipeline_tag", "tags")]
     async with httpx.AsyncClient(timeout=20, headers=_auth()) as c:
         r = await c.get(API, params=params)
         r.raise_for_status()
     results = []
     for m in r.json():
+        tags = m.get("tags") or []
+        lora_repo = "lora" in tags or any(x.startswith("base_model:adapter:") for x in tags)
         names = [s["rfilename"] for s in m.get("siblings") or []]
-        files = [n for n in names if n.lower().endswith(".safetensors")
-                 and not n.startswith(_DIFFUSERS_DIRS)]
+        files, parts = [], []
+        for n in names:
+            if not n.lower().endswith(".safetensors") or n.startswith(_DIFFUSERS_DIRS):
+                continue
+            kind = "lora" if lora_repo else part_kind(n)
+            if kind == "checkpoint":
+                files.append(n)
+            else:
+                parts.append({"file": n, "kind": kind})
+        if files:
+            repo_kind = "checkpoint"
+        elif any(p["kind"] == "diffusion" for p in parts):
+            repo_kind = "parts"
+        elif any(p["kind"] == "lora" for p in parts):
+            repo_kind = "lora"
+        else:
+            repo_kind = "other"
         note = ""
-        if not files:
+        if repo_kind == "parts":
+            note = t("Teile eines Modells (Diffusionsmodell, Text-Encoder, VAE) – laden lässt sich so "
+                     "etwas nur als Katalogmodell mit eigenem Workflow.",
+                     "Parts of a model (diffusion model, text encoder, VAE) – these only load as a "
+                     "catalog model with its own workflow.")
+        elif repo_kind == "lora":
+            note = t("LoRA – NV-AI bindet LoRAs noch nicht ein.", "LoRA – NV-AI does not support LoRAs yet.")
+        elif repo_kind == "other":
             if "model_index.json" in names:
                 note = t("Nur im Diffusers-Format – NV-AI lädt Einzeldatei-Checkpoints.",
                          "Diffusers format only – NV-AI loads single-file checkpoints.")
             elif any(n.lower().endswith(".gguf") for n in names):
                 note = t("Nur GGUF – das bräuchte eine ComfyUI-Erweiterung.",
                          "GGUF only – that would need a ComfyUI extension.")
+            elif parts:
+                note = t("Nur einzelne Bausteine (Text-Encoder, VAE, ControlNet …), kein Modell.",
+                         "Only single components (text encoder, VAE, ControlNet …), no model.")
             else:
                 note = t("Keine safetensors-Datei.", "No safetensors file.")
         card = m.get("cardData") or {}
         license_ = card.get("license") or ""
         if isinstance(license_, list):
             license_ = ", ".join(license_)
+        if license_ == "other" and card.get("license_name"):
+            license_ = card["license_name"]
         results.append({
             "repo": m["id"],
             "downloads": m.get("downloads") or 0,
@@ -71,6 +140,9 @@ async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
             "gated": bool(m.get("gated")),
             "pipeline_tag": m.get("pipeline_tag") or "",
             "files": files[:12],
+            "parts": parts[:16],
+            "kind": repo_kind,
+            "base_model": _base_model(tags),
             "note": note,
         })
     return results
@@ -121,12 +193,91 @@ def classify(keys: list[str]) -> tuple[str, str]:
                           "Stable Diffusion 1.5 checkpoint – runs, best at 512 × 512.")
     if has("cond_stage_model.model."):
         return "sd2", t("Stable Diffusion 2 – nicht unterstützt.", "Stable Diffusion 2 – not supported.")
+    if has("model.diffusion_model.double_blocks.") and (has("text_encoders.") or vae):
+        return "flux", t("FLUX-Checkpoint mit Text-Encoder und VAE – über die Suche nicht ladbar.",
+                         "FLUX checkpoint with text encoder and VAE – cannot be loaded from the search.")
     if has("double_blocks.") or has("model.diffusion_model.double_blocks."):
         return "flux", t("FLUX-Diffusionsmodell ohne Text-Encoder und VAE – nicht unterstützt.",
                           "FLUX diffusion model without text encoder and VAE – not supported.")
     if has("joint_blocks.") or has("model.diffusion_model.joint_blocks."):
         return "sd3", t("SD3-Diffusionsmodell – nicht unterstützt.", "SD3 diffusion model – not supported.")
+    part = _classify_part(keys)
+    if part:
+        return part
     return "unbekannt", t("Unbekannte Architektur – nicht unterstützt.", "Unknown architecture – not supported.")
+
+
+# Diffusionsmodelle, die nur als Teil laufen: (Familie, Anzeigename, Schluessel, die alle da
+# sein muessen). Die Schluessel stammen aus ComfyUIs model_detection.py; geprueft wird ohne
+# die ueblichen Praefixe. Reihenfolge zaehlt -- Qwen-Image 2.1 vor Qwen-Image, FLUX.3 und
+# FLUX.2 vor FLUX.1.
+_DIFFUSION_FAMILIES: list[tuple[str, str, tuple[str, ...]]] = [
+    ("qwenimage21", "Qwen-Image 2.1", ("txt_in.text_norm.weight", "modulation.1.weight", "img_in.weight")),
+    ("qwenimage", "Qwen-Image", ("txt_norm.weight", "img_in.weight")),
+    ("flux3", "FLUX.3", ("content_mode_blocks.image.0.attn_out.weight",)),
+    ("flux2", "FLUX.2", ("double_stream_modulation_img.lin.weight",)),
+    ("chroma", "Chroma", ("distilled_guidance_layer.",)),
+    ("flux", "FLUX.1", ("double_blocks.", "img_in.weight")),
+    ("hunyuanvideo", "HunyuanVideo", ("txt_in.individual_token_refiner.blocks.0.norm1.weight",)),
+    ("wan", "Wan", ("head.modulation",)),
+    ("ltxv", "LTX-Video", ("adaln_single.emb.timestep_embedder.linear_1.bias",)),
+    ("hidream", "HiDream", ("caption_projection.0.linear.weight",)),
+    ("zimage", "Z-Image / Lumina 2", ("cap_embedder.1.weight",)),
+    ("ace", "ACE-Step", ("genre_embedder.weight",)),
+    ("stable_audio", "Stable Audio", ("transformer.rotary_pos_emb.inv_freq",)),
+]
+_PREFIXES = ("model.diffusion_model.", "diffusion_model.", "model.", "")
+
+
+def _classify_part(keys: list[str]) -> tuple[str, str] | None:
+    """Erkennt Bausteine neuerer Modelle: Diffusionsmodell, Text-Encoder, VAE, ControlNet."""
+    keyset = set(keys)
+
+    def has(name: str) -> bool:
+        for p in _PREFIXES:
+            full = p + name
+            if name.endswith("."):
+                if any(k.startswith(full) for k in keys):
+                    return True
+            elif full in keyset:
+                return True
+        return False
+
+    def starts(prefix: str) -> bool:
+        return any(k.startswith(prefix) for k in keys)
+
+    for family, label, needed in _DIFFUSION_FAMILIES:
+        if all(has(n) for n in needed):
+            return f"diffusion:{family}", t(
+                f"Diffusionsmodell von {label}, ohne Text-Encoder und VAE. Laden lässt es sich nur "
+                "als Katalogmodell mit eigenem Workflow.",
+                f"{label} diffusion model, without text encoder and VAE. It only loads as a catalog "
+                "model with its own workflow.")
+    if starts("controlnet_blocks.") or starts("input_hint_block.") or starts("control_model."):
+        return "controlnet", t("ControlNet – nur zusammen mit einem passenden Modell nutzbar.",
+                               "ControlNet – only usable together with a matching model.")
+    if starts("lora_te") or any(".lora." in k or "lora_" in k for k in keys[:200]):
+        return "lora", t("LoRA – NV-AI bindet LoRAs noch nicht ein.", "LoRA – NV-AI does not support LoRAs yet.")
+    if starts("decoder.") and (starts("encoder.") or starts("decoder.conv_in") or starts("decoder.conv1")
+                               or starts("decoder.head")):
+        return "vae", t("VAE – Baustein eines Modells, allein nicht nutzbar.",
+                        "VAE – a model component, not usable on its own.")
+    if starts("encoder.block.0.layer.0.SelfAttention."):
+        return "text_encoder", t("Text-Encoder (T5) – Baustein eines Modells, allein nicht nutzbar.",
+                                 "Text encoder (T5) – a model component, not usable on its own.")
+    if starts("text_model.encoder.") or starts("text_projection"):
+        return "text_encoder", t("Text-Encoder (CLIP) – Baustein eines Modells, allein nicht nutzbar.",
+                                 "Text encoder (CLIP) – a model component, not usable on its own.")
+    if starts("model.layers.") or starts("model.language_model.") or starts("language_model."):
+        vision = starts("model.visual.") or starts("visual.") or starts("vision_tower.")
+        label = t("Sprachmodell mit Bildverständnis", "vision language model") if vision \
+            else t("Sprachmodell", "language model")
+        return "text_encoder", t(
+            f"Text-Encoder ({label}, z. B. für Qwen-Image oder FLUX) – Baustein eines Modells, "
+            "allein nicht nutzbar.",
+            f"Text encoder ({label}, e.g. for Qwen-Image or FLUX) – a model component, "
+            "not usable on its own.")
+    return None
 
 
 SUPPORTED = {"sdxl", "sd15"}
@@ -159,6 +310,29 @@ async def inspect(repo: str, file: str) -> dict[str, Any]:
         return {**base, "verdict": t("Keine gültige safetensors-Datei.", "Not a valid safetensors file.")}
     family, verdict = classify([k for k in header if k != "__metadata__"])
     size_gb = round(total / 1e9, 2) if total else None
+    catalog = catalog_models(family)
+    if catalog:
+        verdict += t(f" Im Katalog: {', '.join(catalog)}.", f" In the catalog: {', '.join(catalog)}.")
+    elif family.startswith("diffusion:"):
+        verdict += t(" Im Katalog gibt es diese Familie noch nicht.",
+                     " This family is not in the catalog yet.")
     return {**base, "ok": family in SUPPORTED, "family": family,
             "workflow": "sdxl" if family in SUPPORTED else None,
-            "size_gb": size_gb, "verdict": verdict}
+            "size_gb": size_gb, "verdict": verdict, "catalog": catalog}
+
+
+# Erkannte Familie -> Familien im Katalog, die dieselbe Architektur rechnen.
+_CATALOG_FAMILIES = {
+    "qwenimage21": ("qwenimage21",), "qwenimage": ("qwenimage",), "flux3": ("flux3",), "flux": ("flux",), "chroma": ("chroma",),
+    "wan": ("wan", "wan22"), "ltxv": ("ltxv",), "zimage": ("zimage",), "ace": ("ace", "ace15"),
+    "stable_audio": ("stable_audio",), "hunyuanvideo": ("hunyuanvideo15",), "sd3": ("sd3",),
+}
+
+
+def catalog_models(family: str) -> list[str]:
+    """Namen der Katalogmodelle derselben Architektur -- ohne Zubehoer wie ControlNets."""
+    from . import registry   # spaet, registry importiert dieses Modul
+
+    wanted = _CATALOG_FAMILIES.get(family.removeprefix("diffusion:"), ())
+    return [registry.display_name(e) for e in registry.all_entries()
+            if e.get("family") in wanted and e.get("kind") in ("image", "video", "audio")]

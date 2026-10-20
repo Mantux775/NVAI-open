@@ -87,6 +87,20 @@ FLUX3_LICENSE_WARNING = (
     "soweit gesetzlich verlangt. BFL kann die Lizenz jederzeit kündigen."
 )
 
+QWEN21_LICENSE_WARNING = (
+    "Qwen Research License: nur für Forschung und Evaluation, keine kommerzielle Nutzung — "
+    "auch keine Bilder für ein verkauftes Spiel. Für Endassets Qwen-Image-2512 (Apache-2.0) "
+    "nehmen."
+)
+# Qwens Seitenverhaeltnisse aus der Modellkarte, auf die 2048er-Grenze der API verkleinert
+# (Qwen selbst nennt 2048 × 2048 und 2400 × 1792 usw.). Vielfache von 32.
+QWEN21_SIZES = [
+    {"label": "1536 × 1536 — 2,4 MP, Objekte", "w": 1536, "h": 1536},
+    {"label": "1344 × 1792 — 3:4, Figuren", "w": 1344, "h": 1792},
+    {"label": "1792 × 1344 — 4:3, Fahrzeuge", "w": 1792, "h": 1344},
+    {"label": "2048 × 2048 — Qwen nativ, maximal", "w": 2048, "h": 2048},
+]
+
 IMAGE_MODELS: list[dict[str, Any]] = [
     {
         "id": "sdxl-base",
@@ -538,6 +552,64 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         "cons": [
             "50 Schritte mit je zwei Durchgängen — ein Vielfaches der Lightning-Zeit",
             "Encoder und Modell passen nicht gleichzeitig in 16 GB",
+        ],
+    },
+    {
+        "id": "qwen-image-2.1-int8",
+        "name": "Qwen-Image 2.1 (INT8, 25 Schritte) — nicht kommerziell",
+        "kind": "image",
+        "family": "qwenimage21",
+        "workflow": "qwen_image21",
+        "files": [
+            {"repo": "Comfy-Org/Qwen-Image-2.1",
+             "file": "diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "Comfy-Org/Qwen-Image-2.1",
+             "file": "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+             "target": "text_encoders"},
+            {"repo": "Comfy-Org/Qwen-Image-2.1",
+             "file": "vae/qwen_image_2.1_vae_bf16.safetensors", "target": "vae"},
+        ],
+        "size_gb": 17.29,
+        "vram_gb": 12,
+        "license": "Qwen Research License",
+        "commercial_ok": False,
+        "warning": QWEN21_LICENSE_WARNING,
+        "best_for": "Ausprobieren: Bearbeiten mit bis zu zehn Referenzbildern, Schrift — nur "
+                    "nicht kommerziell",
+        "features": {
+            "references": 10, "img2img": False, "mask": False, "hires": False,
+            "text_rendering": True, "sizes": QWEN21_SIZES,
+            "prompt_hint": QWEN_PROMPT_HINT + " Referenzbilder heißen im Prompt <image1>, "
+                           "<image2> usw.; das erste ist das Bild, das bearbeitet wird.",
+            "placeholder": QWEN_PLACEHOLDER,
+        },
+        "description": (
+            "Qwen (Alibaba), September 2026. Nachfolger von Qwen-Image-2512 mit 7 Mrd. "
+            "Parametern im Bildteil und Qwen3-VL-8B als Text-Encoder. Ein Modell für Text "
+            "zu Bild und Bearbeiten: bis zu zehn Referenzbilder, laut Qwen auch durchsichtige "
+            "Bilder (RGBA) und bessere Schrift. Diese Fassung ist ComfyUIs INT8-Paket, "
+            "Einstellungen wie in ComfyUIs Vorlage: 25 Schritte, cfg 1 — der Negativprompt "
+            "wirkt deshalb nicht.\n\n"
+            "Gemessen auf der RTX 5060 Ti: 1024² in 26 s, 1344 × 1792 in 64 s, erster Lauf "
+            "mit Laden 109 s; Bearbeiten mit einem Referenzbild 34–38 s. Text zu Bild im Test "
+            "sehr sauber, Schrift buchstabengenau. Beim Bearbeiten blieben Form und Schrift "
+            "erhalten, das Ergebnis wirkte aber überzeichnet (harter Kontrast, körniger "
+            "Hintergrund) — auch mit 50 Schritten und genau ComfyUIs Vorlagengraph.\n\n"
+            "**Nur für nicht-kommerzielle Zwecke.** Die Qwen Research License erlaubt "
+            "Forschung und Evaluation; jede kommerzielle Nutzung, also auch Bilder für ein "
+            "verkauftes Spiel, braucht eine eigene Lizenz von Alibaba. Für Endassets "
+            "Qwen-Image-2512 (Apache-2.0) oder FLUX 3 nehmen."
+        ),
+        "pros": [
+            "Bearbeiten mit bis zu zehn Referenzbildern",
+            "Schrift im Bild",
+            "Kleiner als Qwen-Image-2512: 7 statt 20 Mrd. Parameter im Bildteil",
+        ],
+        "cons": [
+            "Qwen Research License: nur nicht kommerziell — nicht für Assets im verkauften Spiel",
+            "cfg 1: der Negativprompt wirkt nicht",
+            "Bearbeiten wirkt im Test überzeichnet: harter Kontrast, körniger Hintergrund",
         ],
     },
     {
@@ -1360,8 +1432,14 @@ MODEL_3D: list[dict[str, Any]] = [
             "repo": "microsoft/TRELLIS.2-4B", "snapshot": True, "target": "trellis2_bf16",
             "check": "ckpts/slat_flow_img2shape_dit_1_3B_512_bf16.safetensors",
             "allow_patterns": ["*.json", "*.safetensors"],
+        }, {
+            # Den Sparse-Structure-Decoder holt pipeline.json aus dem ersten TRELLIS
+            # (MIT). Liegt er daneben in ckpts/, verweist der Worker lokal darauf.
+            "repo": "microsoft/TRELLIS-image-large", "snapshot": True, "target": "trellis2_bf16",
+            "check": "ckpts/ss_dec_conv3d_16l8_fp16.safetensors",
+            "allow_patterns": ["ckpts/ss_dec_conv3d_16l8_fp16.*"],
         }],
-        "size_gb": 10.31,
+        "size_gb": 16.2,
         "vram_gb": 14,
         "license": "MIT",
         "commercial_ok": True,
@@ -1381,7 +1459,7 @@ MODEL_3D: list[dict[str, Any]] = [
         ],
         "cons": [
             "~14 GB VRAM bei 512³ — auf 16 GB kaum Reserve, 1024³ ist nicht drin",
-            "10,3 GB Download plus ~7 GB venv mit kompilierten Extensions",
+            "16,2 GB Download plus ~7 GB venv mit kompilierten Extensions",
             "Braucht Visual Studio 2022 Build Tools; mit VS 18 scheitert die Kompilierung",
             "Langsamer als TripoSG",
         ],

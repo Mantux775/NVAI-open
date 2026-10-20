@@ -25,7 +25,7 @@ $repo = (Resolve-Path (Join-Path $here "..\..")).Path
 $build = Join-Path $here "build"
 $stage = Join-Path $build "stage"
 $app = Join-Path $stage "app"
-$comfyTag = "v0.41.3"
+$comfyTag = "v0.42.1"
 if (-not $Addon) {
     $Addon = if ($env:NVAI_ADDON_DIR) { $env:NVAI_ADDON_DIR } else { Join-Path $repo "photocraft-addon\dist\addon" }
 }
@@ -66,7 +66,7 @@ if (Test-Path "$repo\external\comfyui\.git") {
     $tmp = Join-Path $build "comfyui-extract"
     if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
     Expand-Archive $zip $tmp
-    # The GitHub archive has one top folder (ComfyUI-0.41.3)
+    # The GitHub archive has one top folder (ComfyUI-0.42.1)
     Move-Item (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName $comfyDest
     Remove-Item -Recurse -Force $tmp
 }

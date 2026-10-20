@@ -120,6 +120,10 @@ def _nvai_state() -> dict[str, Any]:
         masks = nv.supports_masks()
     except NVAIError:
         masks = False
+    try:
+        expand = nv.supports_expand()
+    except NVAIError:
+        expand = False
     return {
         "connected": True,
         "error": None,
@@ -135,6 +139,7 @@ def _nvai_state() -> dict[str, Any]:
         "comfy_running": h.get("comfy_running"),
         "gpu": h.get("gpu"),
         "masks": masks,
+        "expand": expand,
         **where,
     }
 
@@ -222,6 +227,23 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return task.public()
+
+
+class ExpandRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=4000)
+
+
+@app.post("/api/expand")
+def expand(req: ExpandRequest) -> dict[str, Any]:
+    """„Prompt ausbauen“: NV-AI macht aus wenigen Worten eine volle Bildbeschreibung."""
+    nv.check_compatible()
+    if not nv.supports_expand():
+        raise HTTPException(409, t(
+            "Diese NV-AI-Version kann Prompts noch nicht ausbauen. Bitte NV-AI aktualisieren.",
+            "This NV-AI version cannot expand prompts yet. Please update NV-AI.",
+        ))
+    result = nv.expand_prompt(req.prompt)
+    return {"expanded": result["expanded"], "seconds": result.get("seconds")}
 
 
 @app.get("/api/tasks")

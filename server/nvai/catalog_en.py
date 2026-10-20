@@ -23,6 +23,10 @@ FLUX3_LICENSE_WARNING = (
     "revenue (including affiliated companies), review every image before publication, label "
     "as AI-generated where required by law. BFL can terminate the license at any time."
 )
+QWEN21_LICENSE_WARNING = (
+    "Qwen Research License: research and evaluation only, no commercial use — including no "
+    "images for a game you sell. For final assets use Qwen-Image-2512 (Apache-2.0)."
+)
 _LICENSE_CON_FLUX3 = (
     "Kommunity license instead of Apache: revenue cap, review obligation, can be "
     "terminated at any time"
@@ -271,6 +275,41 @@ EN: dict[str, dict[str, Any]] = {
             "Needs PyTorch cu130 in the ComfyUI venv — with cu128 every image takes three "
             "times as long (measured 50 instead of 17 s)",
         ],
+    },
+    "qwen-image-2.1-int8": {
+        "name": "Qwen-Image 2.1 (INT8, 25 steps) — non-commercial",
+        "warning": QWEN21_LICENSE_WARNING,
+        "best_for": "Trying out: editing with up to ten reference images, text — "
+                    "non-commercial only",
+        "description": (
+            "Qwen (Alibaba), September 2026. Successor of Qwen-Image-2512 with 7 billion "
+            "parameters in the image part and Qwen3-VL-8B as text encoder. One model for "
+            "text-to-image and editing: up to ten reference images, according to Qwen also "
+            "transparent images (RGBA) and better text. This version is ComfyUI's INT8 "
+            "package, settings as in ComfyUI's template: 25 steps, cfg 1 — so the negative "
+            "prompt has no effect.\n\n"
+            "Measured on the RTX 5060 Ti: 1024² in 26 s, 1344 × 1792 in 64 s, first run "
+            "with loading 109 s; editing with one reference image 34–38 s. Text-to-image "
+            "was very clean in the test, text letter-perfect. When editing, shape and text "
+            "were kept, but the result looked overprocessed (harsh contrast, grainy "
+            "background) — also with 50 steps and exactly ComfyUI's template graph.\n\n"
+            "**Non-commercial use only.** The Qwen Research License allows research and "
+            "evaluation; any commercial use, including images for a game you sell, needs a "
+            "separate license from Alibaba. For final assets use Qwen-Image-2512 "
+            "(Apache-2.0) or FLUX 3."
+        ),
+        "pros": [
+            "Editing with up to ten reference images",
+            "Text in the image",
+            "Smaller than Qwen-Image-2512: 7 instead of 20 billion parameters in the image part",
+        ],
+        "cons": [
+            "Qwen Research License: non-commercial only — not for assets in a game you sell",
+            "cfg 1: the negative prompt has no effect",
+            "Editing looked overprocessed in the test: harsh contrast, grainy background",
+        ],
+        "features": {"prompt_hint": QWEN_PROMPT_HINT + " In the prompt, reference images are "
+                                    "called <image1>, <image2>, etc.; the first one is the image being edited."},
     },
     "qwen-image-2512-nvfp4": {
         "name": "Qwen-Image-2512 (NVFP4, full 50 steps)",
@@ -788,7 +827,7 @@ EN: dict[str, dict[str, Any]] = {
         ],
         "cons": [
             "~14 GB VRAM at 512³ — hardly any headroom on 16 GB, 1024³ is out of reach",
-            "10.3 GB download plus a ~7 GB venv with compiled extensions",
+            "16.2 GB download plus a ~7 GB venv with compiled extensions",
             "Needs Visual Studio 2022 Build Tools; with VS 18 the compilation fails",
             "Slower than TripoSG",
         ],
@@ -954,6 +993,11 @@ EN: dict[str, dict[str, Any]] = {
 # Every size label used anywhere in catalog.py (German label -> English label),
 # e.g. "1328 × 1328 — Qwen nativ, Objekte" -> "1328 × 1328 — Qwen native, objects".
 SIZE_LABELS: dict[str, str] = {
+    # QWEN21_SIZES
+    "1536 × 1536 — 2,4 MP, Objekte": "1536 × 1536 — 2.4 MP, objects",
+    "1344 × 1792 — 3:4, Figuren": "1344 × 1792 — 3:4, figures",
+    "1792 × 1344 — 4:3, Fahrzeuge": "1792 × 1344 — 4:3, vehicles",
+    "2048 × 2048 — Qwen nativ, maximal": "2048 × 2048 — Qwen native, maximum",
     # hfsearch.SD15_SIZES (models added from the Hugging Face search)
     "512 × 512 — SD 1.5 nativ": "512 × 512 — SD 1.5 native",
     "512 × 768 — Hochformat": "512 × 768 — portrait",

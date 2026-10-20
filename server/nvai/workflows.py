@@ -32,6 +32,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
                    "shift": 3.1},
     "qwen_image_lightning": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple",
                              "shift": 3.1},
+    # Qwen-Image 2.1: Werte aus ComfyUIs Vorlagen image_qwen_image_2_1_{t2i,image_edit}.json
+    # (Qwens Diffusers-Pipeline: 40 Schritte, true_cfg 1). Shift steckt im Modell.
+    "qwen_image21": {"steps": 25, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     # FLUX 3 Image Klein: Werte aus den Vorlagen image_flux3_klein_*.json und der
     # Modellkarte. Die destillierte Fassung ist eine Flow-Map ohne Guidance (cfg 1,
     # negativer Prompt wirkungslos), die Base-Fassung braucht CFG 3.5 -- BFLs
@@ -431,6 +434,62 @@ def build_qwen_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, i
     return graph, seed
 
 
+def build_qwen_image21(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """Qwen-Image 2.1: 7-Mrd.-DiT mit Qwen3-VL-8B als Text-Encoder, 64-Kanal-Latent.
+
+    Nachgebaut nach ComfyUIs Vorlagen image_qwen_image_2_1_t2i.json und *_image_edit.json.
+    TextEncodeQwenImage21 kodiert Prompt und Negativprompt und nimmt die Referenzbilder
+    (im Prompt <image1>, <image2> ...; so setzt sie der Tokenizer). Mit Referenzen kommt das Latent aus dem Encoder,
+    in der Groesse der ersten Referenz -- laut ComfyUI verschiebt jede andere Groesse die
+    Bearbeitung. Ohne Referenzen ein leeres Latent im gewaehlten Format; EmptyLatentImage
+    passt ComfyUI beim Sampeln selbst auf 64 Kanaele und Faktor 16 an.
+    """
+    wf = entry["workflow"]
+    d = defaults_for(wf)
+    seed = _seed(p)
+    ids = _Ids()
+    width, height = int(p.get("width", 1024)), int(p.get("height", 1024))
+
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "qwen_image"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+    }
+    # Referenzen auf etwa die gewaehlte Flaeche bringen, auf Vielfache von 32.
+    resolution = max(256, round((width * height) ** 0.5 / 32) * 32)
+    enc: dict[str, Any] = {"clip": ["2", 0], "vae": ["3", 0], "prompt": p["prompt"],
+                           "negative_prompt": p.get("negative_prompt", ""),
+                           "resolution": resolution}
+    refs = p.get("reference_images") or []
+    for i, name in enumerate(refs):
+        load = ids()
+        graph[load] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        enc[f"images.image_{i + 1}"] = [load, 0]
+    graph["4"] = {"class_type": "TextEncodeQwenImage21", "inputs": enc}
+
+    if refs:
+        latent: Ref = ["4", 2]
+        batch = int(p.get("batch_size", 1))
+        if batch > 1:
+            rep = ids()
+            graph[rep] = {"class_type": "RepeatLatentBatch", "inputs": {"samples": latent, "amount": batch}}
+            latent = [rep, 0]
+    else:
+        graph["5"] = {"class_type": "EmptyLatentImage", "inputs": {
+            "width": width, "height": height, "batch_size": int(p.get("batch_size", 1))}}
+        latent = ["5", 0]
+    graph["6"] = {"class_type": "KSampler", "inputs": {
+        "seed": seed, "steps": int(_pick(p, d, "steps")), "cfg": _pick(p, d, "cfg"),
+        "sampler_name": p.get("sampler") or d["sampler"],
+        "scheduler": p.get("scheduler") or d["scheduler"], "denoise": 1.0,
+        "model": ["1", 0], "positive": ["4", 0], "negative": ["4", 1], "latent_image": latent}}
+    graph["7"] = {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}}
+    graph["8"] = {"class_type": "SaveImage", "inputs": {"images": ["7", 0], "filename_prefix": "nvai"}}
+    return graph, seed
+
+
 def build_flux3(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     """FLUX 3 Image Klein: 5,6-Mrd.-DiT mit Qwen3-VL-4B als Text-Encoder.
 
@@ -489,6 +548,8 @@ def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         return build_zimage(entry, p)
     if wf in ("qwen_image", "qwen_image_lightning"):
         return build_qwen_image(entry, p)
+    if wf == "qwen_image21":
+        return build_qwen_image21(entry, p)
     if wf in FLUX3_WORKFLOWS:
         return build_flux3(entry, p)
     d = defaults_for(wf)
@@ -853,7 +914,7 @@ def _build_hunyuan15(entry, p, wf, sampler, seed, width, height,
 
 FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}
 IMAGE_WORKFLOWS = {"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
-                   "qwen_image", "qwen_image_lightning"} | FLUX3_WORKFLOWS
+                   "qwen_image", "qwen_image_lightning", "qwen_image21"} | FLUX3_WORKFLOWS
 AUDIO_WORKFLOWS = {"stable_audio", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
                    "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v"}

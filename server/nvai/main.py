@@ -27,6 +27,8 @@ from .schemas import (
     Asset,
     DeleteResult,
     DownloadRequest,
+    ExpandPromptRequest,
+    ExpandPromptResult,
     Generate3DRequest,
     GenerateAudioRequest,
     GenerateImageRequest,
@@ -63,6 +65,7 @@ API_FEATURES = [
     "upsampler",       # generate/image: upsample_prompt; Asset-meta "caption"
     "upload",          # POST /api/upload
     "model_search",    # GET /api/models/search und /inspect: Hugging Face mit Pruefung
+    "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
 ]
 
 
@@ -544,6 +547,47 @@ async def generate_3d(req: Generate3DRequest) -> Job:
             f"scripts/setup_{worker.key}.ps1 ausfuehren.",
         )
     return await jobs.submit("img23d", req.model_dump())
+
+
+@app.post("/api/prompt/expand", response_model=ExpandPromptResult)
+async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
+    """Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine
+    volle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Nur Text.
+
+    Blockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden
+    Bild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.
+    """
+    if jobs.prompt_upsampler() is None:
+        raise HTTPException(409, t(
+            "Prompt ausbauen braucht den Upsampler von FLUX 3 Image Klein. Bitte "
+            "flux3-klein-nvfp4 (RTX 50) oder flux3-klein-int8 herunterladen.",
+            "Expanding a prompt needs the FLUX 3 Image Klein upsampler. Please download "
+            "flux3-klein-nvfp4 (RTX 50) or flux3-klein-int8.",
+        ))
+    for asset_id in req.reference_asset_ids:
+        if db.get_asset(asset_id) is None:
+            raise HTTPException(404, t(f"Bild-Asset nicht gefunden: {asset_id}",
+                                       f"Image asset not found: {asset_id}"))
+    started = time.monotonic()
+    job = await jobs.submit("expand_prompt", req.model_dump())
+    current = None
+    try:
+        while True:
+            await asyncio.sleep(0.3)
+            current = db.get_job(job.id)
+            if current is None or current.status in ("done", "error", "cancelled"):
+                break
+            if time.monotonic() - started > 900:
+                raise HTTPException(504, t("Prompt ausbauen dauerte zu lange.",
+                                           "Expanding the prompt took too long."))
+    finally:
+        if jobs.current_job_id() != job.id:
+            db.delete_job(job.id)
+    if current is None or current.status != "done" or not current.params.get("expanded"):
+        detail = (current.error if current else None) or t("abgebrochen", "cancelled")
+        raise HTTPException(500, detail)
+    return ExpandPromptResult(prompt=req.prompt, expanded=current.params["expanded"],
+                              seconds=round(time.monotonic() - started, 1))
 
 
 # --------------------------------------------------------------- Jobs

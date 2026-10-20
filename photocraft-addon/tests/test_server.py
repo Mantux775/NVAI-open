@@ -66,3 +66,19 @@ def test_download_link_opens_in_browser(client, monkeypatch):
     monkeypatch.setattr(server.os, "startfile", opened.append, raising=False)
     assert client.post("/api/open/photocraft-download").json() == {"ok": True}
     assert opened == [config.PHOTOCRAFT_DOWNLOAD_URL]
+
+
+def test_expand_prompt_passes_text_through(client, monkeypatch):
+    monkeypatch.setattr(server.nv, "check_compatible", lambda: {"api": 1})
+    monkeypatch.setattr(server.nv, "supports_expand", lambda: True)
+    monkeypatch.setattr(server.nv, "expand_prompt",
+                        lambda prompt: {"prompt": prompt, "expanded": f"A forge with {prompt}.", "seconds": 13.2})
+    answer = client.post("/api/expand", json={"prompt": "a blacksmith"})
+    assert answer.json() == {"expanded": "A forge with a blacksmith.", "seconds": 13.2}
+
+
+def test_expand_prompt_needs_a_current_nvai(client, monkeypatch):
+    monkeypatch.setattr(server.nv, "check_compatible", lambda: {"api": 1})
+    monkeypatch.setattr(server.nv, "supports_expand", lambda: False)
+    answer = client.post("/api/expand", json={"prompt": "a blacksmith"})
+    assert answer.status_code == 409 and "update NV-AI" in answer.json()["detail"]

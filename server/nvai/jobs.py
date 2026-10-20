@@ -317,7 +317,8 @@ def _resolve_model(p: dict[str, Any], kind: str) -> dict[str, Any]:
     if entry is None:
         raise RuntimeError(t(f"Unbekanntes Modell: {model_id}", f"Unknown model: {model_id}"))
     if not registry.is_installed(entry):
-        missing = [f["file"] for f in entry["files"] if not registry.file_path(f).exists()]
+        # Snapshot-Modelle (ganze Repos wie TRELLIS.2) haben kein "file", nur "repo".
+        missing = [f.get("file") or f["repo"] for f in entry["files"] if not registry.file_path(f).exists()]
         raise RuntimeError(t(
             f"Modell '{model_id}' unvollstaendig. Fehlt: {', '.join(missing)}",
             f"Model '{model_id}' is incomplete. Missing: {', '.join(missing)}",
@@ -393,10 +394,51 @@ def _stage_image(asset_id: str, wofuer: str) -> str:
     return comfy.stage_input(src)
 
 
+def prompt_upsampler() -> dict[str, Any] | None:
+    """Die Upsampler-Datei von FLUX 3, falls ein FLUX-3-Eintrag sie geladen hat.
+
+    Qwen3.5-9B, Apache-2.0. Sie baut auch fuer die anderen Bildmodelle einen knappen
+    Prompt zur vollen Bildbeschreibung aus ("Prompt ausbauen").
+    """
+    for entry in registry.all_entries():
+        for f in entry.get("files", []):
+            if "upsampler" in f.get("file", "") and registry.file_path(f).exists():
+                return f
+    return None
+
+
+async def _upsample(prompt: str, upsampler: dict[str, Any], ref_ids: list[str],
+                    ref_images: list[str], width: int, height: int,
+                    ctx: JobContext) -> str:
+    """Laesst den FLUX-3-Upsampler den Prompt zur vollen Bildbeschreibung ausbauen
+    (Hintergrund in flux3_prompt.py). Gleiche Anfrage -> Zwischenspeicher."""
+    upsampler_file = workflows.file_name(upsampler)
+    key, user, locked = flux3_prompt.plan(prompt, len(ref_ids), width, height)
+    cache_key = flux3_prompt.cache_key(upsampler_file, key, user, ref_ids)
+    caption = flux3_prompt.cache_get(cache_key)
+    if caption is None:
+        await _ensure_backend(ctx)
+        ctx.progress(0.0, t("Upsampler baut den Prompt aus", "upsampler is expanding the prompt"))
+        graph = flux3_prompt.build_graph(upsampler_file, key, user, ref_images)
+        texts = await comfy.run_text_workflow(graph)
+        caption = (texts[-1] if texts else "").strip()
+        if not caption:
+            raise RuntimeError(t(
+                "Der Prompt-Upsampler von FLUX 3 lieferte keinen Text. Ohne ihn: "
+                "upsample_prompt=false und eine volle Bildbeschreibung als Prompt.",
+                "The FLUX 3 prompt upsampler returned no text. To work without it: "
+                "upsample_prompt=false and a full image description as the prompt.",
+            ))
+        if locked:
+            caption = flux3_prompt.reconcile(caption, locked)
+        flux3_prompt.cache_put(cache_key, caption)
+    return caption
+
+
 async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list[str],
                          ctx: JobContext) -> dict[str, Any]:
     """FLUX 3: den Prompt vom mitgelieferten Upsampler zur vollen Bildbeschreibung
-    ausbauen lassen, bevor das Bild entsteht (Hintergrund in flux3_prompt.py).
+    ausbauen lassen, bevor das Bild entsteht.
 
     Legt das Ergebnis unter p["caption"] ab und gibt die Angaben fuer die Asset-Metadaten
     zurueck. Der eingegebene Prompt bleibt in p["prompt"] -- er ist es, den man spaeter
@@ -410,32 +452,38 @@ async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list
     if flux3_prompt.is_finished(prompt):
         return {"upsampled": False}
 
-    upsampler = next((f for f in entry["files"] if "upsampler" in f["file"]), None)
+    upsampler = next((f for f in entry["files"] if "upsampler" in f.get("file", "")), None)
     if upsampler is None:
         return {"upsampled": False}
-    upsampler_file = workflows.file_name(upsampler)
-    key, user, locked = flux3_prompt.plan(
-        prompt, len(ref_ids), int(p.get("width", 1024)), int(p.get("height", 1024)))
-    cache_key = flux3_prompt.cache_key(upsampler_file, key, user, ref_ids)
-    caption = flux3_prompt.cache_get(cache_key)
-    if caption is None:
-        await _ensure_backend(ctx)
-        ctx.progress(0.0, t("Upsampler baut den Prompt aus", "upsampler is expanding the prompt"))
-        graph = flux3_prompt.build_graph(upsampler_file, key, user, p.get("reference_images") or [])
-        texts = await comfy.run_text_workflow(graph)
-        caption = (texts[-1] if texts else "").strip()
-        if not caption:
-            raise RuntimeError(t(
-                "Der Prompt-Upsampler von FLUX 3 lieferte keinen Text. Ohne ihn: "
-                "upsample_prompt=false und eine volle Bildbeschreibung als Prompt.",
-                "The FLUX 3 prompt upsampler returned no text. To work without it: "
-                "upsample_prompt=false and a full image description as the prompt.",
-            ))
-        if locked:
-            caption = flux3_prompt.reconcile(caption, locked)
-        flux3_prompt.cache_put(cache_key, caption)
+    caption = await _upsample(prompt, upsampler, ref_ids, p.get("reference_images") or [],
+                              int(p.get("width", 1024)), int(p.get("height", 1024)), ctx)
     p["caption"] = caption
     return {"upsampled": True, "caption": caption}
+
+
+@register("expand_prompt")
+async def _expand_prompt(job: Job, ctx: JobContext) -> list[str]:
+    """"Prompt ausbauen" fuer jedes Bildmodell: nur Text, kein Bild. Das Ergebnis
+    steht danach in job.params["expanded"]."""
+    p = job.params
+    upsampler = prompt_upsampler()
+    if upsampler is None:
+        raise RuntimeError(t(
+            "Prompt ausbauen braucht den Upsampler von FLUX 3 Image Klein. Bitte "
+            "flux3-klein-nvfp4 (RTX 50) oder flux3-klein-int8 herunterladen.",
+            "Expanding a prompt needs the FLUX 3 Image Klein upsampler. Please download "
+            "flux3-klein-nvfp4 (RTX 50) or flux3-klein-int8.",
+        ))
+    ref_ids = [a for a in (p.get("reference_asset_ids") or []) if a]
+    if len(ref_ids) > flux3_prompt.MAX_REFERENCES:
+        raise RuntimeError(t(f"Hoechstens {flux3_prompt.MAX_REFERENCES} Referenzbilder.",
+                             f"At most {flux3_prompt.MAX_REFERENCES} reference images."))
+    ref_images = [_stage_image(a, t(f"Referenzbild {i + 1}", f"Reference image {i + 1}"))
+                  for i, a in enumerate(ref_ids)]
+    p["expanded"] = await _upsample(p["prompt"], upsampler, ref_ids, ref_images,
+                                    int(p.get("width", 1024)), int(p.get("height", 1024)), ctx)
+    db.update_job(job.id, params=p)
+    return []
 
 
 @register("txt2img")
@@ -445,17 +493,19 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     wf = entry["workflow"]
     is_flux3 = wf in workflows.FLUX3_WORKFLOWS
 
-    # FLUX 3 bearbeitet ueber Referenzbilder, nicht ueber ein angerauschtes Startbild --
-    # dafuer ist es trainiert. Ein Startbild wird dort deshalb zur ersten Referenz.
+    # FLUX 3 und Qwen-Image 2.1 bearbeiten ueber Referenzbilder, nicht ueber ein
+    # angerauschtes Startbild -- dafuer sind sie trainiert. Ein Startbild wird dort
+    # deshalb zur ersten Referenz.
+    by_reference = registry.features_for(entry).get("references", 0) > 0
     ref_ids = [a for a in (p.get("reference_asset_ids") or []) if a]
-    if is_flux3 and p.get("image_asset_id") and not ref_ids:
+    if by_reference and p.get("image_asset_id") and not ref_ids:
         ref_ids = [p.pop("image_asset_id")]
-    if ref_ids and not is_flux3:
+    if ref_ids and not by_reference:
         raise RuntimeError(t(
-            f"Referenzbilder verarbeitet nur FLUX 3, nicht '{_name(entry)}'. Fuer ein "
-            "vorhandenes Bild als Ausgangspunkt: image_asset_id mit denoise.",
-            f"Only FLUX 3 processes reference images, not '{_name(entry)}'. To start "
-            "from an existing image: image_asset_id with denoise.",
+            f"Referenzbilder verarbeiten nur FLUX 3 und Qwen-Image 2.1, nicht '{_name(entry)}'. "
+            "Fuer ein vorhandenes Bild als Ausgangspunkt: image_asset_id mit denoise.",
+            f"Only FLUX 3 and Qwen-Image 2.1 process reference images, not '{_name(entry)}'. "
+            "To start from an existing image: image_asset_id with denoise.",
         ))
     if len(ref_ids) > flux3_prompt.MAX_REFERENCES:
         raise RuntimeError(t(f"Hoechstens {flux3_prompt.MAX_REFERENCES} Referenzbilder.",

@@ -43,6 +43,8 @@ such ("according to BFL").
 | Several objects at fixed positions | **FLUX 3** with bounding boxes |
 | Quick drafts | FLUX 3 (13–16 s) or Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
 | Historically accurate vehicles (Panzer IV, Sd.Kfz. 251 …) | **none** — see section 8 |
+| Only a few words of prompt, model without its own upsampler | first **✨ Expand prompt** (`expand_prompt`), see section 5 |
+| Trying out Qwen-Image 2.1 (`qwen-image-2.1-int8`) | **non-commercial only** (Qwen Research License); editing looked overprocessed in the test |
 
 Without a `model_id`, NV-AI uses the active image model.
 
@@ -261,6 +263,18 @@ at the beginning. Without a style, the upsampler plans a photo.
 If something in the image is wrong, read `caption` first. If the error was already there, extend
 the prompt instead of rerolling.
 
+### Expand prompt: the upsampler for every model
+
+The same upsampler also works for the other image models. In the web interface and in the
+PhotoCraft add-on (Windows) the **✨ Expand prompt** button writes the full description into the
+prompt field; you read it, remove what is wrong, and generate with any model. Via MCP it is
+`expand_prompt(prompt, width, height)`, via REST `POST /api/prompt/expand`. It needs a FLUX 3
+model to be downloaded. Measured: 13–16 s, about 36 s right after a start.
+
+With only "a medieval blacksmith", Qwen-Image-2512 painted a warrior portrait in leather armor;
+with the expanded text it painted a working forge with hearth, anvil, tongs and sparks. The
+upsampler fills every gap, though: it also gave the smith an iron helmet. Read the text first.
+
 ### Reference images
 
 `reference_asset_ids` takes up to ten asset IDs: generated images or your own uploads
@@ -447,7 +461,7 @@ model. Other programs can adapt their controls to it, as the NV-AI web UI does.
   positively, e.g. *plain light grey background* instead of *no background*.
 - **PyTorch cu130 is required for NVFP4.** With cu128, ComfyUI disables its NVFP4 kernels and
   everything becomes three to five times slower. `setup_comfyui.ps1` installs cu130.
-- **ComfyUI 0.41 or newer** for FLUX 3. `install.ps1` pins v0.41.3.
+- **ComfyUI 0.41 or newer** for FLUX 3. `install.ps1` pins v0.42.1.
 - **Check results at full resolution:** downscaled previews hide exactly the errors that matter,
   such as a rope handle without a hole.
 

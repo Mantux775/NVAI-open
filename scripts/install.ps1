@@ -42,15 +42,26 @@ if (-not $smi) {
 
 Step "ComfyUI"
 $comfy = Join-Path $repo "external\comfyui"
+# Auf die Version festgenagelt, gegen die alle Graph-Builder geprueft wurden.
+# 0.41.3: erste Fassung mit FLUX 3 Image Klein (CLIPLoader-Typ flux3, TextGenerate).
+# 0.42.1: Qwen3.5-Chat-Template im Upsampler repariert (PR 17121), Textgenerierung raeumt auf.
+$comfyTag = "v0.42.1"
 if (Test-Path (Join-Path $comfy ".git")) {
-    Ok "liegt bereits vor - uebersprungen"
+    $have = (git -C $comfy describe --tags 2>$null)
+    if ($have -eq $comfyTag) {
+        Ok "liegt bereits vor ($comfyTag) - uebersprungen"
+    } else {
+        # Aeltere Klone auf die gepruefte Fassung heben; setup_comfyui.ps1 zieht danach die Pakete nach.
+        git -C $comfy fetch --depth 1 origin tag $comfyTag
+        git -C $comfy checkout -q $comfyTag
+        if ($LASTEXITCODE -ne 0) { throw "ComfyUI liess sich nicht auf $comfyTag umstellen (lokale Aenderungen?)" }
+        Ok "ComfyUI von $have auf $comfyTag gehoben"
+    }
 } else {
     New-Item -ItemType Directory -Force (Join-Path $repo "external") | Out-Null
-    # Auf die Version festgenagelt, gegen die alle Graph-Builder geprueft wurden.
     # Ein neuerer Stand kann Node-Signaturen aendern und Workflows brechen.
-    # 0.41.3: erste Fassung mit FLUX 3 Image Klein (CLIPLoader-Typ flux3, TextGenerate).
-    git clone --depth 1 --branch v0.41.3 https://github.com/comfyanonymous/ComfyUI.git $comfy
-    Ok "ComfyUI 0.41.3 geholt"
+    git clone --depth 1 --branch $comfyTag https://github.com/comfyanonymous/ComfyUI.git $comfy
+    Ok "ComfyUI $comfyTag geholt"
 }
 
 Step "ComfyUI-Umgebung (Torch, dauert einige Minuten)"

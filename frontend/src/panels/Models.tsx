@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, KIND_LABEL, type ModelInfo, type ModelKind, type ServerEvent } from '../api'
+import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 import { HfSearch } from './HfSearch'
 import { HfToken } from './HfToken'
@@ -7,6 +8,7 @@ import { HfToken } from './HfToken'
 interface Props {
   event: ServerEvent | null
   onChanged: () => void
+  downloads: Downloads
 }
 
 type Filter = ModelKind | 'all' | 'fav' | 'rec'
@@ -22,19 +24,12 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'controlnet', label: 'ControlNet' },
 ]
 
-interface DlState {
-  job: string
-  progress: number
-  stage: string
-}
-
-export function ModelsPanel({ event, onChanged }: Props) {
+export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [active, setActive] = useState<Record<string, string | null>>({})
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [hfOpen, setHfOpen] = useState(false)
-  const [downloads, setDownloads] = useState<Record<string, DlState>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmCleanup, setConfirmCleanup] = useState(false)
@@ -62,7 +57,7 @@ export function ModelsPanel({ event, onChanged }: Props) {
             )
           : t('Es lief kein Download.', 'No download was running.'),
       )
-      setDownloads({})
+      await dls.sync()
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -94,35 +89,19 @@ export function ModelsPanel({ event, onChanged }: Props) {
     load()
   }, [load])
 
+  // Ein Download ist fertig geworden (egal auf welcher Seite gestartet): Liste neu lesen.
   useEffect(() => {
-    if (!event || !('job_id' in event)) return
-    const hit = Object.entries(downloads).find(([, d]) => d.job === event.job_id)
-    if (!hit) return
-    const [id] = hit
-
-    if (event.type === 'job.progress') {
-      setDownloads((d) => ({ ...d, [id]: { ...d[id], progress: event.progress, stage: event.stage } }))
-    } else if (event.type === 'job.done' || event.type === 'job.error') {
-      setDownloads((d) => {
-        const { [id]: _drop, ...rest } = d
-        return rest
-      })
-      if (event.type === 'job.error') setError(event.error)
-      load()
-      onChanged()
-    }
-  }, [event, downloads, load, onChanged])
+    if (dls.finished === 0) return
+    load()
+    onChanged()
+  }, [dls.finished, load, onChanged])
 
   // clean=true bei unvollstaendigem Stand: Reste weg, dann frisch laden.
   // Fortsetzen ist bei kaputten Fragmenten unzuverlaessiger als ein Neustart.
   const download = async (m: ModelInfo, clean = false) => {
     setError(null)
     try {
-      const job = await api.downloadModel(m.id, clean)
-      setDownloads((d) => ({
-        ...d,
-        [m.id]: { job: job.id, progress: 0, stage: t('startet', 'starting') },
-      }))
+      await dls.start(m.id, clean)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -311,6 +290,13 @@ export function ModelsPanel({ event, onChanged }: Props) {
 
       {hfOpen && (
         <HfSearch
+          catalog={models}
+          onShowModel={(id) => {
+            setFilter('all')
+            setQuery('')
+            setExpanded((s) => new Set(s).add(id))
+            setTimeout(() => document.getElementById(`model-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50)
+          }}
           onQueued={(text) => {
             setMessage(text)
             load()
@@ -319,12 +305,13 @@ export function ModelsPanel({ event, onChanged }: Props) {
       )}
 
       {shown.map((m) => {
-        const dl = downloads[m.id]
+        const dl = dls.active[m.id]
         const isActive = active[m.kind] === m.id
         const open = expanded.has(m.id)
         return (
           <article
             key={m.id}
+            id={`model-${m.id}`}
             className={`panel model${m.installed ? ' installed' : ''}${m.favorite ? ' fav' : ''}`}
           >
             <button
@@ -409,7 +396,11 @@ export function ModelsPanel({ event, onChanged }: Props) {
                     <div className="progress">
                       <div className="bar" style={{ width: `${Math.round(dl.progress * 100)}%` }} />
                     </div>
-                    <span className="muted small">{dl.stage}</span>
+                    <span className="muted small">
+                      {dl.status === 'queued'
+                        ? t('wartet auf den laufenden Download', 'waiting for the running download')
+                        : `${Math.round(dl.progress * 100)} % · ${dl.stage}`}
+                    </span>
                   </div>
                 ) : m.installed ? (
                   <>

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "x-api-version": 1
  },
  "paths": {
@@ -831,6 +831,45 @@
     }
    }
   },
+  "/api/prompt/expand": {
+   "post": {
+    "summary": "Expand Prompt",
+    "description": "Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine\nvolle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Nur Text.\n\nBlockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden\nBild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.",
+    "operationId": "expand_prompt_api_prompt_expand_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExpandPromptRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExpandPromptResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/jobs": {
    "get": {
     "summary": "Get Jobs",
@@ -1516,6 +1555,73 @@
     "type": "object",
     "title": "DownloadRequest"
    },
+   "ExpandPromptRequest": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "title": "Prompt",
+      "description": "Knapper Prompt, der ausgebaut werden soll"
+     },
+     "width": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Width",
+      "description": "Geplantes Format -- der Upsampler richtet den Bildaufbau danach",
+      "default": 1024
+     },
+     "height": {
+      "type": "integer",
+      "multipleOf": 8.0,
+      "maximum": 2048.0,
+      "minimum": 256.0,
+      "title": "Height",
+      "default": 1024
+     },
+     "reference_asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 10,
+      "title": "Reference Asset Ids",
+      "description": "Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt"
+    ],
+    "title": "ExpandPromptRequest"
+   },
+   "ExpandPromptResult": {
+    "properties": {
+     "prompt": {
+      "type": "string",
+      "title": "Prompt",
+      "description": "Der eingegebene Prompt"
+     },
+     "expanded": {
+      "type": "string",
+      "title": "Expanded",
+      "description": "Die ausgebaute Bildbeschreibung, fuer jedes Bildmodell"
+     },
+     "seconds": {
+      "type": "number",
+      "title": "Seconds",
+      "description": "Dauer inklusive Warten auf die GPU"
+     }
+    },
+    "type": "object",
+    "required": [
+     "prompt",
+     "expanded",
+     "seconds"
+    ],
+    "title": "ExpandPromptResult"
+   },
    "Generate3DRequest": {
     "properties": {
      "image_asset_id": {
@@ -1908,7 +2014,7 @@
       "type": "array",
       "maxItems": 10,
       "title": "Reference Asset Ids",
-      "description": "Nur FLUX 3: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt als 'the first image', 'the second image' ansprechen"
+      "description": "Nur FLUX 3 und Qwen-Image 2.1: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt als 'the first image', 'the second image' ansprechen (Qwen-Image 2.1: '<image1>', '<image2>')"
      },
      "hires": {
       "type": "boolean",
@@ -2194,7 +2300,8 @@
        "txt2video",
        "img2video",
        "img23d",
-       "download"
+       "download",
+       "expand_prompt"
       ],
       "title": "Kind"
      },

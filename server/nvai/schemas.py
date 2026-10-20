@@ -6,7 +6,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
-JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download"]
+JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
+                  "expand_prompt"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild.
@@ -54,9 +55,10 @@ class GenerateImageRequest(BaseModel):
     )
     reference_asset_ids: list[str] = Field(
         default_factory=list, max_length=10,
-        description="Nur FLUX 3: bis zu 10 Bild-Assets als Referenz -- zum Bearbeiten, fuer "
-                    "gleichbleibende Figuren oder zum Kombinieren. Im Prompt als "
-                    "'the first image', 'the second image' ansprechen",
+        description="Nur FLUX 3 und Qwen-Image 2.1: bis zu 10 Bild-Assets als Referenz -- zum "
+                    "Bearbeiten, fuer gleichbleibende Figuren oder zum Kombinieren. Im Prompt "
+                    "als 'the first image', 'the second image' ansprechen (Qwen-Image 2.1: "
+                    "'<image1>', '<image2>')",
     )
 
     # --- Zweiter Durchgang (Hires-Fix) ---
@@ -141,6 +143,23 @@ class GenerateVideoRequest(BaseModel):
     image_asset_id: str | None = Field(
         None, description="Fuer Bild-zu-Video: Asset-ID des Startbilds"
     )
+
+
+class ExpandPromptRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, description="Knapper Prompt, der ausgebaut werden soll")
+    width: int = Field(1024, ge=256, le=2048, multiple_of=8,
+                       description="Geplantes Format -- der Upsampler richtet den Bildaufbau danach")
+    height: int = Field(1024, ge=256, le=2048, multiple_of=8)
+    reference_asset_ids: list[str] = Field(
+        default_factory=list, max_length=10,
+        description="Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3)",
+    )
+
+
+class ExpandPromptResult(BaseModel):
+    prompt: str = Field(..., description="Der eingegebene Prompt")
+    expanded: str = Field(..., description="Die ausgebaute Bildbeschreibung, fuer jedes Bildmodell")
+    seconds: float = Field(..., description="Dauer inklusive Warten auf die GPU")
 
 
 # ------------------------------------------------------------ Ergebnis

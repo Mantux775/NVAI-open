@@ -229,7 +229,7 @@ cd NVAI-open
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-The script fetches ComfyUI at the tested version 0.41.3, creates two separate Python
+The script fetches ComfyUI at the tested version 0.42.1, creates two separate Python
 environments (orchestrator, and GPU backend with PyTorch for CUDA 13), builds the web UI if npm
 is available, detects the graphics card and finally lists the models that fit this card. Expect
 10–20 minutes, most of it PyTorch.
@@ -311,7 +311,7 @@ Requirements:
 
 The script stages only what belongs in the setup under `packaging\windows\build\stage`: the
 server code with the 3D workers (without venv), `pyproject.toml`, `openapi.json`, the built web
-UI, ComfyUI at the tested tag `v0.41.3` and TripoSG at a pinned commit, `uv.exe` with its
+UI, ComfyUI at the tested tag `v0.42.1` and TripoSG at a pinned commit, `uv.exe` with its
 license files, the locked package lists from `packaging\windows\locks`, the license and the
 generated third-party notices. ComfyUI and TripoSG are exported with `git archive` from local
 clones in `external\` if present (no models, no venv, no outputs), otherwise downloaded from

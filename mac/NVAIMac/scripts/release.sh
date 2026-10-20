@@ -65,10 +65,14 @@ SIGN=${IDENTITY:--}
 # A timestamp needs a real identity; ad hoc has none.
 TS_FLAG=""
 [[ -n "$IDENTITY" ]] && TS_FLAG="--timestamp"
+# CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO: otherwise Xcode adds get-task-allow even in Release,
+# and Apple rejects the notarization ("requests the com.apple.security.get-task-allow
+# entitlement", measured on 2026-10-20).
 xcodebuild -project NVAIMac.xcodeproj -scheme NVAIMac -configuration Release \
   -derivedDataPath $ROOT/dd -clonedSourcePackagesDirPath $ROOT/SourcePackages \
   -destination 'platform=macOS,arch=arm64' -skipPackagePluginValidation -skipMacroValidation \
   CODE_SIGN_IDENTITY="$SIGN" CODE_SIGN_STYLE=Manual ENABLE_HARDENED_RUNTIME=YES \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
   OTHER_CODE_SIGN_FLAGS="$TS_FLAG" build > $ROOT/release-build.log 2>&1 \
   || { grep -E "error:|errSec" $ROOT/release-build.log | head -20 || true
        echo "Build failed (log: $ROOT/release-build.log)"; exit 1; }

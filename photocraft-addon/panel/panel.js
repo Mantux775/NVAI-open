@@ -98,6 +98,9 @@ let modelsAskedAt = 0;
 let lastStatus = null;
 let pollTimer = 0;
 let placing = null; // { taskId, k } während des Einfügens
+let expanding = false; // „Prompt ausbauen“ läuft
+let promptBefore = null; // eigener Prompt vor dem Ausbauen, zum Zurücknehmen
+let expandNote = "";
 let starting = ""; // "photocraft" | "nvai" während eines Starts, "check" während „Erneut prüfen“
 let errorText = "";
 
@@ -419,6 +422,67 @@ function renderGo() {
   go.disabled = Boolean(why);
   go.title = why || "";
   $("#go-label").textContent = state?.task?.status === "running" ? t("Läuft …", "Running …") : modeTexts(settings.mode).go;
+  renderExpand();
+}
+
+// ------------------------------------------------------------ Prompt ausbauen
+
+function expandBlocker() {
+  const nv = state?.nvai;
+  if (!nv?.connected || nv.problem) return t("NV-AI läuft nicht", "NV-AI is not running");
+  if (!nv.expand) return t("Diese NV-AI-Version kann Prompts noch nicht ausbauen", "This NV-AI version cannot expand prompts yet");
+  if (state?.task?.status === "running") return t("Es läuft bereits ein Auftrag", "A job is already running");
+  if (!settings.prompt.trim()) return t("Erst ein paar Worte eingeben", "Type a few words first");
+  return null;
+}
+
+function renderExpand() {
+  const why = expanding ? null : expandBlocker();
+  const button = $("#expand");
+  button.disabled = expanding || Boolean(why);
+  button.textContent = expanding ? t("Baut aus …", "Expanding …") : t("✨ Prompt ausbauen", "✨ Expand prompt");
+  if (why) button.title = why;
+  else button.title = t("Macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Modell (meist 10–40 s)",
+    "Turns a few words into a full image description, for every model (usually 10–40 s)");
+  $("#expand-undo").hidden = expanding || promptBefore === null;
+  $("#expand-note").textContent = expanding ? t("meist 10–40 s", "usually 10–40 s") : expandNote;
+}
+
+function setPrompt(text) {
+  $("#prompt").value = text;
+  settings.prompt = text;
+  saveSettings();
+  renderCount();
+  renderGo();
+}
+
+async function expandPrompt() {
+  if (expanding || expandBlocker()) return;
+  expanding = true;
+  expandNote = "";
+  renderExpand();
+  try {
+    const before = settings.prompt;
+    const r = await api("/api/expand", { method: "POST", body: JSON.stringify({ prompt: before }) });
+    promptBefore = before;
+    expandNote = t(`ausgebaut in ${Math.round(r.seconds)} s – lesen und streichen, was nicht stimmt`,
+      `expanded in ${Math.round(r.seconds)} s – read it and remove what is wrong`);
+    setPrompt(r.expanded);
+  } catch (e) {
+    errorText = e.message;
+    renderNotice();
+  } finally {
+    expanding = false;
+    renderExpand();
+  }
+}
+
+function undoExpand() {
+  if (promptBefore === null) return;
+  const before = promptBefore;
+  promptBefore = null;
+  expandNote = "";
+  setPrompt(before);
 }
 
 // ------------------------------------------------------------ Ergebnisse
@@ -789,6 +853,8 @@ function bind() {
     renderGo();
     renderCount();
   });
+  $("#expand").addEventListener("click", expandPrompt);
+  $("#expand-undo").addEventListener("click", undoExpand);
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {

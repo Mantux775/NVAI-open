@@ -232,7 +232,7 @@ cd NVAI-open
 powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 ```
 
-Das Skript holt ComfyUI in der geprüften Fassung 0.41.3, legt zwei getrennte
+Das Skript holt ComfyUI in der geprüften Fassung 0.42.1, legt zwei getrennte
 Python-Umgebungen an (Orchestrator und GPU-Backend mit PyTorch für CUDA 13), baut die
 Weboberfläche, wenn npm vorhanden ist, erkennt die Grafikkarte und nennt am Ende die Modelle,
 die auf diese Karte passen. Rechne mit 10–20 Minuten, das meiste davon PyTorch.
@@ -315,7 +315,7 @@ Voraussetzungen:
 
 Das Skript stellt unter `packaging\windows\build\stage` nur zusammen, was ins Setup gehört: den
 Server-Code mit den 3D-Workern (ohne venv), `pyproject.toml`, `openapi.json`, die gebaute
-Weboberfläche, ComfyUI im getesteten Tag `v0.41.3` und TripoSG in einem festen Commit, `uv.exe`
+Weboberfläche, ComfyUI im getesteten Tag `v0.42.1` und TripoSG in einem festen Commit, `uv.exe`
 samt Lizenztexten, die festgeschriebenen Paketlisten aus `packaging\windows\locks`, die Lizenz
 und die erzeugten Hinweise zu Fremdkomponenten. ComfyUI und TripoSG kommen per `git archive` aus
 lokalen Klonen unter `external\`, falls vorhanden (keine Modelle, kein venv, keine Ausgaben),

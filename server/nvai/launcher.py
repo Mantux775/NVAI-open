@@ -3,6 +3,7 @@
     pythonw -m nvai.launcher            # NV-AI starten, falls es nicht laeuft
     pythonw -m nvai.launcher --open     # danach die Weboberflaeche oeffnen
     pythonw -m nvai.launcher --stop     # NV-AI samt ComfyUI beenden
+    python -m nvai.launcher --stop --quiet   # dasselbe ohne Dialog (Setup, Deinstallation)
 
 Kehrt zurueck, sobald NV-AI antwortet; der Server laeuft losgeloest weiter.
 Die Einstellungen schreibt das Setup nach HKCU\\Software\\NV-AI (DataDir,
@@ -87,9 +88,16 @@ def _port_busy(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+# Aus Skripten (stop-all.ps1 beim Setup und Deinstallieren) nie einen Dialog zeigen: der
+# wartet unsichtbar auf einen Klick, und die Deinstallation haengt.
+_QUIET = False
+
+
 def _message(text: str, error: bool = True) -> None:
     if sys.stderr is not None:
         print(text, file=sys.stderr)
+    if _QUIET:
+        return
     try:
         import ctypes
         ctypes.windll.user32.MessageBoxW(None, text, "NV-AI", 0x10 if error else 0x40)
@@ -182,6 +190,8 @@ def stop() -> int:
 
 
 def main(argv: list[str]) -> int:
+    global _QUIET
+    _QUIET = "--quiet" in argv
     if "--stop" in argv:
         return stop()
     return start(open_browser="--open" in argv)

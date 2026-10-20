@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, connectEvents, type Health, type ServerEvent } from './api'
+import { useDownloads } from './downloads'
 import { getLang, setLang, t, type Lang } from './i18n'
 import { GeneratePanel } from './panels/Generate'
 import { HistoryPanel } from './panels/History'
@@ -26,6 +27,8 @@ export function App() {
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const downloads = useDownloads(events, setNotice)
+  const dlList = Object.entries(downloads.active)
 
   const refreshHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null))
@@ -193,10 +196,37 @@ export function App() {
         </div>
       )}
 
+      {/* Downloads auf jeder Seite: Name, Balken, Prozent, was gerade geladen wird. */}
+      {dlList.length > 0 && (
+        <div className="dlbar" role="status" aria-live="polite">
+          {dlList.map(([id, d]) => {
+            const pct = Math.round(d.progress * 100)
+            return (
+              <button
+                key={id}
+                className="dl-item"
+                onClick={() => setTab('models')}
+                title={t('Zur Modellverwaltung', 'Go to model management')}
+              >
+                <span className="dl-icon">⬇</span>
+                <span className="dl-name">{d.name}</span>
+                <span className="dl-track">
+                  <span className="dl-fill" style={{ width: `${d.status === 'queued' ? 0 : pct}%` }} />
+                </span>
+                <span className="dl-pct">{d.status === 'queued' ? t('wartet', 'queued') : `${pct} %`}</span>
+                {d.stage && d.status === 'running' && <span className="dl-stage muted small">{d.stage}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <main className="content">
-        {tab === 'generate' && <GeneratePanel health={health} event={events} />}
+        {tab === 'generate' && (
+          <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+        )}
         {tab === 'history' && <HistoryPanel event={events} />}
-        {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} />}
+        {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} />}
       </main>
     </div>
   )

@@ -6,7 +6,7 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| **Windows 10/11** with an NVIDIA graphics card | [NV-AI-Setup-0.3.1.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.3.1/NV-AI-Setup-0.3.1.exe) |
+| **Windows 10/11** with an NVIDIA graphics card | [NV-AI-Setup-0.4.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.4.0/NV-AI-Setup-0.4.0.exe) |
 | **macOS 15+** on Apple Silicon (signed and notarized) | NV-AI-0.3.0.dmg follows shortly – Apple is still checking the signed build. / Wird in Kürze nachgereicht. |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
@@ -32,7 +32,7 @@ NV-AI was built primarily in German. The English interface and docs are new, so 
 **On Windows** (NVIDIA graphics card) NV-AI runs a small local server with a web interface in your browser:
 
 - **Images**: FLUX 3 Image Klein, Qwen-Image-2512 and more. Text to image, editing with reference images, inpainting with a mask.
-- **✨ Expand prompt**: turns a few words into a full image description, for every image model (next version).
+- **✨ Expand prompt**: turns a few words into a full image description, for every image model (since 0.4).
 - **3D models**: turn an image into a 3D model (GLB), with PBR textures via TRELLIS.2 or as a plain shape via TripoSG.
 - **Audio and video**: sound effects and music (Stable Audio Open, ACE-Step), short clips (Wan, LTX-Video).
 - **Model manager**: downloads models from Hugging Face, suggests the ones that fit your graphics card, and has a search for more models. Before anything is downloaded, NV-AI checks whether the file will actually run.
@@ -72,7 +72,7 @@ Same prompt and seed, left FLUX 3, right Qwen-Image-2512:
 ![Bakery sign](docs/images/compare-sign.jpg)
 *"A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall."*
 
-The explorer also has a third column: Qwen-Image 2.1, same prompt, seed and size (832 × 1216). It is in the catalog from the next NV-AI version on. **Its license (Qwen Research License) allows no commercial use**, so it is for trying things out, not for assets in a product you sell.
+The explorer also has a third column: Qwen-Image 2.1, same prompt, seed and size (832 × 1216). It is in the catalog since NV-AI 0.4. **Its license (Qwen Research License) allows no commercial use**, so it is for trying things out, not for assets in a product you sell.
 
 ![Explorer, full body: FLUX 3, Qwen-Image-2512 and Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 *"Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light."*
@@ -92,7 +92,7 @@ All images in this README were generated with NV-AI.
 
 ### ✨ Expand prompt: from a few words to a real picture
 
-New in the next version. Type a few words, click **✨ Expand prompt**, and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. You read it, remove what you don't want, and generate. It works with every image model, not just FLUX 3, and also in the PhotoCraft add-on on Windows and for Claude Code (`expand_prompt`).
+New in 0.4. Type a few words, click **✨ Expand prompt**, and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. You read it, remove what you don't want, and generate. It works with every image model, not just FLUX 3, and also in the PhotoCraft add-on on Windows and for Claude Code (`expand_prompt`).
 
 It uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B, Apache-2.0), so FLUX 3 has to be downloaded once. On my RTX 5060 Ti it takes about 15 seconds; the very first time after a start, with ComfyUI starting up, about 35.
 
@@ -178,7 +178,7 @@ NV-AI ist primär auf Deutsch entstanden. Die englische Oberfläche und Doku sin
 **Unter Windows** (NVIDIA-Grafikkarte) läuft NV-AI als kleiner lokaler Server mit Weboberfläche im Browser:
 
 - **Bilder**: FLUX 3 Image Klein, Qwen-Image-2512 und weitere. Text zu Bild, Bearbeiten mit Referenzbildern, Füllen mit Maske.
-- **✨ Prompt ausbauen**: macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell (nächste Version).
+- **✨ Prompt ausbauen**: macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell (seit 0.4).
 - **3D-Modelle**: aus einem Bild ein 3D-Modell (GLB), mit PBR-Texturen über TRELLIS.2 oder als reine Form über TripoSG.
 - **Audio und Video**: Soundeffekte und Musik (Stable Audio Open, ACE-Step), kurze Clips (Wan, LTX-Video).
 - **Modellverwaltung**: lädt Modelle von Hugging Face, schlägt die zur Grafikkarte passenden vor und hat eine Suche nach weiteren Modellen. Vor jedem Download prüft NV-AI, ob die Datei hier überhaupt läuft.
@@ -218,7 +218,7 @@ Gleicher Prompt und Seed, links FLUX 3, rechts Qwen-Image-2512:
 ![Bäckerschild](docs/images/compare-sign.jpg)
 *Prompt: „A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall.“*
 
-Bei der Entdeckerin gibt es eine dritte Spalte: Qwen-Image 2.1, gleicher Prompt, Seed und Format (832 × 1216). Es steht ab der nächsten NV-AI-Version im Katalog. **Seine Lizenz (Qwen Research License) erlaubt keine kommerzielle Nutzung**, es ist also zum Ausprobieren da, nicht für Assets in einem Produkt, das man verkauft.
+Bei der Entdeckerin gibt es eine dritte Spalte: Qwen-Image 2.1, gleicher Prompt, Seed und Format (832 × 1216). Es steht seit NV-AI 0.4 im Katalog. **Seine Lizenz (Qwen Research License) erlaubt keine kommerzielle Nutzung**, es ist also zum Ausprobieren da, nicht für Assets in einem Produkt, das man verkauft.
 
 ![Entdeckerin, ganze Figur: FLUX 3, Qwen-Image-2512 und Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 *Prompt: „Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light.“*
@@ -238,7 +238,7 @@ Alle Bilder in diesem README hat NV-AI erzeugt.
 
 ### ✨ Prompt ausbauen: aus wenigen Worten ein richtiges Bild
 
-Neu in der nächsten Version. Ein paar Worte eintippen, auf **✨ Prompt ausbauen** klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Man liest sie, streicht, was nicht passt, und generiert. Das geht mit jedem Bildmodell, nicht nur mit FLUX 3, und auch im PhotoCraft-Add-on unter Windows und für Claude Code (`expand_prompt`).
+Neu in 0.4. Ein paar Worte eintippen, auf **✨ Prompt ausbauen** klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Man liest sie, streicht, was nicht passt, und generiert. Das geht mit jedem Bildmodell, nicht nur mit FLUX 3, und auch im PhotoCraft-Add-on unter Windows und für Claude Code (`expand_prompt`).
 
 Dahinter steckt der Prompt-Upsampler, der mit FLUX 3 Image Klein kommt (Qwen3.5-9B, Apache-2.0). FLUX 3 muss also einmal geladen sein. Auf meiner RTX 5060 Ti dauert das Ausbauen rund 15 Sekunden, beim allerersten Mal nach dem Start, wenn ComfyUI noch hochfährt, rund 35.
 

@@ -87,11 +87,19 @@ export interface HfResult {
   pipeline_tag: string
   /** safetensors-Dateien, die als Checkpoint in Frage kommen */
   files: string[]
+  /** Erkannte Modellteile: Diffusionsmodell, Text-Encoder, VAE, LoRA … */
+  parts: { file: string; kind: HfPartKind }[]
+  /** Was das Repo im Ganzen ist: ladbare Checkpoints, Teile eines Modells, LoRA oder nichts davon */
+  kind: 'checkpoint' | 'parts' | 'lora' | 'other'
+  /** Grundmodell laut Repo-Tags, z. B. "Qwen/Qwen-Image-2.1" */
+  base_model: string
   /** Warum keine Datei in Frage kommt (Diffusers, GGUF …) */
   note: string
 }
 
 /** Ergebnis der Prüfung vor dem Laden (GET /api/models/inspect). */
+export type HfPartKind = 'lora' | 'text_encoder' | 'vae' | 'controlnet' | 'upscaler' | 'diffusion'
+
 export interface HfCheck {
   repo: string
   file: string
@@ -100,6 +108,8 @@ export interface HfCheck {
   workflow: string | null
   size_gb: number | null
   verdict: string
+  /** Katalogmodelle mit derselben Architektur */
+  catalog?: string[]
 }
 
 export interface ModelSize {
@@ -281,7 +291,8 @@ export const api = {
     req<{ logged_in: boolean; name: string | null }>('/api/settings/hf-token', {
       method: 'DELETE',
     }),
-  searchHf: (q: string) => req<HfResult[]>(`/api/models/search?q=${encodeURIComponent(q)}`),
+  searchHf: (q: string, limit = 50) =>
+    req<HfResult[]>(`/api/models/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   inspectHf: (repo: string, file: string) =>
     req<HfCheck>(
       `/api/models/inspect?repo=${encodeURIComponent(repo)}&file=${encodeURIComponent(file)}`,
@@ -327,6 +338,11 @@ export const api = {
 
   generateImage: (p: ImageParams) =>
     req<Job>('/api/generate/image', { method: 'POST', body: JSON.stringify(p) }),
+  /** Prompt ausbauen: der FLUX-3-Upsampler schreibt die volle Bildbeschreibung, für jedes Bildmodell. */
+  expandPrompt: (p: { prompt: string; width: number; height: number; reference_asset_ids?: string[] }) =>
+    req<{ prompt: string; expanded: string; seconds: number }>(
+      '/api/prompt/expand', { method: 'POST', body: JSON.stringify(p) },
+    ),
   generateAudio: (p: AudioParams) =>
     req<Job>('/api/generate/audio', { method: 'POST', body: JSON.stringify(p) }),
   generateVideo: (p: VideoParams) =>

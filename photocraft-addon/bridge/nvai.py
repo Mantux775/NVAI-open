@@ -156,6 +156,11 @@ class NVAI:
         self._mask_support = (now, ok)
         return ok
 
+    def supports_expand(self) -> bool:
+        """Kennt die laufende NV-AI ``POST /api/prompt/expand`` („Prompt ausbauen“)?"""
+        info = self.version()
+        return info is not None and "expand_prompt" in (info.get("features") or [])
+
     def assets(self, kind: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit}
         if kind:
@@ -185,6 +190,12 @@ class NVAI:
 
     def generate_image(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/api/generate/image", json=payload)
+
+    def expand_prompt(self, prompt: str, width: int = 1024, height: int = 1024) -> dict[str, Any]:
+        """Knappen Prompt zur vollen Bildbeschreibung ausbauen (FLUX-3-Upsampler, für jedes
+        Bildmodell). Blockiert, bis NV-AI fertig ist; wartet hinter einem laufenden Bild."""
+        return self._request("POST", "/api/prompt/expand", timeout=960.0,
+                             json={"prompt": prompt, "width": width, "height": height})
 
     def cancel(self, job_id: str) -> None:
         """Nur den eigenen Auftrag stoppen – NV-AI wird womöglich gerade auch anderweitig benutzt."""

@@ -73,6 +73,10 @@ Tipps (Modellwahl nach `BILDMODELLE.md` von NV-AI):
 
 - Englische Prompts in ganzen Sätzen treffen am genauesten. Unter dem Prompt steht die
   Kurzanleitung, die NV-AI für das gewählte Modell mitliefert.
+- Nur ein paar Worte? **✨ Prompt ausbauen** unter dem Prompt lässt NV-AI daraus eine volle
+  Bildbeschreibung schreiben (rund 15 s; braucht NV-AI ab 0.4 mit
+  geladenem FLUX 3). Vor dem Start lesen und streichen, was der Upsampler erfunden hat;
+  „Zurück zum eigenen Prompt“ nimmt es zurück. Vorerst nur im Windows-Panel.
 - **Qwen-Image-2512** für Endergebnisse, Schrift und Konstruktion; **FLUX 3** fürs gezielte
   Ändern eines vorhandenen Bereichs (Teil ersetzen, Farbe, Material). FLUX 3 steht unter der
   FLUX Kommunity License (Umsatzgrenze, Prüfpflicht) – das Panel zeigt den Hinweis an.

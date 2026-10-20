@@ -605,3 +605,31 @@ kbd {
 }
 .link-button { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 .hf-token { margin-bottom: 10px; }
+.hf-catalog { border: 1px solid var(--border, #2a2f36); border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.hf-catalog .hf-file { margin-left: 0; }
+.hf-toggle { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+
+/* Prompt ausbauen: Knopf, Rücknahme und Hinweis unter dem Prompt */
+.expand-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 2px; }
+.expand-row .muted { flex: 1 1 220px; }
+
+/* Downloads auf jeder Seite (App.tsx) */
+.dlbar { display: flex; flex-direction: column; gap: 4px; padding: 6px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.dl-item { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 2px 0; }
+.dl-item:hover .dl-name { text-decoration: underline; }
+.dl-icon { color: var(--accent, #7eb749); }
+.dl-name { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; font-size: 13px; }
+.dl-track { flex: 1 1 120px; height: 6px; border-radius: 3px; background: rgba(127, 127, 127, 0.25); overflow: hidden; min-width: 80px; }
+.dl-fill { display: block; height: 100%; background: var(--accent, #7eb749); transition: width 0.4s ease; }
+.dl-pct { font-variant-numeric: tabular-nums; font-size: 12px; min-width: 48px; text-align: right; }
+.dl-stage { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 35%; }
+@media (max-width: 640px) { .dl-stage { display: none; } .dl-name { max-width: 50%; } }
+
+/* 3D: Hinweis, dass nur TRELLIS.2 Texturen liefert (Generate.tsx) */
+.texture-note { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 0 0 12px; font-size: 13px; background: var(--panel-2); }
+.texture-note.important { border-color: #ffd166; background: rgba(255, 209, 102, 0.08); }
+.texture-note p { margin: 0 0 8px; }
+.texture-note .dl { min-width: 0; }
+.row-gap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.link-btn { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+.link-btn:hover { text-decoration: underline; }

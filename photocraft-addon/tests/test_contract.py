@@ -29,14 +29,14 @@ LIVE = config.NVAI_ROOT / "server" / "openapi.json"
 SWIFT_COPY = ROOT / "PhotoCraftKit" / "Tests" / "PhotoCraftKitTests" / "Golden" / "nvai-openapi.json"
 
 VERSION = {"name": "NV-AI", "version": "0.2.0", "api": 1, "auth": "token", "authorized": True,
-           "features": ["model_features", "mask", "references", "upsampler", "upload"]}
+           "features": ["model_features", "mask", "references", "upsampler", "upload", "expand_prompt"]}
 
 # Alles, was bridge/nvai.py bei NV-AI aufruft – der Test unten muss jede Zeile auslösen.
 USED = {
     ("get", "/api/version"), ("get", "/api/health"), ("get", "/api/models"), ("get", "/api/assets"),
     ("get", "/api/assets/{asset_id}"), ("delete", "/api/assets/{asset_id}"), ("post", "/api/upload"),
     ("post", "/api/generate/image"), ("get", "/api/jobs/{job_id}"), ("delete", "/api/jobs/{job_id}"),
-    ("post", "/api/jobs/current/cancel"), ("get", "/files/{filename}"),
+    ("post", "/api/jobs/current/cancel"), ("get", "/files/{filename}"), ("post", "/api/prompt/expand"),
 }
 
 # Antwortfelder, die Brücke und Swift-Port lesen. /api/health ist bewusst untypisiert (Diagnose,
@@ -230,6 +230,10 @@ class FakeNVAI:
             return httpx.Response(200, json=self.asset if method == "GET" else {"ok": True})
         if path == "/api/upload":
             return httpx.Response(200, json={**self.asset, "id": "upload-1", "kind": "upload", "job_id": None})
+        if path == "/api/prompt/expand":
+            prompt = json.loads(request.content)["prompt"]
+            return httpx.Response(200, json={"prompt": prompt, "expanded": f"A full description of {prompt}.",
+                                             "seconds": 13.2})
         if path == "/api/generate/image":
             return httpx.Response(200, json=self.jobs["job-r"])
         if path == "/api/jobs/current/cancel":
@@ -287,6 +291,8 @@ def test_client_requests_follow_contract(spec: dict[str, Any]) -> None:
     nv.cancel("job-q")  # wartend → DELETE /api/jobs/{id}
     nv.cancel("job-r")  # läuft gerade → POST /api/jobs/current/cancel
     nv.delete_asset(upload["id"])
+    assert nv.supports_expand()
+    assert nv.expand_prompt("a crate")["expanded"].startswith("A full description")
 
     used, problems = set(), []
     for request, response in zip(fake.requests, fake.responses):

@@ -62,6 +62,7 @@ After an NV-AI update, a running Claude Code session only sees the new tool desc
 | `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros/cons and `features` |
 | `download_model` / `delete_model` / `set_active_model` | Model management |
 | `generate_image` | Image → file paths |
+| `expand_prompt` | A few words → full image description, for every image model (needs FLUX 3 downloaded) |
 | `generate_audio` | SFX or music → file paths |
 | `generate_video` | Short clip → file paths |
 | `image_to_3d` | Image asset → GLB mesh |
@@ -147,7 +148,7 @@ the user first.
 
 NVFP4 needs PyTorch **cu130** in the ComfyUI venv (`setup_comfyui.ps1` installs it); with cu128
 everything is three to five times slower, because ComfyUI then disables its fast NVFP4 kernels.
-FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.41.3).
+FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.42.1).
 
 ### Prompts for Qwen and FLUX 3
 

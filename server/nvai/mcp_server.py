@@ -50,6 +50,12 @@ server = MCPServer(
         "every image must be reviewed before publishing; point this out for final assets.\n"
         "list_models(kind='image', detailed=True) returns 'features' for each model: which "
         "parameters have an effect, recommended sizes (sizes) and a prompt hint.\n\n"
+        "SHORT PROMPTS: expand_prompt(prompt, width, height) turns a few words into a full "
+        "image description for ANY image model (FLUX 3's upsampler, Apache-2.0, ~15 s). "
+        "Measured: 'a medieval blacksmith' with Qwen-Image-2512 gave a warrior portrait; "
+        "with the expanded text a whole forge with hearth, anvil, tongs and sparks. Read "
+        "the result and remove invented details before generating (it gave the smith a "
+        "helmet). Not needed for flux3-klein-*: they expand internally.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -275,10 +281,11 @@ async def generate_image(
             keep) as an uploaded asset. With denoise=1.0 this is inpainting. Use the full
             Qwen model -- Lightning mostly just continues the surroundings. FLUX 3 can't
             do masks.
-        reference_asset_ids: FLUX 3 only: up to 10 image assets. Refer to them in the
+        reference_asset_ids: FLUX 3: up to 10 image assets. Refer to them in the
             prompt as "the first image", "the second image": "Put the soldier from the first
             image into the trench from the second image" or "Replace the rope handles with
-            iron handles; keep everything else unchanged".
+            iron handles; keep everything else unchanged". Qwen-Image 2.1 also takes up
+            to 10; there they are called <image1>, <image2> (non-commercial license).
         upsample_prompt: FLUX 3 only. None/True = upsampler on (BFL's recommendation).
             False only if the prompt already is a full image description of 100-350 words.
             Bounding boxes: append a table to the end of the prompt, e.g. [{"id": "crate_1",
@@ -310,6 +317,44 @@ async def generate_image(
         "controlnet_preprocess": controlnet_preprocess,
     }
     return await _generate("/api/generate/image", payload, ctx)
+
+
+@server.tool()
+async def expand_prompt(
+    prompt: str,
+    width: int = 1024,
+    height: int = 1024,
+    reference_asset_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Expands a short prompt into a full image description, for every image model.
+
+    Uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B,
+    Apache-2.0) -- it needs that model downloaded. About 15 s on an RTX 5060 Ti, longer
+    if a generation is running (it waits in the GPU queue). Only text, no image.
+
+    Use it when the user gives just a few words ("a medieval blacksmith") and the
+    image model is Qwen, SDXL, Chroma or another one without its own upsampler. Then
+    pass 'expanded' as the prompt to generate_image. Whatever the short prompt left
+    open, the upsampler invents (in a test it put a helmet on a blacksmith): read
+    'expanded' and remove or correct such details first. Not needed for flux3-klein-*
+    models, which expand internally (upsample_prompt).
+
+    Args:
+        prompt: The short prompt, preferably in English.
+        width, height: The planned image size -- the upsampler composes for it.
+        reference_asset_ids: Optional images the upsampler looks at (FLUX 3 editing).
+
+    Returns:
+        prompt (as given), expanded (the full description), seconds.
+    """
+    async with await _client() as c:
+        r = await c.post("/api/prompt/expand", timeout=960.0, json={
+            "prompt": prompt, "width": width, "height": height,
+            "reference_asset_ids": reference_asset_ids or [],
+        })
+        if r.status_code != 200:
+            return {"ok": False, "error": r.json().get("detail", r.text)}
+        return {"ok": True, **r.json()}
 
 
 @server.tool()

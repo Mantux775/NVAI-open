@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Asset, type GenKind, type Health, type ModelInfo, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
+import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 
 type Mode = GenKind
@@ -70,9 +71,11 @@ const HINT: Record<Mode, string> = {
 interface Props {
   health: Health | null
   event: ServerEvent | null
+  downloads: Downloads
+  onShowModels: () => void
 }
 
-export function GeneratePanel({ health, event }: Props) {
+export function GeneratePanel({ health, event, downloads, onShowModels }: Props) {
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<Record<Mode, string>>({
@@ -111,6 +114,10 @@ export function GeneratePanel({ health, event }: Props) {
   // FLUX 3: Upsampler und Referenzbilder (Reihenfolge = "the first image", ...)
   const [upsample, setUpsample] = useState(true)
   const [refIds, setRefIds] = useState<string[]>([])
+  // "Prompt ausbauen": vorheriger Prompt zum Zurücknehmen, Laufzeit der letzten Runde
+  const [expanding, setExpanding] = useState(false)
+  const [promptBefore, setPromptBefore] = useState<string | null>(null)
+  const [expandSecs, setExpandSecs] = useState<number | null>(null)
 
   // 3D
   const [sourceImages, setSourceImages] = useState<Asset[]>([])
@@ -144,7 +151,7 @@ export function GeneratePanel({ health, event }: Props) {
         return next
       })
     })
-  }, [health?.active_models])
+  }, [health?.active_models, downloads.finished])
 
   // Quellbilder für den 3D-Modus nachladen
   const loadSources = () => {
@@ -304,6 +311,108 @@ export function GeneratePanel({ health, event }: Props) {
           : mode === 'image' && cnId
             ? !!prompt.trim() && !!cnImageId
             : !!prompt.trim()
+
+  // Prompt ausbauen geht mit jedem Bildmodell, braucht aber die Upsampler-Datei von FLUX 3.
+  const canExpand = models.some((m) => m.files.some((f) => f.installed && f.file.includes('upsampler')))
+
+  const expandPrompt = async () => {
+    if (expanding || busy || !prompt.trim()) return
+    setExpanding(true)
+    setError(null)
+    try {
+      const r = await api.expandPrompt({
+        prompt, width: imgSize.w, height: imgSize.h,
+        ...(maxRefs > 0 && refIds.length ? { reference_asset_ids: refIds } : {}),
+      })
+      setPromptBefore(prompt)
+      setPrompt(r.expanded)
+      setExpandSecs(r.seconds)
+      // Schon ausgebaut: FLUX 3 soll ihn nicht ein zweites Mal umschreiben.
+      if (feat?.upsampler) setUpsample(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExpanding(false)
+    }
+  }
+
+  const undoExpand = () => {
+    if (promptBefore === null) return
+    setPrompt(promptBefore)
+    setPromptBefore(null)
+    setExpandSecs(null)
+    if (feat?.upsampler) setUpsample(true)
+  }
+
+  // 3D: Nur TRELLIS.2 liefert Texturen. Fehlt es, steht das gut sichtbar oben, mit Download.
+  const trellis = models.find((m) => m.kind === '3d' && m.workflow === 'trellis2')
+  const trellisDl = trellis ? downloads.active[trellis.id] : undefined
+  const [dlError, setDlError] = useState<string | null>(null)
+
+  const textureNotice = () => {
+    if (!trellis) return null
+    if (trellis.installed && trellis.runnable) {
+      if (modelId['3d'] === trellis.id) return null
+      return (
+        <div className="texture-note">
+          <strong>{t('Ohne Texturen: ', 'No textures: ')}</strong>
+          {t('das gewählte Modell baut nur die Form, das Mesh bleibt grau. ',
+            'the selected model only builds the shape, the mesh stays grey. ')}
+          <button className="link-btn" onClick={() => setModelId((c) => ({ ...c, '3d': trellis.id }))}>
+            {t('Auf TRELLIS.2 mit Texturen wechseln', 'Switch to TRELLIS.2 with textures')}
+          </button>
+        </div>
+      )
+    }
+    const pct = trellisDl ? Math.round(trellisDl.progress * 100) : 0
+    return (
+      <div className="texture-note important">
+        <p>
+          <strong>{t('Wichtig: Texturen gibt es nur mit TRELLIS.2.', 'Important: textures only come with TRELLIS.2.')}</strong>{' '}
+          {t(
+            'TripoSG baut nur die Form, das Mesh ist grau und muss selbst texturiert werden. TRELLIS.2 '
+              + '(MIT-Lizenz) legt Farbe, Metall und Rauheit als PBR-Texturen (2048²) mit UVs an, '
+              + 'fertig für Unity, Blender und Co. Rund 2,5 Minuten pro Modell, ~14 GB VRAM.',
+            'TripoSG only builds the shape: the mesh is grey and has to be textured by hand. TRELLIS.2 '
+              + '(MIT license) creates color, metal and roughness as PBR textures (2048²) with UVs, '
+              + 'ready for Unity, Blender and the like. About 2.5 minutes per model, ~14 GB VRAM.',
+          )}
+        </p>
+        {trellisDl ? (
+          <div className="dl">
+            <div className="progress">
+              <div className="bar" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="muted small">
+              {trellisDl.status === 'queued'
+                ? t('wartet auf den laufenden Download', 'waiting for the running download')
+                : `${pct} % · ${trellisDl.stage}`}
+            </span>
+          </div>
+        ) : (
+          <div className="row-gap">
+            <button
+              className="btn small primary"
+              onClick={async () => {
+                setDlError(null)
+                try {
+                  await downloads.start(trellis.id)
+                } catch (e) {
+                  setDlError(e instanceof Error ? e.message : String(e))
+                }
+              }}
+            >
+              {t(`⬇ TRELLIS.2 herunterladen (${trellis.size_gb} GB)`, `⬇ Download TRELLIS.2 (${trellis.size_gb} GB)`)}
+            </button>
+            <button className="link-btn" onClick={onShowModels}>
+              {t('Alle 3D-Modelle ansehen', 'See all 3D models')}
+            </button>
+          </div>
+        )}
+        {dlError && <p className="hint warn small">{dlError}</p>}
+      </div>
+    )
+  }
 
   const generate = async () => {
     if (busy || !canGenerate) return
@@ -475,6 +584,7 @@ export function GeneratePanel({ health, event }: Props) {
 
         {mode === '3d' ? (
           <>
+            {textureNotice()}
             {sourcePicker(false)}
             <p className="hint small">{HINT['3d']}</p>
           </>
@@ -506,6 +616,38 @@ export function GeneratePanel({ health, event }: Props) {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate()
               }}
             />
+            {mode === 'image' && (
+              <div className="expand-row">
+                <button
+                  className="btn small"
+                  onClick={expandPrompt}
+                  disabled={!canExpand || expanding || busy || !prompt.trim()}
+                  title={canExpand
+                    ? t('Macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell',
+                      'Turns a few words into a full image description, for every image model')
+                    : t('Braucht den Upsampler von FLUX 3 Image Klein — das Modell unter „Modelle“ laden',
+                      'Needs the FLUX 3 Image Klein upsampler — download that model under “Models”')}
+                >
+                  {expanding ? t('Baut aus …', 'Expanding …') : t('✨ Prompt ausbauen', '✨ Expand prompt')}
+                </button>
+                {promptBefore !== null && !expanding && (
+                  <button className="btn small ghost" onClick={undoExpand}>
+                    {t('Zurück zum eigenen Prompt', 'Back to my prompt')}
+                  </button>
+                )}
+                <span className="muted small">
+                  {expanding
+                    ? t('meist 10–40 s', 'usually 10–40 s')
+                    : promptBefore !== null
+                      ? t(`ausgebaut in ${expandSecs} s — jetzt lesen und streichen, was nicht stimmt`,
+                        `expanded in ${expandSecs} s — now read it and remove what is wrong`)
+                      : canExpand
+                        ? t('Aus „a medieval blacksmith“ wird eine ganze Schmiede: Esse, Amboss, Funken, Licht.',
+                          'Turns “a medieval blacksmith” into a whole forge: hearth, anvil, sparks, light.')
+                        : t('Braucht FLUX 3 Image Klein (Upsampler).', 'Needs FLUX 3 Image Klein (upsampler).')}
+                </span>
+              </div>
+            )}
             {(feat?.prompt_hint || HINT[mode]) && (
               <p className="hint small">{feat?.prompt_hint || HINT[mode]}</p>
             )}

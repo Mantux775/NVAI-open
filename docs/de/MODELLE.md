@@ -43,6 +43,8 @@ Herstellerangabe gekennzeichnet.
 | Mehrere Objekte an festen Plätzen | **FLUX 3** mit Bounding-Boxen |
 | Schnelle Entwürfe | FLUX 3 (13–16 s) oder Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
 | Historisch exakte Fahrzeuge (Panzer IV, Sd.Kfz. 251 …) | **keines** — siehe Abschnitt 8 |
+| Nur ein paar Worte Prompt, Modell ohne eigenen Upsampler | erst **✨ Prompt ausbauen** (`expand_prompt`), siehe Abschnitt 5 |
+| Qwen-Image 2.1 ausprobieren (`qwen-image-2.1-int8`) | **nur nicht kommerziell** (Qwen Research License); Bearbeiten wirkte im Test überzeichnet |
 
 Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
 
@@ -264,6 +266,18 @@ Ohne Stilangabe plant der Upsampler ein Foto.
 Stimmt am Bild etwas nicht, zuerst `caption` lesen. Stand der Fehler schon dort, den Prompt
 ergänzen, statt neu zu würfeln.
 
+### Prompt ausbauen: der Upsampler für jedes Modell
+
+Derselbe Upsampler arbeitet auch für die anderen Bildmodelle. In der Weboberfläche und im
+PhotoCraft-Add-on (Windows) schreibt der Knopf **✨ Prompt ausbauen** die volle Beschreibung ins
+Prompt-Feld; man liest sie, streicht, was nicht stimmt, und generiert mit einem beliebigen Modell.
+Per MCP heißt das `expand_prompt(prompt, width, height)`, per REST `POST /api/prompt/expand`.
+Ein FLUX-3-Modell muss dafür geladen sein. Gemessen: 13–16 s, direkt nach dem Start rund 36 s.
+
+Mit nur „a medieval blacksmith“ malte Qwen-Image-2512 ein Kriegerporträt in Lederrüstung, mit dem
+ausgebauten Text eine arbeitende Schmiede mit Esse, Amboss, Zange und Funken. Der Upsampler füllt
+aber jede Lücke: Er setzte dem Schmied auch einen Eisenhelm auf. Den Text also erst lesen.
+
 ### Referenzbilder
 
 `reference_asset_ids` nimmt bis zu zehn Asset-IDs: erzeugte Bilder oder eigene Uploads
@@ -452,7 +466,7 @@ tut.
   positiv formulieren, etwa *plain light grey background* statt *no background*.
 - **PyTorch cu130 ist Pflicht für NVFP4.** Mit cu128 schaltet ComfyUI seine NVFP4-Kernel ab,
   alles wird drei- bis fünfmal langsamer. `setup_comfyui.ps1` installiert cu130.
-- **ComfyUI ab 0.41** für FLUX 3. `install.ps1` pinnt v0.41.3.
+- **ComfyUI ab 0.41** für FLUX 3. `install.ps1` pinnt v0.42.1.
 - **Ergebnisse in voller Auflösung prüfen:** Verkleinerte Vorschauen verstecken genau die Fehler,
   auf die es ankommt, etwa einen Seilgriff ohne Bohrung.
 

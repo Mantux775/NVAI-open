@@ -15,7 +15,8 @@ $ErrorActionPreference = "SilentlyContinue"
 $app = (Resolve-Path $App).Path.TrimEnd('\') + '\'
 $launcher = Join-Path $App "server\.venv\Scripts\python.exe"
 if (Test-Path $launcher) {
-    & $launcher -m nvai.launcher --stop | Out-Null
+    # --quiet: no dialog - it would wait invisibly for a click and stall the uninstaller.
+    & $launcher -m nvai.launcher --stop --quiet 2>&1 | Out-Null
 }
 
 $left = Get-CimInstance Win32_Process |
