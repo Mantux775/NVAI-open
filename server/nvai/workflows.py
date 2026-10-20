@@ -583,11 +583,14 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         enc: dict[str, Any] = {
             "clip": ["1", 1], "tags": p["prompt"], "lyrics": p.get("lyrics", ""),
             "seed": seed, "duration": seconds, "language": p.get("language", "en"),
+            # ComfyUI ab 0.41 lehnt den Knoten ohne Tempo, Taktart und Tonart ab
+            # ("required_input_missing"); ohne Angabe gelten die Vorgaben des Knotens.
+            "bpm": int(p.get("bpm") or 120),
+            "timesignature": str(p.get("time_signature") or "4"),
+            "keyscale": p.get("key_scale") or "C major",
             "generate_audio_codes": True, "cfg_scale": _pick(p, d, "cfg"),
             "temperature": 0.85, "top_p": 0.9, "top_k": 0, "min_p": 0.0,
         }
-        if p.get("bpm"):
-            enc["bpm"] = int(p["bpm"])
         graph = {
             "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
             "2": {"class_type": "TextEncodeAceStepAudio1.5", "inputs": enc},

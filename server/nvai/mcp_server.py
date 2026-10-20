@@ -321,6 +321,9 @@ async def generate_audio(
     negative_prompt: str = "",
     model_id: str | None = None,
     seed: int | None = None,
+    bpm: int | None = None,
+    time_signature: str | None = None,
+    key_scale: str | None = None,
 ) -> dict[str, Any]:
     """Generates audio locally on the GPU and returns the file paths.
 
@@ -335,10 +338,14 @@ async def generate_audio(
         negative_prompt: What to avoid.
         model_id: Force a model; otherwise the active audio model.
         seed: For reproducible results.
+        bpm: ACE-Step 1.5 only: tempo, 40-240. Default 120.
+        time_signature: ACE-Step 1.5 only: "2" (2/4), "3" (3/4), "4" (4/4) or "6" (6/8). Default "4".
+        key_scale: ACE-Step 1.5 only: key such as "Bb major" or "A minor". Default "C major".
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt, "lyrics": lyrics,
         "seconds": seconds, "model_id": model_id, "seed": seed,
+        "bpm": bpm, "time_signature": time_signature, "key_scale": key_scale,
     }
     return await _generate("/api/generate/audio", payload, ctx)
 

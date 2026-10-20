@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "x-api-version": 1
  },
  "paths": {
@@ -1706,6 +1706,37 @@
        }
       ],
       "title": "Bpm"
+     },
+     "time_signature": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "2",
+         "3",
+         "4",
+         "6"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Time Signature",
+      "description": "Time signature: 2 = 2/4, 3 = 3/4, 4 = 4/4, 6 = 6/8. Empty = 4/4"
+     },
+     "key_scale": {
+      "anyOf": [
+       {
+        "type": "string",
+        "pattern": "^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Key Scale",
+      "description": "Key, e.g. \"Bb major\". Empty = C major"
      },
      "language": {
       "type": "string",

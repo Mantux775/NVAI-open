@@ -117,6 +117,11 @@ class GenerateAudioRequest(BaseModel):
     seed: int | None = None
     # Nur ACE-Step 1.5
     bpm: int | None = Field(None, ge=40, le=240)
+    time_signature: Literal["2", "3", "4", "6"] | None = Field(
+        None, description="Time signature: 2 = 2/4, 3 = 3/4, 4 = 4/4, 6 = 6/8. Empty = 4/4")
+    key_scale: str | None = Field(
+        None, pattern=r"^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$",
+        description='Key, e.g. "Bb major". Empty = C major')
     language: str = "en"
 
 
