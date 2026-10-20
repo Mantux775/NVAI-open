@@ -71,13 +71,23 @@ Same prompt and seed, left FLUX 3, right Qwen-Image-2512:
 ![Bakery sign](docs/images/compare-sign.jpg)
 *"A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall."*
 
-![Explorer, full body](docs/images/compare-explorer.jpg)
+The explorer also has a third column: Qwen-Image 2.1, same prompt, seed and size (832 × 1216). It is in the catalog from the next NV-AI version on. **Its license (Qwen Research License) allows no commercial use**, so it is for trying things out, not for assets in a product you sell.
+
+![Explorer, full body: FLUX 3, Qwen-Image-2512 and Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 *"Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light."*
 
 ![Lighthouse as an oil painting](docs/images/compare-lighthouse.jpg)
 *"A painted illustration in oil on canvas with visible brush strokes. A lighthouse stands on a rocky coast at dusk, waves crash against the rocks, and warm light glows in the lantern room. A small red fishing boat returns to the harbor. The sky fades from orange to deep blue."*
 
-Times are from my RTX 5060 Ti. All images in this README were generated with NV-AI.
+Times were measured on my PC: NVIDIA GeForce RTX 5060 Ti with 16 GB VRAM, 64 GB RAM, Windows 11, with the model already loaded (the first image after a start takes longer because the model has to load). For the explorer at 832 × 1216:
+
+| Model | Steps | Time |
+|---|---|---|
+| FLUX 3 Image Klein (NVFP4) | 16, plus the prompt upsampler | about 32 s |
+| Qwen-Image-2512 (NVFP4) | 50 | about 98 s |
+| Qwen-Image 2.1 (INT8, non-commercial) | 25 | about 21 s |
+
+All images in this README were generated with NV-AI.
 
 ### 3D: from an image to a model
 
@@ -176,13 +186,23 @@ Gleicher Prompt und Seed, links FLUX 3, rechts Qwen-Image-2512:
 ![Bäckerschild](docs/images/compare-sign.jpg)
 *Prompt: „A hand-painted wooden shop sign hangs above a bakery door. The sign reads "FRESH BREAD DAILY" in cream letters on dark green paint, with a small painted wheat sheaf. Morning sunlight falls on the red brick wall.“*
 
-![Entdeckerin, ganze Figur](docs/images/compare-explorer.jpg)
+Bei der Entdeckerin gibt es eine dritte Spalte: Qwen-Image 2.1, gleicher Prompt, Seed und Format (832 × 1216). Es steht ab der nächsten NV-AI-Version im Katalog. **Seine Lizenz (Qwen Research License) erlaubt keine kommerzielle Nutzung**, es ist also zum Ausprobieren da, nicht für Assets in einem Produkt, das man verkauft.
+
+![Entdeckerin, ganze Figur: FLUX 3, Qwen-Image-2512 und Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 *Prompt: „Full body studio photograph of a woman explorer in a 1920s safari outfit with a pith helmet, leather boots and a canvas satchel, standing in three-quarter view, both boots fully inside the frame. Plain light grey background, even soft studio light.“*
 
 ![Leuchtturm als Ölgemälde](docs/images/compare-lighthouse.jpg)
 *Prompt: „A painted illustration in oil on canvas with visible brush strokes. A lighthouse stands on a rocky coast at dusk, waves crash against the rocks, and warm light glows in the lantern room. A small red fishing boat returns to the harbor. The sky fades from orange to deep blue.“*
 
-Die Zeiten stammen von meiner RTX 5060 Ti. Alle Bilder in diesem README hat NV-AI erzeugt.
+Die Zeiten sind auf meinem PC gemessen: NVIDIA GeForce RTX 5060 Ti mit 16 GB VRAM, 64 GB RAM, Windows 11, mit bereits geladenem Modell (das erste Bild nach dem Start dauert länger, weil das Modell erst geladen wird). Für die Entdeckerin in 832 × 1216:
+
+| Modell | Schritte | Zeit |
+|---|---|---|
+| FLUX 3 Image Klein (NVFP4) | 16, dazu der Prompt-Upsampler | rund 32 s |
+| Qwen-Image-2512 (NVFP4) | 50 | rund 98 s |
+| Qwen-Image 2.1 (INT8, nicht kommerziell) | 25 | rund 21 s |
+
+Alle Bilder in diesem README hat NV-AI erzeugt.
 
 ### 3D: vom Bild zum Modell
 
