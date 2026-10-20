@@ -96,11 +96,11 @@ New in the next version. Type a few words, click **✨ Expand prompt**, and NV-A
 
 It uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B, Apache-2.0), so FLUX 3 has to be downloaded once. On my RTX 5060 Ti it takes about 15 seconds; the very first time after a start, with ComfyUI starting up, about 35.
 
-Same model, same seed (31, fourth image of a batch of four), left only the three words, right the expanded text:
+Same model, same seed (31), left only the three words, right the expanded text after I removed what the upsampler had invented:
 
-![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded prompt](docs/images/expand-prompt.jpg)
+![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded, corrected prompt](docs/images/expand-prompt.jpg)
 
-With just the words, Qwen-Image-2512 made a warrior in decorated leather armor who holds a glowing blade over the anvil, with neither hammer nor tongs. With the expanded text it made a working forge: the smith raises his hammer and holds the glowing bar on the anvil with tongs, around him the hearth, a water bucket and tools on the wall. One catch: whatever your words leave open, the upsampler invents. Here it gave the blacksmith an iron helmet. That is why the text lands in the prompt field first, so you can fix it before anything is generated.
+With just the words, Qwen-Image-2512 made a warrior in decorated leather armor holding a glowing blade over the anvil, with neither hammer nor tongs. The upsampler turned the three words into a whole forge, but it also invented things nobody asked for: an iron helmet on the smith's head, a rack of swords and spearheads, sparks before the hammer even strikes, and a bar bending into a hook. In an earlier test those details made the image worse; the hammer even fused with the glowing bar. So I deleted them from the text and generated again: now the smith holds the glowing bar on the anvil with tongs and has the hammer ready, with hearth, water bucket and tools on the wall around him. That is the intended way to use it: expand, read, delete what is wrong, generate.
 
 ### 3D: from an image to a model
 
@@ -236,11 +236,11 @@ Neu in der nächsten Version. Ein paar Worte eintippen, auf **✨ Prompt ausbaue
 
 Dahinter steckt der Prompt-Upsampler, der mit FLUX 3 Image Klein kommt (Qwen3.5-9B, Apache-2.0). FLUX 3 muss also einmal geladen sein. Auf meiner RTX 5060 Ti dauert das Ausbauen rund 15 Sekunden, beim allerersten Mal nach dem Start, wenn ComfyUI noch hochfährt, rund 35.
 
-Gleiches Modell, gleicher Seed (31, viertes Bild einer Viererreihe), links nur die drei Worte, rechts der ausgebaute Text:
+Gleiches Modell, gleicher Seed (31), links nur die drei Worte, rechts der ausgebaute Text, nachdem ich gestrichen hatte, was der Upsampler erfunden hatte:
 
-![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](docs/images/expand-prompt.jpg)
+![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem, korrigiertem Prompt](docs/images/expand-prompt.jpg)
 
-Mit den drei Worten machte Qwen-Image-2512 einen Krieger in verzierter Lederrüstung, der eine glühende Klinge über den Amboss hält, ohne Hammer und ohne Zange. Mit dem ausgebauten Text eine arbeitende Schmiede: Der Schmied hebt den Hammer und hält den glühenden Stab mit der Zange auf dem Amboss, ringsum Esse, Wassereimer und Werkzeug an der Wand. Ein Haken bleibt: Was die eigenen Worte offenlassen, erfindet der Upsampler. Hier setzte er dem Schmied einen Eisenhelm auf. Deshalb landet der Text erst im Prompt-Feld, damit man so etwas vor dem Generieren streichen kann.
+Mit den drei Worten machte Qwen-Image-2512 einen Krieger in verzierter Lederrüstung, der eine glühende Klinge über den Amboss hält, ohne Hammer und ohne Zange. Der Upsampler machte aus den drei Worten eine ganze Schmiede, erfand aber auch Dinge, die niemand verlangt hatte: einen Eisenhelm auf dem Kopf des Schmieds, einen Ständer mit Schwertern und Speerspitzen, Funken, bevor der Hammer überhaupt trifft, und einen Stab, der sich zum Haken biegt. In einem früheren Versuch machten genau diese Details das Bild schlechter, der Hammer verschmolz sogar mit dem glühenden Stab. Also habe ich sie aus dem Text gestrichen und neu generiert: Jetzt hält der Schmied den glühenden Stab mit der Zange auf dem Amboss und hat den Hammer bereit, ringsum Esse, Wassereimer und Werkzeug an der Wand. So ist es gedacht: ausbauen, lesen, Falsches streichen, generieren.
 
 ### 3D: vom Bild zum Modell
 
