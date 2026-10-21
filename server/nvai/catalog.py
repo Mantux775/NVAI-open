@@ -48,6 +48,22 @@ FLUX3_LARGE_SIZES = [
     {"label": "1728 × 1152 — 2 MP quer, Fahrzeuge mit Detail", "w": 1728, "h": 1152},
     {"label": "2048 × 2048 — 4 MP, maximal", "w": 2048, "h": 2048},
 ]
+# HiDream-O1 ist auf rund 4 Megapixel trainiert (ComfyUI, EmptyHiDreamO1LatentImage);
+# darunter wird es laut Hersteller deutlich schlechter.
+HIDREAM_O1_SIZES = [
+    {"label": "2048 × 2048 — 4 MP, trainiert", "w": 2048, "h": 2048},
+    {"label": "1728 × 2304 — 4 MP hochkant, Figuren", "w": 1728, "h": 2304},
+    {"label": "2304 × 1728 — 4 MP quer", "w": 2304, "h": 1728},
+    {"label": "1664 × 2496 — 4 MP 2:3, Figuren", "w": 1664, "h": 2496},
+    {"label": "2496 × 1664 — 4 MP 3:2, Fahrzeuge", "w": 2496, "h": 1664},
+    {"label": "2560 × 1440 — 4 MP 16:9, Panorama", "w": 2560, "h": 1440},
+]
+BOOGU_FILES_SHARED = [
+    {"repo": "Comfy-Org/Boogu-Image", "file": "text_encoders/qwen3vl_8b_fp8_scaled.safetensors",
+     "target": "text_encoders"},
+    {"repo": "Comfy-Org/Boogu-Image", "file": "vae/flux1_vae_bf16.safetensors", "target": "vae"},
+]
+
 FLUX3_PROMPT_HINT = (
     "Kurz und vollständig beschreiben: Stil, Motiv, Anzahl, Anordnung, Konstruktion. Der "
     "Upsampler baut daraus die lange Bildbeschreibung, auf die FLUX 3 trainiert ist — ohne "
@@ -857,6 +873,166 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         ],
     },
     {
+        "id": "hidream-o1-dev-fp8",
+        "name": "HiDream-O1-Image Dev (fp8, 28 Schritte)",
+        "kind": "image",
+        "family": "hidream_o1",
+        "workflow": "hidream_o1_dev",
+        "files": [{"repo": "Comfy-Org/HiDream-O1-Image",
+                   "file": "checkpoints/hidream_o1_image_dev_fp8_scaled.safetensors",
+                   "target": "checkpoints"}],
+        "size_gb": 8.07,
+        "vram_gb": 12,
+        "license": "MIT",
+        "commercial_ok": True,
+        "best_for": "Große Bilder (4 MP), Bearbeiten mit Referenzbildern — MIT-Lizenz",
+        "description": (
+            "HiDream.ai, Mai 2026. 8 Mrd. Parameter, rechnet direkt im Pixelraum: Text-Encoder "
+            "und Bildausgabe stecken in einer einzigen Datei, eine eigene VAE gibt es nicht. "
+            "Auf rund 4 Megapixel trainiert (2048 × 2048 und ähnliche Formate); kleinere Bilder "
+            "werden laut Hersteller deutlich schlechter.\n\n"
+            "Die Dev-Fassung ist destilliert: 28 Schritte bei cfg 1, der negative Prompt wirkt "
+            "deshalb nicht. Referenzbilder werden an den Prompt gehängt (Bearbeiten, Motive "
+            "kombinieren).\n\n"
+            "Gemessen auf einer RTX 5060 Ti (fp8, ComfyUI 0.42.1) bei 1728 × 2304: 41 s, beim "
+            "ersten Bild mit ComfyUI-Start 87 s. Im Test ganze Figur mit beiden Stiefeln, saubere "
+            "Hände; der „glatte graue“ Hintergrund wurde ein gefleckter Stoff. Bearbeiten mit "
+            "Referenzbild (104 s) traf die Änderung, machte aber Farben flau und den Hintergrund "
+            "dunkel — zum Bearbeiten ist Boogu-Image Edit besser.\n\n"
+            "Werte aus ComfyUIs Vorlage image_hidream_o1_dev.json. MIT-Lizenz."
+        ),
+        "features": {
+            "references": 4, "img2img": False, "mask": False, "hires": False,
+            "sizes": HIDREAM_O1_SIZES,
+            "prompt_hint": ("Ganze Sätze: Stil, Motiv, Material, Licht, Hintergrund. Für "
+                            "Bearbeitungen sagen, was sich ändert und was bleibt. Format um "
+                            "4 Megapixel wählen, darunter leidet die Qualität."),
+        },
+        "pros": ["MIT-Lizenz, kommerziell frei", "Eine Datei, 8 GB",
+                 "Referenzbilder zum Bearbeiten und Kombinieren", "Nativ 4 Megapixel"],
+        "cons": ["Unter 4 Megapixel deutlich schlechter (laut Hersteller)",
+                 "Negativer Prompt wirkungslos (destilliert, cfg 1)",
+                 "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "hidream-o1-fp8",
+        "name": "HiDream-O1-Image (fp8, 40 Schritte)",
+        "kind": "image",
+        "family": "hidream_o1",
+        "workflow": "hidream_o1",
+        "files": [{"repo": "Comfy-Org/HiDream-O1-Image",
+                   "file": "checkpoints/hidream_o1_image_fp8_scaled.safetensors",
+                   "target": "checkpoints"}],
+        "size_gb": 8.07,
+        "vram_gb": 12,
+        "license": "MIT",
+        "commercial_ok": True,
+        "best_for": "Volle Qualität mit Negativprompt, 4 MP — langsamer als Dev",
+        "description": (
+            "Die volle, nicht destillierte Fassung von HiDream-O1-Image: 40 Schritte mit cfg 5, "
+            "der negative Prompt wirkt. Dazu glättet ein eigener Knoten die Nähte zwischen den "
+            "Bildkacheln. Sonst wie die Dev-Fassung: Pixelraum, eine Datei, rund 4 Megapixel, "
+            "Referenzbilder.\n\n"
+            "Gemessen auf einer RTX 5060 Ti bei 1728 × 2304: 142 s. Die Vorlage nimmt den Sampler "
+            "dpmpp_2m_sde_gpu; mit der fp8-Datei zerfiel der Hintergrund dabei in Blöcke, NV-AI "
+            "nimmt deshalb euler (sauber).\n\n"
+            "Werte aus ComfyUIs Vorlage image_hidream_o1.json, Sampler geändert. MIT-Lizenz."
+        ),
+        "features": {
+            "references": 4, "img2img": False, "mask": False, "hires": False,
+            "sizes": HIDREAM_O1_SIZES,
+            "prompt_hint": ("Ganze Sätze: Stil, Motiv, Material, Licht, Hintergrund. Der "
+                            "Negativprompt wirkt (cfg 5). Format um 4 Megapixel wählen."),
+        },
+        "pros": ["MIT-Lizenz", "Negativer Prompt wirkt (cfg 5)", "Referenzbilder", "Nativ 4 Megapixel"],
+        "cons": ["40 Schritte bei 4 MP: deutlich langsamer als Dev", "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "boogu-image-turbo-nvfp4",
+        "name": "Boogu-Image 0.1 Turbo (NVFP4, 4 Schritte)",
+        "kind": "image",
+        "family": "boogu",
+        "workflow": "boogu_turbo",
+        "files": [{"repo": "Comfy-Org/Boogu-Image",
+                   "file": "diffusion_models/boogu_image_turbo_hotfix_nvfp4.safetensors",
+                   "target": "diffusion_models"}, *BOOGU_FILES_SHARED],
+        "size_gb": 16.59,
+        "vram_gb": 11,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Schnelle Entwürfe in 4 Schritten — Apache-2.0",
+        "description": (
+            "Boogu, Juni 2026 (Forschungsprojekt, Version 0.1). 10 Mrd. Parameter mit Qwen3-VL-8B "
+            "als Text-Encoder. Die Turbo-Fassung rechnet 4 Schritte bei cfg 1, der negative "
+            "Prompt wirkt nicht. NV-AI nimmt die korrigierte „hotfix“-Fassung.\n\n"
+            "Gemessen auf einer RTX 5060 Ti bei 832 × 1216: 9,8 s, beim ersten Bild 17 s. Im Test "
+            "ganze Figur, glatter grauer Hintergrund wie verlangt.\n\n"
+            "Werte aus ComfyUIs Vorlage image_boogu_image_0_1_turbo_t2i.json. Apache-2.0."
+        ),
+        "features": {"references": 0, "img2img": False, "mask": False, "hires": False,
+                     "prompt_hint": "Ganze Sätze: Stil, Motiv, Material, Licht, Hintergrund."},
+        "pros": ["Apache-2.0", "4 Schritte", "NVFP4: Modell nur 5,8 GB"],
+        "cons": ["Version 0.1, laut Hersteller Forschungsprojekt",
+                 "Negativer Prompt wirkungslos (cfg 1)", "Text-Encoder 10,6 GB",
+                 "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "boogu-image-nvfp4",
+        "name": "Boogu-Image 0.1 Base (NVFP4, 25 Schritte)",
+        "kind": "image",
+        "family": "boogu",
+        "workflow": "boogu",
+        "files": [{"repo": "Comfy-Org/Boogu-Image",
+                   "file": "diffusion_models/boogu_image_base_nvfp4.safetensors",
+                   "target": "diffusion_models"}, *BOOGU_FILES_SHARED],
+        "size_gb": 16.59,
+        "vram_gb": 11,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Volle Qualität mit Negativprompt — Apache-2.0",
+        "description": (
+            "Die nicht destillierte Base-Fassung von Boogu-Image 0.1: 25 Schritte mit cfg 3,5, "
+            "der negative Prompt wirkt. Text-Encoder und VAE teilt sie mit Turbo und Edit.\n\n"
+            "Werte wie in ComfyUIs Vorlage image_boogu_image_0_1_edit.json (eine eigene "
+            "Text-zu-Bild-Vorlage für Base gibt es nicht). Gemessen auf einer RTX 5060 Ti bei "
+            "832 × 1216: 66 s. Apache-2.0."
+        ),
+        "features": {"references": 0, "img2img": False, "mask": False, "hires": False,
+                     "prompt_hint": "Ganze Sätze: Stil, Motiv, Material, Licht, Hintergrund. Der Negativprompt wirkt."},
+        "pros": ["Apache-2.0", "Negativer Prompt wirkt (cfg 3,5)"],
+        "cons": ["Version 0.1, laut Hersteller Forschungsprojekt", "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "boogu-image-edit-nvfp4",
+        "name": "Boogu-Image 0.1 Edit (NVFP4, Bearbeiten)",
+        "kind": "image",
+        "family": "boogu",
+        "workflow": "boogu",
+        "files": [{"repo": "Comfy-Org/Boogu-Image",
+                   "file": "diffusion_models/boogu_image_edit_nvfp4.safetensors",
+                   "target": "diffusion_models"}, *BOOGU_FILES_SHARED],
+        "size_gb": 16.59,
+        "vram_gb": 11,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Ein Bild nach Anweisung ändern — Apache-2.0",
+        "description": (
+            "Die Bearbeiten-Fassung von Boogu-Image 0.1: ein Referenzbild plus Anweisung "
+            "(„remove the hat“, „make it winter“). Das Bild geht zweimal ein: als Bildverständnis "
+            "für die Anweisung und als Referenz für den Inhalt. 25 Schritte, cfg 3,5.\n\n"
+            "Gemessen auf einer RTX 5060 Ti bei 832 × 1216: rund 147 s. Im Test („Tropenhelm durch "
+            "rote Baseballkappe ersetzen“) änderte es nur den Hut; Gesicht, Kleidung, Tasche, "
+            "Stiefel und Hintergrund blieben gleich.\n\n"
+            "Werte aus ComfyUIs Vorlage image_boogu_image_0_1_edit.json. Apache-2.0."
+        ),
+        "features": {"references": 4, "img2img": False, "mask": False, "hires": False,
+                     "prompt_hint": ("Anweisung, was sich ändern soll, und was bleiben soll. "
+                                     "Am besten ein Referenzbild; mehrere sind erlaubt.")},
+        "pros": ["Apache-2.0-Alternative zum Bearbeiten mit FLUX 3", "Anweisung in Alltagssprache"],
+        "cons": ["Braucht ein Referenzbild", "Version 0.1, laut Hersteller Forschungsprojekt",
+                 "Zensur nicht dokumentiert"],
+    },
+    {
         "id": "sdxl-vae-fp16",
         "name": "SDXL VAE (fp16-fix)",
         "kind": "image",
@@ -1108,6 +1284,53 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             "~14 GB VRAM je Experte: vorher VRAM leeren",
             "Braucht zwingend ein Startbild",
         ],
+    },
+    {
+        "id": "ltx25-distilled-nvfp4",
+        "name": "LTX-2.5 (NVFP4, destilliert, mit Ton)",
+        "kind": "video",
+        "family": "ltx25",
+        "workflow": "ltx25",
+        "files": [
+            # Repo ist gated: Lizenz auf Hugging Face akzeptieren und Token hinterlegen.
+            {"repo": "Lightricks/LTX-2.5",
+             "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "Lightricks/LTX-2.5",
+             "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+             "target": "text_encoders"},
+            {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-video-vae-bf16.safetensors", "target": "vae"},
+            {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-audio-vae-bf16.safetensors", "target": "vae"},
+            {"repo": "Lightricks/LTX-2.5",
+             "file": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+             "target": "latent_upscale_models"},
+        ],
+        "size_gb": 37.92,
+        "vram_gb": 16,
+        "license": "LTX-2 Community License",
+        "commercial_ok": True,
+        "warning": ("LTX-2 Community License: kostenlos nur unter 10 Mio. US-$ Jahresumsatz; das "
+                    "Wasserzeichen darf nicht entfernt werden. Repo gated — Lizenz auf Hugging Face "
+                    "akzeptieren und Token hinterlegen."),
+        "best_for": "Video mit Ton aus Text oder Startbild — stärkstes lokales Videomodell",
+        "description": (
+            "Lightricks, August 2026. 22 Mrd. Parameter, erzeugt Bild und Ton in einem Durchgang: "
+            "Geräusche, Musik und Sprache passend zur Szene. Mit Startbild wird es zum ersten Frame "
+            "(Bild zu Video), ohne ist es Text zu Video.\n\n"
+            "Die destillierte Fassung rechnet in zwei Stufen mit festen Sigmas: erst auf halber "
+            "Auflösung, dann hochskaliert und nachgerechnet. Text-Encoder ist Gemma 4 12B (INT8). "
+            "Modell und Encoder passen nicht gleichzeitig in 16 GB; ComfyUI lagert aus.\n\n"
+            "Gemessen auf einer RTX 5060 Ti, 97 Frames (4 s) bei 24 fps: 1280 × 704 in 72 s, "
+            "832 × 448 in 78 s (erstes Video, mit Laden), Bild zu Video 448 × 832 in 45 s. Im Test "
+            "Schmiede mit Funken und Hammerklang, Leuchtturm mit Kamerafahrt; mit Startbild blieb "
+            "die Figur erhalten.\n\n"
+            "Ausgabe als MP4 mit Ton. Werte aus ComfyUIs Vorlagen video_ltx2_5_t2v.json und "
+            "*_i2v.json."
+        ),
+        "pros": ["Video mit passendem Ton", "Text zu Video und Bild zu Video in einem Modell",
+                 "NVFP4: rechnet auf RTX 50 in Hardware", "Lizenz erlaubt die EU"],
+        "cons": ["38 GB Download", "Kostenlos nur unter 10 Mio. US-$ Umsatz",
+                 "Breite und Höhe werden auf Vielfache von 64 gerundet", "Zensur nicht dokumentiert"],
     },
     {
         "id": "ltxv-2b-095",

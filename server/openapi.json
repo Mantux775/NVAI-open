@@ -2203,7 +2203,7 @@
      "width": {
       "type": "integer",
       "multipleOf": 8.0,
-      "maximum": 2048.0,
+      "maximum": 2560.0,
       "minimum": 256.0,
       "title": "Width",
       "default": 1024
@@ -2211,7 +2211,7 @@
      "height": {
       "type": "integer",
       "multipleOf": 8.0,
-      "maximum": 2048.0,
+      "maximum": 2560.0,
       "minimum": 256.0,
       "title": "Height",
       "default": 1024

@@ -33,7 +33,7 @@ October 2026: NV-AI 0.5.1 for Windows, NV-AI 0.4.1 for Mac ([release notes](http
 | Prompt ausbauen auf dem Mac | Aus ein paar Worten wird eine volle Bildbeschreibung, in NV-AI und im PhotoCraft-Add-on |
 | Menüleiste auf dem Mac | Folgt der Spracheinstellung der App |
 
-Coming with the next release (0.5.2, already in the source): cancel each download and queued job, labels for censored and uncensored models, choose data and model folders under "Models", NV-AI and ComfyUI version next to the logo. / Mit dem nächsten Release (0.5.2, schon im Quelltext): jeden Download und wartenden Auftrag abbrechen, Kennzeichnung zensierter und unzensierter Modelle, Daten- und Modellordner unter „Modelle“ wählen, Versionen von NV-AI und ComfyUI neben dem Logo.
+Coming with the next release (0.5.2, already in the source): new models Boogu-Image 0.1 (Apache-2.0, with editing), HiDream-O1-Image (MIT, 4 MP) and LTX-2.5 (video with sound), cancel each download and queued job, labels for censored and uncensored models, choose data and model folders under "Models", NV-AI and ComfyUI version next to the logo. / Mit dem nächsten Release (0.5.2, schon im Quelltext): neue Modelle Boogu-Image 0.1 (Apache-2.0, mit Bearbeiten), HiDream-O1-Image (MIT, 4 MP) und LTX-2.5 (Video mit Ton), jeden Download und wartenden Auftrag abbrechen, Kennzeichnung zensierter und unzensierter Modelle, Daten- und Modellordner unter „Modelle“ wählen, Versionen von NV-AI und ComfyUI neben dem Logo.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -51,11 +51,11 @@ It has only been tested on my own hardware: a Windows PC with an RTX 5060 Ti (16
 
 | | Windows | Mac |
 |---|---|---|
-| Images | FLUX 3 Image Klein, Qwen-Image-2512, Chroma, Z-Image, SDXL family and more | FLUX.2 Klein 4B (MLX), Stable Diffusion via Core ML |
+| Images | FLUX 3 Image Klein, Qwen-Image-2512, Boogu-Image, HiDream-O1, Chroma, Z-Image, SDXL family and more | FLUX.2 Klein 4B (MLX), Stable Diffusion via Core ML |
 | Editing | Reference images, image to image, inpainting with a mask | Reference images, image to image, inpainting with a mask |
 | Expand prompt | For every image model | Yes, since 0.4 |
 | Audio | Sound effects (Stable Audio Open), music with vocals (ACE-Step) | |
-| Video | Wan 2.1/2.2, LTX-Video, text or image to video | |
+| Video | LTX-2.5 with sound, Wan 2.1/2.2, text or image to video | |
 | 3D | Image to GLB model, with PBR textures (TRELLIS.2) or shape only (TripoSG) | |
 | Graphics | NVIDIA, AMD Radeon (experimental), several cards (experimental) | Apple Silicon |
 | Uncensored models | Chroma, Pony, NoobAI and more, one click away | |
@@ -200,11 +200,11 @@ Getestet ist sie nur auf meiner eigenen Hardware: einem Windows-PC mit RTX 5060 
 
 | | Windows | Mac |
 |---|---|---|
-| Bilder | FLUX 3 Image Klein, Qwen-Image-2512, Chroma, Z-Image, SDXL-Familie und weitere | FLUX.2 Klein 4B (MLX), Stable Diffusion über Core ML |
+| Bilder | FLUX 3 Image Klein, Qwen-Image-2512, Boogu-Image, HiDream-O1, Chroma, Z-Image, SDXL-Familie und weitere | FLUX.2 Klein 4B (MLX), Stable Diffusion über Core ML |
 | Bearbeiten | Referenzbilder, Bild zu Bild, Füllen mit Maske | Referenzbilder, Bild zu Bild, Füllen mit Maske |
 | Prompt ausbauen | Für jedes Bildmodell | Ja, seit 0.4 |
 | Audio | Soundeffekte (Stable Audio Open), Musik mit Gesang (ACE-Step) | |
-| Video | Wan 2.1/2.2, LTX-Video, aus Text oder Bild | |
+| Video | LTX-2.5 mit Ton, Wan 2.1/2.2, aus Text oder Bild | |
 | 3D | Aus einem Bild ein GLB-Modell, mit PBR-Texturen (TRELLIS.2) oder als reine Form (TripoSG) | |
 | Grafik | NVIDIA, AMD Radeon (experimentell), mehrere Karten (experimentell) | Apple Silicon |
 | Unzensierte Modelle | Chroma, Pony, NoobAI und weitere, einen Klick entfernt | |

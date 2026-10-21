@@ -392,6 +392,96 @@ EN: dict[str, dict[str, Any]] = {
             "BFL names the distilled version as its production model",
         ],
     },
+    "hidream-o1-dev-fp8": {
+        "name": "HiDream-O1-Image Dev (fp8, 28 steps)",
+        "best_for": "Large images (4 MP), editing with reference images — MIT license",
+        "description": (
+            "HiDream.ai, May 2026. 8 billion parameters, works directly in pixel space: text "
+            "encoder and image output live in a single file, there is no separate VAE. Trained at "
+            "about 4 megapixels (2048 × 2048 and similar sizes); according to the maker, smaller "
+            "images get noticeably worse.\n\n"
+            "The Dev version is distilled: 28 steps at cfg 1, so the negative prompt has no effect. "
+            "Reference images are attached to the prompt (editing, combining subjects).\n\n"
+            "Measured on an RTX 5060 Ti (fp8, ComfyUI 0.42.1) at 1728 × 2304: 41 s, 87 s for the first "
+            "image including the ComfyUI start. In the test: full figure with both boots, clean hands; "
+            "the \"plain grey\" background became a mottled cloth. Editing with a reference image "
+            "(104 s) got the change right but washed out the colors and darkened the background — "
+            "for editing, Boogu-Image Edit is better.\n\n"
+            "Values from ComfyUI's template image_hidream_o1_dev.json. MIT license."
+        ),
+        "pros": ["MIT license, free for commercial use", "One file, 8 GB",
+                 "Reference images for editing and combining", "Native 4 megapixels"],
+        "cons": ["Noticeably worse below 4 megapixels (per the maker)",
+                 "Negative prompt has no effect (distilled, cfg 1)", "Content filtering not documented"],
+        "features": {"prompt_hint": ("Full sentences: style, subject, material, light, background. For "
+                                     "edits, say what changes and what stays. Choose a size around "
+                                     "4 megapixels; below that, quality suffers.")},
+    },
+    "hidream-o1-fp8": {
+        "name": "HiDream-O1-Image (fp8, 40 steps)",
+        "best_for": "Full quality with negative prompt, 4 MP — slower than Dev",
+        "description": (
+            "The full, non-distilled version of HiDream-O1-Image: 40 steps at cfg 5, the negative "
+            "prompt works. A dedicated node smooths the seams between image patches. Otherwise like "
+            "Dev: pixel space, one file, about 4 megapixels, reference images.\n\n"
+            "Measured on an RTX 5060 Ti at 1728 × 2304: 142 s. The template uses the sampler "
+            "dpmpp_2m_sde_gpu; with the fp8 file the background broke into blocks, so NV-AI uses "
+            "euler (clean).\n\n"
+            "Values from ComfyUI's template image_hidream_o1.json, sampler changed. MIT license."
+        ),
+        "pros": ["MIT license", "Negative prompt works (cfg 5)", "Reference images", "Native 4 megapixels"],
+        "cons": ["40 steps at 4 MP: much slower than Dev", "Content filtering not documented"],
+        "features": {"prompt_hint": ("Full sentences: style, subject, material, light, background. The "
+                                     "negative prompt works (cfg 5). Choose a size around 4 megapixels.")},
+    },
+    "boogu-image-turbo-nvfp4": {
+        "name": "Boogu-Image 0.1 Turbo (NVFP4, 4 steps)",
+        "best_for": "Fast drafts in 4 steps — Apache-2.0",
+        "description": (
+            "Boogu, June 2026 (research project, version 0.1). 10 billion parameters with Qwen3-VL-8B "
+            "as the text encoder. The Turbo version runs 4 steps at cfg 1; the negative prompt has no "
+            "effect. NV-AI uses the corrected \"hotfix\" version.\n\n"
+            "Measured on an RTX 5060 Ti at 832 × 1216: 9.8 s, 17 s for the first image. In the test: "
+            "full figure, plain grey background as asked.\n\n"
+            "Values from ComfyUI's template image_boogu_image_0_1_turbo_t2i.json. Apache-2.0."
+        ),
+        "pros": ["Apache-2.0", "4 steps", "NVFP4: model only 5.8 GB"],
+        "cons": ["Version 0.1, a research project per the maker", "Negative prompt has no effect (cfg 1)",
+                 "Text encoder 10.6 GB", "Content filtering not documented"],
+        "features": {"prompt_hint": "Full sentences: style, subject, material, light, background."},
+    },
+    "boogu-image-nvfp4": {
+        "name": "Boogu-Image 0.1 Base (NVFP4, 25 steps)",
+        "best_for": "Full quality with negative prompt — Apache-2.0",
+        "description": (
+            "The non-distilled Base version of Boogu-Image 0.1: 25 steps at cfg 3.5, the negative "
+            "prompt works. Shares text encoder and VAE with Turbo and Edit.\n\n"
+            "Values as in ComfyUI's template image_boogu_image_0_1_edit.json (there is no separate "
+            "text-to-image template for Base). Measured on an RTX 5060 Ti at 832 × 1216: 66 s. "
+            "Apache-2.0."
+        ),
+        "pros": ["Apache-2.0", "Negative prompt works (cfg 3.5)"],
+        "cons": ["Version 0.1, a research project per the maker", "Content filtering not documented"],
+        "features": {"prompt_hint": "Full sentences: style, subject, material, light, background. The negative prompt works."},
+    },
+    "boogu-image-edit-nvfp4": {
+        "name": "Boogu-Image 0.1 Edit (NVFP4, editing)",
+        "best_for": "Change an image by instruction — Apache-2.0",
+        "description": (
+            "The editing version of Boogu-Image 0.1: one reference image plus an instruction "
+            "(\"remove the hat\", \"make it winter\"). The image is used twice: as visual "
+            "understanding for the instruction and as a reference for the content. 25 steps, cfg 3.5.\n\n"
+            "Measured on an RTX 5060 Ti at 832 × 1216: about 147 s. In the test (\"replace the pith "
+            "helmet with a red baseball cap\") only the hat changed; face, outfit, satchel, boots "
+            "and background stayed the same.\n\n"
+            "Values from ComfyUI's template image_boogu_image_0_1_edit.json. Apache-2.0."
+        ),
+        "pros": ["Apache-2.0 alternative to editing with FLUX 3", "Instructions in plain language"],
+        "cons": ["Needs a reference image", "Version 0.1, a research project per the maker",
+                 "Content filtering not documented"],
+        "features": {"prompt_hint": ("Say what should change and what should stay. Best with one "
+                                     "reference image; several are allowed.")},
+    },
     "longcat-image": {
         "best_for": "Scenes with several objects and an action",
         "description": (
@@ -638,6 +728,31 @@ EN: dict[str, dict[str, Any]] = {
             "~14 GB VRAM per expert: free VRAM beforehand",
             "Requires a start image",
         ],
+    },
+    "ltx25-distilled-nvfp4": {
+        "name": "LTX-2.5 (NVFP4, distilled, with sound)",
+        "warning": ("LTX-2 Community License: free only below US$10 million annual revenue; the "
+                    "watermark must not be removed. Gated repo — accept the license on Hugging Face "
+                    "and store a token."),
+        "best_for": "Video with sound from text or a start image — the strongest local video model",
+        "description": (
+            "Lightricks, August 2026. 22 billion parameters, generates picture and sound in one pass: "
+            "noises, music and speech that fit the scene. With a start image it becomes the first "
+            "frame (image to video), without one it is text to video.\n\n"
+            "The distilled version works in two stages with fixed sigmas: first at half resolution, "
+            "then upscaled and refined. The text encoder is Gemma 4 12B (INT8). Model and encoder do "
+            "not fit into 16 GB at the same time; ComfyUI offloads.\n\n"
+            "Measured on an RTX 5060 Ti, 97 frames (4 s) at 24 fps: 1280 × 704 in 72 s, 832 × 448 in "
+            "78 s (first video, with loading), image to video 448 × 832 in 45 s. In the test: forge "
+            "with sparks and hammer sound, lighthouse with camera move; with a start image the figure "
+            "stayed intact.\n\n"
+            "Output is MP4 with sound. Values from ComfyUI's templates video_ltx2_5_t2v.json and "
+            "*_i2v.json."
+        ),
+        "pros": ["Video with matching sound", "Text to video and image to video in one model",
+                 "NVFP4: computed in hardware on RTX 50", "License allows the EU"],
+        "cons": ["38 GB download", "Free only below US$10 million revenue",
+                 "Width and height are rounded to multiples of 64", "Content filtering not documented"],
     },
     "ltxv-2b-095": {
         "best_for": "Fast iteration — video preview in seconds instead of minutes",

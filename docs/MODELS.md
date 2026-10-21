@@ -48,6 +48,17 @@ such ("according to BFL").
 
 Without a `model_id`, NV-AI uses the active image model.
 
+### New in 0.5.2
+
+| Model | Use for | Measured (RTX 5060 Ti) | License |
+|---|---|---|---|
+| Boogu-Image 0.1 Turbo (`boogu-image-turbo-nvfp4`) | fast drafts, 4 steps | 832 × 1216 in ~10 s | Apache-2.0 |
+| Boogu-Image 0.1 Base (`boogu-image-nvfp4`) | full quality, negative prompt works | 832 × 1216 in ~66 s | Apache-2.0 |
+| Boogu-Image 0.1 Edit (`boogu-image-edit-nvfp4`) | change an image by instruction; in the test only the hat changed | ~147 s | Apache-2.0 |
+| HiDream-O1-Image Dev (`hidream-o1-dev-fp8`) | large images, trained at ~4 MP | 1728 × 2304 in ~41 s | MIT |
+| HiDream-O1-Image (`hidream-o1-fp8`) | the same with 40 steps and negative prompt | ~142 s | MIT |
+| LTX-2.5 (`ltx25-distilled-nvfp4`) | video with sound, text or start image | 4 s at 1280 × 704 in ~72 s | LTX-2 Community (below US$10M revenue) |
+
 ### Censored or uncensored
 
 Every image and video model in the list carries a label: *uncensored*, *partly censored*,

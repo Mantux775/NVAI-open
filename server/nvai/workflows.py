@@ -50,7 +50,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # VAE stecken im Checkpoint; trainiert um 4 Megapixel (darunter deutlich schlechter).
     "hidream_o1_dev": {"steps": 28, "cfg": 1.0, "sampler": "lcm", "scheduler": "normal",
                        "noise_scale": 7.6},
-    "hidream_o1": {"steps": 40, "cfg": 5.0, "sampler": "dpmpp_2m_sde_gpu", "scheduler": "normal",
+    # Sampler: Die Vorlage nimmt dpmpp_2m_sde_gpu; mit der fp8-Datei zerfiel der Hintergrund
+    # dabei in 32-px-Bloecke (gemessen 2026-10-21, 1728 x 2304, Seed 7). euler: sauber, 142 s.
+    "hidream_o1": {"steps": 40, "cfg": 5.0, "sampler": "euler", "scheduler": "normal",
                    "noise_scale": 8.0},
     "stable_audio": {"steps": 50, "cfg": 5.0, "sampler": "dpmpp_3m_sde_gpu", "scheduler": "exponential"},
     "ace_step":   {"steps": 50, "cfg": 5.0, "sampler": "euler",    "scheduler": "simple"},
@@ -66,6 +68,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "hunyuan15_t2v": {"steps": 30, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "hunyuan15_i2v": {"steps": 30, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "ltxv_t2v":   {"steps": 30, "cfg": 3.0, "sampler": "euler",    "scheduler": "simple"},
+    # LTX-2.5 (destilliert): Werte aus video_ltx2_5_{t2v,i2v}.json. Zwei Stufen mit festen
+    # Sigmas statt Schritten, cfg 1 fuer Bild und Ton, euler_ancestral.
+    "ltx25":      {"steps": 8, "cfg": 1.0, "sampler": "euler_ancestral", "scheduler": "simple"},
 }
 
 # Workflows, die zwingend ein Startbild brauchen.
@@ -832,10 +837,104 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 # --------------------------------------------------------------- VIDEO
 
 def normalize_frames(frames: int, workflow: str) -> int:
-    """Wan braucht 4n+1 Frames, LTX-Video 8n+1."""
-    step = 8 if workflow == "ltxv_t2v" else 4
+    """Wan braucht 4n+1 Frames, LTX-Video und LTX-2.5 8n+1."""
+    step = 8 if workflow in ("ltxv_t2v", "ltx25") else 4
     n = max(1, round((frames - 1) / step))
     return n * step + 1
+
+
+
+# Feste Sigmas der destillierten LTX-2.5-Vorlagen: erste Stufe (halbe Aufloesung), zweite
+# Stufe nach dem Hochskalieren.
+LTX25_SIGMAS_1 = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+LTX25_SIGMAS_2 = "0.85, 0.7250, 0.4219, 0.0"
+LTX25_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
+
+
+def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tuple[Graph, int]:
+    """LTX-2.5 (Lightricks, 22 Mrd.): Video mit Ton in einem Durchgang.
+
+    Nachgebaut nach ComfyUIs Vorlagen video_ltx2_5_t2v.json und *_i2v.json: Die erste Stufe
+    rechnet Bild- und Tonlatent gemeinsam auf halber Aufloesung (8 feste Sigmas), dann skaliert
+    LTXVLatentUpsampler das Video auf volle Groesse, und eine zweite Stufe (3 Sigmas) rechnet
+    nach. Mit Startbild setzt LTXVImgToVideoInplace es in beiden Stufen als ersten Frame ein
+    (Staerke 0,7, dann 1,0). Den Prompt-Ausbau der Vorlage (Gemma 4 E2B) laesst NV-AI weg.
+    Ausgabe: MP4 mit Ton (CreateVideo + SaveVideo).
+    """
+    ids = _Ids(start=40)
+    w = max(256, int(width) // 64 * 64)
+    h = max(256, int(height) // 64 * 64)
+    negative = p.get("negative_prompt") or LTX25_NEGATIVE
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "ltxv"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "video")}},
+        "4": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "audio")}},
+        "5": {"class_type": "LatentUpscaleModelLoader",
+              "inputs": {"model_name": _file_by_target(entry, "latent_upscale_models")}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
+        "8": {"class_type": "LTXVConditioning",
+              "inputs": {"positive": ["6", 0], "negative": ["7", 0], "frame_rate": fps}},
+        "9": {"class_type": "EmptyLTXVLatentVideo", "inputs": {
+            "width": w // 2, "height": h // 2, "length": frames, "batch_size": 1}},
+        "10": {"class_type": "LTXVEmptyLatentAudio", "inputs": {
+            "frames_number": frames, "frame_rate": int(fps), "batch_size": 1, "audio_vae": ["4", 0]}},
+    }
+    video: Ref = ["9", 0]
+    image: Ref | None = None
+    if start_image:
+        load, scale, pre, inplace = ids(), ids(), ids(), ids()
+        graph[load] = {"class_type": "LoadImage", "inputs": {"image": start_image}}
+        graph[scale] = {"class_type": "ImageScale", "inputs": {
+            "image": [load, 0], "upscale_method": "lanczos", "width": w, "height": h, "crop": "center"}}
+        graph[pre] = {"class_type": "LTXVPreprocess", "inputs": {"image": [scale, 0], "img_compression": 18}}
+        image = [pre, 0]
+        graph[inplace] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
+            "vae": ["3", 0], "image": image, "latent": video, "strength": 0.7, "bypass": False}}
+        video = [inplace, 0]
+
+    def stage(av: Ref, sigmas: str, noise_seed: int) -> Ref:
+        noise, sel, sig, guide, samp = ids(), ids(), ids(), ids(), ids()
+        graph[noise] = {"class_type": "RandomNoise", "inputs": {"noise_seed": noise_seed}}
+        graph[sel] = {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler_ancestral"}}
+        graph[sig] = {"class_type": "ManualSigmas", "inputs": {"sigmas": sigmas}}
+        graph[guide] = {"class_type": "LTXVDualCFGGuider", "inputs": {
+            "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1],
+            "video_cfg": 1.0, "audio_cfg": 1.0}}
+        graph[samp] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": [noise, 0], "guider": [guide, 0], "sampler": [sel, 0], "sigmas": [sig, 0],
+            "latent_image": av}}
+        sep = ids()
+        graph[sep] = {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": [samp, 0]}}
+        return sep
+
+    cat1 = ids()
+    graph[cat1] = {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": video, "audio_latent": ["10", 0]}}
+    sep1 = stage([cat1, 0], LTX25_SIGMAS_1, seed)
+    up = ids()
+    graph[up] = {"class_type": "LTXVLatentUpsampler", "inputs": {
+        "samples": [sep1, 0], "upscale_model": ["5", 0], "vae": ["3", 0]}}
+    video2: Ref = [up, 0]
+    if image is not None:
+        inplace2 = ids()
+        graph[inplace2] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
+            "vae": ["3", 0], "image": image, "latent": video2, "strength": 1.0, "bypass": False}}
+        video2 = [inplace2, 0]
+    cat2 = ids()
+    graph[cat2] = {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": video2, "audio_latent": [sep1, 1]}}
+    sep2 = stage([cat2, 0], LTX25_SIGMAS_2, seed + 1)
+    dec, aud, vid, save = ids(), ids(), ids(), ids()
+    graph[dec] = {"class_type": "VAEDecodeTiled", "inputs": {
+        "samples": [sep2, 0], "vae": ["3", 0], "tile_size": 512, "overlap": 64,
+        "temporal_size": 64, "temporal_overlap": 16}}
+    graph[aud] = {"class_type": "LTXVAudioVAEDecode", "inputs": {"samples": [sep2, 1], "audio_vae": ["4", 0]}}
+    graph[vid] = {"class_type": "CreateVideo", "inputs": {"images": [dec, 0], "fps": fps, "audio": [aud, 0]}}
+    graph[save] = {"class_type": "SaveVideo", "inputs": {
+        "video": [vid, 0], "filename_prefix": "nvai_video", "format": "mp4", "format.codec": "h264"}}
+    return graph, seed
 
 
 def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
@@ -876,6 +975,9 @@ def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     if wf == "wan22_i2v":
         return _build_wan22_i2v(entry, p, d, sampler, seed, width, height,
                                 frames, negative, start_image, save)
+
+    if wf == "ltx25":
+        return _build_ltx25(entry, p, seed, width, height, frames, fps, start_image)
 
     if wf == "ltxv_t2v":
         # LTX-Video liegt als all-in-one Checkpoint vor und braucht einen eigenen
@@ -1074,7 +1176,7 @@ IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zim
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 AUDIO_WORKFLOWS = {"stable_audio", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
-                   "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v"}
+                   "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25"}
 
 # Diese laufen NICHT ueber ComfyUI, sondern in eigenen Worker-Prozessen
 # (siehe nvai/mesh_workers.py). Sie haben deshalb hier bewusst keinen Graph-Builder.

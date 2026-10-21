@@ -48,6 +48,17 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
 
+### Neu in 0.5.2
+
+| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
+|---|---|---|---|
+| Boogu-Image 0.1 Turbo (`boogu-image-turbo-nvfp4`) | schnelle Entwürfe, 4 Schritte | 832 × 1216 in ~10 s | Apache-2.0 |
+| Boogu-Image 0.1 Base (`boogu-image-nvfp4`) | volle Qualität, Negativprompt wirkt | 832 × 1216 in ~66 s | Apache-2.0 |
+| Boogu-Image 0.1 Edit (`boogu-image-edit-nvfp4`) | Bild nach Anweisung ändern; im Test änderte sich nur der Hut | ~147 s | Apache-2.0 |
+| HiDream-O1-Image Dev (`hidream-o1-dev-fp8`) | große Bilder, auf ~4 MP trainiert | 1728 × 2304 in ~41 s | MIT |
+| HiDream-O1-Image (`hidream-o1-fp8`) | dasselbe mit 40 Schritten und Negativprompt | ~142 s | MIT |
+| LTX-2.5 (`ltx25-distilled-nvfp4`) | Video mit Ton, aus Text oder Startbild | 4 s in 1280 × 704 in ~72 s | LTX-2 Community (unter 10 Mio. US-$ Umsatz) |
+
 ### Zensiert oder unzensiert
 
 Jedes Bild- und Videomodell in der Liste trägt ein Abzeichen: *unzensiert*, *teilweise

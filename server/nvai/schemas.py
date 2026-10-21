@@ -23,8 +23,8 @@ class GenerateImageRequest(BaseModel):
                         "features.negative_prompt in /api/models sagt es je Modell"
     )
     model_id: str | None = Field(None, description="Modell aus der Registry; None = aktives")
-    width: int = Field(1024, ge=256, le=2048, multiple_of=8)
-    height: int = Field(1024, ge=256, le=2048, multiple_of=8)
+    width: int = Field(1024, ge=256, le=2560, multiple_of=8)
+    height: int = Field(1024, ge=256, le=2560, multiple_of=8)
     steps: int | None = Field(None, ge=1, le=150)
     cfg: float | None = Field(None, ge=0.0, le=30.0)
     seed: int | None = None

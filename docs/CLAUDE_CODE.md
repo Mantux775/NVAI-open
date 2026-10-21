@@ -96,6 +96,10 @@ license. Downloads are several GB; ask the user first.
 | Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
 | Video 832×480, 25 frames | Wan 2.1 T2V 1.3B | ~120 s |
+| Image 1728 × 2304 (4 MP) | HiDream-O1 Dev fp8 | ~41 s, first run ~87 s |
+| Image 832 × 1216, 4 steps | Boogu-Image Turbo NVFP4 | ~10 s, first run ~17 s |
+| Edit 832 × 1216 | Boogu-Image Edit NVFP4 | ~147 s |
+| Video with sound 1280 × 704, 4 s | LTX-2.5 NVFP4 | ~72 s; image to video 448 × 832 ~45 s |
 | Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
 
 The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the
