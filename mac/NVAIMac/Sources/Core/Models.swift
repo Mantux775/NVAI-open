@@ -88,6 +88,12 @@ enum Models {
         return nil
     }
 
+    /// Für „Prompt ausbauen“: das gewählte FLUX.2-Modell, sonst ein geladenes. Nil, wenn keines da ist.
+    static var expansionModel: CatalogModel? {
+        if case .flux(let m)? = find(Settings.activeModelID), ModelCatalog.status(m).installed { return m }
+        return ModelCatalog.all.first { ModelCatalog.status($0).installed }
+    }
+
     /// Gewähltes Modell; sonst das erste geladene (FLUX.2 vor Core ML); sonst die Empfehlung.
     static var active: AnyModel {
         if let chosen = find(Settings.activeModelID) { return chosen }

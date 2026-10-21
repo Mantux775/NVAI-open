@@ -2,12 +2,28 @@
 
 Local image, audio, video and 3D generation on your own computer. No cloud, no subscription, no account.
 
+### What's new? / Was gibt's Neues?
+
+**October 2026: NV-AI 0.5.0 for Windows, NV-AI 0.4.0 for Mac** ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.0))
+
+- **✨ Expand prompt on the Mac**, in NV-AI and in the PhotoCraft add-on. It uses the text encoder that comes with FLUX.2 Klein, so nothing extra to download; about 25 seconds on a Mac mini M1 with 8 GB. The Mac menu bar now follows the app's language setting.
+- **Two or more NVIDIA graphics cards** (Windows, experimental): image models, language models and 3D each get their own card, and "Expand prompt" runs while an image renders. [Testers wanted](https://github.com/Mantux775/NVAI-open/issues/1).
+- **AMD Radeon** (Windows, experimental): the setup installs PyTorch with ROCm instead of CUDA. [Testers wanted](https://github.com/Mantux775/NVAI-open/issues/2).
+- Since 0.4: ✨ Expand prompt for every image model, Qwen-Image 2.1, download progress on every page, textured 3D models with TRELLIS.2.
+
+**Oktober 2026: NV-AI 0.5.0 für Windows, NV-AI 0.4.0 für Mac**
+
+- **✨ Prompt ausbauen auf dem Mac**, in NV-AI und im PhotoCraft-Add-on. Es nutzt den Text-Encoder, der mit FLUX.2 Klein kommt, also kein zusätzlicher Download; rund 25 Sekunden auf einem Mac mini M1 mit 8 GB. Die Menüleiste folgt jetzt der Spracheinstellung der App.
+- **Zwei oder mehr NVIDIA-Grafikkarten** (Windows, experimentell): Bildmodelle, Sprachmodelle und 3D bekommen je eine eigene Karte, und „Prompt ausbauen“ läuft, während ein Bild rechnet. [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/1).
+- **AMD Radeon** (Windows, experimentell): Das Setup installiert PyTorch mit ROCm statt CUDA. [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/2).
+- Seit 0.4: ✨ Prompt ausbauen für jedes Bildmodell, Qwen-Image 2.1, Download-Fortschritt auf jeder Seite, texturierte 3D-Modelle mit TRELLIS.2.
+
 **Download**
 
 | | |
 |---|---|
-| **Windows 10/11** with an NVIDIA graphics card | [NV-AI-Setup-0.4.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.4.0/NV-AI-Setup-0.4.0.exe) |
-| **macOS 15+** on Apple Silicon (signed and notarized) | [NV-AI-0.3.0.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.4.0/NV-AI-0.3.0.dmg) |
+| **Windows 10/11** | [NV-AI-Setup-0.5.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.0/NV-AI-Setup-0.5.0.exe) |
+| **macOS 15+** on Apple Silicon (signed and notarized) | [NV-AI-0.4.0.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.0/NV-AI-0.4.0.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
@@ -29,7 +45,7 @@ NV-AI was built primarily in German. The English interface and docs are new, so 
 
 ### What it does
 
-**On Windows** (NVIDIA graphics card) NV-AI runs a small local server with a web interface in your browser:
+**On Windows** NV-AI runs a small local server with a web interface in your browser:
 
 - **Images**: FLUX 3 Image Klein, Qwen-Image-2512 and more. Text to image, editing with reference images, inpainting with a mask.
 - **✨ Expand prompt**: turns a few words into a full image description, for every image model (since 0.4).
@@ -38,7 +54,7 @@ NV-AI was built primarily in German. The English interface and docs are new, so 
 - **Model manager**: downloads models from Hugging Face, suggests the ones that fit your graphics card, and has a search for more models. Before anything is downloaded, NV-AI checks whether the file will actually run.
 - **Claude Code**: an MCP server, so Claude can generate assets for you directly (see [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)).
 
-**On the Mac** (Apple Silicon) NV-AI is a native app. It runs FLUX.2 Klein 4B with MLX: generate, refine, fill with a mask, and use up to three reference images. Smaller Stable Diffusion models run through Core ML.
+**On the Mac** (Apple Silicon) NV-AI is a native app. It runs FLUX.2 Klein 4B with MLX: generate, refine, fill with a mask, use up to three reference images, and ✨ expand a prompt (since 0.4). Smaller Stable Diffusion models run through Core ML.
 
 **PhotoCraft add-on**: [PhotoCraft](https://github.com/storytold/photocraft) is a great open-source photo editor. The optional add-on connects it to NV-AI. Select an area in PhotoCraft and fill it, generate something new or rework it, and the result comes back as a layer with a mask. Thanks a lot to the PhotoCraft developers for building such a well-scriptable editor. The add-on needs PhotoCraft 0.10.0 or newer.
 
@@ -92,9 +108,11 @@ All images in this README were generated with NV-AI.
 
 ### ✨ Expand prompt: from a few words to a real picture
 
-New in 0.4. Type a few words, click **✨ Expand prompt**, and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. You read it, remove what you don't want, and generate. It works with every image model, not just FLUX 3, and also in the PhotoCraft add-on on Windows and for Claude Code (`expand_prompt`).
+New in 0.4. Type a few words, click **✨ Expand prompt**, and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. You read it, remove what you don't want, and generate. It works with every image model, not just FLUX 3, in the PhotoCraft add-on and for Claude Code (`expand_prompt`), and since Mac 0.4 on the Mac too.
 
 It uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B, Apache-2.0), so FLUX 3 has to be downloaded once. On my RTX 5060 Ti it takes about 15 seconds; the very first time after a start, with ComfyUI starting up, about 35.
+
+On the Mac, NV-AI uses the Qwen3-4B text encoder that comes with FLUX.2 Klein anyway, with Black Forest Labs' own instructions for expanding prompts. Nothing extra to download. On my Mac mini M1 with 8 GB it takes 22 to 25 seconds, 35 the first time after starting the app. The image model is unloaded for it on Macs with up to 16 GB, so the next image loads it again.
 
 Same model, same seed (31), left only the three words, right the expanded text after I removed what the upsampler had invented:
 
@@ -120,9 +138,9 @@ Wood grain, wear, the iron handles and the bolts come out well. Lettering does n
 
 There is also an iOS app with a 3D model scanner that turns photos of real objects into 3D models. It is in closed beta for now. If enough people are interested, I'll make it public, so tell me in an issue if you would use it.
 
-### Testers wanted: two graphics cards and AMD Radeon (0.5 beta)
+### Testers wanted: two graphics cards and AMD Radeon
 
-The [0.5 beta](https://github.com/Mantux775/NVAI-open/releases) adds two experimental features that I cannot fully test on my own PC. If you have the hardware, please try them and tell me what works and what does not in the [issues](https://github.com/Mantux775/NVAI-open/issues). The stable version stays 0.4.0.
+Version 0.5 adds two experimental features that I cannot fully test on my own PC. If you have the hardware, please try them and tell me what works and what does not: [two or more NVIDIA cards (#1)](https://github.com/Mantux775/NVAI-open/issues/1), [AMD Radeon (#2)](https://github.com/Mantux775/NVAI-open/issues/2). On a single NVIDIA card nothing changes.
 
 - **Two (or more) NVIDIA cards:** under "Models", each task gets its own card: image models, language models (the prompt upsampler and "Expand prompt") and 3D. With the language models on a second card, nothing has to be swapped out any more, and "Expand prompt" runs while an image is rendering. Tested here with one card that simulates two; the real speed-up still needs to be measured.
 - **AMD Radeon (ROCm):** the setup detects a Radeon and installs PyTorch with ROCm 7.2.1 from AMD instead of CUDA. Needs AMD driver 26.2.2 or newer and a card on AMD's [compatibility list](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html) (RDNA 3 and RDNA 4, not every model is listed). Image models in INT8 or FP8 should run. The NVFP4 models are an NVIDIA format, and 3D (TripoSG, TRELLIS.2) needs NVIDIA for now. Tested here: the packages install and ComfyUI starts with them, but I have no Radeon to generate on.
@@ -134,7 +152,7 @@ Useful in an issue: graphics card(s), driver version, what you tried, and the en
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (2004+) or 11, 64-bit | macOS 15 or newer, Apple Silicon |
-| Graphics / memory | NVIDIA card with driver 580.88+, 12 GB+ VRAM recommended (8 GB works with the INT8 models) | 16 GB RAM or more recommended (8 GB works for small images) |
+| Graphics / memory | Graphics card with 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon (experimental): driver 26.2.2+ | 16 GB RAM or more recommended (8 GB works for small images) |
 | Disk | about 10 GB for the program, plus 5 to 30 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
 | Internet | for setup (about 3 GB) and model downloads | for model downloads |
 
@@ -184,7 +202,7 @@ NV-AI ist primär auf Deutsch entstanden. Die englische Oberfläche und Doku sin
 
 ### Was es kann
 
-**Unter Windows** (NVIDIA-Grafikkarte) läuft NV-AI als kleiner lokaler Server mit Weboberfläche im Browser:
+**Unter Windows** läuft NV-AI als kleiner lokaler Server mit Weboberfläche im Browser:
 
 - **Bilder**: FLUX 3 Image Klein, Qwen-Image-2512 und weitere. Text zu Bild, Bearbeiten mit Referenzbildern, Füllen mit Maske.
 - **✨ Prompt ausbauen**: macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell (seit 0.4).
@@ -193,7 +211,7 @@ NV-AI ist primär auf Deutsch entstanden. Die englische Oberfläche und Doku sin
 - **Modellverwaltung**: lädt Modelle von Hugging Face, schlägt die zur Grafikkarte passenden vor und hat eine Suche nach weiteren Modellen. Vor jedem Download prüft NV-AI, ob die Datei hier überhaupt läuft.
 - **Claude Code**: ein MCP-Server, über den Claude direkt Assets erzeugen kann (siehe [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)).
 
-**Auf dem Mac** (Apple Silicon) ist NV-AI eine native App. Sie rechnet FLUX.2 Klein 4B mit MLX: Generieren, Überarbeiten, Füllen mit Maske und bis zu drei Referenzbilder. Kleinere Stable-Diffusion-Modelle laufen über Core ML.
+**Auf dem Mac** (Apple Silicon) ist NV-AI eine native App. Sie rechnet FLUX.2 Klein 4B mit MLX: Generieren, Überarbeiten, Füllen mit Maske, bis zu drei Referenzbilder und ✨ Prompt ausbauen (seit 0.4). Kleinere Stable-Diffusion-Modelle laufen über Core ML.
 
 **PhotoCraft-Add-on**: [PhotoCraft](https://github.com/storytold/photocraft) ist ein toller Open-Source-Bildeditor. Das optionale Add-on verbindet ihn mit NV-AI. Einen Bereich in PhotoCraft auswählen und füllen, neu generieren oder überarbeiten, das Ergebnis kommt als Ebene mit Maske zurück. Vielen Dank an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor. Das Add-on braucht PhotoCraft ab Version 0.10.0.
 
@@ -247,9 +265,11 @@ Alle Bilder in diesem README hat NV-AI erzeugt.
 
 ### ✨ Prompt ausbauen: aus wenigen Worten ein richtiges Bild
 
-Neu in 0.4. Ein paar Worte eintippen, auf **✨ Prompt ausbauen** klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Man liest sie, streicht, was nicht passt, und generiert. Das geht mit jedem Bildmodell, nicht nur mit FLUX 3, und auch im PhotoCraft-Add-on unter Windows und für Claude Code (`expand_prompt`).
+Neu in 0.4. Ein paar Worte eintippen, auf **✨ Prompt ausbauen** klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Man liest sie, streicht, was nicht passt, und generiert. Das geht mit jedem Bildmodell, nicht nur mit FLUX 3, im PhotoCraft-Add-on und für Claude Code (`expand_prompt`), und seit Mac 0.4 auch auf dem Mac.
 
 Dahinter steckt der Prompt-Upsampler, der mit FLUX 3 Image Klein kommt (Qwen3.5-9B, Apache-2.0). FLUX 3 muss also einmal geladen sein. Auf meiner RTX 5060 Ti dauert das Ausbauen rund 15 Sekunden, beim allerersten Mal nach dem Start, wenn ComfyUI noch hochfährt, rund 35.
+
+Auf dem Mac nutzt NV-AI den Text-Encoder Qwen3-4B, der mit FLUX.2 Klein ohnehin kommt, mit den Anweisungen von Black Forest Labs zum Ausbauen von Prompts. Zusätzlich laden muss man nichts. Auf meinem Mac mini M1 mit 8 GB dauert es 22 bis 25 Sekunden, beim ersten Mal nach dem App-Start 35. Auf Macs bis 16 GB wird dafür das Bildmodell entladen, das nächste Bild lädt es also neu.
 
 Gleiches Modell, gleicher Seed (31), links nur die drei Worte, rechts der ausgebaute Text, nachdem ich gestrichen hatte, was der Upsampler erfunden hatte:
 
@@ -275,9 +295,9 @@ Holzmaserung, Abnutzung, die Eisengriffe und die Schrauben kommen gut heraus. Sc
 
 Es gibt auch eine iOS-App mit 3D-Modell-Scanner, die aus Fotos echter Gegenstände 3D-Modelle macht. Sie ist vorerst eine geschlossene Beta. Wenn genug Interesse da ist, stelle ich sie öffentlich bereit. Schreibt mir gern in einem Issue, wenn ihr sie nutzen würdet.
 
-### Tester gesucht: zwei Grafikkarten und AMD Radeon (0.5-Beta)
+### Tester gesucht: zwei Grafikkarten und AMD Radeon
 
-Die [0.5-Beta](https://github.com/Mantux775/NVAI-open/releases) bringt zwei experimentelle Funktionen, die ich auf meinem eigenen PC nicht vollständig testen kann. Wer die Hardware hat: bitte ausprobieren und in den [Issues](https://github.com/Mantux775/NVAI-open/issues) schreiben, was geht und was nicht. Die stabile Version bleibt 0.4.0.
+Version 0.5 bringt zwei experimentelle Funktionen, die ich auf meinem eigenen PC nicht vollständig testen kann. Wer die Hardware hat: bitte ausprobieren und schreiben, was geht und was nicht: [zwei oder mehr NVIDIA-Karten (#1)](https://github.com/Mantux775/NVAI-open/issues/1), [AMD Radeon (#2)](https://github.com/Mantux775/NVAI-open/issues/2). Mit einer einzelnen NVIDIA-Karte ändert sich nichts.
 
 - **Zwei (oder mehr) NVIDIA-Karten:** Unter „Modelle“ bekommt jede Aufgabe ihre eigene Karte: Bildmodelle, Sprachmodelle (der Prompt-Upsampler und „Prompt ausbauen“) und 3D. Liegen die Sprachmodelle auf einer zweiten Karte, muss nichts mehr umgeladen werden, und „Prompt ausbauen“ läuft, während ein Bild rechnet. Hier getestet mit einer Karte, die zwei simuliert; den echten Gewinn muss noch jemand messen.
 - **AMD Radeon (ROCm):** Das Setup erkennt eine Radeon und installiert statt CUDA das PyTorch mit ROCm 7.2.1 von AMD. Nötig sind der AMD-Treiber 26.2.2 oder neuer und eine Karte auf AMDs [Kompatibilitätsliste](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html) (RDNA 3 und RDNA 4, nicht jedes Modell ist aufgeführt). Bildmodelle in INT8 oder FP8 sollten laufen. Die NVFP4-Modelle sind ein NVIDIA-Format, und 3D (TripoSG, TRELLIS.2) braucht vorerst NVIDIA. Hier getestet: Die Pakete installieren sich und ComfyUI startet damit, aber zum Generieren fehlt mir eine Radeon.
@@ -289,7 +309,7 @@ Hilfreich in einem Issue: Grafikkarte(n), Treiberversion, was du probiert hast, 
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (ab 2004) oder 11, 64 Bit | macOS 15 oder neuer, Apple Silicon |
-| Grafik / Speicher | NVIDIA-Karte mit Treiber ab 580.88, empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen) | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
+| Grafik / Speicher | Grafikkarte, empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon (experimentell): Treiber ab 26.2.2 | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
 | Platte | rund 10 GB für das Programm, dazu 5 bis 30 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
 | Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
 

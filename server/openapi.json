@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.0b1",
+  "version": "0.5.0",
   "x-api-version": 1
  },
  "paths": {

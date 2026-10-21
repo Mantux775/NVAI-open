@@ -139,8 +139,10 @@ NV-AI for Mac: Getting Started
 2. Open NV-AI. Under "Models", download FLUX.2 Klein (about 9 to 11 GB, once).
    With 24 GB of memory or more pick the 8-bit version, otherwise the 4-bit version.
 3. Under "Generate", enter a prompt. The first image takes longer because the model loads.
+4. Only a few words? Click "✨ Expand prompt": the text encoder of FLUX.2 Klein writes a full
+   image description from them. Read it and delete what was invented; "Back to my prompt" restores yours.
 
-Language: English by default; switch to German under Settings > Language.
+Language: follows the system; switch under Settings > Language (the menu bar follows after a restart).
 
 PhotoCraft add-on
 - Needs PhotoCraft 0.10.0 or later:
@@ -163,8 +165,11 @@ NV-AI für Mac: Erste Schritte
    Ab 24 GB Arbeitsspeicher die 8-Bit-Fassung wählen, darunter die 4-Bit-Fassung.
 3. Unter „Generieren“ einen Prompt eingeben. Das erste Bild dauert länger, weil das
    Modell geladen wird.
+4. Nur ein paar Worte? „✨ Prompt ausbauen“ klicken: Der Text-Encoder von FLUX.2 Klein schreibt
+   daraus eine volle Bildbeschreibung. Lesen und Erfundenes streichen; „Zurück zum eigenen Prompt“ holt deinen
+   Text zurück.
 
-Sprache: Standard ist Englisch; auf Deutsch umstellen unter Einstellungen > Sprache.
+Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menüleiste folgt nach einem Neustart).
 
 PhotoCraft-Add-on
 - Braucht PhotoCraft ab Version 0.10.0:

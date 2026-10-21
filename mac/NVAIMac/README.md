@@ -9,8 +9,9 @@ NV-AI > Licenses). Models are not part of the app; the model list shows each mod
 
 ## Languages
 
-English is the default; German is available. Settings > Language offers Automatic (system
-language; anything other than German means English), English and German. All visible texts go
+Settings > Language offers Automatic (system language; anything other than German means
+English), English and German. The menu bar follows the choice after a restart: the app sets
+`AppleLanguages` for itself, and `Info.plist` lists `CFBundleLocalizations` (en, de). All visible texts go
 through `t("Deutsch", "English")` (`Sources/Core/Lang.swift`); there is no string catalog.
 
 The API answers in the language the client sends in `Accept-Language` (`de` → German, otherwise
@@ -30,6 +31,15 @@ Measured on an M1 with 8 GB (FLUX.2 Klein 4B, 4-bit, 4 steps):
 - **PhotoCraft-style jobs at 1184 × 880:** generate 109 s (7.9 GB peak), refine (`denoise` 0.5) 65 s, fill 109 s. The area outside the mask stays unchanged (mean difference 0.12/255).
 
 On 8 GB, 1 megapixel is the practical limit; 16 GB or more is comfortable.
+
+## Expand prompt
+
+"✨ Expand prompt" (Generate page) and `POST /api/prompt/expand` (feature `expand_prompt`, same
+shape as on Windows) turn a few words into a full image description. The Qwen3-4B text encoder of
+FLUX.2 Klein writes it (`KleinTextEncoder.upsamplePrompt`, Black Forest Labs' system prompt, no
+thinking mode); no extra download. It runs as a job in the queue, which is deleted afterwards. On
+Macs with up to 16 GB the image model is unloaded first. Measured on an M1 with 8 GB: 22–25 s,
+35 s the first time after starting; a 512 × 512 image right afterwards took 41.9 s.
 
 ## Build (this folder is the source, the build runs on a Mac)
 

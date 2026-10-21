@@ -36,6 +36,7 @@ struct PanelView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                ExpandRow()
                 ModelRow()
                 if model.showsStrength { StrengthSlider(value: $model.form.strength) }
                 DisclosureGroup(t("Erweitert", "Advanced"), isExpanded: $model.form.advanced) {
@@ -500,6 +501,34 @@ private struct SmallField: View {
 }
 
 // MARK: - Auftrag
+
+/// „✨ Prompt ausbauen“ mit Zurücknehmen – nur, wenn NV-AI es kann (ab 0.4).
+private struct ExpandRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.nv.usable && model.nv.expand {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    Button { model.expandPrompt() } label: {
+                        Text(model.expanding ? t("Baut aus …", "Expanding …") : t("✨ Prompt ausbauen", "✨ Expand prompt"))
+                    }
+                    .disabled(!model.canExpand)
+                    .help(t("Schreibt aus ein paar Worten eine volle Bildbeschreibung. Danach lesen und Erfundenes streichen.",
+                            "Turns a few words into a full image description. Read it afterwards and delete what was invented."))
+                    if model.expanding { ProgressView().controlSize(.small) }
+                    if model.promptBeforeExpand != nil, !model.expanding {
+                        Button(t("Zurück zum eigenen Prompt", "Back to my prompt")) { model.undoExpand() }
+                    }
+                    Spacer()
+                }
+                if let info = model.expandInfo {
+                    Text(info).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
 
 private struct GoButton: View {
     @Environment(AppModel.self) private var model

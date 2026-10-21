@@ -18,8 +18,10 @@ struct SettingsView: View {
                     Text("English").tag("en")
                     Text("Deutsch").tag("de")
                 }
-                Text(t("Die Schnittstelle antwortet in der Sprache, die der Client schickt (Accept-Language).",
-                       "The API answers in the language the client asks for (Accept-Language)."))
+                Text(t("Die Menüleiste wechselt beim nächsten Start von NV-AI. Die Schnittstelle antwortet "
+                       + "in der Sprache, die der Client schickt (Accept-Language).",
+                       "The menu bar switches the next time NV-AI starts. The API answers in the language "
+                       + "the client asks for (Accept-Language)."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(t("Lokaler Server", "Local server")) {

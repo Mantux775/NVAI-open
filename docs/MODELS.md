@@ -266,10 +266,15 @@ the prompt instead of rerolling.
 ### Expand prompt: the upsampler for every model
 
 The same upsampler also works for the other image models. In the web interface and in the
-PhotoCraft add-on (Windows) the **✨ Expand prompt** button writes the full description into the
+PhotoCraft add-on the **✨ Expand prompt** button writes the full description into the
 prompt field; you read it, remove what is wrong, and generate with any model. Via MCP it is
 `expand_prompt(prompt, width, height)`, via REST `POST /api/prompt/expand`. It needs a FLUX 3
 model to be downloaded. Measured: 13–16 s, about 36 s right after a start.
+
+NV-AI for Mac (since 0.4) and the Mac PhotoCraft add-on have the same button and the same REST
+route. There the Qwen3-4B text encoder of FLUX.2 Klein writes the description, with Black Forest
+Labs' instructions for text-to-image prompts; no extra download. Measured on a Mac mini M1 with
+8 GB: 22–25 s, 35 s the first time after starting the app.
 
 With only "a medieval blacksmith", Qwen-Image-2512 painted a warrior portrait in leather armor;
 with the expanded text it painted a working forge with hearth, anvil, tongs and sparks. The

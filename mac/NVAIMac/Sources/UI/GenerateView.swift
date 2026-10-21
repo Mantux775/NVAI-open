@@ -17,6 +17,10 @@ struct GenerateView: View {
     @State private var message: String?
     @State private var negative = ""
     @State private var guidance = 7.5
+    /// „Prompt ausbauen“: läuft gerade, und der Text davor (für „Zurücknehmen“).
+    @State private var expanding = false
+    @State private var promptBeforeExpand: String?
+    @State private var expandInfo: String?
 
     private var sizes: [(label: String, w: Int, h: Int)] {
         ModelCatalog.flux2Sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 1024, $0["h"] as? Int ?? 1024) }
@@ -78,6 +82,7 @@ struct GenerateView: View {
                     }
                     .border(.quaternary)
                 Text(hint).font(.caption).foregroundStyle(.secondary)
+                expandRow
 
                 if isCoreML {
                     Text(t("Negativer Prompt", "Negative prompt")).font(.subheadline.bold())
@@ -160,6 +165,58 @@ struct GenerateView: View {
                 if let message { Text(message).foregroundStyle(.red).font(.callout) }
             }
             .padding(14)
+        }
+    }
+
+    /// „✨ Prompt ausbauen“: aus ein paar Worten eine volle Bildbeschreibung, mit Zurücknehmen.
+    @ViewBuilder
+    private var expandRow: some View {
+        let canExpand = Models.expansionModel != nil
+        HStack {
+            Button {
+                Task { await expand() }
+            } label: {
+                Text(expanding ? t("Baut aus …", "Expanding …") : t("✨ Prompt ausbauen", "✨ Expand prompt"))
+            }
+            .disabled(!canExpand || expanding || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help(t("Schreibt aus ein paar Worten eine volle Bildbeschreibung (Qwen3 aus FLUX.2 Klein). "
+                    + "Danach lesen und Erfundenes streichen.",
+                    "Turns a few words into a full image description (Qwen3 from FLUX.2 Klein). "
+                    + "Read it afterwards and delete what was invented."))
+            if expanding { ProgressView().controlSize(.small) }
+            if let before = promptBeforeExpand, !expanding {
+                Button(t("Zurück zum eigenen Prompt", "Back to my prompt")) {
+                    prompt = before
+                    promptBeforeExpand = nil
+                    expandInfo = nil
+                }
+            }
+            Spacer()
+        }
+        if !canExpand {
+            Text(t("Prompt ausbauen braucht FLUX.2 Klein (unter „Modelle“).",
+                   "Expand prompt needs FLUX.2 Klein (under \"Models\")."))
+                .font(.caption).foregroundStyle(.secondary)
+        } else if let expandInfo {
+            Text(expandInfo).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func expand() async {
+        message = nil
+        let original = prompt
+        expanding = true
+        defer { expanding = false }
+        do {
+            let result = try await JobQueue.expandAndWait(original.trimmingCharacters(in: .whitespacesAndNewlines))
+            promptBeforeExpand = original
+            prompt = result.expanded
+            let words = result.expanded.split(whereSeparator: \.isWhitespace).count
+            expandInfo = t("\(words) Wörter in \(Int(result.seconds.rounded())) s. Lesen und Erfundenes streichen.",
+                           "\(words) words in \(Int(result.seconds.rounded())) s. Read it and delete what was invented.")
+            await state.refresh()
+        } catch {
+            message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
     }
 

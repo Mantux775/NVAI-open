@@ -92,6 +92,7 @@ final class AppState: ObservableObject {
     /// Sprache umstellen: alle Ansichten beobachten AppState und zeichnen sich neu.
     func setLanguage(_ value: String) {
         Lang.setting = value
+        Lang.applyToMenus()
         language = value
         AppLog.info("Language set to \(value) (\(Lang.ui.rawValue))")
         refreshModels()

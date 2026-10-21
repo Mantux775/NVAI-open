@@ -269,10 +269,15 @@ ergänzen, statt neu zu würfeln.
 ### Prompt ausbauen: der Upsampler für jedes Modell
 
 Derselbe Upsampler arbeitet auch für die anderen Bildmodelle. In der Weboberfläche und im
-PhotoCraft-Add-on (Windows) schreibt der Knopf **✨ Prompt ausbauen** die volle Beschreibung ins
+PhotoCraft-Add-on schreibt der Knopf **✨ Prompt ausbauen** die volle Beschreibung ins
 Prompt-Feld; man liest sie, streicht, was nicht stimmt, und generiert mit einem beliebigen Modell.
 Per MCP heißt das `expand_prompt(prompt, width, height)`, per REST `POST /api/prompt/expand`.
 Ein FLUX-3-Modell muss dafür geladen sein. Gemessen: 13–16 s, direkt nach dem Start rund 36 s.
+
+NV-AI für Mac (seit 0.4) und das PhotoCraft-Add-on auf dem Mac haben denselben Knopf und dieselbe
+REST-Route. Dort schreibt der Text-Encoder Qwen3-4B von FLUX.2 Klein die Beschreibung, mit den
+Anweisungen von Black Forest Labs für Text-zu-Bild-Prompts; kein zusätzlicher Download. Gemessen
+auf einem Mac mini M1 mit 8 GB: 22–25 s, beim ersten Mal nach dem App-Start 35 s.
 
 Mit nur „a medieval blacksmith“ malte Qwen-Image-2512 ein Kriegerporträt in Lederrüstung, mit dem
 ausgebauten Text eine arbeitende Schmiede mit Esse, Amboss, Zange und Funken. Der Upsampler füllt

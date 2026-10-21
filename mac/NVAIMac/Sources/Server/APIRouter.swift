@@ -5,7 +5,8 @@ import Foundation
 enum APIRouter {
     static let apiVersion = 1
     /// Was dieser Server von GenerateImageRequest versteht – kein „upsampler“: FLUX 3 gibt es hier nicht.
-    static let features = ["model_features", "mask", "references", "upload", "model_search"]
+    /// „expand_prompt“: POST /api/prompt/expand wie unter Windows, hier mit dem Qwen3 von FLUX.2 Klein.
+    static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt"]
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
         // Texte (Beschreibungen, Hinweise, Fehler) in der Sprache des Clients: de → Deutsch, sonst Englisch.
@@ -40,6 +41,13 @@ enum APIRouter {
             if route("POST", "/api/generate/image") != nil {
                 let request = try ImageJobRequest.parse(req.json)
                 return .json(await JobQueue.shared.submit(request).json)
+            }
+            if route("POST", "/api/prompt/expand") != nil {
+                let prompt = (req.json?["prompt"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !prompt.isEmpty else { throw APIError(422, t("prompt fehlt.", "prompt is missing.")) }
+                let result = try await JobQueue.expandAndWait(prompt)
+                return .json(["prompt": prompt, "expanded": result.expanded,
+                              "seconds": (result.seconds * 10).rounded() / 10])
             }
             if let c = route("POST", "/api/generate/:kind") {
                 throw APIError(404, t("NV-AI für Mac erzeugt nur Bilder (\(c[0]) gibt es hier nicht).",

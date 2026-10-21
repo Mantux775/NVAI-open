@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppLog.info("Start NV-AI \(SystemInfo.appVersion) (\(SystemInfo.build)), \(SystemInfo.chip), "
             + "\(SystemInfo.memoryGB) GB, macOS \(SystemInfo.macOS), port \(Settings.serverPort), "
             + "models \(Settings.modelsDirectory.path), language \(Lang.ui.rawValue)")
+        Lang.applyToMenus()   // Einstellungen aus 0.3 übernehmen; wirkt ab dem nächsten Start
         AppState.shared.ensureServer()
         Task { @MainActor in
             await AppState.shared.start()

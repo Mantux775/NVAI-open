@@ -169,6 +169,7 @@ final class AppModel {
                 // /api/version kurz nicht lesbar – beim nächsten Abgleich wieder
             }
             s.masks = (try? await nvai.supportsMasks()) ?? false
+            s.expand = (try? await nvai.supportsExpand()) ?? false
             s.activeModel = health["active_models"]?["image"]?.stringValue
             s.loaded = (health["vram_loaded"]?.arrayValue ?? []).compactMap { $0["model"]?.stringValue }
             s.busy = health["current_job"]?.truthy ?? false
@@ -351,6 +352,47 @@ final class AppModel {
             }
             item.finished = Date()
         }
+    }
+
+    // MARK: Prompt ausbauen
+
+    /// Läuft gerade; der Text davor (für „Zurücknehmen“); kurze Rückmeldung danach.
+    var expanding = false
+    var promptBeforeExpand: String? = nil
+    var expandInfo: String? = nil
+
+    var canExpand: Bool { nv.usable && nv.expand && !expanding && !form.prompt.trimmed.isEmpty }
+
+    /// Ein paar Worte zur vollen Bildbeschreibung ausbauen (NV-AI: unter Windows der Upsampler von
+    /// FLUX 3, auf dem Mac der Text-Encoder von FLUX.2 Klein). Ersetzt den Prompt, mit Zurücknehmen.
+    func expandPrompt() {
+        guard canExpand, let nvai else { return }
+        let original = form.prompt
+        expanding = true
+        message = nil
+        expandInfo = nil
+        Task {
+            defer { expanding = false }
+            do {
+                let result = try await nvai.expandPrompt(original.trimmed)
+                promptBeforeExpand = original
+                form.prompt = result.expanded
+                let words = result.expanded.split(whereSeparator: \.isWhitespace).count
+                expandInfo = t("\(words) Wörter in \(Int(result.seconds.rounded())) s. Lesen und Erfundenes streichen.",
+                               "\(words) words in \(Int(result.seconds.rounded())) s. Read it and delete what was invented.")
+                Log.write("Prompt ausgebaut: \(words) Wörter in \(Int(result.seconds.rounded())) s")
+            } catch {
+                message = error.localizedDescription
+                Log.write("Prompt ausbauen gescheitert: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func undoExpand() {
+        guard let before = promptBeforeExpand else { return }
+        form.prompt = before
+        promptBeforeExpand = nil
+        expandInfo = nil
     }
 
     func cancel() {

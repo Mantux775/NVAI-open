@@ -47,6 +47,8 @@ struct NVAIState: Equatable {
     /// Erreichbar, aber nicht nutzbar: andere Vertragsversion oder Zugriff verweigert.
     var problem: String?
     var masks = false
+    /// „Prompt ausbauen“ (`POST /api/prompt/expand`): NV-AI ab 0.4.
+    var expand = false
     var busy = false
     var activeModel: String?
     var loaded: [String] = []

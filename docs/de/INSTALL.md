@@ -4,7 +4,7 @@
 
 NV-AI erzeugt Medien lokal auf der eigenen Hardware:
 
-- **Windows:** Bilder, Audio, Video und 3D-Meshes auf einer NVIDIA-Grafikkarte, bedienbar über
+- **Windows:** Bilder, Audio, Video und 3D-Meshes auf der eigenen Grafikkarte, bedienbar über
   eine Weboberfläche und als MCP-Server für Claude Code.
 - **macOS:** eine native App für Apple Silicon, die Bilder erzeugt.
 
@@ -28,15 +28,15 @@ den eigenen Benutzer und braucht keine Adminrechte.
 | | |
 |---|---|
 | **Windows** | Windows 10 (2004 oder neuer) oder Windows 11, 64 Bit |
-| **Grafikkarte** | NVIDIA; ab 8 GB VRAM sinnvoll, 12–16 GB komfortabel |
-| **Treiber** | ab 580.88 (Zweig R580, den PyTorch mit CUDA 13 braucht): https://www.nvidia.com/drivers |
+| **Grafikkarte** | NVIDIA oder AMD Radeon (experimentell, siehe unten); ab 8 GB VRAM sinnvoll, 12–16 GB komfortabel |
+| **Treiber** | NVIDIA: ab 580.88 (Zweig R580, den PyTorch mit CUDA 13 braucht): https://www.nvidia.com/drivers. AMD: ab 26.2.2 |
 | **Internet** | rund 3 GB beim Einrichten (vor allem PyTorch), dazu 5–30 GB pro Modell |
 | **Platte** | rund 10 GB für das Programm, dazu Platz für die Modelle |
 
 Das Setup prüft Grafikkarte und Treiber und warnt, wenn keine NVIDIA-Karte gefunden wird oder
 der Treiber zu alt ist. Ohne NVIDIA-Karte lässt sich NV-AI installieren, erzeugt aber nichts.
 
-### Experimentell (0.5-Beta): AMD Radeon und mehrere Grafikkarten
+### Experimentell (seit 0.5): AMD Radeon und mehrere Grafikkarten
 
 - **AMD Radeon:** Das Setup erkennt eine Radeon (und keine NVIDIA-Karte) und installiert PyTorch
   mit ROCm 7.2.1 von AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, beide

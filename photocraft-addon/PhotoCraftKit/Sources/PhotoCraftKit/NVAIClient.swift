@@ -169,6 +169,22 @@ public final class NVAIClient: @unchecked Sendable {
         return ok
     }
 
+    /// Kennt der Server „Prompt ausbauen“ (`POST /api/prompt/expand`, NV-AI ab 0.4 unter Windows,
+    /// NV-AI für Mac ab 0.4)? Steht in `/api/version` unter `features`.
+    public func supportsExpand() async throws -> Bool {
+        try await version()?.features.contains("expand_prompt") ?? false
+    }
+
+    /// Knappen Prompt zur vollen Bildbeschreibung ausbauen. Das Sprachmodell lädt dafür erst; auf
+    /// kleinen Macs dauert das über eine Minute, deshalb die lange Wartezeit.
+    public func expandPrompt(_ prompt: String) async throws -> (expanded: String, seconds: Double) {
+        let r = try await requestJSON("POST", "/api/prompt/expand", json: ["prompt": .string(prompt)], timeout: 600)
+        guard let text = r["expanded"]?.stringValue, !text.isEmpty else {
+            throw NVAIError.invalidResponse("/api/prompt/expand ohne expanded")
+        }
+        return (text, r["seconds"]?.doubleValue ?? 0)
+    }
+
     public func job(_ id: String) async throws -> JSONValue { try await requestJSON("GET", "/api/jobs/\(id)") }
     public func asset(_ id: String) async throws -> JSONValue { try await requestJSON("GET", "/api/assets/\(id)") }
 

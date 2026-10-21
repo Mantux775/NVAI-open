@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.4.0",
+  "version": "0.5.0b1",
   "x-api-version": 1
  },
  "paths": {
@@ -124,6 +124,70 @@
           "type": "string"
          },
          "title": "Response Backend Log Api Backend Log Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/gpus": {
+   "get": {
+    "summary": "Get Gpus",
+    "description": "Karten und Zuordnung: image (Bildmodelle), text (Sprachmodelle: Prompt-Upsampler,\nPrompt ausbauen), mesh (3D). Experimentell seit 0.5.",
+    "operationId": "get_gpus_api_gpus_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Get Gpus Api Gpus Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Put Gpus",
+    "description": "Neue Zuordnung speichern. Laufende Backends werden beendet und starten beim\nnaechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet.",
+    "operationId": "put_gpus_api_gpus_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Put Gpus Api Gpus Put"
         }
        }
       }

@@ -16,6 +16,9 @@ struct JobRecord: Sendable, Identifiable {
     var finishedAt: Double?
     var request: ImageJobRequest?
     var downloadModelID: String?
+    /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
+    var expandPrompt: String?
+    var expanded: String?
     var cancelRequested = false
     /// Sprache des Clients bzw. der App; Stufen und Fehler des Auftrags folgen ihr.
     var lang: Lang = .en
@@ -107,6 +110,39 @@ actor JobQueue {
                             createdAt: Date().timeIntervalSince1970, downloadModelID: model.id, lang: Lang.current)
         add(job)
         return job
+    }
+
+    func submitExpand(_ prompt: String) -> JobRecord {
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "expand_prompt", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["prompt": .string(prompt)]), createdAt: Date().timeIntervalSince1970,
+                            expandPrompt: prompt, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    /// Prompt ausbauen und warten: läuft in der Warteschlange (ein Modell zur Zeit), danach wird der
+    /// Auftrag gelöscht, damit er nicht im Verlauf steht. Für die Generieren-Seite und die API.
+    static func expandAndWait(_ prompt: String) async throws -> (expanded: String, seconds: Double) {
+        guard Models.expansionModel != nil else {
+            throw APIError(409, t("Prompt ausbauen braucht FLUX.2 Klein (dessen Text-Encoder schreibt die Beschreibung). "
+                                  + "Bitte unter „Modelle“ laden.",
+                                  "Expand prompt needs FLUX.2 Klein (its text encoder writes the description). "
+                                  + "Please download it under \"Models\"."))
+        }
+        let started = Date()
+        let job = await shared.submitExpand(prompt)
+        var record = job
+        while !record.isFinished {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let current = await shared.job(job.id) else { break }
+            record = current
+        }
+        try? await shared.delete(job.id)
+        if let error = record.error { throw APIError(500, error) }
+        guard let text = record.expanded, !text.isEmpty else {
+            throw APIError(500, t("Der Prompt kam leer zurück.", "The prompt came back empty."))
+        }
+        return (text, Date().timeIntervalSince(started))
     }
 
     private func add(_ job: JobRecord) {
@@ -211,6 +247,8 @@ actor JobQueue {
         do {
             if let modelID = job.downloadModelID {
                 try await runDownload(id, modelID: modelID)
+            } else if let prompt = job.expandPrompt {
+                try await runExpand(id, prompt: prompt)
             } else if let request = job.request {
                 try await runImage(id, request)
             }
@@ -269,6 +307,17 @@ actor JobQueue {
         case .coreml(let m):
             try await CoreMLInstaller.install(m, progress: report)
         }
+    }
+
+    private func runExpand(_ id: String, prompt: String) async throws {
+        guard let model = Models.expansionModel else {
+            throw APIError(409, t("FLUX.2 Klein ist nicht geladen.", "FLUX.2 Klein is not downloaded."))
+        }
+        await CoreMLEngine.shared.unload()
+        update(id) { $0.stage = t("baut den Prompt aus", "expanding the prompt") }
+        let text = try await Flux2Engine.shared.expand(prompt, model: model)
+        update(id) { $0.expanded = text }
+        AppLog.info("Expanded prompt: \(prompt.split(separator: " ").count) → \(text.split(separator: " ").count) words")
     }
 
     private func loadImage(_ assetID: String, _ what: String) async throws -> CGImage {

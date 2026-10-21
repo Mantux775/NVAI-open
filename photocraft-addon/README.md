@@ -77,9 +77,10 @@ Tips:
 - Detailed English prompts in full sentences work best. Below the prompt the panel shows the short
   guide NV-AI provides for the selected model.
 - Only a few words? **✨ Expand prompt** below the prompt lets NV-AI write a full image description
-  from them (about 15 s, needs NV-AI 0.4 or newer with FLUX 3 downloaded).
-  Read it and remove what the upsampler invented before you start; "Back to my prompt" undoes it.
-  Windows panel only for now.
+  from them. Windows: about 15 s, needs NV-AI 0.4 or newer with FLUX 3 downloaded. Mac: about
+  25 s on an M1 with 8 GB, needs NV-AI for Mac 0.4 or newer with FLUX.2 Klein downloaded (its text
+  encoder writes the description, no extra download). Read it and remove what was invented before
+  you start; "Back to my prompt" undoes it.
 - If the model active in NV-AI does not fit the mode, the panel picks a suitable one and says so.
 - For **new objects** when filling, use a full model; fast distilled models (cfg 1) mostly continue
   the surroundings – good for retouching.

@@ -31,6 +31,16 @@ enum Lang: String, Sendable {
 
     static var current: Lang { request ?? ui }
 
+    /// Menüleiste und Systemdialoge folgen der Spracheinstellung der App (ab dem nächsten Start):
+    /// "de"/"en" setzt AppleLanguages nur für diese App, "auto" nimmt die Systemsprache.
+    /// Dazu nennt Info.plist CFBundleLocalizations (en, de).
+    static func applyToMenus() {
+        switch setting {
+        case "de", "en": UserDefaults.standard.set([setting], forKey: "AppleLanguages")
+        default: UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+    }
+
     /// "de-DE,de;q=0.9,en;q=0.8" → .de. Without a header: English.
     static func from(acceptLanguage header: String?) -> Lang {
         guard let header, !header.isEmpty else { return .en }

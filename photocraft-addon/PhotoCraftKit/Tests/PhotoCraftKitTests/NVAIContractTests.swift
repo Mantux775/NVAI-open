@@ -234,6 +234,9 @@ final class StubNVAI: @unchecked Sendable {
             return .json(job("job-r", "running"))
         case ("POST", "/api/jobs/current/cancel"):
             return .json(["ok": true])
+        case ("POST", "/api/prompt/expand"):
+            return .json(["prompt": "a lighthouse", "expanded": "A tall white lighthouse on a rocky coast at dusk.",
+                          "seconds": 14.2])
         case (let method, let path) where path.hasPrefix("/api/assets/"):
             return .json(method == "GET" ? asset : ["ok": true])
         case (let method, let path) where path.hasPrefix("/api/jobs/"):
@@ -296,6 +299,7 @@ final class NVAIContractTests: XCTestCase {
         "GET /api/version", "GET /api/health", "GET /api/models", "GET /api/assets", "GET /api/assets/{asset_id}",
         "DELETE /api/assets/{asset_id}", "POST /api/upload", "POST /api/generate/image", "GET /api/jobs/{job_id}",
         "DELETE /api/jobs/{job_id}", "POST /api/jobs/current/cancel", "GET /files/{filename}",
+        "POST /api/prompt/expand",
     ]
 
     override func setUpWithError() throws {
@@ -384,6 +388,8 @@ final class NVAIContractTests: XCTestCase {
         try await client.cancel(jobID: "job-q") // wartend → DELETE /api/jobs/{id}
         try await client.cancel(jobID: "job-r") // läuft gerade → POST /api/jobs/current/cancel
         try await client.deleteAsset("upload-1")
+        let expanded = try await client.expandPrompt("a lighthouse")
+        XCTAssertEqual(expanded.seconds, 14.2)
 
         var used = Set<String>()
         var problems: [String] = []
@@ -413,6 +419,15 @@ final class NVAIContractTests: XCTestCase {
         let nv = StubNVAI(spec: contract.spec, version: StubNVAI.version(features: ["model_features", "references"]))
         let masks = try await nv.client().supportsMasks()
         XCTAssertFalse(masks)
+    }
+
+    func testExpandFollowsFeatures() async throws {
+        let with = try await StubNVAI(spec: contract.spec, version: StubNVAI.version(features: ["expand_prompt"])).client().supportsExpand()
+        XCTAssertTrue(with)
+        let without = try await StubNVAI(spec: contract.spec).client().supportsExpand()
+        XCTAssertFalse(without)
+        let old = try await StubNVAI(spec: contract.spec, version: nil).client().supportsExpand()
+        XCTAssertFalse(old)
     }
 
     func testOtherAPIVersionIsRefused() async {
