@@ -6,17 +6,19 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.0/NV-AI-Setup-0.5.0.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.0.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.0/NV-AI-0.4.0.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.1.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.1/NV-AI-Setup-0.5.1.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.1.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.1/NV-AI-0.4.1.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.0 for Windows, NV-AI 0.4.0 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.0))
+October 2026: NV-AI 0.5.1 for Windows, NV-AI 0.4.1 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.1))
 
 | | |
 |---|---|
+| Report a problem | Describe what went wrong, NV-AI creates an anonymized report with timestamp and logs and opens a prefilled GitHub issue (Windows and Mac) |
+| Graphics cards in the header | With several cards, click a card at the top and tick what it should do |
 | AMD Radeon | The Windows setup installs PyTorch with ROCm instead of CUDA (experimental, [testers wanted](https://github.com/Mantux775/NVAI-open/issues/2)) |
 | Several graphics cards | Image models, language models and 3D each on their own NVIDIA card (experimental, [testers wanted](https://github.com/Mantux775/NVAI-open/issues/1)) |
 | Expand prompt on the Mac | A few words become a full image description, in NV-AI and in the PhotoCraft add-on |
@@ -24,6 +26,8 @@ October 2026: NV-AI 0.5.0 for Windows, NV-AI 0.4.0 for Mac ([release notes](http
 
 | | |
 |---|---|
+| Problem melden | Beschreiben, was schiefging; NV-AI erstellt einen anonymisierten Bericht mit Zeitstempel und Protokollen und öffnet ein vorausgefülltes GitHub-Issue (Windows und Mac) |
+| Grafikkarten in der Kopfleiste | Mit mehreren Karten oben eine Karte anklicken und anhaken, was sie machen soll |
 | AMD Radeon | Das Windows-Setup installiert PyTorch mit ROCm statt CUDA (experimentell, [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/2)) |
 | Mehrere Grafikkarten | Bildmodelle, Sprachmodelle und 3D je auf einer eigenen NVIDIA-Karte (experimentell, [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/1)) |
 | Prompt ausbauen auf dem Mac | Aus ein paar Worten wird eine volle Bildbeschreibung, in NV-AI und im PhotoCraft-Add-on |
@@ -39,7 +43,7 @@ October 2026: NV-AI 0.5.0 for Windows, NV-AI 0.4.0 for Mac ([release notes](http
 
 I vibe-coded this app because I needed it myself, and I'd like to share it. I wanted images, sounds and 3D models for my own game projects without paying per picture or sending everything to the cloud.
 
-It has only been tested on my own hardware: a Windows PC with an RTX 5060 Ti (16 GB) and 64 GB RAM, and a Mac mini M1 with 8 GB. Feedback is very welcome as an [issue](https://github.com/Mantux775/NVAI-open/issues); I have a full-time job, so answers can take a while. NV-AI was built in German first, so you may still find German code comments. English and German are both available in all apps.
+It has only been tested on my own hardware: a Windows PC with an RTX 5060 Ti (16 GB) and 64 GB RAM, and a Mac mini M1 with 8 GB. Feedback is very welcome as an [issue](https://github.com/Mantux775/NVAI-open/issues), easiest with "Report a problem" in the app (top right on Windows, Settings on the Mac): it attaches an anonymized report with the logs. I have a full-time job, so answers can take a while. NV-AI was built in German first, so you may still find German code comments. English and German are both available in all apps.
 
 ### Features at a glance
 
@@ -82,12 +86,12 @@ Setup with the Windows setup, data folder and port: [docs/CLAUDE_CODE.md](docs/C
 |---|---|
 | NVIDIA RTX 50 | Uses the NVFP4 versions of FLUX 3 and Qwen-Image, which the card computes natively in hardware |
 | NVIDIA RTX 20, 30, 40 | Recommends the INT8 versions instead; FLUX 3 INT8 runs on 8 GB cards according to Black Forest Labs |
-| Two or more NVIDIA cards | Experimental since 0.5: under "Models" → "Graphics cards", image models, language models and 3D each get their own card. The language models then run in a second ComfyUI, so "Expand prompt" works while an image renders |
+| Two or more NVIDIA cards | Experimental since 0.5: in the header or under "Models" → "Graphics cards", image models, language models and 3D each get their own card. The language models then run in a second ComfyUI, so "Expand prompt" works while an image renders |
 | AMD Radeon | Experimental since 0.5: the setup detects a Radeon and installs PyTorch with ROCm 7.2.1 from AMD. Needs driver 26.2.2 or newer and a card on AMD's [compatibility list](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html). Image models in INT8 or FP8; 3D needs NVIDIA for now |
 
 The model list marks which models fit your card and says when a format does not run natively on it.
 
-Testers wanted: I only have one NVIDIA card. The multi-card mode is tested with one card simulating two, and on AMD the installation is tested but no image was generated yet. If you have the hardware, please report in [#1 (several NVIDIA cards)](https://github.com/Mantux775/NVAI-open/issues/1) or [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2).
+Testers wanted: I only have one NVIDIA card. The multi-card mode is tested with one card simulating two, and on AMD the installation is tested but no image was generated yet. If you have the hardware, please use "Report a problem" or report in [#1 (several NVIDIA cards)](https://github.com/Mantux775/NVAI-open/issues/1) or [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2).
 
 ### Uncensored models
 
@@ -189,7 +193,7 @@ NV-AI und das PhotoCraft-Add-on in Aktion, ein kurzes Video auf YouTube.<br>
 
 Ich habe diese App aus eigenem Bedarf „vibegecodet“ und möchte sie teilen. Ich wollte Bilder, Sounds und 3D-Modelle für meine eigenen Spieleprojekte erzeugen, ohne pro Bild zu zahlen oder alles in die Cloud zu schicken.
 
-Getestet ist sie nur auf meiner eigenen Hardware: einem Windows-PC mit RTX 5060 Ti (16 GB) und 64 GB RAM und einem Mac mini M1 mit 8 GB. Über Feedback als [Issue](https://github.com/Mantux775/NVAI-open/issues) freue ich mich sehr; ich habe einen Vollzeitjob, Antworten können also dauern. NV-AI ist zuerst auf Deutsch entstanden, im Code stehen deshalb noch deutsche Kommentare. Deutsch und Englisch sind in allen Apps wählbar.
+Getestet ist sie nur auf meiner eigenen Hardware: einem Windows-PC mit RTX 5060 Ti (16 GB) und 64 GB RAM und einem Mac mini M1 mit 8 GB. Über Feedback als [Issue](https://github.com/Mantux775/NVAI-open/issues) freue ich mich sehr, am einfachsten mit „Problem melden“ in der App (Windows oben rechts, Mac in den Einstellungen): Das hängt einen anonymisierten Bericht mit den Protokollen an. Ich habe einen Vollzeitjob, Antworten können also dauern. NV-AI ist zuerst auf Deutsch entstanden, im Code stehen deshalb noch deutsche Kommentare. Deutsch und Englisch sind in allen Apps wählbar.
 
 ### Funktionen im Überblick
 
@@ -232,12 +236,12 @@ Einrichtung mit dem Windows-Setup, Datenordner und Port: [docs/CLAUDE_CODE.md](d
 |---|---|
 | NVIDIA RTX 50 | Nutzt die NVFP4-Fassungen von FLUX 3 und Qwen-Image, die die Karte nativ in Hardware rechnet |
 | NVIDIA RTX 20, 30, 40 | Empfiehlt stattdessen die INT8-Fassungen; FLUX 3 INT8 läuft laut Black Forest Labs schon auf 8-GB-Karten |
-| Zwei oder mehr NVIDIA-Karten | Experimentell seit 0.5: Unter „Modelle“ → „Grafikkarten“ bekommen Bildmodelle, Sprachmodelle und 3D je eine eigene Karte. Die Sprachmodelle laufen dann in einem zweiten ComfyUI, „Prompt ausbauen“ geht also, während ein Bild rechnet |
+| Zwei oder mehr NVIDIA-Karten | Experimentell seit 0.5: In der Kopfleiste oder unter „Modelle“ → „Grafikkarten“ bekommen Bildmodelle, Sprachmodelle und 3D je eine eigene Karte. Die Sprachmodelle laufen dann in einem zweiten ComfyUI, „Prompt ausbauen“ geht also, während ein Bild rechnet |
 | AMD Radeon | Experimentell seit 0.5: Das Setup erkennt eine Radeon und installiert PyTorch mit ROCm 7.2.1 von AMD. Nötig sind Treiber 26.2.2 oder neuer und eine Karte auf AMDs [Kompatibilitätsliste](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html). Bildmodelle in INT8 oder FP8; 3D braucht vorerst NVIDIA |
 
 Die Modellliste markiert, welche Modelle zur Karte passen, und sagt, wenn ein Format darauf nicht nativ rechnet.
 
-Tester gesucht: Ich habe nur eine NVIDIA-Karte. Der Mehrkartenbetrieb ist mit einer Karte getestet, die zwei simuliert, und auf AMD ist die Installation getestet, aber noch kein Bild erzeugt. Wer die Hardware hat: bitte in [#1 (mehrere NVIDIA-Karten)](https://github.com/Mantux775/NVAI-open/issues/1) oder [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2) berichten.
+Tester gesucht: Ich habe nur eine NVIDIA-Karte. Der Mehrkartenbetrieb ist mit einer Karte getestet, die zwei simuliert, und auf AMD ist die Installation getestet, aber noch kein Bild erzeugt. Wer die Hardware hat: bitte über „Problem melden“ oder in [#1 (mehrere NVIDIA-Karten)](https://github.com/Mantux775/NVAI-open/issues/1) oder [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2) berichten.
 
 ### Unzensierte Modelle
 

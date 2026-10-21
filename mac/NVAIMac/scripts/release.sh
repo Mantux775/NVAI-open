@@ -150,9 +150,9 @@ PhotoCraft add-on
 - The add-on starts NV-AI when needed; both run locally only.
 
 Feedback
-- In NV-AI under Settings, save the test report and send it along, together with
-  ~/Library/Logs/NV-AI/nvai.log. The report lists the Mac, memory, duration and memory use
-  per image; it contains no prompts and no images.
+- In NV-AI under Settings > "Report a problem", describe what happened and click
+  "Report on GitHub". NV-AI saves an anonymized report (no names, no prompts, no images)
+  and opens a prefilled issue; drag the saved file into it.
 
 Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NV-AI itself: MIT License.
 Third-party components: see "Third-Party Notices.txt" or NV-AI > Licenses.
@@ -177,9 +177,9 @@ PhotoCraft-Add-on
 - „NV-AI für PhotoCraft“ startet NV-AI bei Bedarf selbst; beide laufen nur lokal.
 
 Rückmeldung
-- In NV-AI unter „Einstellungen“ den Messbericht speichern und mitschicken, dazu
-  ~/Library/Logs/NV-AI/nvai.log. Der Bericht enthält Mac, Arbeitsspeicher, Dauer und
-  Speicherbedarf je Bild, keine Prompts und keine Bilder.
+- In NV-AI unter „Einstellungen“ → „Problem melden“ beschreiben, was passiert ist, und
+  „Auf GitHub melden“ klicken. NV-AI speichert einen anonymisierten Bericht (keine Namen,
+  keine Prompts, keine Bilder) und öffnet ein vorausgefülltes Issue; die Datei dort hineinziehen.
 
 Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NV-AI selbst: MIT-Lizenz.
 Komponenten von Dritten: siehe „Third-Party Notices.txt“ oder NV-AI > Lizenzen.
