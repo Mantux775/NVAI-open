@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Asset, type GenKind, type Health, type ModelInfo, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
+import { ContentBadge } from '../components/ContentBadge'
 import { t } from '../i18n'
 
 type Mode = GenKind
@@ -182,8 +183,26 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     } else if (event.type === 'job.error') {
       setError(event.error)
       setJobId(null)
+    } else if (event.type === 'job.cancelled') {
+      // Auch ein Stopp über die Kopfleiste oder aus dem PhotoCraft-Add-on landet hier.
+      setJobId(null)
+      setStage(t('abgebrochen', 'cancelled'))
     }
   }, [event, mode])
+
+  const cancelJob = async () => {
+    if (!jobId) return
+    try {
+      const res = await api.cancelJob(jobId)
+      if (!res.ok && res.reason) setError(res.reason)
+      else {
+        setJobId(null)
+        setStage(t('abgebrochen', 'cancelled'))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const available = useMemo(
     () => models.filter((m) => m.kind === mode && m.runnable),
@@ -704,6 +723,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           ))}
         </select>
         {selected && <p className="hint small">{selected.best_for}</p>}
+        {selected && (mode === 'image' || mode === 'video') && (
+          <div className="feature-chips"><ContentBadge model={selected} /></div>
+        )}
         {chips.length > 0 && (
           <div className="feature-chips">
             {chips.map((c) => (
@@ -1181,10 +1203,15 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             <div className="progress">
               <div className="bar" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
-            <div className="muted small">
-              {stage} · {Math.round(progress * 100)} %
-              {mode === 'video' && t(' · Video dauert mehrere Minuten', ' · video takes several minutes')}
-              {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
+            <div className="muted small progress-line">
+              <span>
+                {stage} · {Math.round(progress * 100)} %
+                {mode === 'video' && t(' · Video dauert mehrere Minuten', ' · video takes several minutes')}
+                {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
+              </span>
+              <button className="btn small ghost danger-text" onClick={cancelJob}>
+                {t('Abbrechen', 'Cancel')}
+              </button>
             </div>
           </div>
         )}

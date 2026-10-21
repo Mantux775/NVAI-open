@@ -30,11 +30,17 @@ export function App() {
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
+  const [versions, setVersions] = useState<{ version: string; comfyui: string | null } | null>(null)
   const downloads = useDownloads(events, setNotice)
   const dlList = Object.entries(downloads.active)
 
   const refreshHealth = useCallback(() => {
     api.health().then(setHealth).catch(() => setHealth(null))
+  }, [])
+
+  // Versionen neben dem Logo: einmal beim Laden, sie ändern sich nur mit einem Update.
+  useEffect(() => {
+    api.version().then(setVersions).catch(() => setVersions(null))
   }, [])
 
   useEffect(() => {
@@ -109,6 +115,12 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           NV<span>-AI</span>
+          {versions && (
+            <span className="brand-version" title={t('Versionen von NV-AI und ComfyUI', 'Versions of NV-AI and ComfyUI')}>
+              {versions.version}
+              {versions.comfyui && <><br />ComfyUI {versions.comfyui}</>}
+            </span>
+          )}
         </div>
 
         <nav className="tabs">
@@ -230,20 +242,30 @@ export function App() {
           {dlList.map(([id, d]) => {
             const pct = Math.round(d.progress * 100)
             return (
-              <button
-                key={id}
-                className="dl-item"
-                onClick={() => setTab('models')}
-                title={t('Zur Modellverwaltung', 'Go to model management')}
-              >
-                <span className="dl-icon">⬇</span>
-                <span className="dl-name">{d.name}</span>
-                <span className="dl-track">
-                  <span className="dl-fill" style={{ width: `${d.status === 'queued' ? 0 : pct}%` }} />
-                </span>
-                <span className="dl-pct">{d.status === 'queued' ? t('wartet', 'queued') : `${pct} %`}</span>
-                {d.stage && d.status === 'running' && <span className="dl-stage muted small">{d.stage}</span>}
-              </button>
+              <span key={id} className="dl-row">
+                <button
+                  className="dl-item"
+                  onClick={() => setTab('models')}
+                  title={t('Zur Modellverwaltung', 'Go to model management')}
+                >
+                  <span className="dl-icon">⬇</span>
+                  <span className="dl-name">{d.name}</span>
+                  <span className="dl-track">
+                    <span className="dl-fill" style={{ width: `${d.status === 'queued' ? 0 : pct}%` }} />
+                  </span>
+                  <span className="dl-pct">{d.status === 'queued' ? t('wartet', 'queued') : `${pct} %`}</span>
+                  {d.stage && d.status === 'running' && <span className="dl-stage muted small">{d.stage}</span>}
+                </button>
+                <button
+                  className="dl-cancel"
+                  onClick={() => downloads.cancel(id)}
+                  title={t('Download abbrechen (fertige Teile bleiben zum Fortsetzen)',
+                    'Cancel download (finished parts stay to resume)')}
+                  aria-label={t(`${d.name}: Download abbrechen`, `${d.name}: cancel download`)}
+                >
+                  ✕
+                </button>
+              </span>
             )
           })}
         </div>

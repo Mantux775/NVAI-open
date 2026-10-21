@@ -119,6 +119,8 @@ Lizenz beschrieben.
   ein Vielfaches langsamer.
 - „Auf Hugging Face suchen“ auf derselben Seite findet weitere Modelle. NV-AI prüft jede Datei
   vor dem Laden; laden lassen sich SDXL- und SD-1.5-Checkpoints.
+- Jedes Bild- und Videomodell trägt ein Abzeichen *unzensiert*, *teilweise zensiert*,
+  *zensiert* oder *Zensur unbekannt*, mit Quelle im Tooltip (siehe [MODELLE.md](MODELLE.md)).
 
 **Ein guter Einstieg je nach Karte:**
 
@@ -134,6 +136,23 @@ PBR-Texturen) gibt es nur bei der Installation aus dem Quelltext (siehe
 
 Die beiden empfohlenen Bildmodelle, Qwen-Image-2512 und FLUX 3 Image Klein, beschreibt
 [MODELLE.md](MODELLE.md) ausführlich.
+
+### Speicherorte
+
+„Modelle“ → „Speicherorte“ (seit 0.5.2) zeigt Datenordner (Verlauf, Bilder, Protokolle) und
+Modellordner (die großen Modelldateien) mit freiem Platz. „Durchsuchen …“ öffnet den
+Ordnerdialog von Windows; NV-AI prüft, ob es dort schreiben kann, und speichert die Wahl in
+`HKCU\Software\NV-AI`. „NV-AI jetzt neu starten“ übernimmt sie. Vorhandene Dateien bleiben im
+alten Ordner: Zum Mitnehmen NV-AI beenden, den Inhalt in den neuen Ordner verschieben und neu
+starten.
+
+### Abbrechen
+
+Jeder laufende oder wartende Download hat einen Abbrechen-Knopf, in der Download-Leiste oben auf
+jeder Seite und auf der Modellseite. Er stoppt nach dem aktuellen Datenblock (wenige Sekunden);
+fertige Teile bleiben, ein neuer Download setzt dort fort. Generierungen lassen sich auf der
+Generieren-Seite abbrechen, auch wartende, oder mit „Stopp“ in der Kopfleiste. REST:
+`POST /api/jobs/{id}/cancel`.
 
 ### Problem melden
 

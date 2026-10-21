@@ -35,6 +35,8 @@ _subscribers: set[asyncio.Queue] = set()
 _handlers: dict[str, Handler] = {}
 _current_job_id: str | None = None
 _current_download_id: str | None = None
+# Laufende Jobs mit Abbruchwunsch (Downloads pruefen das bei jedem Datenblock)
+_cancel_requested: set[str] = set()
 # Der Task des laufenden GPU-Jobs -- nur so laesst er sich einzeln abbrechen.
 _current_gpu_task: asyncio.Task | None = None
 # Sprache je Job. Die Worker-Loops laufen seit dem Serverstart als eigene Tasks und
@@ -56,6 +58,10 @@ class JobContext:
     def __init__(self, job: Job, loop: asyncio.AbstractEventLoop) -> None:
         self.job = job
         self._loop = loop
+
+    def should_stop(self) -> bool:
+        """Abbruch angefordert (POST /api/jobs/{id}/cancel)? Threadsicher: nur ein Set-Lookup."""
+        return self.job.id in _cancel_requested
 
     def progress(self, value: float, stage: str = "") -> None:
         try:
@@ -190,6 +196,10 @@ async def _run_one(job_id: str) -> None:
         db.update_job(job_id, status="cancelled", finished_at=time.time())
         _publish({"type": "job.cancelled", "job_id": job_id})
         raise
+    except registry.DownloadCancelled:
+        db.update_job(job_id, status="cancelled", finished_at=time.time(),
+                      stage=t("vom Nutzer abgebrochen", "cancelled by the user"))
+        _publish({"type": "job.cancelled", "job_id": job_id})
     except Exception as exc:  # noqa: BLE001 - Fehler gehoert in den Job, nicht in den Worker
         detail = f"{type(exc).__name__}: {exc}"
         traceback.print_exc()
@@ -197,6 +207,7 @@ async def _run_one(job_id: str) -> None:
         _publish({"type": "job.error", "job_id": job_id, "error": detail})
     finally:
         _set_current(job.kind, None)
+        _cancel_requested.discard(job_id)
 
 
 async def _worker_loop(queue: asyncio.Queue[str], name: str) -> None:
@@ -220,6 +231,30 @@ async def _worker_loop(queue: asyncio.Queue[str], name: str) -> None:
             if name == "gpu":
                 _current_gpu_task = None
             queue.task_done()
+
+
+async def cancel_job(job_id: str) -> dict[str, Any]:
+    """Einen einzelnen Job abbrechen: wartend sofort, laufender GPU-Job wie cancel_current,
+    laufender Download beim naechsten Datenblock (siehe registry.DownloadCancelled)."""
+    job = db.get_job(job_id)
+    if job is None:
+        return {"ok": False, "reason": t(f"Unbekannter Job: {job_id}", f"Unknown job: {job_id}")}
+    if job.status not in ("queued", "running"):
+        return {"ok": False, "job_id": job_id,
+                "reason": t("Der Job ist schon beendet.", "The job has already finished.")}
+    if job.status == "queued":
+        db.update_job(job_id, status="cancelled", finished_at=time.time(),
+                      stage=t("vom Nutzer abgebrochen", "cancelled by the user"))
+        _publish({"type": "job.cancelled", "job_id": job_id})
+        return {"ok": True, "job_id": job_id, "stopped": []}
+    if job_id == _current_job_id:
+        return await cancel_current()
+    # Laufender Download (oder Text-Job auf eigener Karte): Flag setzen, der Job endet selbst.
+    _cancel_requested.add(job_id)
+    db.update_job(job_id, stage=t("bricht ab …", "cancelling …"))
+    _publish({"type": "job.progress", "job_id": job_id, "progress": job.progress,
+              "stage": t("bricht ab …", "cancelling …")})
+    return {"ok": True, "job_id": job_id, "stopped": [], "pending": True}
 
 
 async def cancel_current() -> dict[str, Any]:
@@ -522,9 +557,11 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
         ref_ids = [p.pop("image_asset_id")]
     if ref_ids and not by_reference:
         raise RuntimeError(t(
-            f"Referenzbilder verarbeiten nur FLUX 3 und Qwen-Image 2.1, nicht '{_name(entry)}'. "
+            f"Referenzbilder verarbeiten nur Modelle mit Referenzbild-Unterstuetzung (FLUX 3, "
+            f"Qwen-Image 2.1, Boogu-Image Edit, HiDream-O1), nicht '{_name(entry)}'. "
             "Fuer ein vorhandenes Bild als Ausgangspunkt: image_asset_id mit denoise.",
-            f"Only FLUX 3 and Qwen-Image 2.1 process reference images, not '{_name(entry)}'. "
+            f"Only models with reference support (FLUX 3, Qwen-Image 2.1, Boogu-Image Edit, "
+            f"HiDream-O1) process reference images, not '{_name(entry)}'. "
             "To start from an existing image: image_asset_id with denoise.",
         ))
     if len(ref_ids) > flux3_prompt.MAX_REFERENCES:
@@ -773,7 +810,7 @@ async def _download(job: Job, ctx: JobContext) -> list[str]:
     entry = job.params["entry"]
     clean = bool(job.params.get("clean"))
     ctx.progress(0.0, t(f"lade {_name(entry)}", f"downloading {_name(entry)}"))
-    await asyncio.to_thread(registry.download, entry, ctx.progress, clean)
+    await asyncio.to_thread(registry.download, entry, ctx.progress, clean, ctx.should_stop)
     # ComfyUI cached die Modellliste -- nach dem Download neu einlesen lassen.
     if await comfy.is_running():
         await comfy.list_checkpoints()

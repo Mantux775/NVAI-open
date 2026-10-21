@@ -4,6 +4,7 @@
     pythonw -m nvai.launcher --open     # danach die Weboberflaeche oeffnen
     pythonw -m nvai.launcher --stop     # NV-AI samt ComfyUI beenden
     python -m nvai.launcher --stop --quiet   # dasselbe ohne Dialog (Setup, Deinstallation)
+    pythonw -m nvai.launcher --restart --quiet   # beenden und neu starten (neue Ordner, /api/restart)
 
 Kehrt zurueck, sobald NV-AI antwortet; der Server laeuft losgeloest weiter.
 Die Einstellungen schreibt das Setup nach HKCU\\Software\\NV-AI (DataDir,
@@ -194,6 +195,10 @@ def main(argv: list[str]) -> int:
     _QUIET = "--quiet" in argv
     if "--stop" in argv:
         return stop()
+    if "--restart" in argv:
+        # Neue Ordner aus der Registry gelten erst fuer einen neu gestarteten Server.
+        result = stop()
+        return result or start(open_browser=False)
     return start(open_browser="--open" in argv)
 
 

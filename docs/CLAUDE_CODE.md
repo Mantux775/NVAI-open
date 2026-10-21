@@ -421,21 +421,10 @@ Rules that make the difference:
 | **Wan 2.2 I2V A14B** | First choice. Best motion, Apache-2.0, 720p possible |
 | **Wan 2.1 I2V 480p 14B** | 10 GB smaller, no expert switch — otherwise weaker |
 | **Wan 2.2 TI2V 5B** | Does both; I2V with a start image, T2V without |
-| **HunyuanVideo 1.5 I2V** | Testing only — license, see below |
 
 **Wan 2.2 I2V A14B loads two experts one after the other** (high-noise for motion, low-noise for
 details). That costs a model switch in the middle of the run — expect considerably more time than
 with text-to-video, and tell the user beforehand.
-
-### HunyuanVideo 1.5 — for experiments only
-
-Technically strong (DiT only 7.8 GB, very good motion), but the **Tencent Hunyuan Community
-License does not cover the EU, the UK and South Korea.** Elsewhere commercial use is allowed below
-100 million monthly active users. Unusable for anyone in those regions.
-
-If the user generates with it, treat the result as a mood board or comparison and point out that
-an asset to be shipped has to be regenerated with Wan (Apache-2.0). `negative_prompt` has no
-effect on either Hunyuan entry — they are CFG-distilled (cfg 1.0).
 
 ## Image to 3D
 
@@ -523,13 +512,8 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
 
 `list_models` returns `commercial_ok`. Critical cases:
 
-- **FLUX.1 dev** — non-commercial. Fine for mood boards, not for shipping assets. Replacement:
-  **FLUX.1 schnell** (Apache-2.0).
-- **HunyuanVideo 1.5** (T2V and I2V) — Tencent Hunyuan Community License: not licensed in
-  the EU, UK and South Korea (elsewhere commercial use up to 100 million monthly users). Marked with a red exclamation mark in the web UI. Replacement:
-  **Wan 2.2 I2V A14B** or **Wan 2.1 T2V** (both Apache-2.0).
-- **Hunyuan3D** — the same Tencent family, critical for the EU. Replacement: **TripoSG** (MIT).
-- **Stability Community License** (SD 3.5, Stable Audio Open) — commercial use up to US$1 million
+- **Hunyuan3D** — Tencent Hunyuan Community License, not licensed in the EU, the UK and South Korea. Replacement: **TripoSG** (MIT).
+- **Stability Community License** (Stable Audio Open) — commercial use up to US$1 million
   in revenue.
 - **FLUX Kommunity License v1.0** (FLUX 3 Image Klein) — images may be used commercially only by
   "Qualifying Users" below US$5 million annual revenue, including affiliated companies.
@@ -539,6 +523,9 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
   other image model (4.b). No EU exclusion. The repo is gated — accept the license on Hugging
   Face and store a token. Without these conditions: **Qwen-Image-2512** (Apache-2.0).
 - Unproblematic: SDXL, FLUX schnell, ACE-Step, Wan (all variants), Chroma, TripoSG, TRELLIS.2.
+
+`list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)
+with `content_note` and `content_source`. NV-AI itself has no content filter.
 
 When in doubt, point the user to the license instead of generating silently. This is not legal
 advice; the original license text is authoritative.

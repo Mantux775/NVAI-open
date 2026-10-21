@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "x-api-version": 1
  },
  "paths": {
@@ -219,6 +219,48 @@
          "additionalProperties": true,
          "type": "object",
          "title": "Response Backend Free Api Backend Free Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/jobs/{job_id}/cancel": {
+   "post": {
+    "summary": "Cancel Job",
+    "description": "Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads\nnach dem aktuellen Datenblock. Fertige Teile eines Downloads bleiben fuers Fortsetzen.",
+    "operationId": "cancel_job_api_jobs__job_id__cancel_post",
+    "parameters": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Job Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Cancel Job Api Jobs  Job Id  Cancel Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
         }
        }
       }
@@ -576,7 +618,7 @@
   "/api/downloads/cancel": {
    "post": {
     "summary": "Cancel Downloads",
-    "description": "Bricht alle wartenden und den laufenden Download ab.\n\nWartende Jobs werden uebersprungen, sobald sie drankommen. Der laufende\nDownload steckt in einem Thread und laeuft bis zum Dateiende weiter --\ndanach wird er nicht mehr fortgesetzt.",
+    "description": "Bricht alle wartenden und den laufenden Download ab (je Job: POST /api/jobs/{id}/cancel).",
     "operationId": "cancel_downloads_api_downloads_cancel_post",
     "responses": {
      "200": {
@@ -888,6 +930,180 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings/folders": {
+   "get": {
+    "summary": "Get Folders",
+    "description": "Daten- und Modellordner, freier Platz, und ob NV-AI sie selbst setzen kann (Setup).",
+    "operationId": "get_folders_api_settings_folders_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Get Folders Api Settings Folders Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Put Folders",
+    "description": "Neue Ordner speichern (Registry der Setup-Fassung); gelten nach POST /api/restart.",
+    "operationId": "put_folders_api_settings_folders_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Put Folders Api Settings Folders Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings/folders/check": {
+   "post": {
+    "summary": "Check Folder",
+    "operationId": "check_folder_api_settings_folders_check_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Check Folder Api Settings Folders Check Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/settings/folders/browse": {
+   "post": {
+    "summary": "Browse Folder",
+    "description": "Oeffnet den Ordnerdialog von Windows auf diesem Rechner; path ist None bei Abbruch.",
+    "operationId": "browse_folder_api_settings_folders_browse_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Browse Folder Api Settings Folders Browse Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/restart": {
+   "post": {
+    "summary": "Restart",
+    "description": "Setup-Fassung neu starten (ueber den Starter). Laeuft ein Job, erst danach.",
+    "operationId": "restart_api_restart_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Restart Api Restart Post"
         }
        }
       }
@@ -2670,6 +2886,27 @@
      "gpu_note": {
       "type": "string",
       "title": "Gpu Note",
+      "default": ""
+     },
+     "content": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Content"
+     },
+     "content_note": {
+      "type": "string",
+      "title": "Content Note",
+      "default": ""
+     },
+     "content_source": {
+      "type": "string",
+      "title": "Content Source",
       "default": ""
      },
      "features": {

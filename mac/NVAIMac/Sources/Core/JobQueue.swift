@@ -58,6 +58,8 @@ actor JobQueue {
     private var order: [String] = []
     private var runningID: String?
     private var worker: Task<Void, Never>?
+    /// Laufender Download als eigene Task, damit „Abbrechen“ ihn mitten in der Datei stoppen kann.
+    private var downloadTask: Task<Void, Error>?
     private var onChange: (@Sendable () -> Void)?
 
     func setOnChange(_ handler: @escaping @Sendable () -> Void) { onChange = handler }
@@ -172,6 +174,12 @@ actor JobQueue {
                 $0.stage = t("abgebrochen", "cancelled")
                 $0.finishedAt = Date().timeIntervalSince1970
             }
+        case "running" where job.kind == "download":
+            update(id) {
+                $0.cancelRequested = true
+                $0.stage = t("bricht ab", "cancelling")
+            }
+            downloadTask?.cancel()
         case "running":
             update(id) {
                 $0.cancelRequested = true
@@ -258,6 +266,13 @@ actor JobQueue {
                 $0.stage = cancelled ? t("abgebrochen", "cancelled") : t("fertig", "done")
                 $0.progress = 1
             }
+        } catch where jobs[id]?.cancelRequested == true {
+            // Abgebrochen (z. B. Download mitten in der Datei): kein Fehler.
+            update(id) {
+                $0.status = "cancelled"
+                $0.stage = t("abgebrochen", "cancelled")
+            }
+            AppLog.info("Job \(id) cancelled by the user")
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
             update(id) {
@@ -300,13 +315,20 @@ actor JobQueue {
         let report: @Sendable (Double, String) -> Void = { fraction, message in
             Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
         }
-        switch model {
-        case .flux(let m):
-            await CoreMLEngine.shared.unload()
-            try await Flux2Engine.shared.load(m, progress: report)
-        case .coreml(let m):
-            try await CoreMLInstaller.install(m, progress: report)
+        let work = Task {
+            switch model {
+            case .flux(let m):
+                await CoreMLEngine.shared.unload()
+                try await Flux2Engine.shared.load(m, progress: report)
+            case .coreml(let m):
+                try await CoreMLInstaller.install(m, progress: report)
+            }
         }
+        downloadTask = work
+        defer { downloadTask = nil }
+        try await work.value
+        // Das FLUX.2-Paket bricht nicht mitten in der Datei ab; dann endet es hier.
+        if jobs[id]?.cancelRequested == true { throw CancellationError() }
     }
 
     private func runExpand(_ id: String, prompt: String) async throws {

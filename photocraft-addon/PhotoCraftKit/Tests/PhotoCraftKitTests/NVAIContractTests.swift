@@ -168,7 +168,7 @@ final class StubNVAI: @unchecked Sendable {
     static let registry = Registry()
 
     static func version(api: Int = 1, authorized: Bool = true,
-                        features: [String] = ["model_features", "mask", "references", "upsampler", "upload"]) -> JSONValue {
+                        features: [String] = ["model_features", "mask", "references", "upsampler", "upload", "cancel_job"]) -> JSONValue {
         ["name": "NV-AI", "version": "0.2.0", "api": .int(api), "auth": "token", "authorized": .bool(authorized),
          "features": .array(features.map { .string($0) })]
     }
@@ -234,6 +234,13 @@ final class StubNVAI: @unchecked Sendable {
             return .json(job("job-r", "running"))
         case ("POST", "/api/jobs/current/cancel"):
             return .json(["ok": true])
+        case ("GET", "/api/jobs"):
+            var dl = job("job-dl", "running").objectValue ?? [:]
+            dl["kind"] = "download"; dl["progress"] = 0.4
+            dl["params"] = ["entry": ["id": "flux3-klein-nvfp4", "name": "FLUX 3 Klein"]]
+            return .json([.object(dl), job("job-q", "queued")])
+        case ("POST", let path) where path.hasPrefix("/api/jobs/") && path.hasSuffix("/cancel") && path != "/api/jobs/current/cancel":
+            return .json(["ok": true, "job_id": .string(String(path.split(separator: "/")[2])), "pending": true])
         case ("POST", "/api/prompt/expand"):
             return .json(["prompt": "a lighthouse", "expanded": "A tall white lighthouse on a rocky coast at dusk.",
                           "seconds": 14.2])
@@ -299,7 +306,7 @@ final class NVAIContractTests: XCTestCase {
         "GET /api/version", "GET /api/health", "GET /api/models", "GET /api/assets", "GET /api/assets/{asset_id}",
         "DELETE /api/assets/{asset_id}", "POST /api/upload", "POST /api/generate/image", "GET /api/jobs/{job_id}",
         "DELETE /api/jobs/{job_id}", "POST /api/jobs/current/cancel", "GET /files/{filename}",
-        "POST /api/prompt/expand",
+        "POST /api/prompt/expand", "GET /api/jobs", "POST /api/jobs/{job_id}/cancel",
     ]
 
     override func setUpWithError() throws {
@@ -390,6 +397,10 @@ final class NVAIContractTests: XCTestCase {
         try await client.deleteAsset("upload-1")
         let expanded = try await client.expandPrompt("a lighthouse")
         XCTAssertEqual(expanded.seconds, 14.2)
+        let downloads = try await client.downloads()
+        XCTAssertEqual(downloads.map(\.name), ["FLUX 3 Klein"])
+        XCTAssertEqual(downloads.first?.progress, 0.4)
+        try await client.cancelDownload("job-dl")
 
         var used = Set<String>()
         var problems: [String] = []

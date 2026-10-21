@@ -35,6 +35,12 @@ body {
 
 .brand { font-weight: 700; font-size: 18px; letter-spacing: 0.5px; }
 .brand span { color: var(--accent); }
+.brand { white-space: nowrap; }
+.brand .brand-version {
+  display: inline-block; vertical-align: middle; margin-left: 8px;
+  color: var(--muted); font-size: 10px; font-weight: 400; letter-spacing: 0; line-height: 1.25;
+  opacity: 0.8;
+}
 
 .tabs { display: flex; gap: 4px; }
 
@@ -680,3 +686,30 @@ kbd {
   overflow-wrap: anywhere; margin: 0;
 }
 .modal-close { display: flex; justify-content: flex-end; }
+
+/* Zensiert / unzensiert (content.py) */
+.badge.content-uncensored { color: #d9a6ff; border-color: #8a5bb0; }
+.badge.content-partial { color: #ffcf7a; border-color: #a7833f; }
+.badge.content-censored { color: var(--muted); border-color: var(--line); }
+.badge.content-unknown { color: var(--muted); border-color: var(--line); border-style: dashed; }
+
+/* Download-Leiste: Abbrechen je Download */
+.dl-row { display: inline-flex; align-items: stretch; gap: 2px; }
+.dl-cancel {
+  background: transparent; border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
+  padding: 0 8px; cursor: pointer; font: inherit;
+}
+.dl-cancel:hover { color: var(--danger); border-color: var(--danger); }
+.progress-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Modelle: Speicherorte */
+.folder-settings { padding: 10px 14px; }
+.folder-head {
+  width: 100%; display: flex; align-items: center; gap: 10px; background: transparent; border: 0;
+  color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0;
+}
+.folder-title { font-weight: 600; white-space: nowrap; }
+.folder-summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-body { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.folder-row { display: flex; gap: 8px; }
+.folder-row input { flex: 1; }

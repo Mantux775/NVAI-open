@@ -48,6 +48,23 @@ such ("according to BFL").
 
 Without a `model_id`, NV-AI uses the active image model.
 
+### Censored or uncensored
+
+Every image and video model in the list carries a label: *uncensored*, *partly censored*,
+*censored* or *filtering unknown*. The tooltip names the evidence and the source (model card,
+technical report). NV-AI itself filters nothing. The same information is in `GET /api/models`
+(`content`, `content_note`, `content_source`).
+
+| Label | Models (as of October 2026) |
+|---|---|
+| uncensored | Chroma1-HD, Pony Diffusion V6 XL, NoobAI-XL, Illustrious XL |
+| partly censored | SDXL, Z-Image, Wan 2.1 / 2.2 |
+| censored | Qwen-Image-2512, FLUX 3 Image Klein, FLUX.1 schnell |
+| filtering unknown | Juggernaut XL, Qwen-Image 2.1, LongCat-Image, LTX-Video |
+
+Removed from the catalog in 0.5.2 (installed files stay): SD 3.5 Medium/Large, FLUX.1 dev,
+Chroma v37 (use Chroma1-HD), HunyuanVideo 1.5 (license excludes the EU; use Wan 2.2).
+
 ## 3. Access from other projects
 
 ### Prerequisite
@@ -428,7 +445,7 @@ Applies equally to the MCP tool and to the body of `POST /api/generate/image`.
 | `mask_asset_id` | ✓ inpainting (with `image_asset_id`, `denoise=1.0`) | — (error message) | white = new, black = keep; upload the mask via `POST /api/upload` |
 | `reference_asset_ids` | — | up to 10 | error message with other models |
 | `upsample_prompt` | — | on by default | |
-| `slg`, `controlnet_*` | — | — | only for SD 3.5 models |
+| `slg`, `controlnet_*` | — | — | only for SD 3.5 models (no longer in the catalog) |
 
 Size by silhouette: standing figure 832 × 1216 (Qwen native 1056 × 1584), vehicle in landscape
 1216 × 832 (1584 × 1056), object and icon 1024 × 1024 (1328 × 1328).

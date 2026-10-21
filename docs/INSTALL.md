@@ -118,6 +118,8 @@ and license.
   reloaded at every step and is therefore many times slower.
 - **Search Hugging Face** on the same page finds further models. NV-AI checks each file before
   downloading it; SDXL and SD 1.5 checkpoints can be downloaded.
+- Each image and video model is labelled *uncensored*, *partly censored*, *censored* or
+  *filtering unknown*, with the source in the tooltip (see [MODELS.md](MODELS.md)).
 
 **A good start depending on your card:**
 
@@ -133,6 +135,21 @@ textures) is only available when you install from source (see
 
 The two recommended image models, Qwen-Image-2512 and FLUX 3 Image Klein, are described in
 detail in [MODELS.md](MODELS.md).
+
+### Storage locations
+
+"Models" → "Storage locations" (since 0.5.2) shows the data folder (history, images, logs) and
+the models folder (the large model files) with the free space. "Browse …" opens the Windows
+folder dialog; NV-AI checks that it can write there and saves the choice in
+`HKCU\Software\NV-AI`. "Restart NV-AI now" applies it. Existing files stay in the old folder: to
+take them along, quit NV-AI, move the contents into the new folder and start it again.
+
+### Cancelling
+
+Every running or queued download has a cancel button, in the download bar at the top of every
+page and on the Models page. It stops after the current data block (a few seconds); finished
+parts stay, so a new download resumes. Generations can be cancelled on the Generate page,
+including queued ones, or with "Stop" in the header. REST: `POST /api/jobs/{id}/cancel`.
 
 ### Reporting a problem
 

@@ -193,6 +193,6 @@ enum ModelCatalog {
             "runnable": st.installed, "favorite": false, "fits_vram": fits(m),
             "features": features(m),
             "engine": "mlx",
-        ]
+        ].merging(ContentRating.apiFields(m.id)) { a, _ in a }
     }
 }

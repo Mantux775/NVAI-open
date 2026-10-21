@@ -73,6 +73,10 @@ export interface ModelInfo {
   recommended: boolean
   /** Hinweis, wenn das Format auf dieser Karte nicht in Hardware rechnet. */
   gpu_note: string
+  /** Zensiert oder nicht (Bild und Video); null = unbekannt. Beleg und Quelle dazu (content.py). */
+  content: 'uncensored' | 'partial' | 'censored' | null
+  content_note: string
+  content_source: string
   /** Was das Modell beim Generieren kann — steuert die Bedienelemente (registry.features_for). */
   features: Partial<ModelFeatures>
 }
@@ -160,6 +164,18 @@ export interface Health {
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'
+
+/** GET /api/settings/folders: Daten- und Modellordner (Setup-Fassung: änderbar). */
+export interface FolderSettings {
+  data_dir: string
+  models_dir: string
+  models_dir_set: boolean
+  data_free_gb: number | null
+  models_free_gb: number | null
+  managed: boolean
+  env_override: string[]
+  can_restart: boolean
+}
 
 /** POST /api/report: anonymisierter Fehlerbericht fuer GitHub. */
 export interface ProblemReport {
@@ -288,6 +304,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => req<Health>('/api/health'),
+  version: () => req<{ version: string; comfyui: string | null }>('/api/version'),
   startBackend: () => req<{ started: boolean }>('/api/backend/start', { method: 'POST' }),
   freeVram: () => req<{ ok: boolean; freed: string[] }>('/api/backend/free', { method: 'POST' }),
   gpus: () =>
@@ -345,6 +362,11 @@ export const api = {
     }),
   deleteModel: (model_id: string) =>
     req<DeleteResult>(`/api/models/${model_id}`, { method: 'DELETE' }),
+  /** Einen Job abbrechen: wartend sofort, Generierung sofort, Download nach dem aktuellen Datenblock. */
+  cancelJob: (id: string) =>
+    req<{ ok: boolean; job_id?: string; reason?: string; pending?: boolean; stopped?: string[] }>(
+      `/api/jobs/${id}/cancel`, { method: 'POST' },
+    ),
   cancelDownloads: () =>
     req<{ ok: boolean; cancelled: number; was_running: string | null }>(
       '/api/downloads/cancel',
@@ -370,6 +392,14 @@ export const api = {
   generateImage: (p: ImageParams) =>
     req<Job>('/api/generate/image', { method: 'POST', body: JSON.stringify(p) }),
   /** Prompt ausbauen: der FLUX-3-Upsampler schreibt die volle Bildbeschreibung, für jedes Bildmodell. */
+  folders: () => req<FolderSettings>('/api/settings/folders'),
+  checkFolder: (path: string) =>
+    req<{ path: string; free_gb: number | null }>('/api/settings/folders/check', { method: 'POST', body: JSON.stringify({ path }) }),
+  browseFolder: (initial: string) =>
+    req<{ path: string | null }>('/api/settings/folders/browse', { method: 'POST', body: JSON.stringify({ initial }) }),
+  saveFolders: (f: { data_dir?: string; models_dir?: string }) =>
+    req<{ saved: Record<string, string>; restart_needed: boolean }>('/api/settings/folders', { method: 'PUT', body: JSON.stringify(f) }),
+  restart: () => req<{ ok: boolean }>('/api/restart', { method: 'POST' }),
   report: (description: string) =>
     req<ProblemReport>('/api/report', { method: 'POST', body: JSON.stringify({ description }) }),
   expandPrompt: (p: { prompt: string; width: number; height: number; reference_asset_ids?: string[] }) =>

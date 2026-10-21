@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Job, type ServerEvent } from './api'
+import { t } from './i18n'
 
 /** Ein laufender oder wartender Modell-Download, je Modell-ID. */
 export interface DlState {
@@ -15,6 +16,8 @@ export interface Downloads {
   /** Zählt abgeschlossene Downloads hoch -- Panels laden daraufhin ihre Modellliste neu. */
   finished: number
   start: (modelId: string, clean?: boolean) => Promise<void>
+  /** Download eines Modells abbrechen; fertige Teile bleiben zum Fortsetzen. */
+  cancel: (modelId: string) => Promise<void>
   sync: () => Promise<void>
 }
 
@@ -108,5 +111,19 @@ export function useDownloads(
     [],
   )
 
-  return { active, finished, start, sync }
+  const cancel = useCallback(async (modelId: string) => {
+    const dl = activeRef.current[modelId]
+    if (!dl) return
+    try {
+      const res = await api.cancelJob(dl.job)
+      if (!res.ok && res.reason) onError(res.reason)
+      // Laufender Download: bis zum Ende des Datenblocks "bricht ab …" anzeigen
+      setActive((a) => (a[modelId] ? { ...a, [modelId]: { ...a[modelId], stage: t('bricht ab …', 'cancelling …') } } : a))
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e))
+    }
+    await sync()
+  }, [onError, sync])
+
+  return { active, finished, start, cancel, sync }
 }

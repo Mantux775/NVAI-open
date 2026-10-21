@@ -170,6 +170,7 @@ final class AppModel {
             }
             s.masks = (try? await nvai.supportsMasks()) ?? false
             s.expand = (try? await nvai.supportsExpand()) ?? false
+            s.downloads = (try? await nvai.downloads()) ?? []
             s.activeModel = health["active_models"]?["image"]?.stringValue
             s.loaded = (health["vram_loaded"]?.arrayValue ?? []).compactMap { $0["model"]?.stringValue }
             s.busy = health["current_job"]?.truthy ?? false
@@ -385,6 +386,20 @@ final class AppModel {
                 message = error.localizedDescription
                 Log.write("Prompt ausbauen gescheitert: \(error.localizedDescription)")
             }
+        }
+    }
+
+    /// Einen NV-AI-Download abbrechen; fertige Teile bleiben dort zum Fortsetzen.
+    func cancelDownload(_ job: String) {
+        guard let nvai else { return }
+        Task {
+            do {
+                try await nvai.cancelDownload(job)
+                Log.write("Download \(job) abgebrochen")
+            } catch {
+                message = error.localizedDescription
+            }
+            await refreshNVAI()
         }
     }
 

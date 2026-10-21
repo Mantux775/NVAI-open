@@ -185,6 +185,39 @@ public final class NVAIClient: @unchecked Sendable {
         return (text, r["seconds"]?.doubleValue ?? 0)
     }
 
+    /// Ein laufender oder wartender Modell-Download von NV-AI.
+    public struct Download: Equatable, Sendable {
+        public var job: String
+        public var name: String
+        public var running: Bool
+        public var progress: Double
+        public var stage: String
+    }
+
+    /// Laufende und wartende Downloads (Windows: `params.entry.name`, Mac: `params.model_id`).
+    public func downloads() async throws -> [Download] {
+        let jobs = try await requestJSON("GET", "/api/jobs", query: [URLQueryItem(name: "limit", value: "50")], timeout: 4)
+            .arrayValue ?? []
+        return jobs.compactMap { j in
+            guard j["kind"]?.stringValue == "download", let id = j["id"]?.stringValue,
+                  let status = j["status"]?.stringValue, status == "queued" || status == "running" else { return nil }
+            let p = j["params"]
+            let name = p?["name"]?.stringValue ?? p?["entry"]?["name"]?.stringValue ?? p?["model_id"]?.stringValue ?? id
+            return Download(job: id, name: name, running: status == "running",
+                            progress: j["progress"]?.doubleValue ?? 0, stage: j["stage"]?.stringValue ?? "")
+        }
+    }
+
+    /// Einen Download abbrechen (ab NV-AI 0.5.2 bzw. Mac 0.4.2: `POST /api/jobs/{id}/cancel`).
+    /// Ältere NV-AI unter Windows kennen nur „alle Downloads abbrechen“.
+    public func cancelDownload(_ jobID: String) async throws {
+        if try await version()?.features.contains("cancel_job") == true {
+            _ = try await request("POST", "/api/jobs/\(jobID)/cancel")
+        } else {
+            _ = try await request("POST", "/api/downloads/cancel")
+        }
+    }
+
     public func job(_ id: String) async throws -> JSONValue { try await requestJSON("GET", "/api/jobs/\(id)") }
     public func asset(_ id: String) async throws -> JSONValue { try await requestJSON("GET", "/api/assets/\(id)") }
 

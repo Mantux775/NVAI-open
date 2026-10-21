@@ -85,6 +85,11 @@ struct ModelCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(row.model.name).font(.headline)
+                    Text(ContentRating.label(row.model.id)).font(.caption)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .overlay(Capsule().stroke(.secondary.opacity(0.5)))
+                        .foregroundStyle(.secondary)
+                        .help(ContentRating.help(row.model.id))
                     if state.activeModelID == row.model.id {
                         Text(t("aktiv", "active")).font(.caption.bold()).padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.accentColor.opacity(0.25)).clipShape(Capsule())
@@ -97,7 +102,18 @@ struct ModelCard: View {
                 if !warning.isEmpty { Text(warning).font(.caption).foregroundStyle(.orange) }
                 if let download {
                     ProgressView(value: download.progress)
-                    Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button(t("Abbrechen", "Cancel")) {
+                            Task {
+                                _ = try? await JobQueue.shared.cancel(download.id)
+                                await state.refresh()
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(download.cancelRequested)
+                    }
                 } else if let lastError {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }

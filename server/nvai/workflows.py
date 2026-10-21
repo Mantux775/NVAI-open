@@ -41,6 +41,17 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # Referenzcode nimmt 4.0. Shift steckt in den Modell-Metadaten, kein eigener Node.
     "flux3_klein": {"steps": 16, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "flux3_klein_base": {"steps": 50, "cfg": 3.5, "sampler": "euler", "scheduler": "simple"},
+    # Boogu-Image 0.1: Werte aus ComfyUIs Vorlagen image_boogu_image_0_1_{turbo_t2i,edit}.json.
+    # Turbo ist destilliert (4 Schritte, cfg 1, Negativ ausgenullt); Base und Edit rechnen
+    # 25 Schritte mit cfg 3,5 und shift 3,16 (nur fuer die Sigmas, wie in der Vorlage).
+    "boogu_turbo": {"steps": 4, "cfg": 1.0, "sampler": "lcm", "scheduler": "sgm_uniform"},
+    "boogu":      {"steps": 25, "cfg": 3.5, "sampler": "dpmpp_2m", "scheduler": "simple", "shift": 3.16},
+    # HiDream-O1: Werte aus image_hidream_o1{,_dev}.json. Pixelraum-Modell, Text-Encoder und
+    # VAE stecken im Checkpoint; trainiert um 4 Megapixel (darunter deutlich schlechter).
+    "hidream_o1_dev": {"steps": 28, "cfg": 1.0, "sampler": "lcm", "scheduler": "normal",
+                       "noise_scale": 7.6},
+    "hidream_o1": {"steps": 40, "cfg": 5.0, "sampler": "dpmpp_2m_sde_gpu", "scheduler": "normal",
+                   "noise_scale": 8.0},
     "stable_audio": {"steps": 50, "cfg": 5.0, "sampler": "dpmpp_3m_sde_gpu", "scheduler": "exponential"},
     "ace_step":   {"steps": 50, "cfg": 5.0, "sampler": "euler",    "scheduler": "simple"},
     "ace_step_15": {"steps": 12, "cfg": 2.0, "sampler": "euler",   "scheduler": "simple"},
@@ -538,8 +549,151 @@ def build_flux3(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     return graph, seed
 
 
+def _load_refs(graph: Graph, p: dict[str, Any], ids: _Ids, key: str) -> dict[str, Ref]:
+    """Referenzbilder laden; Eingangsnamen wie images.image_1 (Autogrow-Eingaenge)."""
+    out: dict[str, Ref] = {}
+    for i, name in enumerate(p.get("reference_images") or []):
+        load = ids()
+        graph[load] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        out[f"{key}.image_{i + 1}"] = [load, 0]
+    return out
+
+
+def _sample_custom(graph: Graph, p: dict[str, Any], d: dict[str, Any], seed: int, ids: _Ids, *,
+                   model: Ref, sigma_model: Ref, pos: Ref, neg: Ref, latent: Ref, sampler: Ref) -> Ref:
+    """SamplerCustom mit BasicScheduler -- so rechnen die Vorlagen von Boogu und HiDream-O1."""
+    sched, samp = ids(), ids()
+    graph[sched] = {"class_type": "BasicScheduler", "inputs": {
+        "model": sigma_model, "scheduler": p.get("scheduler") or d["scheduler"],
+        "steps": int(_pick(p, d, "steps")), "denoise": 1.0}}
+    graph[samp] = {"class_type": "SamplerCustom", "inputs": {
+        "model": model, "add_noise": True, "noise_seed": seed, "cfg": _pick(p, d, "cfg"),
+        "positive": pos, "negative": neg, "sampler": sampler, "sigmas": [sched, 0],
+        "latent_image": latent}}
+    return [samp, 0]
+
+
+def build_boogu(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """Boogu-Image 0.1: 10-Mrd.-DiT mit Qwen3-VL-8B als Text-Encoder (CLIPLoader-Typ "boogu").
+
+    Nachgebaut nach ComfyUIs Vorlagen image_boogu_image_0_1_turbo_t2i.json und *_edit.json.
+    Turbo: KSampler mit lcm/sgm_uniform, cfg 1, Negativ ausgenullt. Base und Edit: SamplerCustom,
+    die Sigmas kommen vom Modell mit ModelSamplingAuraFlow (shift 3,16), gerechnet wird mit dem
+    unveraenderten Modell -- genau so in der Vorlage. Edit nimmt die Referenz ueber
+    TextEncodeBooguEdit (Bildverstaendnis im Positiv, Referenzlatent in beiden).
+    """
+    wf = entry["workflow"]
+    d = defaults_for(wf)
+    seed = _seed(p)
+    ids = _Ids()
+    width, height = int(p.get("width", 1024)), int(p.get("height", 1024))
+    batch = int(p.get("batch_size", 1))
+
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "boogu"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {
+            "width": width, "height": height, "batch_size": batch}},
+    }
+    refs = _load_refs(graph, p, ids, "images")
+    if refs:
+        graph["4"] = {"class_type": "TextEncodeBooguEdit", "inputs": {
+            "clip": ["2", 0], "vae": ["3", 0], "prompt": p["prompt"],
+            "negative_prompt": p.get("negative_prompt", ""), **refs}}
+        pos, neg = ["4", 0], ["4", 1]
+    else:
+        graph["4"] = {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}}
+        pos = ["4", 0]
+        if wf == "boogu_turbo":
+            graph["6"] = {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": pos}}
+        else:
+            graph["6"] = {"class_type": "CLIPTextEncode",
+                          "inputs": {"text": p.get("negative_prompt", ""), "clip": ["2", 0]}}
+        neg = ["6", 0]
+
+    if wf == "boogu_turbo" and not refs:
+        graph["7"] = {"class_type": "KSampler", "inputs": {
+            "seed": seed, "steps": int(_pick(p, d, "steps")), "cfg": _pick(p, d, "cfg"),
+            "sampler_name": p.get("sampler") or d["sampler"],
+            "scheduler": p.get("scheduler") or d["scheduler"], "denoise": 1.0,
+            "model": ["1", 0], "positive": pos, "negative": neg, "latent_image": ["5", 0]}}
+        samples: Ref = ["7", 0]
+    else:
+        shift, sel = ids(), ids()
+        graph[shift] = {"class_type": "ModelSamplingAuraFlow",
+                        "inputs": {"model": ["1", 0], "shift": d.get("shift", 3.16)}}
+        graph[sel] = {"class_type": "KSamplerSelect",
+                      "inputs": {"sampler_name": p.get("sampler") or d["sampler"]}}
+        samples = _sample_custom(graph, p, d, seed, ids, model=["1", 0], sigma_model=[shift, 0],
+                                 pos=pos, neg=neg, latent=["5", 0], sampler=[sel, 0])
+    graph["8"] = {"class_type": "VAEDecode", "inputs": {"samples": samples, "vae": ["3", 0]}}
+    graph["9"] = {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "nvai"}}
+    return graph, seed
+
+
+def build_hidream_o1(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """HiDream-O1-Image: 8-Mrd.-Pixelraum-Modell; Text-Encoder und VAE stecken im Checkpoint.
+
+    Nachgebaut nach ComfyUIs Vorlagen image_hidream_o1_dev.json und image_hidream_o1.json:
+    ModelNoiseScale (dev 7,6, voll 8,0), BasicScheduler "normal", SamplerCustom. Dev rechnet
+    mit SamplerLCM bei cfg 1, die volle Fassung mit dpmpp_2m_sde_gpu bei cfg 5 und glaettet
+    Patch-Naehte. Referenzbilder haengt HiDreamO1ReferenceImages an beide Conditionings.
+    Den Prompt-Ausbau der Vorlage (Gemma 4) laesst NV-AI weg -- dafuer gibt es "Prompt ausbauen".
+    """
+    wf = entry["workflow"]
+    d = defaults_for(wf)
+    seed = _seed(p)
+    ids = _Ids()
+    width, height = int(p.get("width", 2048)), int(p.get("height", 2048))
+
+    graph: Graph = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": _ckpt(entry)}},
+        "2": {"class_type": "ModelNoiseScale",
+              "inputs": {"model": ["1", 0], "noise_scale": d.get("noise_scale", 8.0)}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["1", 1]}},
+        "4": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": p.get("negative_prompt", ""), "clip": ["1", 1]}},
+        "5": {"class_type": "EmptyHiDreamO1LatentImage", "inputs": {
+            "width": max(64, width // 32 * 32), "height": max(64, height // 32 * 32),
+            "batch_size": int(p.get("batch_size", 1))}},
+    }
+    pos, neg = ["3", 0], ["4", 0]
+    refs = _load_refs(graph, p, ids, "images")
+    if refs:
+        ref = ids()
+        graph[ref] = {"class_type": "HiDreamO1ReferenceImages",
+                      "inputs": {"positive": pos, "negative": neg, **refs}}
+        pos, neg = [ref, 0], [ref, 1]
+
+    model: Ref = ["2", 0]
+    sel = ids()
+    if wf == "hidream_o1_dev":
+        graph[sel] = {"class_type": "SamplerLCM",
+                      "inputs": {"s_noise": 1.0, "s_noise_end": 1.0, "noise_clip_std": 2.5}}
+    else:
+        smooth = ids()
+        graph[smooth] = {"class_type": "HiDreamO1PatchSeamSmoothing", "inputs": {
+            "model": model, "start_percent": 0.8, "end_percent": 1.0, "pattern": "single_shift",
+            "passes": "ramp_2_4", "blend": "median", "strength": 1.0}}
+        model = [smooth, 0]
+        graph[sel] = {"class_type": "KSamplerSelect",
+                      "inputs": {"sampler_name": p.get("sampler") or d["sampler"]}}
+    samples = _sample_custom(graph, p, d, seed, ids, model=model, sigma_model=["2", 0],
+                             pos=pos, neg=neg, latent=["5", 0], sampler=[sel, 0])
+    graph["8"] = {"class_type": "VAEDecode", "inputs": {"samples": samples, "vae": ["1", 2]}}
+    graph["9"] = {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "nvai"}}
+    return graph, seed
+
+
 def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry["workflow"]
+    if wf in BOOGU_WORKFLOWS:
+        return build_boogu(entry, p)
+    if wf in HIDREAM_O1_WORKFLOWS:
+        return build_hidream_o1(entry, p)
     if wf == "chroma":
         return build_chroma(entry, p)
     if wf == "longcat":
@@ -913,8 +1067,11 @@ def _build_hunyuan15(entry, p, wf, sampler, seed, width, height,
 # ------------------------------------------------------------- Dispatch
 
 FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}
-IMAGE_WORKFLOWS = {"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
-                   "qwen_image", "qwen_image_lightning", "qwen_image21"} | FLUX3_WORKFLOWS
+BOOGU_WORKFLOWS = {"boogu", "boogu_turbo"}
+HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
+IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
+                    "qwen_image", "qwen_image_lightning", "qwen_image21"}
+                   | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 AUDIO_WORKFLOWS = {"stable_audio", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
                    "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v"}

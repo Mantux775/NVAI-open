@@ -180,7 +180,7 @@ enum CoreMLCatalog {
             "installed": installed, "partially_installed": false, "disk_gb": installed ? m.sizeGb : 0,
             "runnable": installed, "favorite": false, "fits_vram": fits(m),
             "features": features(m), "engine": "coreml", "custom": m.custom,
-        ]
+        ].merging(ContentRating.apiFields(m.id)) { a, _ in a }
     }
 }
 

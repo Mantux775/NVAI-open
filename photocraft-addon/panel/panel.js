@@ -614,8 +614,38 @@ function renderHistory() {
   );
 }
 
+// Laufende Modell-Downloads von NV-AI, je mit Abbrechen (fertige Teile bleiben zum Fortsetzen).
+function renderDownloads() {
+  const box = $("#nv-downloads");
+  const list = (state?.nvai?.connected && state.nvai.downloads) || [];
+  box.hidden = list.length === 0;
+  box.replaceChildren(...list.map((d) => {
+    const pct = Math.round((d.progress || 0) * 100);
+    const label = d.status === "queued" ? t("wartet", "queued") : `${pct} %`;
+    const cancelBtn = el("button", {
+      class: "dl-cancel", type: "button", text: "✕",
+      title: t("Download abbrechen (fertige Teile bleiben zum Fortsetzen)", "Cancel download (finished parts stay to resume)"),
+    });
+    cancelBtn.addEventListener("click", async () => {
+      cancelBtn.disabled = true;
+      try {
+        await api(`/api/nvai/downloads/${encodeURIComponent(d.job)}/cancel`, { method: "POST" });
+      } catch (e) {
+        errorText = e.message;
+      }
+      poll(300);
+    });
+    return el("div", { class: "dl-item", title: d.stage || "" },
+      el("span", { class: "dl-name", text: t(`NV-AI lädt ${d.name}`, `NV-AI downloading ${d.name}`) }),
+      el("span", { class: "dl-track" }, el("span", { class: "dl-fill", style: `width:${d.status === "queued" ? 0 : pct}%` })),
+      el("span", { class: "dl-pct", text: label }),
+      cancelBtn);
+  }));
+}
+
 function renderAll() {
   renderStatus();
+  renderDownloads();
   renderNotice();
   renderDoc();
   renderGo();

@@ -37,6 +37,7 @@ struct PanelView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 ExpandRow()
+                DownloadsRow()
                 ModelRow()
                 if model.showsStrength { StrengthSlider(value: $model.form.strength) }
                 DisclosureGroup(t("Erweitert", "Advanced"), isExpanded: $model.form.advanced) {
@@ -501,6 +502,34 @@ private struct SmallField: View {
 }
 
 // MARK: - Auftrag
+
+/// Laufende Modell-Downloads von NV-AI, je mit Abbrechen.
+private struct DownloadsRow: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.nv.connected && !model.nv.downloads.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(model.nv.downloads, id: \.job) { d in
+                    HStack(spacing: 8) {
+                        Text(t("NV-AI lädt \(d.name)", "NV-AI downloading \(d.name)"))
+                            .lineLimit(1).truncationMode(.middle)
+                        ProgressView(value: d.running ? d.progress : 0).frame(minWidth: 40)
+                        Text(d.running ? "\(Int((d.progress * 100).rounded())) %" : t("wartet", "queued"))
+                            .monospacedDigit().frame(width: 52, alignment: .trailing)
+                        Button { model.cancelDownload(d.job) } label: { Image(systemName: "xmark") }
+                            .buttonStyle(.borderless)
+                            .help(t("Download abbrechen (fertige Teile bleiben zum Fortsetzen)",
+                                    "Cancel download (finished parts stay to resume)"))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(d.stage)
+                }
+            }
+        }
+    }
+}
 
 /// „✨ Prompt ausbauen“ mit Zurücknehmen – nur, wenn NV-AI es kann (ab 0.4).
 private struct ExpandRow: View {

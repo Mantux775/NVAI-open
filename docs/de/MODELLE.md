@@ -48,6 +48,24 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
 
+### Zensiert oder unzensiert
+
+Jedes Bild- und Videomodell in der Liste trägt ein Abzeichen: *unzensiert*, *teilweise
+zensiert*, *zensiert* oder *Zensur unbekannt*. Der Tooltip nennt Beleg und Quelle (Modellkarte,
+technischer Bericht). NV-AI selbst filtert nichts. Dieselbe Angabe steht in `GET /api/models`
+(`content`, `content_note`, `content_source`).
+
+| Abzeichen | Modelle (Stand Oktober 2026) |
+|---|---|
+| unzensiert | Chroma1-HD, Pony Diffusion V6 XL, NoobAI-XL, Illustrious XL |
+| teilweise zensiert | SDXL, Z-Image, Wan 2.1 / 2.2 |
+| zensiert | Qwen-Image-2512, FLUX 3 Image Klein, FLUX.1 schnell |
+| Zensur unbekannt | Juggernaut XL, Qwen-Image 2.1, LongCat-Image, LTX-Video |
+
+In 0.5.2 aus dem Katalog genommen (installierte Dateien bleiben): SD 3.5 Medium/Large,
+FLUX.1 dev, Chroma v37 (stattdessen Chroma1-HD), HunyuanVideo 1.5 (Lizenz schließt die EU aus;
+stattdessen Wan 2.2).
+
 ## 3. Zugriff aus einem anderen Projekt
 
 ### Voraussetzung

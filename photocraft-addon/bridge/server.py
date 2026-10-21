@@ -124,6 +124,10 @@ def _nvai_state() -> dict[str, Any]:
         expand = nv.supports_expand()
     except NVAIError:
         expand = False
+    try:
+        downloads = nv.downloads()
+    except NVAIError:
+        downloads = []
     return {
         "connected": True,
         "error": None,
@@ -140,6 +144,7 @@ def _nvai_state() -> dict[str, Any]:
         "gpu": h.get("gpu"),
         "masks": masks,
         "expand": expand,
+        "downloads": downloads,
         **where,
     }
 
@@ -307,6 +312,17 @@ def nvai_start() -> dict[str, Any]:
         raise HTTPException(409, str(exc)) from exc
     cache.drop("nv")
     return {"message": message}
+
+
+@app.post("/api/nvai/downloads/{job_id}/cancel")
+def nvai_download_cancel(job_id: str) -> dict[str, Any]:
+    """Einen NV-AI-Download aus dem Panel abbrechen (fertige Teile bleiben zum Fortsetzen)."""
+    try:
+        nv.cancel_download(job_id)
+    except NVAIError as exc:
+        raise HTTPException(exc.status or 502, str(exc)) from exc
+    cache.drop("nv")
+    return {"cancelled": True, "job": job_id}
 
 
 @app.post("/api/nvai/check")

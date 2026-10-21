@@ -161,6 +161,30 @@ class NVAI:
         info = self.version()
         return info is not None and "expand_prompt" in (info.get("features") or [])
 
+    def supports_cancel_job(self) -> bool:
+        """Kennt NV-AI ``POST /api/jobs/{id}/cancel`` (ab 0.5.2: Downloads brechen sofort ab)?"""
+        info = self.version()
+        return info is not None and "cancel_job" in (info.get("features") or [])
+
+    def downloads(self) -> list[dict[str, Any]]:
+        """Laufende und wartende Modell-Downloads von NV-AI (Windows und Mac)."""
+        out = []
+        for j in self._request("GET", "/api/jobs", params={"limit": 50}, timeout=4.0):
+            if j.get("kind") != "download" or j.get("status") not in ("queued", "running"):
+                continue
+            p = j.get("params") or {}
+            name = p.get("name") or (p.get("entry") or {}).get("name") or p.get("model_id") or j["id"]
+            out.append({"job": j["id"], "name": name, "status": j["status"],
+                        "progress": j.get("progress") or 0.0, "stage": j.get("stage") or ""})
+        return out
+
+    def cancel_download(self, job_id: str) -> None:
+        """Einen Download abbrechen. Ältere NV-AI kennen nur „alle Downloads abbrechen“."""
+        if self.supports_cancel_job():
+            self._request("POST", f"/api/jobs/{job_id}/cancel")
+        else:
+            self._request("POST", "/api/downloads/cancel")
+
     def assets(self, kind: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit}
         if kind:

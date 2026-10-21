@@ -6,7 +6,8 @@ enum APIRouter {
     static let apiVersion = 1
     /// Was dieser Server von GenerateImageRequest versteht – kein „upsampler“: FLUX 3 gibt es hier nicht.
     /// „expand_prompt“: POST /api/prompt/expand wie unter Windows, hier mit dem Qwen3 von FLUX.2 Klein.
-    static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt"]
+    static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
+                           "cancel_job"]
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
         // Texte (Beschreibungen, Hinweise, Fehler) in der Sprache des Clients: de → Deutsch, sonst Englisch.
@@ -63,6 +64,12 @@ enum APIRouter {
                 }
                 return .json(["cancelled": true, "job_id": job.id,
                               "detail": t("Der Auftrag endet nach dem aktuellen Bild.", "The job ends after the current image.")])
+            }
+            if let c = route("POST", "/api/jobs/:id/cancel") {
+                // Wartend sofort, Download sofort (Core ML; FLUX.2 nach der aktuellen Datei),
+                // ein laufendes Bild nach dem aktuellen Bild.
+                let job = try await JobQueue.shared.cancel(c[0])
+                return .json(["ok": true, "job_id": job.id, "pending": job.status == "running", "stopped": [String]()])
             }
             if let c = route("GET", "/api/jobs/:id") {
                 guard let job = await JobQueue.shared.job(c[0]) else { throw APIError(404, t("Unbekannter Auftrag: \(c[0])", "Unknown job: \(c[0])")) }

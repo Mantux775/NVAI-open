@@ -32,6 +32,13 @@ Measured on an M1 with 8 GB (FLUX.2 Klein 4B, 4-bit, 4 steps):
 
 On 8 GB, 1 megapixel is the practical limit; 16 GB or more is comfortable.
 
+## Cancelling and content labels
+
+A running download can be cancelled (model card, or `POST /api/jobs/:id/cancel`, feature
+`cancel_job`): it runs as its own task and stops at once; measured on the M1, no partial file
+is left behind. A running image still ends after the current image. Each model shows whether it
+is censored (`Sources/Core/ContentRating.swift`, same fields as on Windows).
+
 ## Problem report
 
 Settings > "Report a problem" (`Sources/Core/ProblemReport.swift`): a short description becomes a

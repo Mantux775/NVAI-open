@@ -49,6 +49,8 @@ struct NVAIState: Equatable {
     var masks = false
     /// „Prompt ausbauen“ (`POST /api/prompt/expand`): NV-AI ab 0.4.
     var expand = false
+    /// Laufende und wartende Modell-Downloads von NV-AI.
+    var downloads: [NVAIClient.Download] = []
     var busy = false
     var activeModel: String?
     var loaded: [String] = []

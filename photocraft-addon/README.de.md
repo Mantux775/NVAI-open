@@ -78,6 +78,8 @@ Tipps (Modellwahl nach `BILDMODELLE.md` von NV-AI):
   Mac: rund 25 s auf einem M1 mit 8 GB, braucht NV-AI für Mac ab 0.4 mit geladenem FLUX.2 Klein
   (dessen Text-Encoder schreibt die Beschreibung, kein zusätzlicher Download). Vor dem Start lesen
   und streichen, was erfunden wurde; „Zurück zum eigenen Prompt“ nimmt es zurück.
+- Lädt NV-AI gerade ein Modell, zeigt das Panel den Download mit Fortschritt und einem ✕ zum
+  Abbrechen (sofort ab NV-AI 0.5.2 bzw. Mac 0.4.2; ältere Fassungen brechen alle Downloads ab).
 - **Qwen-Image-2512** für Endergebnisse, Schrift und Konstruktion; **FLUX 3** fürs gezielte
   Ändern eines vorhandenen Bereichs (Teil ersetzen, Farbe, Material). FLUX 3 steht unter der
   FLUX Kommunity License (Umsatzgrenze, Prüfpflicht) – das Panel zeigt den Hinweis an.

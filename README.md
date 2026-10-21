@@ -33,6 +33,8 @@ October 2026: NV-AI 0.5.1 for Windows, NV-AI 0.4.1 for Mac ([release notes](http
 | Prompt ausbauen auf dem Mac | Aus ein paar Worten wird eine volle Bildbeschreibung, in NV-AI und im PhotoCraft-Add-on |
 | Menüleiste auf dem Mac | Folgt der Spracheinstellung der App |
 
+Coming with the next release (0.5.2, already in the source): cancel each download and queued job, labels for censored and uncensored models, choose data and model folders under "Models", NV-AI and ComfyUI version next to the logo. / Mit dem nächsten Release (0.5.2, schon im Quelltext): jeden Download und wartenden Auftrag abbrechen, Kennzeichnung zensierter und unzensierter Modelle, Daten- und Modellordner unter „Modelle“ wählen, Versionen von NV-AI und ComfyUI neben dem Logo.
+
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
 ---
@@ -95,14 +97,13 @@ Testers wanted: I only have one NVIDIA card. The multi-card mode is tested with 
 
 ### Uncensored models
 
-NV-AI has no content filter of its own: no prompt blocklist, no image check, nothing is sent anywhere. What a model will draw depends only on how it was trained. Some models in the catalog are trained without filters and can be downloaded with one click under "Models":
+NV-AI has no content filter of its own: no prompt blocklist, no image check, nothing is sent anywhere. What a model will draw depends only on how it was trained. Since 0.5.2 the model list labels every image and video model as uncensored, partly censored, censored or unknown, with the source in the tooltip. Some models in the catalog are trained without filters and can be downloaded with one click under "Models":
 
 | Model | Good for | Download / VRAM | License |
 |---|---|---|---|
 | Chroma1-HD (fp8) | Scenes, painting styles, dark fantasy and horror; follows long prompts well, negative prompt works | 13.7 GB / about 11 GB | Apache-2.0 |
 | Pony Diffusion V6 XL | Characters and creatures; huge LoRA ecosystem; needs its score tags (`score_9, score_8_up, …`) | 6.5 GB / about 8 GB | see model card |
 | NoobAI-XL v1.1 | Stylized 2D and anime; knows more characters and styles than Illustrious | 6.6 GB / about 8 GB | Fair AI Public License 1.0-SD |
-| Chroma v37 | The older Chroma, kept for comparison | 21.7 GB / about 13 GB | Apache-2.0 |
 
 More can be found with "Models" → "Search on Hugging Face": NV-AI checks a file before downloading and loads SDXL and SD 1.5 checkpoints, which covers most community fine-tunes.
 
@@ -245,14 +246,13 @@ Tester gesucht: Ich habe nur eine NVIDIA-Karte. Der Mehrkartenbetrieb ist mit ei
 
 ### Unzensierte Modelle
 
-NV-AI hat keinen eigenen Inhaltsfilter: keine Sperrliste für Prompts, keine Bildprüfung, nichts wird irgendwohin geschickt. Was ein Modell zeichnet, hängt nur von seinem Training ab. Einige Modelle im Katalog sind ohne Filter trainiert und unter „Modelle“ mit einem Klick geladen:
+NV-AI hat keinen eigenen Inhaltsfilter: keine Sperrliste für Prompts, keine Bildprüfung, nichts wird irgendwohin geschickt. Was ein Modell zeichnet, hängt nur von seinem Training ab. Seit 0.5.2 kennzeichnet die Modellliste jedes Bild- und Videomodell als unzensiert, teilweise zensiert, zensiert oder unbekannt, mit Quelle im Tooltip. Einige Modelle im Katalog sind ohne Filter trainiert und unter „Modelle“ mit einem Klick geladen:
 
 | Modell | Gut für | Download / VRAM | Lizenz |
 |---|---|---|---|
 | Chroma1-HD (fp8) | Szenen, Malstile, Dark Fantasy und Horror; folgt langen Prompts gut, Negativprompt wirkt | 13,7 GB / rund 11 GB | Apache-2.0 |
 | Pony Diffusion V6 XL | Figuren und Kreaturen; riesiges LoRA-Angebot; braucht seine Score-Tags (`score_9, score_8_up, …`) | 6,5 GB / rund 8 GB | siehe Model Card |
 | NoobAI-XL v1.1 | Stilisiertes 2D und Anime; kennt mehr Figuren und Stile als Illustrious | 6,6 GB / rund 8 GB | Fair AI Public License 1.0-SD |
-| Chroma v37 | Das ältere Chroma, zum Vergleich | 21,7 GB / rund 13 GB | Apache-2.0 |
 
 Weitere findet „Modelle“ → „Auf Hugging Face suchen“: NV-AI prüft eine Datei vor dem Download und lädt SDXL- und SD-1.5-Checkpoints, damit sind die meisten Community-Feintunings abgedeckt.
 

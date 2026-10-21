@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from huggingface_hub import hf_hub_download, snapshot_download
 
-from . import catalog, config, gpu, i18n, workflows
+from . import catalog, config, content, gpu, i18n, workflows
 from .catalog import ALL_MODELS
 from .i18n import t
 
@@ -249,6 +249,7 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None) -> ModelIn
         fits_vram=gpu.fits(entry.get("vram_gb", 0)),
         features=features_for(text),
         **gpu_advice(entry),
+        **content.lookup(entry["id"]),
     )
 
 
@@ -335,7 +336,13 @@ def hf_token() -> str | None:
     return os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN") or get_token()
 
 
-def _progress_tqdm(on_progress: Callable[[float, str], None], prefix: str, base: float, span: float):
+class DownloadCancelled(Exception):
+    """Der Nutzer hat den Download abgebrochen. Fertige Dateien und .incomplete-Teile
+    bleiben liegen: ein spaeterer Download setzt fort, "Reste loeschen" raeumt auf."""
+
+
+def _progress_tqdm(on_progress: Callable[[float, str], None], prefix: str, base: float, span: float,
+                   should_stop: Callable[[], bool] | None = None):
     """tqdm-Ersatz, der HF-Fortschritt in den Job-Fortschritt uebersetzt.
 
     Gedrosselt auf ganze Prozent -- sonst schreibt ein 16-GB-Download tausende
@@ -347,6 +354,10 @@ def _progress_tqdm(on_progress: Callable[[float, str], None], prefix: str, base:
         _last_pct = -1
 
         def update(self, n: float | None = 1) -> bool | None:
+            # Bei jedem Datenblock (wenige MB) nachfragen -- so endet ein Abbruch in Sekunden,
+            # nicht erst nach einer 10-GB-Datei.
+            if should_stop and should_stop():
+                raise DownloadCancelled()
             result = super().update(n)
             total = getattr(self, "total", None)
             if total:
@@ -400,6 +411,7 @@ def download(
     entry: dict[str, Any],
     on_progress: Callable[[float, str], None] | None = None,
     clean: bool = False,
+    should_stop: Callable[[], bool] | None = None,
 ) -> list[Path]:
     """Laedt alle Dateien eines Modells. Blockierend -- gehoert in einen Worker-Thread.
 
@@ -415,6 +427,8 @@ def download(
     paths: list[Path] = []
 
     for i, f in enumerate(files):
+        if should_stop and should_stop():
+            raise DownloadCancelled()
         dest = file_path(f)
         label = f"{i + 1}/{len(files)} " + (
             f["target"] if f.get("snapshot") else Path(f["file"]).name
@@ -431,7 +445,7 @@ def download(
 
         kwargs: dict[str, Any] = {}
         if on_progress:
-            kwargs["tqdm_class"] = _progress_tqdm(on_progress, label, i * span, span)
+            kwargs["tqdm_class"] = _progress_tqdm(on_progress, label, i * span, span, should_stop)
         token = hf_token()
         if token:
             kwargs["token"] = token

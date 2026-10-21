@@ -288,6 +288,11 @@ class ModelInfo(BaseModel):
     recommended: bool = False
     # Hinweis, wenn das Format auf dieser Karte nicht in Hardware rechnet; sonst leer
     gpu_note: str = ""
+    # Zensiert oder nicht (Bild und Video): "uncensored" | "partial" | "censored", None = unbekannt.
+    # Mit Beleg und Quelle -- siehe content.py
+    content: str | None = None
+    content_note: str = ""
+    content_source: str = ""
     # Was das Modell beim Generieren kann und wie man es anspricht -- Grundlage fuer die
     # Bedienelemente im Frontend und fuer Claude ueber list_models. Siehe
     # registry.features_for.

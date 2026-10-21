@@ -88,6 +88,8 @@ Tips:
   about twice the time. Models with a fixed square format (Core ML on the Mac) always render
   square; generated images are cropped to the selection, never stretched.
 - **Esc** cancels a running job – only your own; NV-AI can be used by others in parallel.
+- While NV-AI downloads a model, the panel shows it with its progress and a ✕ to cancel it
+  (needs NV-AI 0.5.2 or Mac 0.4.2 to stop mid-file; older versions cancel all downloads).
 - The pin at the top right keeps the panel above PhotoCraft.
 
 ## Limitations

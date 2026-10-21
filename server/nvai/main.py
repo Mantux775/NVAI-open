@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 import httpx
 
-from . import __version__, comfy, config, db, hfsearch, i18n, jobs, mesh_workers, registry, report
+from . import __version__, comfy, config, db, folders, hfsearch, i18n, jobs, mesh_workers, registry, report
 from .i18n import t
 from . import gpu as gpu_info
 from .schemas import (
@@ -70,6 +70,8 @@ API_FEATURES = [
     "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
     "gpus",            # GET/PUT /api/gpus: mehrere Karten, Aufgaben je Karte (experimentell)
     "report",          # POST /api/report: anonymisierter Fehlerbericht fuer GitHub
+    "cancel_job",      # POST /api/jobs/{id}/cancel: einzelne Jobs abbrechen, Downloads sofort
+    "folders",         # GET/PUT /api/settings/folders, POST /api/restart: Daten- und Modellordner
 ]
 
 
@@ -389,6 +391,15 @@ async def backend_free() -> dict[str, Any]:
     return {"ok": True, "freed": freed}
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str) -> dict[str, Any]:
+    """Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads
+    nach dem aktuellen Datenblock. Fertige Teile eines Downloads bleiben fuers Fortsetzen."""
+    if db.get_job(job_id) is None:
+        raise HTTPException(404, t(f"Unbekannter Job: {job_id}", f"Unknown job: {job_id}"))
+    return await jobs.cancel_job(job_id)
+
+
 @app.post("/api/jobs/current/cancel")
 async def cancel_current_job() -> dict[str, Any]:
     """Stoppt den laufenden GPU-Job. Downloads bleiben unberuehrt."""
@@ -499,24 +510,21 @@ async def delete_model(model_id: str, forget: bool = False) -> DeleteResult:
 
 @app.post("/api/downloads/cancel")
 async def cancel_downloads() -> dict[str, Any]:
-    """Bricht alle wartenden und den laufenden Download ab.
-
-    Wartende Jobs werden uebersprungen, sobald sie drankommen. Der laufende
-    Download steckt in einem Thread und laeuft bis zum Dateiende weiter --
-    danach wird er nicht mehr fortgesetzt.
-    """
+    """Bricht alle wartenden und den laufenden Download ab (je Job: POST /api/jobs/{id}/cancel)."""
     cancelled, running = [], None
     for job in db.list_jobs(limit=300):
         if job.kind != "download" or job.status not in ("queued", "running"):
             continue
-        db.update_job(job.id, status="cancelled", finished_at=time.time(),
-                      stage="vom Nutzer abgebrochen")
+        await jobs.cancel_job(job.id)
         cancelled.append(job.id)
         if job.status == "running":
             running = job.id
     return {
         "ok": True, "cancelled": len(cancelled), "was_running": running,
-        "note": "Ein bereits laufender Dateidownload endet erst nach der aktuellen Datei.",
+        "note": t("Der laufende Download endet nach dem aktuellen Datenblock; fertige Teile bleiben "
+                  "zum Fortsetzen liegen.",
+                  "The running download stops after the current block; finished parts stay so it "
+                  "can resume."),
     }
 
 
@@ -606,6 +614,50 @@ async def generate_3d(req: Generate3DRequest) -> Job:
             f"scripts/setup_{worker.key}.ps1 ausfuehren.",
         )
     return await jobs.submit("img23d", req.model_dump())
+
+
+@app.get("/api/settings/folders")
+async def get_folders() -> dict[str, Any]:
+    """Daten- und Modellordner, freier Platz, und ob NV-AI sie selbst setzen kann (Setup)."""
+    return await asyncio.to_thread(folders.current)
+
+
+@app.post("/api/settings/folders/check")
+async def check_folder(body: dict[str, str]) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(folders.check, body.get("path", ""))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/folders/browse")
+async def browse_folder(body: dict[str, str]) -> dict[str, Any]:
+    """Oeffnet den Ordnerdialog von Windows auf diesem Rechner; path ist None bei Abbruch."""
+    return {"path": await asyncio.to_thread(folders.browse, body.get("initial"))}
+
+
+@app.put("/api/settings/folders")
+async def put_folders(body: dict[str, str]) -> dict[str, Any]:
+    """Neue Ordner speichern (Registry der Setup-Fassung); gelten nach POST /api/restart."""
+    try:
+        return await asyncio.to_thread(folders.save, body.get("data_dir"), body.get("models_dir"))
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/restart")
+async def restart() -> dict[str, Any]:
+    """Setup-Fassung neu starten (ueber den Starter). Laeuft ein Job, erst danach."""
+    if not folders.managed():
+        raise HTTPException(409, t("Neustart geht nur bei der installierten Fassung. Bitte NV-AI selbst neu starten.",
+                                   "Restart only works for the installed version. Please restart NV-AI yourself."))
+    if jobs.current_job_id():
+        raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
+                                   "A job is running. Please try again afterwards."))
+    folders.restart()
+    return {"ok": True}
 
 
 @app.post("/api/report", response_model=ProblemReport)

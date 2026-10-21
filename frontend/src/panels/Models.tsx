@@ -3,6 +3,8 @@ import { api, KIND_LABEL, type ModelInfo, type ModelKind, type ServerEvent } fro
 import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 import { GpuSettings } from '../components/GpuSettings'
+import { ContentBadge } from '../components/ContentBadge'
+import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
 import { HfToken } from './HfToken'
 
@@ -53,8 +55,8 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
       setMessage(
         res.cancelled
           ? t(
-              `${res.cancelled} Download(s) abgebrochen. Eine gerade laufende Datei wird noch zu Ende geladen.`,
-              `${res.cancelled} download(s) cancelled. A file already in progress will still finish.`,
+              `${res.cancelled} Download(s) abgebrochen. Fertige Teile bleiben zum Fortsetzen liegen.`,
+              `${res.cancelled} download(s) cancelled. Finished parts stay so they can resume.`,
             )
           : t('Es lief kein Download.', 'No download was running.'),
       )
@@ -208,6 +210,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
 
   return (
     <div className="models">
+      <FolderSettings />
       <GpuSettings />
       <div className="model-toolbar">
         <div className="filters">
@@ -337,6 +340,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                   )}
                   {m.name}
                   <span className="badge kind">{KIND_LABEL[m.kind]}</span>
+                  <ContentBadge model={m} />
                   {isActive && <span className="badge done">{t('aktiv', 'active')}</span>}
                   {m.recommended && (
                     <span
@@ -403,6 +407,14 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                         ? t('wartet auf den laufenden Download', 'waiting for the running download')
                         : `${Math.round(dl.progress * 100)} % · ${dl.stage}`}
                     </span>
+                    <button
+                      className="btn small ghost danger-text"
+                      onClick={() => dls.cancel(m.id)}
+                      title={t('Fertige Teile bleiben liegen; ein neuer Download setzt dort fort.',
+                        'Finished parts stay; a new download resumes from there.')}
+                    >
+                      {t('Abbrechen', 'Cancel')}
+                    </button>
                   </div>
                 ) : m.installed ? (
                   <>
