@@ -97,6 +97,7 @@ def _amd_windows() -> list[dict[str, Any]]:
                     provider = str(val("ProviderName") or "")
                     desc = str(val("DriverDesc") or "")
                     mem = val("HardwareInformation.qwMemorySize")
+                    driver = str(val("DriverVersion") or "")
             except OSError:
                 continue
             if "Advanced Micro Devices" not in provider and "AMD" not in provider and "Radeon" not in desc:
@@ -106,7 +107,7 @@ def _amd_windows() -> list[dict[str, Any]]:
             total_mb = int(mem) // (1024 * 1024) if isinstance(mem, int) and mem > 0 else 0
             cards.append({"index": len(cards), "vendor": "amd", "name": desc or "AMD Radeon",
                           "vram_total_mb": total_mb, "vram_total_gb": round(total_mb / 1024, 1),
-                          "compute_cap": None})
+                          "compute_cap": None, "driver": driver or None})
     return cards
 
 

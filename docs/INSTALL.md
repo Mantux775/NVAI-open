@@ -44,7 +44,8 @@ anything.
   hashes). Needs AMD driver 26.2.2 or newer. 3D is skipped on AMD. "Repair NV-AI" runs the same
   detection again; `install-runtime.ps1 -Gpu amd|nvidia` forces one side.
 - **Several NVIDIA cards:** under "Models" → "Graphics cards", choose a card for image models,
-  language models and 3D. If the language models get their own card, NV-AI starts a second
+  language models and 3D. Since 0.5.1 also directly in the header: click a card and tick what it
+  should do. If the language models get their own card, NV-AI starts a second
   ComfyUI for them (port 8189, logs in `comfyui-text.log`). The choice is stored in
   `gpus.json` in the data folder; deleting it puts everything back on card 0.
 - For testing without the hardware: `NVAI_SIMULATE_GPUS=2` reports the one card twice, and
@@ -133,6 +134,16 @@ textures) is only available when you install from source (see
 The two recommended image models, Qwen-Image-2512 and FLUX 3 Image Klein, are described in
 detail in [MODELS.md](MODELS.md).
 
+### Reporting a problem
+
+"Report a problem" at the top right of the web interface (since 0.5.1): describe in a sentence
+or two what happened, and NV-AI creates a report with a timestamp, system details (version,
+Windows, graphics card and driver, installed models), the recent jobs and the ends of the logs.
+You see it before passing it on. It is anonymized: user and computer name, folder paths, e-mail,
+IP and MAC addresses and tokens are replaced; prompts and images are not included. "Download
+report" saves it as `nvai-report-<time>.txt`, "Report on GitHub" opens a prefilled issue; drag
+the file into it there. Scripts can get the same report via `POST /api/report`.
+
 ### Logs and repair
 
 If something goes wrong, these files help. They are in the data folder (default
@@ -215,9 +226,13 @@ Limits:
 
 - Data: `~/Library/Application Support/NV-AI` (`assets/` with `index.json`).
 - Log: `~/Library/Logs/NV-AI/nvai.log` (start, server status, jobs and errors).
-- To report a problem, save the test report under **Settings → Save test report…** and attach
-  it. It contains the Mac model, memory, and the duration and memory use per image — no
-  prompts.
+- To report a problem (since 0.4.1): Settings → "Report a problem". Describe what happened,
+  then "Save report…" or "Report on GitHub" (saves the report and opens a prefilled issue; drag
+  the file into it). The report contains a timestamp, the Mac, macOS, the recent jobs and the
+  end of `nvai.log`, anonymized like on Windows: no user or computer name, home folder shown as
+  `~`, no prompts or images.
+- The test report under Settings → "Save test report…" lists duration and memory use per image,
+  also without prompts.
 
 ---
 

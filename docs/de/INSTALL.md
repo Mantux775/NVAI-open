@@ -44,7 +44,8 @@ der Treiber zu alt ist. Ohne NVIDIA-Karte lässt sich NV-AI installieren, erzeug
   „NV-AI reparieren“ erkennt die Karte erneut; `install-runtime.ps1 -Gpu amd|nvidia` erzwingt
   eine Seite.
 - **Mehrere NVIDIA-Karten:** Unter „Modelle“ → „Grafikkarten“ für Bildmodelle, Sprachmodelle und
-  3D je eine Karte wählen. Bekommen die Sprachmodelle eine eigene Karte, startet NV-AI dafür ein
+  3D je eine Karte wählen. Seit 0.5.1 auch direkt in der Kopfleiste: Karte anklicken und anhaken,
+  was sie machen soll. Bekommen die Sprachmodelle eine eigene Karte, startet NV-AI dafür ein
   zweites ComfyUI (Port 8189, Protokoll in `comfyui-text.log`). Die Wahl steht in `gpus.json` im
   Datenordner; wer die Datei löscht, hat wieder alles auf Karte 0.
 - Zum Testen ohne die Hardware: `NVAI_SIMULATE_GPUS=2` meldet die eine Karte doppelt, und
@@ -134,6 +135,17 @@ PBR-Texturen) gibt es nur bei der Installation aus dem Quelltext (siehe
 Die beiden empfohlenen Bildmodelle, Qwen-Image-2512 und FLUX 3 Image Klein, beschreibt
 [MODELLE.md](MODELLE.md) ausführlich.
 
+### Problem melden
+
+„Problem melden“ oben rechts in der Weboberfläche (seit 0.5.1): in ein, zwei Sätzen beschreiben,
+was passiert ist, und NV-AI erstellt einen Bericht mit Zeitstempel, Systemangaben (Version,
+Windows, Grafikkarte und Treiber, installierte Modelle), den letzten Aufträgen und den Enden der
+Protokolle. Man sieht ihn, bevor man ihn weitergibt. Er ist anonymisiert: Benutzer- und
+Rechnername, Ordnerpfade, E-Mail-, IP- und MAC-Adressen und Token werden ersetzt; Prompts und
+Bilder sind nicht enthalten. „Bericht herunterladen“ speichert ihn als
+`nvai-report-<Zeit>.txt`, „Auf GitHub melden“ öffnet ein vorausgefülltes Issue; die Datei dort
+hineinziehen. Skripte bekommen denselben Bericht über `POST /api/report`.
+
 ### Protokolle und Reparatur
 
 Wenn etwas nicht klappt, helfen diese Dateien. Sie liegen im Datenordner (Vorgabe
@@ -219,9 +231,13 @@ Grenzen:
 
 - Daten: `~/Library/Application Support/NV-AI` (`assets/` mit `index.json`).
 - Protokoll: `~/Library/Logs/NV-AI/nvai.log` (Start, Serverstatus, Aufträge und Fehler).
-- Bei Problemen in NV-AI unter **Einstellungen → Messbericht speichern …** den Messbericht
-  speichern und mitschicken. Er enthält Mac, Arbeitsspeicher, Dauer und Speicherbedarf je Bild,
-  keine Prompts.
+- Problem melden (seit 0.4.1): Einstellungen → „Problem melden“. Beschreiben, was passiert ist,
+  dann „Bericht speichern …“ oder „Auf GitHub melden“ (speichert den Bericht und öffnet ein
+  vorausgefülltes Issue; die Datei dort hineinziehen). Der Bericht enthält Zeitstempel, Mac,
+  macOS, die letzten Aufträge und das Ende von `nvai.log`, anonymisiert wie unter Windows: kein
+  Benutzer- oder Rechnername, Benutzerordner als `~`, keine Prompts und keine Bilder.
+- Der Messbericht unter Einstellungen → „Messbericht speichern …“ listet Dauer und
+  Speicherbedarf je Bild, ebenfalls ohne Prompts.
 
 ---
 

@@ -639,3 +639,44 @@ kbd {
 .gpu-settings { margin-bottom: 14px; }
 .gpu-settings h3 { margin-top: 0; }
 .gpu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 10px; }
+
+/* Kopfleiste, mehrere Karten: Karte anklicken, Aufgaben wählen */
+.gpu-chip { position: relative; display: inline-flex; }
+.gpu-chip-btn {
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  padding: 2px 6px; color: inherit; font: inherit; cursor: pointer;
+}
+.gpu-chip-btn:hover, .gpu-chip-btn.open { border-color: var(--line); background: rgba(255, 255, 255, 0.04); }
+.gpu-chip-caret { font-size: 10px; color: var(--muted); }
+.gpu-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; width: 290px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+}
+.gpu-pop-title { font-weight: 600; font-size: 13px; }
+.gpu-pop-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+.gpu-pop-row.here { cursor: default; }
+.gpu-pop-row input[type="checkbox"] { width: auto; flex: 0 0 auto; margin: 2px 0 0; }
+.gpu-pop-row > span { flex: 1; text-align: left; }
+.gpu-pop-note { margin-top: 4px; line-height: 1.4; }
+
+/* Problem melden */
+.report-btn { white-space: nowrap; }
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px;
+}
+.modal {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  width: min(760px, 100%); max-height: 88vh; overflow: auto; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.modal h3 { margin: 0; }
+.report-text { width: 100%; resize: vertical; font: inherit; }
+.report-preview {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  max-height: 34vh; overflow: auto; font-size: 11px; line-height: 1.4; white-space: pre-wrap;
+  overflow-wrap: anywhere; margin: 0;
+}
+.modal-close { display: flex; justify-content: flex-end; }

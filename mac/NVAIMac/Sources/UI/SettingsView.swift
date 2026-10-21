@@ -6,6 +6,9 @@ struct SettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var portText = ""
     @State private var reportMessage: String?
+    @State private var problemText = ""
+    @State private var problem: ProblemReport.Result?
+    @State private var problemMessage: String?
 
     var body: some View {
         Form {
@@ -54,6 +57,33 @@ struct SettingsView: View {
                        "Each model is 5 to 11 GB. An external drive works too; the folder is then called \"models\"."))
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section(t("Problem melden", "Report a problem")) {
+                TextEditor(text: $problemText)
+                    .frame(minHeight: 70)
+                    .overlay(alignment: .topLeading) {
+                        if problemText.isEmpty {
+                            Text(t("Kurz beschreiben, was passiert ist und was du erwartet hast.",
+                                   "Briefly describe what happened and what you expected."))
+                                .foregroundStyle(.tertiary).padding(6).allowsHitTesting(false)
+                        }
+                    }
+                    .onChange(of: problemText) { _, _ in problem = nil }
+                HStack {
+                    Button(t("Bericht speichern …", "Save report …")) { saveProblem() }
+                    Button(t("Auf GitHub melden", "Report on GitHub")) { reportOnGitHub() }
+                }
+                .disabled(problemText.trimmingCharacters(in: .whitespacesAndNewlines).count < 10)
+                if let problemMessage { Text(problemMessage).font(.caption) }
+                Text(t("Der Bericht enthält Zeitstempel, Mac, macOS, die letzten Aufträge und das Ende des Protokolls. "
+                       + "Er ist anonymisiert: Benutzer- und Rechnername, Benutzerordner, E-Mail- und IP-Adressen und "
+                       + "Token werden ersetzt; Prompts und Bilder sind nicht enthalten. „Auf GitHub melden“ speichert "
+                       + "ihn und öffnet ein vorausgefülltes Issue; die Datei dort hineinziehen (braucht ein GitHub-Konto).",
+                       "The report contains a timestamp, the Mac, macOS, the recent jobs and the end of the log. It is "
+                       + "anonymized: user and computer name, home folder, e-mail and IP addresses and tokens are replaced; "
+                       + "prompts and images are not included. \"Report on GitHub\" saves it and opens a prefilled issue; "
+                       + "drag the file into it there (needs a GitHub account)."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(t("Messbericht für Tester", "Test report")) {
                 Button(t("Messbericht speichern …", "Save test report …")) { saveReport() }
                 if let reportMessage { Text(reportMessage).font(.caption) }
@@ -71,6 +101,33 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { portText = String(state.port) }
+    }
+
+    /// Fragt nach dem Ort und speichert den anonymisierten Bericht; nil, wenn abgebrochen.
+    @discardableResult
+    private func saveProblem() -> ProblemReport.Result? {
+        let report = ProblemReport.build(description: problemText, jobs: state.jobs)
+        let panel = NSSavePanel()
+        panel.title = t("Fehlerbericht speichern", "Save problem report")
+        panel.nameFieldStringValue = report.filename
+        panel.allowedContentTypes = [.plainText]
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        do {
+            try report.text.write(to: url, atomically: true, encoding: .utf8)
+            problem = report
+            problemMessage = t("Gespeichert: ", "Saved: ") + url.lastPathComponent
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            AppLog.info("Problem report saved (\(report.text.count) characters)")
+            return report
+        } catch {
+            problemMessage = t("Nicht gespeichert: ", "Not saved: ") + error.localizedDescription
+            return nil
+        }
+    }
+
+    private func reportOnGitHub() {
+        guard let report = problem ?? saveProblem(), let url = ProblemReport.issueURL(report, description: problemText) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func saveReport() {

@@ -162,6 +162,27 @@ class ExpandPromptResult(BaseModel):
     seconds: float = Field(..., description="Dauer inklusive Warten auf die GPU")
 
 
+class ProblemReportRequest(BaseModel):
+    description: str = Field("", max_length=4000, description="Kurze Fehlerbeschreibung des Nutzers")
+
+
+class ProblemReportSummary(BaseModel):
+    version: str
+    os: str
+    graphics: str
+    driver: str
+    last_error: str | None = None
+    time: str
+
+
+class ProblemReport(BaseModel):
+    filename: str = Field(..., description="Vorschlag fuer den Dateinamen, nvai-report-<Zeit>.txt")
+    text: str = Field(..., description="Der anonymisierte Bericht")
+    created_at: float
+    summary: ProblemReportSummary
+    issues_url: str = Field(..., description="Wo neue Issues angelegt werden (GitHub)")
+
+
 # ------------------------------------------------------------ Ergebnis
 
 class Generate3DRequest(BaseModel):

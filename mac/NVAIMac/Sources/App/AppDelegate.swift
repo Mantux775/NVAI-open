@@ -43,8 +43,20 @@ enum LaunchOptions {
     static func runTasks() async {
         let snapshot = value("--snapshot")
         let report = value("--report")
+        let problem = value("--problem-report")
         let quit = args.contains("--quit")
-        guard snapshot != nil || report != nil else { return }
+        guard snapshot != nil || report != nil || problem != nil else { return }
+
+        // Anonymisierter Fehlerbericht ohne Dialog (zum Prüfen der Anonymisierung).
+        if let problem {
+            let text = ProblemReport.build(description: value("--description") ?? "", jobs: AppState.shared.jobs).text
+            do {
+                try text.write(toFile: problem, atomically: true, encoding: .utf8)
+                AppLog.info("Problem report written")
+            } catch {
+                AppLog.error("Problem report not written: \(error.localizedDescription)")
+            }
+        }
 
         if let report {
             let text = Report.markdown(images: AppState.shared.images, jobs: AppState.shared.jobs)

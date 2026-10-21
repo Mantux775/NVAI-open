@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.0b1",
+  "version": "0.5.0",
   "x-api-version": 1
  },
  "paths": {
@@ -878,6 +878,45 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/report": {
+   "post": {
+    "summary": "Problem Report",
+    "description": "Anonymisierter Fehlerbericht: Systemangaben, letzte Auftraege ohne Prompts und die\nEnden der Logs. Die Weboberflaeche bietet ihn zum Herunterladen an und oeffnet ein\nvorausgefuelltes GitHub-Issue; hochgeladen wird hier nichts.",
+    "operationId": "problem_report_api_report_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProblemReportRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProblemReport"
         }
        }
       }
@@ -2651,6 +2690,98 @@
      "commercial_ok"
     ],
     "title": "ModelInfo"
+   },
+   "ProblemReport": {
+    "properties": {
+     "filename": {
+      "type": "string",
+      "title": "Filename",
+      "description": "Vorschlag fuer den Dateinamen, nvai-report-<Zeit>.txt"
+     },
+     "text": {
+      "type": "string",
+      "title": "Text",
+      "description": "Der anonymisierte Bericht"
+     },
+     "created_at": {
+      "type": "number",
+      "title": "Created At"
+     },
+     "summary": {
+      "$ref": "#/components/schemas/ProblemReportSummary"
+     },
+     "issues_url": {
+      "type": "string",
+      "title": "Issues Url",
+      "description": "Wo neue Issues angelegt werden (GitHub)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "filename",
+     "text",
+     "created_at",
+     "summary",
+     "issues_url"
+    ],
+    "title": "ProblemReport"
+   },
+   "ProblemReportRequest": {
+    "properties": {
+     "description": {
+      "type": "string",
+      "maxLength": 4000,
+      "title": "Description",
+      "description": "Kurze Fehlerbeschreibung des Nutzers",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "title": "ProblemReportRequest"
+   },
+   "ProblemReportSummary": {
+    "properties": {
+     "version": {
+      "type": "string",
+      "title": "Version"
+     },
+     "os": {
+      "type": "string",
+      "title": "Os"
+     },
+     "graphics": {
+      "type": "string",
+      "title": "Graphics"
+     },
+     "driver": {
+      "type": "string",
+      "title": "Driver"
+     },
+     "last_error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error"
+     },
+     "time": {
+      "type": "string",
+      "title": "Time"
+     }
+    },
+    "type": "object",
+    "required": [
+     "version",
+     "os",
+     "graphics",
+     "driver",
+     "time"
+    ],
+    "title": "ProblemReportSummary"
    },
    "ValidationError": {
     "properties": {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, connectEvents, type GpuRole, type Health, type ServerEvent } from './api'
+import { api, connectEvents, type Health, type ServerEvent } from './api'
+import { GpuChip } from './components/GpuChip'
+import { ReportDialog } from './components/ReportDialog'
 import { useDownloads } from './downloads'
 import { getLang, setLang, t, type Lang } from './i18n'
 import { GeneratePanel } from './panels/Generate'
@@ -14,12 +16,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'models', label: t('Modelle', 'Models') },
 ]
 
-const ROLE_LABEL: Record<GpuRole, string> = {
-  image: t('Bild', 'Image'),
-  text: t('Text', 'Text'),
-  mesh: '3D',
-}
-
 // Sprachnamen stehen in ihrer eigenen Sprache, damit man sie in jeder Einstellung findet.
 const LANGS: { id: Lang; label: string; name: string }[] = [
   { id: 'en', label: 'EN', name: 'English' },
@@ -33,6 +29,7 @@ export function App() {
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [reporting, setReporting] = useState(false)
   const downloads = useDownloads(events, setNotice)
   const dlList = Object.entries(downloads.active)
 
@@ -131,23 +128,11 @@ export function App() {
 
           {/* Was liegt im VRAM? Wichtiger als der GPU-Name, deshalb zuerst. */}
           {multiGpu ? (
-            // Mehrere Karten (experimentell): je Karte ein Balken und ihre Aufgaben.
-            health!.gpus!.map((g) => {
-              const total = g.vram_total_mb / 1024
-              const used = (g.vram_used_mb ?? 0) / 1024
-              const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0
-              return (
-                <span key={g.index} className="vram" title={`GPU ${g.index}: ${g.name} · ${used.toFixed(1)} / ${total.toFixed(0)} GB`}>
-                  <span className="gpu-roles">
-                    {g.roles.map((r) => ROLE_LABEL[r]).join(' + ') || `GPU ${g.index}`}
-                  </span>
-                  <span className="vram-bar">
-                    <span className={pct > 85 ? 'vram-fill high' : 'vram-fill'} style={{ width: `${pct}%` }} />
-                  </span>
-                  <span className="muted small">{g.vram_used_mb == null ? `${total.toFixed(0)} GB` : `${used.toFixed(1)} / ${total.toFixed(0)} GB`}</span>
-                </span>
-              )
-            })
+            // Mehrere Karten (experimentell): je Karte ein Balken und ihre Aufgaben; ein Klick
+            // wählt, was die Karte macht.
+            health!.gpus!.map((g) => (
+              <GpuChip key={g.index} gpu={g} onChanged={refreshHealth} onError={setNotice} />
+            ))
           ) : (
             <span className="vram" title={`${health?.gpu?.name ?? 'GPU'} · ${vram}`}>
               <span className="vram-bar">
@@ -199,6 +184,15 @@ export function App() {
           )}
         </div>
 
+        <button
+          className="btn small ghost report-btn"
+          onClick={() => setReporting(true)}
+          title={t('Anonymisierten Fehlerbericht erstellen und auf GitHub melden',
+            'Create an anonymized problem report and send it to GitHub')}
+        >
+          {t('Problem melden', 'Report a problem')}
+        </button>
+
         {/* Sprachwahl: speichert und laedt neu (i18n.setLang). */}
         <div className="lang-switch" role="group" aria-label={t('Sprache', 'Language')}>
           {LANGS.map((l) => (
@@ -217,6 +211,8 @@ export function App() {
           ))}
         </div>
       </header>
+
+      {reporting && <ReportDialog onClose={() => setReporting(false)} />}
 
       {notice && (
         <div

@@ -161,6 +161,15 @@ export interface Health {
 
 export type GpuRole = 'image' | 'text' | 'mesh'
 
+/** POST /api/report: anonymisierter Fehlerbericht fuer GitHub. */
+export interface ProblemReport {
+  filename: string
+  text: string
+  created_at: number
+  summary: { version: string; os: string; graphics: string; driver: string; last_error: string | null; time: string }
+  issues_url: string
+}
+
 export interface GpuInfo {
   index: number
   vendor: 'nvidia' | 'amd'
@@ -361,6 +370,8 @@ export const api = {
   generateImage: (p: ImageParams) =>
     req<Job>('/api/generate/image', { method: 'POST', body: JSON.stringify(p) }),
   /** Prompt ausbauen: der FLUX-3-Upsampler schreibt die volle Bildbeschreibung, für jedes Bildmodell. */
+  report: (description: string) =>
+    req<ProblemReport>('/api/report', { method: 'POST', body: JSON.stringify({ description }) }),
   expandPrompt: (p: { prompt: string; width: number; height: number; reference_asset_ids?: string[] }) =>
     req<{ prompt: string; expanded: string; seconds: number }>(
       '/api/prompt/expand', { method: 'POST', body: JSON.stringify(p) },

@@ -32,6 +32,15 @@ Measured on an M1 with 8 GB (FLUX.2 Klein 4B, 4-bit, 4 steps):
 
 On 8 GB, 1 megapixel is the practical limit; 16 GB or more is comfortable.
 
+## Problem report
+
+Settings > "Report a problem" (`Sources/Core/ProblemReport.swift`): a short description becomes a
+text report with timestamp, Mac, macOS, installed models, the recent jobs (without prompts) and
+the last 300 lines of `nvai.log`. Anonymized: home folder → `~`, user and computer name, e-mail,
+IP and MAC addresses, the Hugging Face token and long hex strings are replaced. "Report on
+GitHub" saves it and opens a prefilled issue. For tests without the save dialog:
+`NV-AI.app/Contents/MacOS/NV-AI --problem-report <file> [--description "…"] --quit`.
+
 ## Expand prompt
 
 "✨ Expand prompt" (Generate page) and `POST /api/prompt/expand` (feature `expand_prompt`, same

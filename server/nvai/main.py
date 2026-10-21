@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 import httpx
 
-from . import __version__, comfy, config, db, hfsearch, i18n, jobs, mesh_workers, registry
+from . import __version__, comfy, config, db, hfsearch, i18n, jobs, mesh_workers, registry, report
 from .i18n import t
 from . import gpu as gpu_info
 from .schemas import (
@@ -28,6 +28,8 @@ from .schemas import (
     DeleteResult,
     DownloadRequest,
     ExpandPromptRequest,
+    ProblemReport,
+    ProblemReportRequest,
     ExpandPromptResult,
     Generate3DRequest,
     GenerateAudioRequest,
@@ -67,6 +69,7 @@ API_FEATURES = [
     "model_search",    # GET /api/models/search und /inspect: Hugging Face mit Pruefung
     "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
     "gpus",            # GET/PUT /api/gpus: mehrere Karten, Aufgaben je Karte (experimentell)
+    "report",          # POST /api/report: anonymisierter Fehlerbericht fuer GitHub
 ]
 
 
@@ -603,6 +606,14 @@ async def generate_3d(req: Generate3DRequest) -> Job:
             f"scripts/setup_{worker.key}.ps1 ausfuehren.",
         )
     return await jobs.submit("img23d", req.model_dump())
+
+
+@app.post("/api/report", response_model=ProblemReport)
+async def problem_report(req: ProblemReportRequest) -> dict[str, Any]:
+    """Anonymisierter Fehlerbericht: Systemangaben, letzte Auftraege ohne Prompts und die
+    Enden der Logs. Die Weboberflaeche bietet ihn zum Herunterladen an und oeffnet ein
+    vorausgefuelltes GitHub-Issue; hochgeladen wird hier nichts."""
+    return await asyncio.to_thread(report.build, req.description)
 
 
 @app.post("/api/prompt/expand", response_model=ExpandPromptResult)
