@@ -5,9 +5,17 @@ import { getLang, t } from './i18n'
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
 /** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. */
-export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet'
+export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora'
+
+/** Eine LoRA beim Generieren: Katalog-ID (kind 'lora') und Stärke. */
+export interface LoraRef {
+  model_id: string
+  strength: number
+}
 /** Die vier Modi, die wirklich etwas erzeugen. */
 export type GenKind = 'image' | 'audio' | 'video' | '3d'
+// Wofür "Prompt ausbauen" schreibt (server/nvai/prompt_targets.py)
+export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_start' | 'sfx' | 'music' | '3d'
 
 export interface Job {
   id: string
@@ -79,6 +87,10 @@ export interface ModelInfo {
   content_source: string
   /** Was das Modell beim Generieren kann — steuert die Bedienelemente (registry.features_for). */
   features: Partial<ModelFeatures>
+  /** Generatoren: welche LoRA-Basen sie nehmen. LoRAs: Basis steht in family. */
+  lora_bases?: string[]
+  trigger?: string
+  source_url?: string
 }
 
 /** Ein Treffer der Hugging-Face-Suche (GET /api/models/search). */
@@ -99,6 +111,9 @@ export interface HfResult {
   base_model: string
   /** Warum keine Datei in Frage kommt (Diffusers, GGUF …) */
   note: string
+  /** LoRA-Repos: Basis laut Tags (loras.BASES) und Trigger-Wörter aus der Modellkarte */
+  lora_base?: string | null
+  trigger?: string
 }
 
 /** Ergebnis der Prüfung vor dem Laden (GET /api/models/inspect). */
@@ -114,6 +129,39 @@ export interface HfCheck {
   verdict: string
   /** Katalogmodelle mit derselben Architektur */
   catalog?: string[]
+  /** LoRAs: kind 'lora', family = LoRA-Basis, Trigger-Wörter */
+  kind?: 'lora'
+  trigger?: string
+}
+
+/** Ein Treffer der Civitai-Suche (GET /api/civitai/search), je Modell die neueste Version. */
+export interface CivitaiResult {
+  model_id: number
+  version_id: number
+  name: string
+  version: string
+  base_model: string
+  lora_base: string | null
+  targets: string[]
+  trigger: string
+  file: string
+  size_gb: number
+  url: string
+  page: string
+  nsfw: boolean
+  commercial: string
+  creator: string
+  downloads: number
+}
+
+export interface CivitaiCheck {
+  ok: boolean
+  family: string | null
+  checked: boolean
+  catalog: string[]
+  verdict: string
+  size_gb?: number | null
+  trigger?: string
 }
 
 export interface ModelSize {
@@ -203,6 +251,7 @@ export interface DeleteResult {
 }
 
 export interface ImageParams {
+  loras?: LoraRef[]
   prompt: string
   negative_prompt?: string
   model_id?: string | null
@@ -249,6 +298,7 @@ export interface AudioParams {
 }
 
 export interface VideoParams {
+  loras?: LoraRef[]
   prompt: string
   negative_prompt?: string
   model_id?: string | null
@@ -339,8 +389,34 @@ export const api = {
     req<{ logged_in: boolean; name: string | null }>('/api/settings/hf-token', {
       method: 'DELETE',
     }),
-  searchHf: (q: string, limit = 50) =>
-    req<HfResult[]>(`/api/models/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  searchHf: (q: string, limit = 50, kind?: 'lora') =>
+    req<HfResult[]>(`/api/models/search?q=${encodeURIComponent(q)}&limit=${limit}${kind ? `&kind=${kind}` : ''}`),
+  civitaiStatus: () => req<{ logged_in: boolean; name: string | null }>('/api/settings/civitai'),
+  setCivitaiToken: (token: string) =>
+    req<{ logged_in: boolean; name: string | null }>('/api/settings/civitai', {
+      method: 'POST', body: JSON.stringify({ token }),
+    }),
+  deleteCivitaiToken: () =>
+    req<{ logged_in: boolean; name: string | null }>('/api/settings/civitai', { method: 'DELETE' }),
+  searchCivitai: (q: string, loraBase?: string) =>
+    req<CivitaiResult[]>(
+      `/api/civitai/search?q=${encodeURIComponent(q)}&limit=40${loraBase ? `&lora_base=${encodeURIComponent(loraBase)}` : ''}`,
+    ),
+  checkCivitai: (r: CivitaiResult) =>
+    req<CivitaiCheck>(
+      `/api/civitai/check?url=${encodeURIComponent(r.url)}&base_model=${encodeURIComponent(r.base_model)}`,
+    ),
+  /** Lädt eine Civitai-LoRA direkt von dort und nimmt sie in den Katalog auf. */
+  downloadCivitai: (r: CivitaiResult, family: string, trigger: string) =>
+    req<Job>('/api/models/download', {
+      method: 'POST',
+      body: JSON.stringify({
+        repo: `civitai/${r.name.replace(/[^\w.-]+/g, '_').slice(0, 60)}`,
+        file: r.file, kind: 'lora', family, workflow: null, target: 'loras',
+        license: r.commercial ? `Civitai: ${r.commercial}` : 'Civitai',
+        size_gb: r.size_gb, url: r.url, source_url: r.page, trigger,
+      }),
+    }),
   inspectHf: (repo: string, file: string) =>
     req<HfCheck>(
       `/api/models/inspect?repo=${encodeURIComponent(repo)}&file=${encodeURIComponent(file)}`,
@@ -358,6 +434,9 @@ export const api = {
         workflow: c.workflow,
         license: license || null,
         size_gb: c.size_gb,
+        ...(c.kind === 'lora'
+          ? { kind: 'lora', target: 'loras', workflow: null, trigger: c.trigger ?? '' }
+          : {}),
       }),
     }),
   deleteModel: (model_id: string) =>
@@ -402,7 +481,10 @@ export const api = {
   restart: () => req<{ ok: boolean }>('/api/restart', { method: 'POST' }),
   report: (description: string) =>
     req<ProblemReport>('/api/report', { method: 'POST', body: JSON.stringify({ description }) }),
-  expandPrompt: (p: { prompt: string; width: number; height: number; reference_asset_ids?: string[] }) =>
+  expandPrompt: (p: {
+    prompt: string; width: number; height: number; reference_asset_ids?: string[]
+    target?: ExpandTarget
+  }) =>
     req<{ prompt: string; expanded: string; seconds: number }>(
       '/api/prompt/expand', { method: 'POST', body: JSON.stringify(p) },
     ),
@@ -484,4 +566,20 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   video: 'Video',
   '3d': '3D',
   controlnet: 'ControlNet',
+  lora: 'LoRA',
+}
+
+/** Anzeigenamen der LoRA-Basen (server: loras.BASES). */
+export const LORA_BASE_LABEL: Record<string, string> = {
+  sdxl: 'SDXL (Pony, Illustrious, NoobAI …)',
+  sd15: 'SD 1.5',
+  qwenimage: 'Qwen-Image',
+  zimage: 'Z-Image',
+  flux1: 'FLUX.1 / Chroma',
+  flux2: 'FLUX.2 Klein',
+  'wan-1.3b': 'Wan 2.1 1.3B',
+  'wan-5b': 'Wan 2.2 TI2V 5B',
+  'wan-14b': 'Wan 14B (2.1, 2.2 A14B)',
+  ltx2: 'LTX-2 / 2.3',
+  ltxv: 'LTX-Video 0.9',
 }

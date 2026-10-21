@@ -230,9 +230,10 @@ kbd {
 .model-search { width: 220px; padding: 5px 9px; }
 .hf-search { margin-bottom: 14px; }
 .hf-form { display: flex; gap: 8px; margin: 10px 0; }
-.hf-form input { flex: 1; }
+.hf-form input { flex: 1 1 160px; min-width: 0; }
+.hf-form select { flex: 0 1 230px; width: auto; min-width: 0; }
 .hf-result { border-top: 1px solid var(--border, #2a2f36); padding: 8px 0; }
-.hf-head a { font-weight: 600; }
+.hf-head a { font-weight: 600; color: var(--accent); }
 .hf-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 0 12px; }
 .hf-file code { font-size: 12px; }
 
@@ -713,3 +714,18 @@ kbd {
 .folder-body { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .folder-row { display: flex; gap: 8px; }
 .folder-row input { flex: 1; }
+
+/* 3D aus Text: aufklappbar über der Quellbild-Auswahl */
+.mesh-from-text { margin: 8px 0 4px; }
+.mesh-from-text summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
+.mesh-from-text textarea { width: 100%; }
+.mesh-from-text .btn.full { margin-top: 4px; }
+
+/* LoRAs: Umschalter in der Suche und Auswahl beim Generieren */
+.seg { display: inline-flex; gap: 4px; }
+.lora-picker { margin-top: 8px; }
+.lora-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0; }
+.lora-row label { display: flex; align-items: center; gap: 6px; flex: 1 1 180px; min-width: 0; }
+.lora-row label input[type="checkbox"] { width: auto; }
+.lora-row .lora-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lora-row input[type="range"] { flex: 1 1 100px; max-width: 160px; }

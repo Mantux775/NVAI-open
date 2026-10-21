@@ -6,36 +6,32 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.2.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.2/NV-AI-Setup-0.5.2.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.2/NV-AI-0.4.2.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.3.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.3/NV-AI-Setup-0.5.3.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.3/NV-AI-0.4.2.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.2 for Windows, NV-AI 0.4.2 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.2))
+October 2026: NV-AI 0.5.3 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.3)); the Mac app stays at 0.4.2
 
 | | |
 |---|---|
-| LTX-2.5 | Video with matching sound, from text or a start image; 4 seconds at 1280 × 704 in about 72 s |
-| Boogu-Image 0.1 | Apache-2.0 image model with Turbo (about 10 s) and Edit: change an image by instruction, the rest stays |
-| HiDream-O1-Image | MIT image model for large pictures, trained at 4 megapixels |
-| Censored or uncensored | Every image and video model is labelled, with the source in the tooltip |
-| Cancel | Each download and each queued or running job, also from the PhotoCraft add-on |
-| Storage locations | Choose data and model folders under "Models" |
+| LoRAs | Search Hugging Face and Civitai, NV-AI checks which model a LoRA fits before downloading; pick LoRAs with a strength slider when generating, images and video |
+| New video models | LTX-2.3 with sound (101 s for 4 s at 1280 × 704), Mochi 1 (Apache-2.0), Kandinsky 5.0 Video Lite (MIT) |
+| Expand prompt everywhere | Now also for video (motion, camera, sound), sound effects, music tags and 3D ("object from text") |
+| Image to video with LTX | The start image picker now also shows up for LTX-2.5 and LTX-2.3 |
 
-Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
+Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
 
 | | |
 |---|---|
-| LTX-2.5 | Video mit passendem Ton, aus Text oder Startbild; 4 Sekunden in 1280 × 704 in rund 72 s |
-| Boogu-Image 0.1 | Bildmodell unter Apache-2.0 mit Turbo (rund 10 s) und Edit: Bild nach Anweisung ändern, der Rest bleibt |
-| HiDream-O1-Image | Bildmodell unter MIT für große Bilder, auf 4 Megapixel trainiert |
-| Zensiert oder unzensiert | Jedes Bild- und Videomodell ist gekennzeichnet, mit Quelle im Tooltip |
-| Abbrechen | Jeden Download und jeden wartenden oder laufenden Auftrag, auch aus dem PhotoCraft-Add-on |
-| Speicherorte | Daten- und Modellordner unter „Modelle“ wählen |
+| LoRAs | Auf Hugging Face und Civitai suchen, NV-AI prüft vor dem Laden, zu welchem Modell eine LoRA passt; beim Generieren mit Stärke-Regler auswählen, für Bild und Video |
+| Neue Videomodelle | LTX-2.3 mit Ton (101 s für 4 s in 1280 × 704), Mochi 1 (Apache-2.0), Kandinsky 5.0 Video Lite (MIT) |
+| Prompt ausbauen überall | Jetzt auch für Video (Bewegung, Kamera, Ton), Soundeffekte, Musik-Tags und 3D („Objekt aus Text“) |
+| Bild zu Video mit LTX | Die Startbild-Auswahl gibt es jetzt auch bei LTX-2.5 und LTX-2.3 |
 
-Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
+Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -55,9 +51,10 @@ It has only been tested on my own hardware: a Windows PC with an RTX 5060 Ti (16
 |---|---|---|
 | Images | FLUX 3 Image Klein, Qwen-Image-2512, Boogu-Image, HiDream-O1, Chroma, Z-Image, SDXL family and more | FLUX.2 Klein 4B (MLX), Stable Diffusion via Core ML |
 | Editing | Reference images, image to image, inpainting with a mask | Reference images, image to image, inpainting with a mask |
-| Expand prompt | For every image model | Yes, since 0.4 |
+| Expand prompt | For every model: images, video, sound, music, 3D | Images, since 0.4 |
+| LoRAs | From Hugging Face and Civitai, checked before download, for images and video | |
 | Audio | Sound effects (Stable Audio Open), music with vocals (ACE-Step) | |
-| Video | LTX-2.5 with sound, Wan 2.1/2.2, text or image to video | |
+| Video | LTX-2.5 and LTX-2.3 with sound, Wan 2.1/2.2, Mochi, Kandinsky 5, text or image to video | |
 | 3D | Image to GLB model, with PBR textures (TRELLIS.2) or shape only (TripoSG) | |
 | Graphics | NVIDIA, AMD Radeon (experimental), several cards (experimental) | Apple Silicon |
 | Uncensored models | Chroma, Pony, NoobAI and more, one click away | |
@@ -107,13 +104,13 @@ NV-AI has no content filter of its own: no prompt blocklist, no image check, not
 | Pony Diffusion V6 XL | Characters and creatures; huge LoRA ecosystem; needs its score tags (`score_9, score_8_up, …`) | 6.5 GB / about 8 GB | see model card |
 | NoobAI-XL v1.1 | Stylized 2D and anime; knows more characters and styles than Illustrious | 6.6 GB / about 8 GB | Fair AI Public License 1.0-SD |
 
-More can be found with "Models" → "Search on Hugging Face": NV-AI checks a file before downloading and loads SDXL and SD 1.5 checkpoints, which covers most community fine-tunes.
+More can be found with "Models" → "Search models and LoRAs": NV-AI checks a file before downloading and loads SDXL and SD 1.5 checkpoints, which covers most community fine-tunes. Since 0.5.3 the same page finds LoRAs on Hugging Face and Civitai, including uncensored ones for Qwen-Image, Z-Image, Wan and LTX; NV-AI reads the file header first and tells you which model the LoRA fits. Civitai needs your own API key for downloads.
 
 You are responsible for what you create and publish. Respect the law and each model's license; the FLUX 3 license, for example, requires a content filter or a review of every image before it is published.
 
 ### Expand prompt
 
-Type a few words, click "Expand prompt", and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. Read it, delete what was invented, generate. It works with every image model.
+Type a few words, click "Expand prompt", and NV-AI writes a full image description from them: setting, materials, light, what happens in the picture. Read it, delete what was invented, generate. It works with every image model, and since 0.5.3 on Windows also for video (motion, camera move, with LTX also the sound), sound effects, music tags and 3D, in 3 to 12 s.
 
 | | Uses | Time |
 |---|---|---|
@@ -204,9 +201,10 @@ Getestet ist sie nur auf meiner eigenen Hardware: einem Windows-PC mit RTX 5060 
 |---|---|---|
 | Bilder | FLUX 3 Image Klein, Qwen-Image-2512, Boogu-Image, HiDream-O1, Chroma, Z-Image, SDXL-Familie und weitere | FLUX.2 Klein 4B (MLX), Stable Diffusion über Core ML |
 | Bearbeiten | Referenzbilder, Bild zu Bild, Füllen mit Maske | Referenzbilder, Bild zu Bild, Füllen mit Maske |
-| Prompt ausbauen | Für jedes Bildmodell | Ja, seit 0.4 |
+| Prompt ausbauen | Für jedes Modell: Bild, Video, Ton, Musik, 3D | Bilder, seit 0.4 |
+| LoRAs | Von Hugging Face und Civitai, vor dem Laden geprüft, für Bild und Video | |
 | Audio | Soundeffekte (Stable Audio Open), Musik mit Gesang (ACE-Step) | |
-| Video | LTX-2.5 mit Ton, Wan 2.1/2.2, aus Text oder Bild | |
+| Video | LTX-2.5 und LTX-2.3 mit Ton, Wan 2.1/2.2, Mochi, Kandinsky 5, aus Text oder Bild | |
 | 3D | Aus einem Bild ein GLB-Modell, mit PBR-Texturen (TRELLIS.2) oder als reine Form (TripoSG) | |
 | Grafik | NVIDIA, AMD Radeon (experimentell), mehrere Karten (experimentell) | Apple Silicon |
 | Unzensierte Modelle | Chroma, Pony, NoobAI und weitere, einen Klick entfernt | |
@@ -256,13 +254,13 @@ NV-AI hat keinen eigenen Inhaltsfilter: keine Sperrliste für Prompts, keine Bil
 | Pony Diffusion V6 XL | Figuren und Kreaturen; riesiges LoRA-Angebot; braucht seine Score-Tags (`score_9, score_8_up, …`) | 6,5 GB / rund 8 GB | siehe Model Card |
 | NoobAI-XL v1.1 | Stilisiertes 2D und Anime; kennt mehr Figuren und Stile als Illustrious | 6,6 GB / rund 8 GB | Fair AI Public License 1.0-SD |
 
-Weitere findet „Modelle“ → „Auf Hugging Face suchen“: NV-AI prüft eine Datei vor dem Download und lädt SDXL- und SD-1.5-Checkpoints, damit sind die meisten Community-Feintunings abgedeckt.
+Weitere findet „Modelle“ → „Modelle und LoRAs suchen“: NV-AI prüft eine Datei vor dem Download und lädt SDXL- und SD-1.5-Checkpoints, damit sind die meisten Community-Feintunings abgedeckt. Seit 0.5.3 findet dieselbe Seite auch LoRAs auf Hugging Face und Civitai, auch unzensierte für Qwen-Image, Z-Image, Wan und LTX; NV-AI liest vorher den Dateikopf und sagt, zu welchem Modell die LoRA passt. Civitai braucht für Downloads einen eigenen API-Schlüssel.
 
 Für das, was du erzeugst und veröffentlichst, bist du selbst verantwortlich. Gesetze und die Lizenz des Modells gelten; die FLUX-3-Lizenz etwa verlangt einen Inhaltsfilter oder die Prüfung jedes Bildes vor der Veröffentlichung.
 
 ### Prompt ausbauen
 
-Ein paar Worte eintippen, auf „Prompt ausbauen“ klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Lesen, Erfundenes streichen, generieren. Das geht mit jedem Bildmodell.
+Ein paar Worte eintippen, auf „Prompt ausbauen“ klicken, und NV-AI schreibt daraus eine volle Bildbeschreibung: Ort, Material, Licht, was im Bild passiert. Lesen, Erfundenes streichen, generieren. Das geht mit jedem Bildmodell und seit 0.5.3 unter Windows auch für Video (Bewegung, Kamerafahrt, bei LTX auch der Ton), Soundeffekte, Musik-Tags und 3D, in 3 bis 12 s.
 
 | | Nutzt | Dauer |
 |---|---|---|

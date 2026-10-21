@@ -71,10 +71,25 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # LTX-2.5 (destilliert): Werte aus video_ltx2_5_{t2v,i2v}.json. Zwei Stufen mit festen
     # Sigmas statt Schritten, cfg 1 fuer Bild und Ton, euler_ancestral.
     "ltx25":      {"steps": 8, "cfg": 1.0, "sampler": "euler_ancestral", "scheduler": "simple"},
+    # LTX-2.3: Vorlagen video_ltx2_3_{t2v,i2v}.json -- dev-Checkpoint plus destillierte LoRA
+    # (Staerke 0,5), dieselben zwei Stufen mit festen Sigmas wie LTX-2.5, aber euler.
+    "ltx23":      {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
+    # Kandinsky 5.0 Lite: Vorlagen video_kandinsky5_{t2v,i2v}.json (50 Schritte, cfg 5,
+    # shift 5). Die destillierte Fassung laut Modellkarte 16 Schritte, CFG-destilliert.
+    "kandinsky5_t2v": {"steps": 50, "cfg": 5.0, "sampler": "euler_ancestral", "scheduler": "beta",
+                       "shift": 5.0},
+    "kandinsky5_t2v_distilled": {"steps": 16, "cfg": 1.0, "sampler": "euler_ancestral",
+                                 "scheduler": "beta", "shift": 5.0},
+    "kandinsky5_i2v": {"steps": 50, "cfg": 5.0, "sampler": "euler_ancestral", "scheduler": "beta",
+                       "shift": 5.0},
+    # Mochi 1 preview: Werte aus ComfyUIs Mochi-Beispiel (30 Schritte, cfg 4.5).
+    "mochi":      {"steps": 30, "cfg": 4.5, "sampler": "euler", "scheduler": "simple"},
 }
 
 # Workflows, die zwingend ein Startbild brauchen.
-I2V_WORKFLOWS = {"wan_i2v", "wan22_i2v", "hunyuan15_i2v"}
+I2V_WORKFLOWS = {"wan_i2v", "wan22_i2v", "hunyuan15_i2v", "kandinsky5_i2v"}
+# Workflows, die ein Startbild nehmen koennen, aber nicht muessen.
+OPTIONAL_START_WORKFLOWS = {"wan22_ti2v", "ltx25", "ltx23"}
 
 DEFAULT_VIDEO_NEGATIVE = (
     "blurry, low quality, static, jpeg artifacts, watermark, text, distorted, "
@@ -837,8 +852,8 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 # --------------------------------------------------------------- VIDEO
 
 def normalize_frames(frames: int, workflow: str) -> int:
-    """Wan braucht 4n+1 Frames, LTX-Video und LTX-2.5 8n+1."""
-    step = 8 if workflow in ("ltxv_t2v", "ltx25") else 4
+    """Wan und Kandinsky brauchen 4n+1 Frames, LTX 8n+1, Mochi 6n+1."""
+    step = 8 if workflow in ("ltxv_t2v", "ltx25", "ltx23") else 6 if workflow == "mochi" else 4
     n = max(1, round((frames - 1) / step))
     return n * step + 1
 
@@ -865,15 +880,37 @@ def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tup
     w = max(256, int(width) // 64 * 64)
     h = max(256, int(height) // 64 * 64)
     negative = p.get("negative_prompt") or LTX25_NEGATIVE
+    is23 = entry["workflow"] == "ltx23"
     graph: Graph = {
-        "1": {"class_type": "UNETLoader", "inputs": {
-            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {
-            "clip_name": _file_by_target(entry, "text_encoders"), "type": "ltxv"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "video")}},
-        "4": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "audio")}},
         "5": {"class_type": "LatentUpscaleModelLoader",
               "inputs": {"model_name": _file_by_target(entry, "latent_upscale_models")}},
+    }
+    if is23:
+        # LTX-2.3 (Vorlage video_ltx2_3_*): ein dev-Checkpoint mit Bild- und Ton-VAE, der
+        # Text-Encoder Gemma 3 12B laedt seine Projektion aus demselben Checkpoint, die
+        # destillierte LoRA mit 0,5 macht daraus die schnelle Fassung.
+        ckpt = _file_by_target(entry, "checkpoints")
+        graph.update({
+            "0": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
+            "1": {"class_type": "LoraLoaderModelOnly", "inputs": {
+                "model": ["0", 0], "lora_name": _file_by_target(entry, "loras"), "strength_model": 0.5}},
+            "2": {"class_type": "LTXAVTextEncoderLoader", "inputs": {
+                "text_encoder": _file_by_target(entry, "text_encoders"), "ckpt_name": ckpt,
+                "device": "default"}},
+            "4": {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": ckpt}},
+        })
+        vae: Ref = ["0", 2]
+    else:
+        graph.update({
+            "1": {"class_type": "UNETLoader", "inputs": {
+                "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+            "2": {"class_type": "CLIPLoader", "inputs": {
+                "clip_name": _file_by_target(entry, "text_encoders"), "type": "ltxv"}},
+            "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "video")}},
+            "4": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "audio")}},
+        })
+        vae = ["3", 0]
+    graph.update({
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
         "8": {"class_type": "LTXVConditioning",
@@ -882,7 +919,7 @@ def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tup
             "width": w // 2, "height": h // 2, "length": frames, "batch_size": 1}},
         "10": {"class_type": "LTXVEmptyLatentAudio", "inputs": {
             "frames_number": frames, "frame_rate": int(fps), "batch_size": 1, "audio_vae": ["4", 0]}},
-    }
+    })
     video: Ref = ["9", 0]
     image: Ref | None = None
     if start_image:
@@ -893,17 +930,22 @@ def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tup
         graph[pre] = {"class_type": "LTXVPreprocess", "inputs": {"image": [scale, 0], "img_compression": 18}}
         image = [pre, 0]
         graph[inplace] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
-            "vae": ["3", 0], "image": image, "latent": video, "strength": 0.7, "bypass": False}}
+            "vae": vae, "image": image, "latent": video, "strength": 0.7, "bypass": False}}
         video = [inplace, 0]
 
     def stage(av: Ref, sigmas: str, noise_seed: int) -> Ref:
         noise, sel, sig, guide, samp = ids(), ids(), ids(), ids(), ids()
         graph[noise] = {"class_type": "RandomNoise", "inputs": {"noise_seed": noise_seed}}
-        graph[sel] = {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler_ancestral"}}
+        graph[sel] = {"class_type": "KSamplerSelect", "inputs": {
+            "sampler_name": "euler" if is23 else "euler_ancestral"}}
         graph[sig] = {"class_type": "ManualSigmas", "inputs": {"sigmas": sigmas}}
-        graph[guide] = {"class_type": "LTXVDualCFGGuider", "inputs": {
-            "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1],
-            "video_cfg": 1.0, "audio_cfg": 1.0}}
+        if is23:
+            graph[guide] = {"class_type": "CFGGuider", "inputs": {
+                "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1], "cfg": 1.0}}
+        else:
+            graph[guide] = {"class_type": "LTXVDualCFGGuider", "inputs": {
+                "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1],
+                "video_cfg": 1.0, "audio_cfg": 1.0}}
         graph[samp] = {"class_type": "SamplerCustomAdvanced", "inputs": {
             "noise": [noise, 0], "guider": [guide, 0], "sampler": [sel, 0], "sigmas": [sig, 0],
             "latent_image": av}}
@@ -916,25 +958,107 @@ def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tup
     sep1 = stage([cat1, 0], LTX25_SIGMAS_1, seed)
     up = ids()
     graph[up] = {"class_type": "LTXVLatentUpsampler", "inputs": {
-        "samples": [sep1, 0], "upscale_model": ["5", 0], "vae": ["3", 0]}}
+        "samples": [sep1, 0], "upscale_model": ["5", 0], "vae": vae}}
     video2: Ref = [up, 0]
     if image is not None:
         inplace2 = ids()
         graph[inplace2] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
-            "vae": ["3", 0], "image": image, "latent": video2, "strength": 1.0, "bypass": False}}
+            "vae": vae, "image": image, "latent": video2, "strength": 1.0, "bypass": False}}
         video2 = [inplace2, 0]
     cat2 = ids()
     graph[cat2] = {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": video2, "audio_latent": [sep1, 1]}}
     sep2 = stage([cat2, 0], LTX25_SIGMAS_2, seed + 1)
     dec, aud, vid, save = ids(), ids(), ids(), ids()
     graph[dec] = {"class_type": "VAEDecodeTiled", "inputs": {
-        "samples": [sep2, 0], "vae": ["3", 0], "tile_size": 512, "overlap": 64,
+        "samples": [sep2, 0], "vae": vae, "tile_size": 512, "overlap": 64,
         "temporal_size": 64, "temporal_overlap": 16}}
     graph[aud] = {"class_type": "LTXVAudioVAEDecode", "inputs": {"samples": [sep2, 1], "audio_vae": ["4", 0]}}
     graph[vid] = {"class_type": "CreateVideo", "inputs": {"images": [dec, 0], "fps": fps, "audio": [aud, 0]}}
     graph[save] = {"class_type": "SaveVideo", "inputs": {
         "video": [vid, 0], "filename_prefix": "nvai_video", "format": "mp4", "format.codec": "h264"}}
     return graph, seed
+
+
+def _build_kandinsky5(entry, p, d, sampler, width, height, frames, fps, negative,
+                      start_image) -> tuple[Graph, int]:
+    """Kandinsky 5.0 Video Lite (2B, MIT), nachgebaut nach ComfyUIs Vorlagen
+    video_kandinsky5_t2v.json und *_i2v.json: Qwen2.5-VL 7B und CLIP-L als Text-Encoder,
+    HunyuanVideo-VAE, Ausgabe MP4 mit 24 fps. Beim Bild-zu-Video setzt
+    ReplaceVideoLatentFrames das Startbild wieder als ersten Frame ein, und
+    NormalizeVideoLatentStart gleicht die Helligkeit der ersten Frames an.
+    """
+    w = max(256, int(width) // 16 * 16)
+    h = max(256, int(height) // 16 * 16)
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "DualCLIPLoader", "inputs": {
+            "clip_name1": _file_by_target(entry, "text_encoders", "qwen"),
+            "clip_name2": _file_by_target(entry, "text_encoders", "clip_l"),
+            "type": "kandinsky5", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
+        # Die Vorlagen lassen den Negativprompt leer; NV-AI nimmt nur einen eigenen.
+        "5": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": p.get("negative_prompt") or "", "clip": ["2", 0]}},
+        "6": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": d.get("shift", 5.0)}},
+    }
+    latent: dict[str, Any] = {"positive": ["4", 0], "negative": ["5", 0], "vae": ["3", 0],
+                              "width": w, "height": h, "length": frames, "batch_size": 1}
+    if start_image:
+        graph["7"] = {"class_type": "LoadImage", "inputs": {"image": start_image}}
+        graph["8"] = {"class_type": "ImageScale", "inputs": {
+            "image": ["7", 0], "upscale_method": "lanczos", "width": w, "height": h, "crop": "center"}}
+        latent["start_image"] = ["8", 0]
+    graph["9"] = {"class_type": "Kandinsky5ImageToVideo", "inputs": latent}
+    graph["10"] = {"class_type": "KSampler", "inputs": {
+        **sampler, "model": ["6", 0], "positive": ["9", 0], "negative": ["9", 1],
+        "latent_image": ["9", 2]}}
+    samples: Ref = ["10", 0]
+    if start_image:
+        graph["11"] = {"class_type": "ReplaceVideoLatentFrames", "inputs": {
+            "destination": ["10", 0], "source": ["9", 3], "index": 0}}
+        graph["12"] = {"class_type": "NormalizeVideoLatentStart", "inputs": {
+            "latent": ["11", 0], "start_frame_count": 4, "reference_frame_count": 5}}
+        samples = ["12", 0]
+    # Ungekachelt stuerzte ComfyUI beim HunyuanVideo-VAE ab (768 x 512 x 121, 16 GB:
+    # "Fatal Python error: Aborted" in der 3D-Faltung). Gekachelt wie bei Mochi.
+    graph["13"] = {"class_type": "VAEDecodeTiled", "inputs": {
+        "samples": samples, "vae": ["3", 0], "tile_size": 256, "overlap": 64,
+        "temporal_size": 64, "temporal_overlap": 8}}
+    graph["14"] = {"class_type": "CreateVideo", "inputs": {"images": ["13", 0], "fps": fps}}
+    graph["15"] = {"class_type": "SaveVideo", "inputs": {
+        "video": ["14", 0], "filename_prefix": "nvai_video", "format": "mp4", "format.codec": "h264"}}
+    return graph, sampler["seed"]
+
+
+def _build_mochi(entry, p, sampler, width, height, frames, fps, negative) -> tuple[Graph, int]:
+    """Mochi 1 preview (Genmo, 10B, Apache-2.0) nach ComfyUIs Mochi-Beispiel: T5-XXL als
+    Text-Encoder, fp8-Modell, eigener VAE. Der VAE-Decoder braucht viel Speicher, deshalb
+    gekachelt."""
+    w = max(256, int(width) // 16 * 16)
+    h = max(256, int(height) // 16 * 16)
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "mochi"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
+        "5": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
+        "6": {"class_type": "EmptyMochiLatentVideo", "inputs": {
+            "width": w, "height": h, "length": frames, "batch_size": 1}},
+        "7": {"class_type": "KSampler", "inputs": {
+            **sampler, "model": ["1", 0], "positive": ["4", 0], "negative": ["5", 0],
+            "latent_image": ["6", 0]}},
+        "8": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["7", 0], "vae": ["3", 0], "tile_size": 256, "overlap": 64,
+            "temporal_size": 64, "temporal_overlap": 8}},
+        "9": {"class_type": "CreateVideo", "inputs": {"images": ["8", 0], "fps": fps}},
+        "10": {"class_type": "SaveVideo", "inputs": {
+            "video": ["9", 0], "filename_prefix": "nvai_video", "format": "mp4", "format.codec": "h264"}},
+    }
+    return graph, sampler["seed"]
 
 
 def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
@@ -976,8 +1100,15 @@ def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         return _build_wan22_i2v(entry, p, d, sampler, seed, width, height,
                                 frames, negative, start_image, save)
 
-    if wf == "ltx25":
+    if wf in ("ltx25", "ltx23"):
         return _build_ltx25(entry, p, seed, width, height, frames, fps, start_image)
+
+    if wf in ("kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v"):
+        return _build_kandinsky5(entry, p, d, sampler, width, height, frames, fps, negative,
+                                 start_image)
+
+    if wf == "mochi":
+        return _build_mochi(entry, p, sampler, width, height, frames, fps, negative)
 
     if wf == "ltxv_t2v":
         # LTX-Video liegt als all-in-one Checkpoint vor und braucht einen eigenen
@@ -1176,7 +1307,8 @@ IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zim
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 AUDIO_WORKFLOWS = {"stable_audio", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
-                   "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25"}
+                   "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25", "ltx23",
+                   "kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v", "mochi"}
 
 # Diese laufen NICHT ueber ComfyUI, sondern in eigenen Worker-Prozessen
 # (siehe nvai/mesh_workers.py). Sie haben deshalb hier bewusst keinen Graph-Builder.

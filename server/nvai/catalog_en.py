@@ -36,6 +36,13 @@ _GATED_CON_FLUX3 = "Repo is gated: accept the license on Hugging Face and store 
 # Per model id: only fields that contain German text. Allowed keys:
 # name, best_for, description, pros, cons, warning, license (only if German words),
 # features (dict with prompt_hint and/or placeholder only).
+
+KANDINSKY5_VAE_WARNING = (
+    "The model is MIT-licensed, but the VAE comes from HunyuanVideo (Tencent Hunyuan Community "
+    "License). According to Tencent it does not apply in the EU, the UK and South Korea — check "
+    "before commercial use there."
+)
+
 EN: dict[str, dict[str, Any]] = {
     # ------------------------------------------------------------ IMAGE
     "sdxl-base": {
@@ -753,6 +760,90 @@ EN: dict[str, dict[str, Any]] = {
                  "NVFP4: computed in hardware on RTX 50", "License allows the EU"],
         "cons": ["38 GB download", "Free only below US$10 million revenue",
                  "Width and height are rounded to multiples of 64", "Content filtering not documented"],
+    },
+    "ltx23-nvfp4": {
+        "name": "LTX-2.3 (NVFP4, with sound)",
+        "warning": "LTX-2 Community License: free only below US$10 million annual revenue.",
+        "best_for": "Video with sound; the base of most community LoRAs and finetunes for LTX",
+        "description": (
+            "Lightricks, the predecessor of LTX-2.5 with the same architecture (22 billion "
+            "parameters, picture and sound in one pass). There are far more community extensions for "
+            "2.3 than for 2.5: LoRAs for styles, characters and motion, and finetunes without content "
+            "filtering. This is the right base for them.\n\n"
+            "NV-AI works like ComfyUI's template video_ltx2_3_t2v.json: dev checkpoint in NVFP4 plus "
+            "the distilled LoRA (strength 0.5), two stages with fixed sigmas, text encoder Gemma 3 12B "
+            "(fp4). With a start image it is image to video. Measured on an RTX 5060 Ti, 97 frames "
+            "(4 s) at 24 fps: 1280 × 704 with sound in 101 s, image to video 448 × 832 in 65 s. In the "
+            "test a blacksmith with hammer sound; with a start image the figure stayed intact."
+        ),
+        "pros": ["Video with matching sound", "Text and image to video in one model",
+                 "Largest choice of community LoRAs for LTX", "Not a gated repo"],
+        "cons": ["35 GB download", "Free only below US$10 million revenue",
+                 "The newer LTX-2.5 is better at the same size",
+                 "Width and height are rounded to multiples of 64"],
+    },
+    "kandinsky5-lite-t2v": {
+        "name": "Kandinsky 5.0 Video Lite T2V (2B)",
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Small MIT-licensed video model, 5 s at 768 × 512",
+        "description": (
+            "Kandinsky Lab (Sber), 2 billion parameters, MIT license. Text encoders Qwen2.5-VL 7B and "
+            "CLIP-L, the VAE comes from HunyuanVideo. Trained for 5 s: 121 frames at 24 fps in "
+            "768 × 512 (maker), no longer clips.\n\n"
+            "Values from ComfyUI's template video_kandinsky5_t2v.json: 50 steps, cfg 5, "
+            "euler_ancestral, beta, shift 5. The text encoder is the same as Qwen-Image's and is "
+            "stored only once. Measured on an RTX 5060 Ti: 5 s of video at 768 × 512 in 26 minutes "
+            "(1578 s) — use the distilled version for drafts."
+        ),
+        "pros": ["MIT license for the model", "Only 2 billion parameters",
+                 "Text encoder shared with Qwen-Image", "Negative prompt works (cfg 5)"],
+        "cons": ["VAE under Tencent's license", "50 steps", "5 s at most", "Content filtering not documented"],
+    },
+    "kandinsky5-lite-t2v-distilled": {
+        "name": "Kandinsky 5.0 Video Lite T2V, distilled (16 steps)",
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Fast video drafts with Kandinsky",
+        "description": (
+            "The same Kandinsky 5.0 Lite, distilled to 16 steps without CFG. According to the model "
+            "card 35 s instead of 77 s for 5 s of video on an H100. NV-AI uses 16 steps and cfg 1; the "
+            "negative prompt has no effect then. Measured on an RTX 5060 Ti: 5 s of video (121 "
+            "frames, 768 × 512) in about 300 s. In the test a blacksmith with a coherent hammer "
+            "motion and glowing metal."
+        ),
+        "pros": ["About three times fewer steps", "MIT license for the model"],
+        "cons": ["VAE under Tencent's license", "Negative prompt has no effect (cfg 1)", "5 s at most"],
+    },
+    "kandinsky5-lite-i2v": {
+        "name": "Kandinsky 5.0 Video Lite I2V (2B)",
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Animate a still image with a small model",
+        "description": (
+            "Image-to-video version of Kandinsky 5.0 Lite. The start image is cropped to the chosen "
+            "size and put back as the first frame after sampling, as in ComfyUI's template "
+            "video_kandinsky5_i2v.json. A start image is required. Measured on an RTX 5060 Ti: 5 s at "
+            "768 × 512 in 27 minutes (1617 s). In landscape it kept the scene and followed the "
+            "instruction; in portrait 512 × 768 the video jumped to a close-up after the first frame — "
+            "use 768 × 512 only."
+        ),
+        "pros": ["MIT license for the model", "The start image stays exactly as the first frame"],
+        "cons": ["VAE under Tencent's license", "Needs a start image", "Only reliable in landscape 768 × 512",
+                 "27 minutes for 5 s"],
+    },
+    "mochi-1-preview-fp8": {
+        "name": "Mochi 1 preview (fp8)",
+        "best_for": "Apache-licensed text to video with smooth motion",
+        "description": (
+            "Genmo, 10 billion parameters, Apache-2.0. Strong at motion and prompt adherence according "
+            "to the maker, made for 480p (848 × 480) at 30 fps. Text encoder T5-XXL (shared with "
+            "Chroma).\n\n"
+            "NV-AI works like ComfyUI's Mochi example: 30 steps, cfg 4.5, euler. Frames are rounded to "
+            "6n+1, the VAE decodes in tiles. Measured on an RTX 5060 Ti: 49 frames at 848 × 480 in "
+            "351 s including loading. In the test a fox running cleanly through snow, with a sideways "
+            "tracking shot."
+        ),
+        "pros": ["Apache-2.0, commercial use too", "Negative prompt works", "Text only, no license conditions"],
+        "cons": ["Text to video only", "Preview from 2024, no successor",
+                 "NSFW content limited according to the model card"],
     },
     "ltxv-2b-095": {
         "best_for": "Fast iteration — video preview in seconds instead of minutes",

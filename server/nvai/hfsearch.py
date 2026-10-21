@@ -5,7 +5,8 @@ Gigabytes fliessen. Geprueft wird der safetensors-Kopf -- je nach Modell einige 
 KB, per Range-Anfrage -- und daraus die Architektur bestimmt. Zum Laden angeboten wird nur,
 was ein vorhandener Workflow sicher rechnet: vollstaendige SDXL-Checkpoints (dazu
 gehoeren Pony, Illustrious, NoobAI, Juggernaut, RealVis ...) und SD-1.5-Checkpoints.
-Reine Diffusionsmodelle ohne Text-Encoder und VAE, LoRAs und GGUF-Dateien nicht; die
+LoRAs werden am Dateikopf einer Architektur zugeordnet (loras.detect) und laufen mit jedem
+passenden Katalogmodell. Reine Diffusionsmodelle ohne Text-Encoder und VAE und GGUF nicht; die
 Suche erkennt sie aber und sagt, was sie sind (Qwen-Image 2.1, FLUX, Wan, Text-Encoder ...)
 und welches Katalogmodell dieselbe Architektur rechnet.
 """
@@ -19,6 +20,7 @@ from urllib.parse import quote
 import httpx
 from huggingface_hub import get_token
 
+from . import loras
 from .i18n import t
 
 API = "https://huggingface.co/api/models"
@@ -64,14 +66,24 @@ def part_kind(path: str) -> str:
 
 
 def _base_model(tags: list[str]) -> str:
-    for prefix in ("base_model:finetune:", "base_model:quantized:", "base_model:"):
+    for prefix in ("base_model:adapter:", "base_model:finetune:", "base_model:quantized:", "base_model:"):
         for tag in tags:
             if tag.startswith(prefix) and ":" not in tag[len(prefix):]:
                 return tag[len(prefix):]
     return ""
 
 
-async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
+def lora_targets(base: str | None) -> list[str]:
+    """Namen der Katalogmodelle, die LoRAs dieser Basis nehmen."""
+    from . import registry   # spaet, registry importiert dieses Modul
+
+    if not base:
+        return []
+    return [registry.display_name(e) for e in registry.all_entries()
+            if base in loras.bases_for(e) and not e.get("custom")]
+
+
+async def search(query: str, limit: int = 20, lora_only: bool = False) -> list[dict[str, Any]]:
     """Repos samt ihren safetensors-Dateien, jede Datei mit ihrer vermuteten Art.
 
     `files` sind moegliche Checkpoints (pruefbar, vielleicht ladbar), `parts` die erkannten
@@ -81,6 +93,8 @@ async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
     params = [("search", query), ("limit", str(limit)), ("sort", "downloads"), ("direction", "-1")]
     params += [("expand[]", x) for x in
                ("siblings", "cardData", "downloads", "likes", "gated", "pipeline_tag", "tags")]
+    if lora_only:
+        params.append(("filter", "lora"))
     async with httpx.AsyncClient(timeout=20, headers=_auth()) as c:
         r = await c.get(API, params=params)
         r.raise_for_status()
@@ -112,8 +126,14 @@ async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
                      "etwas nur als Katalogmodell mit eigenem Workflow.",
                      "Parts of a model (diffusion model, text encoder, VAE) – these only load as a "
                      "catalog model with its own workflow.")
-        elif repo_kind == "lora":
-            note = t("LoRA – NV-AI bindet LoRAs noch nicht ein.", "LoRA – NV-AI does not support LoRAs yet.")
+        lora_base = loras.hf_base_hint(_base_model(tags)) if repo_kind == "lora" else None
+        if repo_kind == "lora":
+            targets = lora_targets(lora_base)
+            note = (t(f"LoRA, laut Repo für {', '.join(targets)} – vor dem Laden prüfen.",
+                      f"LoRA, according to the repo for {', '.join(targets)} – check before loading.")
+                    if targets else
+                    t("LoRA – Datei prüfen, dann zeigt NV-AI, zu welchem Modell sie passt.",
+                      "LoRA – check a file and NV-AI shows which model it fits."))
         elif repo_kind == "other":
             if "model_index.json" in names:
                 note = t("Nur im Diffusers-Format – NV-AI lädt Einzeldatei-Checkpoints.",
@@ -143,8 +163,12 @@ async def search(query: str, limit: int = 20) -> list[dict[str, Any]]:
             "parts": parts[:16],
             "kind": repo_kind,
             "base_model": _base_model(tags),
+            "lora_base": lora_base,
+            "trigger": _card_trigger(card),
             "note": note,
         })
+    if lora_only:
+        results = [r for r in results if r["kind"] == "lora"]
     return results
 
 
@@ -177,9 +201,8 @@ def classify(keys: list[str]) -> tuple[str, str]:
     def has(prefix: str) -> bool:
         return any(k.startswith(prefix) for k in keys)
 
-    if any("lora_up" in k or "lora_down" in k or ".lora_A." in k or k.startswith("lora_unet_")
-           for k in keys):
-        return "lora", t("LoRA – NV-AI bindet LoRAs noch nicht ein.", "LoRA – NV-AI does not support LoRAs yet.")
+    if loras.is_lora(keys):
+        return "lora", t("LoRA.", "LoRA.")
     unet = has("model.diffusion_model.")
     vae = has("first_stage_model.")
     if has("conditioner.embedders.1.") and unet:
@@ -257,7 +280,7 @@ def _classify_part(keys: list[str]) -> tuple[str, str] | None:
         return "controlnet", t("ControlNet – nur zusammen mit einem passenden Modell nutzbar.",
                                "ControlNet – only usable together with a matching model.")
     if starts("lora_te") or any(".lora." in k or "lora_" in k for k in keys[:200]):
-        return "lora", t("LoRA – NV-AI bindet LoRAs noch nicht ein.", "LoRA – NV-AI does not support LoRAs yet.")
+        return "lora", t("LoRA.", "LoRA.")
     if starts("decoder.") and (starts("encoder.") or starts("decoder.conv_in") or starts("decoder.conv1")
                                or starts("decoder.head")):
         return "vae", t("VAE – Baustein eines Modells, allein nicht nutzbar.",
@@ -308,8 +331,10 @@ async def inspect(repo: str, file: str) -> dict[str, Any]:
         header = json.loads(raw)
     except ValueError:
         return {**base, "verdict": t("Keine gültige safetensors-Datei.", "Not a valid safetensors file.")}
-    family, verdict = classify([k for k in header if k != "__metadata__"])
     size_gb = round(total / 1e9, 2) if total else None
+    if loras.is_lora([k for k in header if k != "__metadata__"]):
+        return await _inspect_lora(repo, file, header, size_gb, base)
+    family, verdict = classify([k for k in header if k != "__metadata__"])
     catalog = catalog_models(family)
     if catalog:
         verdict += t(f" Im Katalog: {', '.join(catalog)}.", f" In the catalog: {', '.join(catalog)}.")
@@ -319,6 +344,38 @@ async def inspect(repo: str, file: str) -> dict[str, Any]:
     return {**base, "ok": family in SUPPORTED, "family": family,
             "workflow": "sdxl" if family in SUPPORTED else None,
             "size_gb": size_gb, "verdict": verdict, "catalog": catalog}
+
+
+def _card_trigger(card: dict[str, Any]) -> str:
+    """Trigger-Woerter aus der Modellkarte (Diffusers-Trainer schreiben instance_prompt)."""
+    value = card.get("instance_prompt") or ""
+    if isinstance(value, list):
+        value = ", ".join(str(v) for v in value)
+    return str(value).strip()[:200]
+
+
+async def _inspect_lora(repo: str, file: str, header: dict[str, Any], size_gb: float | None,
+                        base: dict[str, Any]) -> dict[str, Any]:
+    lora_base, why = loras.detect(header)
+    targets = lora_targets(lora_base)
+    trigger = ""
+    try:
+        async with httpx.AsyncClient(timeout=15, headers=_auth()) as c:
+            r = await c.get(f"{API}/{repo}", params=[("expand[]", "cardData")])
+            if r.status_code == 200:
+                trigger = _card_trigger(r.json().get("cardData") or {})
+    except httpx.HTTPError:
+        pass
+    trigger = trigger or loras.trigger_from_metadata(header)
+    if lora_base and targets:
+        verdict = t(f"{why}. Läuft mit: {', '.join(targets)}.", f"{why}. Runs with: {', '.join(targets)}.")
+    elif lora_base:
+        verdict = t(f"{why}. Im Katalog gibt es dafür kein Modell.", f"{why}. There is no model for it in the catalog.")
+    else:
+        verdict = why
+    return {**base, "ok": bool(lora_base and targets), "kind": "lora", "family": lora_base,
+            "workflow": None, "target": "loras", "size_gb": size_gb, "verdict": verdict,
+            "catalog": targets, "trigger": trigger}
 
 
 # Erkannte Familie -> Familien im Katalog, die dieselbe Architektur rechnen.

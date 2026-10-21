@@ -136,7 +136,8 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
     """All known models with installation status, size, VRAM requirement and license.
 
     Args:
-        kind: 'image', 'audio', 'video' or '3d'; None = all.
+        kind: 'image', 'audio', 'video', '3d' or 'lora'; None = all. LoRAs carry their
+            family (which models they fit) and 'trigger' words for the prompt.
         detailed: Also return the description, pros and cons.
     """
     async with await _client() as c:
@@ -159,6 +160,11 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
             row["recommended"] = True
         if m.get("gpu_note"):
             row["gpu_note"] = m["gpu_note"]
+        if m.get("lora_bases"):
+            row["lora_bases"] = m["lora_bases"]
+        if m["kind"] == "lora":
+            row |= {"family": m["family"], "trigger": m.get("trigger", ""),
+                    "source_url": m.get("source_url", "")}
         if detailed:
             row |= {"description": m["description"], "pros": m["pros"], "cons": m["cons"],
                     "features": m.get("features", {})}
@@ -241,6 +247,7 @@ async def generate_image(
     controlnet_strength: float = 0.7,
     controlnet_end: float = 0.8,
     controlnet_preprocess: str = "none",
+    loras: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Generates an image locally on the GPU and returns file paths and asset IDs.
 
@@ -294,6 +301,10 @@ async def generate_image(
             fixed. A text that cites all ids counts as a finished description and goes to
             the model without the upsampler.
         controlnet_*: SD 3.5 only -- ignore for other models.
+        loras: LoRAs as [{"model_id": "...", "strength": 0.8}]. Only installed LoRAs whose
+            family fits the model: list_models(kind="lora") lists them, and each image or
+            video model names the LoRA families it takes in 'lora_bases'. Put the LoRA's
+            'trigger' words into the prompt. 0.6-1.0 is the usual strength.
 
     Returns:
         files, asset_ids, seed, model_id; for FLUX 3 also 'caption' -- the description
@@ -315,6 +326,7 @@ async def generate_image(
         "controlnet_strength": controlnet_strength,
         "controlnet_end": controlnet_end,
         "controlnet_preprocess": controlnet_preprocess,
+        "loras": loras or [],
     }
     return await _generate("/api/generate/image", payload, ctx)
 
@@ -325,8 +337,9 @@ async def expand_prompt(
     width: int = 1024,
     height: int = 1024,
     reference_asset_ids: list[str] | None = None,
+    target: str = "image",
 ) -> dict[str, Any]:
-    """Expands a short prompt into a full image description, for every image model.
+    """Expands a short prompt into a full prompt -- for images, video, sound or 3D.
 
     Uses the prompt upsampler that comes with FLUX 3 Image Klein (Qwen3.5-9B,
     Apache-2.0) -- it needs that model downloaded. About 15 s on an RTX 5060 Ti, longer
@@ -342,7 +355,13 @@ async def expand_prompt(
     Args:
         prompt: The short prompt, preferably in English.
         width, height: The planned image size -- the upsampler composes for it.
-        reference_asset_ids: Optional images the upsampler looks at (FLUX 3 editing).
+        reference_asset_ids: Optional images the upsampler looks at (FLUX 3 editing,
+            or the start image with target 'video_start').
+        target: 'image' (default), 'video' (Wan, LTX-Video: motion and camera),
+            'video_sound' (LTX-2.5: also describes the sound), 'video_start' (image to
+            video: motion only, reads the start image), 'sfx' (Stable Audio: sound
+            tags), 'music' (ACE-Step genre tags) or '3d' (an image prompt for one
+            object without floor or shadow, then image_to_3d). Measured 3-12 s each.
 
     Returns:
         prompt (as given), expanded (the full description), seconds.
@@ -350,7 +369,7 @@ async def expand_prompt(
     async with await _client() as c:
         r = await c.post("/api/prompt/expand", timeout=960.0, json={
             "prompt": prompt, "width": width, "height": height,
-            "reference_asset_ids": reference_asset_ids or [],
+            "reference_asset_ids": reference_asset_ids or [], "target": target,
         })
         if r.status_code != 200:
             return {"ok": False, "error": r.json().get("detail", r.text)}
@@ -407,6 +426,7 @@ async def generate_video(
     model_id: str | None = None,
     seed: int | None = None,
     image_asset_id: str | None = None,
+    loras: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
@@ -415,7 +435,7 @@ async def generate_video(
 
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
-    hunyuanvideo15-i2v-720p require it. The asset ID comes from
+    kandinsky5-lite-i2v require it. The asset ID comes from
     list_assets(kind="image") or from the return value of generate_image.
 
     Args:
@@ -429,11 +449,18 @@ async def generate_video(
         model_id: Force a model; otherwise the active video model.
         seed: For reproducible results.
         image_asset_id: Asset ID of the start image for image-to-video.
+        loras: LoRAs as [{"model_id": "...", "strength": 0.8}]. Only installed LoRAs whose
+            family fits the model: list_models(kind="lora") lists them, and each image or
+            video model names the LoRA families it takes in 'lora_bases'. Put the LoRA's
+            'trigger' words into the prompt. 0.6-1.0 is the usual strength.
+            Wan 2.2 A14B LoRAs often come as a high-noise and a low-noise file: load
+            both, each is applied to its own expert automatically.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
         "width": width, "height": height, "frames": frames, "fps": fps,
         "model_id": model_id, "seed": seed, "image_asset_id": image_asset_id,
+        "loras": loras or [],
     }
     return await _generate("/api/generate/video", payload, ctx)
 

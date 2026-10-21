@@ -136,6 +136,24 @@ textures) is only available when you install from source (see
 The two recommended image models, Qwen-Image-2512 and FLUX 3 Image Klein, are described in
 detail in [MODELS.md](MODELS.md).
 
+### LoRAs (Hugging Face and Civitai)
+
+Since 0.5.3, "Models" → "Search models and LoRAs" also finds LoRAs: on Hugging Face with the
+"LoRAs" switch, on Civitai in its own box below. Before anything is downloaded, NV-AI reads only
+the file header and recognizes which model the LoRA fits: SDXL (Pony, Illustrious, NoobAI …),
+SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan (1.3B, 5B, 14B) and LTX-2/2.3. Tested on 79
+LoRAs from Hugging Face, all recognized correctly. LoRAs land in `loras` in the models folder.
+
+On the Generate page each matching LoRA appears under the selected image or video model: tick
+it, set the strength (0.6–1.0 is usual) and add its trigger words to the prompt with
+"+ trigger". Wan 2.2 A14B LoRAs usually come as a high-noise and a low-noise file: download both,
+NV-AI applies each one to its own expert. REST and MCP: `loras=[{"model_id": "…", "strength": 0.8}]`.
+
+Civitai needs your own API key for almost every download (civitai.com → Settings → API Keys);
+it is stored in the data folder. Without a key the search works and NV-AI relies on Civitai's
+base-model label; with a key it checks the file header as on Hugging Face. Licenses and content
+of LoRAs are only stated on their pages — check them there before publishing anything.
+
 ### Storage locations
 
 "Models" → "Storage locations" (since 0.5.2) shows the data folder (history, images, logs) and

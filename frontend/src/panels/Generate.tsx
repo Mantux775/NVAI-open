@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type Asset, type GenKind, type Health, type ModelInfo, type ServerEvent } from '../api'
+import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
@@ -15,7 +15,9 @@ const MODES: { id: Mode; label: string; icon: string }[] = [
 ]
 
 // Video-Workflows, die ohne Startbild nicht laufen (siehe workflows.py).
-const I2V_WORKFLOWS = new Set(['wan_i2v', 'wan22_i2v', 'hunyuan15_i2v'])
+const I2V_WORKFLOWS = new Set(['wan_i2v', 'wan22_i2v', 'hunyuan15_i2v', 'kandinsky5_i2v'])
+// Diese nehmen ein Startbild, wenn eines gewählt ist, sonst Text zu Video (workflows.OPTIONAL_START_WORKFLOWS).
+const OPTIONAL_START_WORKFLOWS = new Set(['wan22_ti2v', 'ltx25', 'ltx23'])
 
 // Allgemeine Formate, alle rund 1 Megapixel. Das Format folgt der Silhouette: ein
 // stehender Mensch im Quadrat verliert eher Beine und bekommt weniger Pixel für die
@@ -37,6 +39,7 @@ const SCHEDULERS = ['simple', 'normal', 'sgm_uniform', 'beta', 'ddim_uniform']
 
 const VIDEO_SIZES = [
   { label: t('832 × 480 (Wan-Standard)', '832 × 480 (Wan default)'), w: 832, h: 480 },
+  { label: t('768 × 512 (Kandinsky)', '768 × 512 (Kandinsky)'), w: 768, h: 512 },
   { label: t('640 × 640 (quadratisch)', '640 × 640 (square)'), w: 640, h: 640 },
   { label: t('480 × 832 (Hochformat)', '480 × 832 (portrait)'), w: 480, h: 832 },
   { label: t('1280 × 720 (720p, langsam)', '1280 × 720 (720p, slow)'), w: 1280, h: 720 },
@@ -46,8 +49,27 @@ const PLACEHOLDER: Record<Mode, string> = {
   image: 'stylized fantasy sword, game asset, orthographic, clean background',
   audio: 'footsteps on gravel, close mic, dry, no music',
   video: 'a torch flickering in a dark stone corridor, slow camera push in',
-  '3d': '',
+  '3d': 'a weathered stone gargoyle',
 }
+
+// Was "Prompt ausbauen" je Reiter daraus macht -- steht im Tooltip des Knopfs.
+const EXPAND_TIP: Record<Mode, string> = {
+  image: t('Aus „a medieval blacksmith“ wird eine ganze Schmiede: Esse, Amboss, Funken, Licht.',
+    'Turns “a medieval blacksmith” into a whole forge: hearth, anvil, sparks, light.'),
+  video: t('Ergänzt Bewegung, Kamerafahrt, Ort und Licht; bei LTX-2.5 auch den Ton, mit Startbild nur die Bewegung.',
+    'Adds motion, camera move, setting and light; with LTX-2.5 also the sound, with a start image only the motion.'),
+  audio: t('Stable Audio: Klang-Tags (Quelle, Material, Raum, Mikrofon). ACE-Step: Genre-, Instrument- und Stimmungs-Tags.',
+    'Stable Audio: sound tags (source, material, room, microphone). ACE-Step: genre, instrument and mood tags.'),
+  '3d': t('Beschreibt ein einzelnes, geschlossenes Objekt ohne Boden und Schatten, so wie die 3D-Modelle es brauchen.',
+    'Describes a single closed object without floor or shadow, the way the 3D models need it.'),
+}
+
+// Wie mcp_server.MESH_PROMPT_SUFFIX / MESH_NEGATIVE: was ein Bild für die Mesh-Rekonstruktion braucht.
+const MESH_SUFFIX = 'Show the complete object, including any base or plinth that belongs to it, as a '
+  + 'single subject, centered and fully visible. It floats in empty space against a plain, flat light '
+  + 'grey background, lit by even, diffuse, shadowless studio light. Product shot.'
+const MESH_NEGATIVE = 'cast shadow, drop shadow, floor, ground plane, table surface, room, landscape, '
+  + 'environment, background objects, multiple objects, cropped, text, watermark'
 
 const HINT: Record<Mode, string> = {
   image: '',
@@ -115,6 +137,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // FLUX 3: Upsampler und Referenzbilder (Reihenfolge = "the first image", ...)
   const [upsample, setUpsample] = useState(true)
   const [refIds, setRefIds] = useState<string[]>([])
+  const [loraPicks, setLoraPicks] = useState<LoraRef[]>([])
   // "Prompt ausbauen": vorheriger Prompt zum Zurücknehmen, Laufzeit der letzten Runde
   const [expanding, setExpanding] = useState(false)
   const [promptBefore, setPromptBefore] = useState<string | null>(null)
@@ -175,7 +198,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       setProgress(event.progress)
       setStage(event.stage)
     } else if (event.type === 'job.done') {
-      api.jobAssets(event.job_id).then(setResults)
+      api.jobAssets(event.job_id).then((assets) => {
+        setResults(assets)
+        // 3D aus Text: das frische Bild gleich als Quellbild auswählen.
+        if (mode === '3d' && assets[0]?.kind === 'image') {
+          setSourceId(assets[0].id)
+          loadSources()
+        }
+      })
       setJobId(null)
       setProgress(1)
       setStage(t('fertig', 'done'))
@@ -227,8 +257,23 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // Bild-zu-Video: diese Modelle brauchen zwingend ein Startbild, Wan 2.2 TI2V
   // kann beides. Reine Text-zu-Video-Modelle bekommen die Auswahl gar nicht erst.
   const needsStart = mode === 'video' && I2V_WORKFLOWS.has(selected?.workflow ?? '')
-  const usesStart = needsStart || (mode === 'video' && selected?.workflow === 'wan22_ti2v')
+  const usesStart = needsStart || (mode === 'video' && OPTIONAL_START_WORKFLOWS.has(selected?.workflow ?? ''))
   const meshWorker = selected?.workflow ? health?.mesh_workers?.[selected.workflow] : undefined
+
+  // LoRAs, die zum gewählten Modell passen (Basis in lora_bases). Die Auswahl gilt je Modell;
+  // was nicht passt, fällt beim Wechsel weg.
+  const loraChoices = useMemo(
+    () => models.filter((m) => m.kind === 'lora' && m.installed
+      && (selected?.lora_bases ?? []).includes(m.family)),
+    [models, selected],
+  )
+  const activeLoras = loraPicks.filter((p) => loraChoices.some((l) => l.id === p.model_id))
+  const toggleLora = (id: string) =>
+    setLoraPicks((list) => (list.some((p) => p.model_id === id)
+      ? list.filter((p) => p.model_id !== id)
+      : [...list, { model_id: id, strength: 0.8 }]))
+  const setLoraStrength = (id: string, strength: number) =>
+    setLoraPicks((list) => list.map((p) => (p.model_id === id ? { ...p, strength } : p)))
 
   // Was das gewählte Bildmodell kann (registry.features_for). Fehlt ein Eintrag, gilt
   // das alte Verhalten: alles anbieten.
@@ -331,23 +376,31 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             ? !!prompt.trim() && !!cnImageId
             : !!prompt.trim()
 
-  // Prompt ausbauen geht mit jedem Bildmodell, braucht aber die Upsampler-Datei von FLUX 3.
+  // Prompt ausbauen geht mit jedem Modell, braucht aber die Upsampler-Datei von FLUX 3.
   const canExpand = models.some((m) => m.files.some((f) => f.installed && f.file.includes('upsampler')))
+  const expandTarget: ExpandTarget =
+    mode === 'image' ? 'image'
+      : mode === '3d' ? '3d'
+        : mode === 'audio' ? (isAce ? 'music' : 'sfx')
+          : usesStart && sourceId ? 'video_start'
+            : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
 
   const expandPrompt = async () => {
     if (expanding || busy || !prompt.trim()) return
     setExpanding(true)
     setError(null)
     try {
+      const refs = expandTarget === 'image' && maxRefs > 0 ? refIds
+        : expandTarget === 'video_start' ? [sourceId] : []
       const r = await api.expandPrompt({
-        prompt, width: imgSize.w, height: imgSize.h,
-        ...(maxRefs > 0 && refIds.length ? { reference_asset_ids: refIds } : {}),
+        prompt, width: imgSize.w, height: imgSize.h, target: expandTarget,
+        ...(refs.length ? { reference_asset_ids: refs } : {}),
       })
       setPromptBefore(prompt)
       setPrompt(r.expanded)
       setExpandSecs(r.seconds)
       // Schon ausgebaut: FLUX 3 soll ihn nicht ein zweites Mal umschreiben.
-      if (feat?.upsampler) setUpsample(false)
+      if (mode === 'image' && feat?.upsampler) setUpsample(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -360,8 +413,68 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     setPrompt(promptBefore)
     setPromptBefore(null)
     setExpandSecs(null)
-    if (feat?.upsampler) setUpsample(true)
+    if (mode === 'image' && feat?.upsampler) setUpsample(true)
   }
+
+  // 3D aus Text: erst ein Bild mit dem aktiven Bildmodell, das dann als Quellbild dient.
+  const imageModel = models.find((m) => m.kind === 'image' && m.runnable && m.id === modelId.image)
+  const meshImage = async () => {
+    if (busy || !prompt.trim()) return
+    setError(null)
+    setResults([])
+    setProgress(0)
+    setStage(t('in der Warteschlange', 'queued'))
+    // Ein für 3D ausgebauter Prompt enthält die Angaben schon.
+    const full = promptBefore !== null ? prompt : `${prompt.trim().replace(/[ .,]+$/, '')}. ${MESH_SUFFIX}`
+    try {
+      const job = await api.generateImage({
+        prompt: full,
+        negative_prompt: imageModel?.features?.negative_prompt === false ? '' : MESH_NEGATIVE,
+        model_id: imageModel?.id ?? null,
+        steps: null, seed: seed ? Number(seed) : null,
+        width: 1024, height: 1024, batch_size: 1,
+      })
+      setJobId(job.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // Der Hinweis zum Prompt steht im leeren Feld selbst, nicht als Absatz darunter.
+  const promptHint = mode === 'image' ? feat?.prompt_hint || '' : HINT[mode]
+  const placeholder = [promptHint, `${t('z. B.', 'e.g.')} ${feat?.placeholder || PLACEHOLDER[mode]}`]
+    .filter(Boolean).join('\n\n')
+
+  const expandRow = () => (
+    <div className="expand-row">
+      <button
+        className="btn small"
+        onClick={expandPrompt}
+        disabled={!canExpand || expanding || busy || !prompt.trim()}
+        title={canExpand
+          ? EXPAND_TIP[mode]
+          : t('Braucht den Upsampler von FLUX 3 Image Klein — das Modell unter „Modelle“ laden',
+            'Needs the FLUX 3 Image Klein upsampler — download that model under “Models”')}
+      >
+        {expanding ? t('Baut aus …', 'Expanding …') : t('✨ Prompt ausbauen', '✨ Expand prompt')}
+      </button>
+      {promptBefore !== null && !expanding && (
+        <button className="btn small ghost" onClick={undoExpand}>
+          {t('Zurück zum eigenen Prompt', 'Back to my prompt')}
+        </button>
+      )}
+      {(expanding || promptBefore !== null || !canExpand) && (
+        <span className="muted small">
+          {expanding
+            ? t('meist 3–40 s', 'usually 3–40 s')
+            : promptBefore !== null
+              ? t(`ausgebaut in ${expandSecs} s — lesen und streichen, was nicht stimmt`,
+                `expanded in ${expandSecs} s — read it and remove what is wrong`)
+              : t('Braucht FLUX 3 Image Klein (Upsampler).', 'Needs FLUX 3 Image Klein (upsampler).')}
+        </span>
+      )}
+    </div>
+  )
 
   // 3D: Nur TRELLIS.2 liefert Texturen. Fehlt es, steht das gut sichtbar oben, mit Download.
   const trellis = models.find((m) => m.kind === '3d' && m.workflow === 'trellis2')
@@ -467,6 +580,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           controlnet_strength: cnStrength,
           controlnet_end: cnEnd,
           controlnet_preprocess: cnPre,
+          loras: activeLoras,
         })
       } else if (mode === 'audio') {
         job = await api.generateAudio({ ...common, seconds, lyrics })
@@ -474,6 +588,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         job = await api.generateVideo({
           ...common, width: vidSize.w, height: vidSize.h, frames, fps,
           image_asset_id: usesStart ? sourceId || null : null,
+          loras: activeLoras,
         })
       } else {
         job = await api.generate3D({
@@ -604,8 +719,28 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         {mode === '3d' ? (
           <>
             {textureNotice()}
+            <details className="mesh-from-text" open={!!prompt.trim() || sourceImages.length === 0}>
+              <summary>{t('Objekt aus Text (optional)', 'Object from text (optional)')}</summary>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={placeholder}
+                rows={3}
+              />
+              {expandRow()}
+              <button
+                className="btn small full"
+                onClick={meshImage}
+                disabled={busy || !prompt.trim() || !imageModel}
+                title={imageModel
+                  ? t(`Erzeugt mit ${imageModel.name} ein Quellbild; danach unten das Mesh bauen`,
+                    `Creates a source image with ${imageModel.name}; then build the mesh below`)
+                  : t('Kein Bildmodell installiert', 'No image model installed')}
+              >
+                {t('Quellbild erzeugen', 'Create source image')}
+              </button>
+            </details>
             {sourcePicker(false)}
-            <p className="hint small">{HINT['3d']}</p>
           </>
         ) : (
           <>
@@ -629,47 +764,13 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder={feat?.placeholder || PLACEHOLDER[mode]}
+              placeholder={placeholder}
               rows={feat?.upsampler ? 4 : 6}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate()
               }}
             />
-            {mode === 'image' && (
-              <div className="expand-row">
-                <button
-                  className="btn small"
-                  onClick={expandPrompt}
-                  disabled={!canExpand || expanding || busy || !prompt.trim()}
-                  title={canExpand
-                    ? t('Macht aus wenigen Worten eine volle Bildbeschreibung, für jedes Bildmodell',
-                      'Turns a few words into a full image description, for every image model')
-                    : t('Braucht den Upsampler von FLUX 3 Image Klein — das Modell unter „Modelle“ laden',
-                      'Needs the FLUX 3 Image Klein upsampler — download that model under “Models”')}
-                >
-                  {expanding ? t('Baut aus …', 'Expanding …') : t('✨ Prompt ausbauen', '✨ Expand prompt')}
-                </button>
-                {promptBefore !== null && !expanding && (
-                  <button className="btn small ghost" onClick={undoExpand}>
-                    {t('Zurück zum eigenen Prompt', 'Back to my prompt')}
-                  </button>
-                )}
-                <span className="muted small">
-                  {expanding
-                    ? t('meist 10–40 s', 'usually 10–40 s')
-                    : promptBefore !== null
-                      ? t(`ausgebaut in ${expandSecs} s — jetzt lesen und streichen, was nicht stimmt`,
-                        `expanded in ${expandSecs} s — now read it and remove what is wrong`)
-                      : canExpand
-                        ? t('Aus „a medieval blacksmith“ wird eine ganze Schmiede: Esse, Amboss, Funken, Licht.',
-                          'Turns “a medieval blacksmith” into a whole forge: hearth, anvil, sparks, light.')
-                        : t('Braucht FLUX 3 Image Klein (Upsampler).', 'Needs FLUX 3 Image Klein (upsampler).')}
-                </span>
-              </div>
-            )}
-            {(feat?.prompt_hint || HINT[mode]) && (
-              <p className="hint small">{feat?.prompt_hint || HINT[mode]}</p>
-            )}
+            {expandRow()}
 
             {mode === 'audio' && isAce && (
               <>
@@ -735,6 +836,44 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         )}
         {mode === 'image' && selected?.warning && (
           <p className="hint small warn">{selected.warning}</p>
+        )}
+        {(mode === 'image' || mode === 'video') && (selected?.lora_bases?.length ?? 0) > 0 && (
+          <div className="lora-picker">
+            <h3>LoRAs</h3>
+            {loraChoices.length === 0 ? (
+              <p className="hint small">
+                {t('Keine passende LoRA geladen. ', 'No matching LoRA downloaded. ')}
+                <button className="link-btn" onClick={onShowModels}>
+                  {t('Unter „Modelle“ suchen', 'Search under “Models”')}
+                </button>
+              </p>
+            ) : (
+              loraChoices.map((l) => {
+                const pick = loraPicks.find((p) => p.model_id === l.id)
+                return (
+                  <div key={l.id} className="lora-row">
+                    <label title={l.source_url || l.name}>
+                      <input type="checkbox" checked={!!pick} onChange={() => toggleLora(l.id)} />
+                      <span className="lora-name">{l.name.replace(/^.*\//, '').replace(/\.safetensors$/, '')}</span>
+                    </label>
+                    {pick && (
+                      <>
+                        <input type="range" min={0} max={1.5} step={0.05} value={pick.strength}
+                          onChange={(e) => setLoraStrength(l.id, Number(e.target.value))} />
+                        <span className="muted small">{pick.strength.toFixed(2)}</span>
+                        {l.trigger && !prompt.includes(l.trigger) && (
+                          <button className="btn small ghost" title={l.trigger}
+                            onClick={() => setPrompt((p) => (p.trim() ? `${l.trigger}, ${p}` : l.trigger!))}>
+                            {t('+ Trigger', '+ trigger')}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
         )}
 
         {mode === 'image' && (

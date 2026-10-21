@@ -62,7 +62,8 @@ After an NV-AI update, a running Claude Code session only sees the new tool desc
 | `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros/cons and `features` |
 | `download_model` / `delete_model` / `set_active_model` | Model management |
 | `generate_image` | Image → file paths |
-| `expand_prompt` | A few words → full image description, for every image model (needs FLUX 3 downloaded) |
+| `list_models(kind="lora")` | Downloaded LoRAs with their family and trigger words; pass them as `loras=[{model_id, strength}]` to `generate_image` / `generate_video` (the model's `lora_bases` says which fit) |
+| `expand_prompt` | A few words → full prompt for every image model; `target` = video, video_sound, video_start, sfx, music or 3d for the other kinds (needs FLUX 3 downloaded) |
 | `generate_audio` | SFX or music → file paths |
 | `generate_video` | Short clip → file paths |
 | `image_to_3d` | Image asset → GLB mesh |
@@ -100,6 +101,9 @@ license. Downloads are several GB; ask the user first.
 | Image 832 × 1216, 4 steps | Boogu-Image Turbo NVFP4 | ~10 s, first run ~17 s |
 | Edit 832 × 1216 | Boogu-Image Edit NVFP4 | ~147 s |
 | Video with sound 1280 × 704, 4 s | LTX-2.5 NVFP4 | ~72 s; image to video 448 × 832 ~45 s |
+| Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
+| Video 848 × 480, 49 frames | Mochi 1 preview fp8 | ~351 s with loading |
+| Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
 | Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
 
 The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the

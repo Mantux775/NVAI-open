@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 import httpx
 
-from . import __version__, comfy, config, db, folders, hfsearch, i18n, jobs, mesh_workers, registry, report
+from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report
 from .i18n import t
 from . import gpu as gpu_info
 from .schemas import (
@@ -68,10 +68,13 @@ API_FEATURES = [
     "upload",          # POST /api/upload
     "model_search",    # GET /api/models/search und /inspect: Hugging Face mit Pruefung
     "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
+    "expand_targets",  # ... auch fuer Video, Video mit Ton/Startbild, SFX, Musik und 3D (target)
     "gpus",            # GET/PUT /api/gpus: mehrere Karten, Aufgaben je Karte (experimentell)
     "report",          # POST /api/report: anonymisierter Fehlerbericht fuer GitHub
     "cancel_job",      # POST /api/jobs/{id}/cancel: einzelne Jobs abbrechen, Downloads sofort
     "folders",         # GET/PUT /api/settings/folders, POST /api/restart: Daten- und Modellordner
+    "loras",           # LoRAs: Suche (kind=lora), Laden, loras=[{model_id, strength}] beim Generieren
+    "civitai",         # GET /api/civitai/search, PUT /api/settings/civitai: LoRAs von Civitai
 ]
 
 
@@ -456,11 +459,67 @@ async def delete_hf_token(request: Request) -> dict[str, Any]:
     return {"logged_in": bool(registry.hf_token()), "name": None}
 
 
-@app.get("/api/models/search")
-async def search_models(q: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien."""
+@app.get("/api/settings/civitai")
+async def civitai_status() -> dict[str, Any]:
+    """Ist ein Civitai-API-Schluessel hinterlegt, und fuer wen?"""
+    token = registry.civitai_token()
+    if not token:
+        return {"logged_in": False, "name": None}
     try:
-        return await hfsearch.search(q, min(max(limit, 1), 50))
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get("https://civitai.com/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+        name = r.json().get("username") if r.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
+        name = None
+    return {"logged_in": True, "name": name}
+
+
+@app.post("/api/settings/civitai")
+async def set_civitai_token(request: Request, body: dict[str, str]) -> dict[str, Any]:
+    """Prueft den Schluessel bei Civitai und legt ihn im Datenordner ab. Nur vom eigenen Rechner."""
+    if not _is_local(request.headers, request.client):
+        raise HTTPException(403, t("Den Schlüssel nur am eigenen Rechner eintragen.", "Enter the key on this computer only."))
+    token = (body.get("token") or "").strip()
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get("https://civitai.com/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError as e:
+        raise HTTPException(502, t(f"Civitai nicht erreichbar: {e}", f"Civitai not reachable: {e}")) from e
+    if r.status_code != 200 or not token:
+        raise HTTPException(400, t("Civitai lehnt den Schlüssel ab.", "Civitai rejected the key."))
+    path = config.DATA_DIR / "civitai_token"
+    path.write_text(token, encoding="utf-8")
+    return {"logged_in": True, "name": r.json().get("username")}
+
+
+@app.delete("/api/settings/civitai")
+async def delete_civitai_token(request: Request) -> dict[str, Any]:
+    if not _is_local(request.headers, request.client):
+        raise HTTPException(403, t("Nur vom eigenen Rechner.", "Only from this computer."))
+    (config.DATA_DIR / "civitai_token").unlink(missing_ok=True)
+    return {"logged_in": bool(registry.civitai_token()), "name": None}
+
+
+@app.get("/api/civitai/search")
+async def civitai_search(q: str = "", lora_base: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    """LoRAs auf Civitai, mit Basis, Trigger-Woertern und passenden Katalogmodellen."""
+    try:
+        return await civitai.search(q, lora_base, min(max(limit, 1), 50))
+    except httpx.HTTPError as e:
+        raise HTTPException(502, t(f"Civitai nicht erreichbar: {e}", f"Civitai not reachable: {e}")) from e
+
+
+@app.get("/api/civitai/check")
+async def civitai_check(url: str, base_model: str = "") -> dict[str, Any]:
+    """Prueft eine Civitai-LoRA vor dem Laden (mit Schluessel am Dateikopf)."""
+    return await civitai.check(url, base_model)
+
+
+@app.get("/api/models/search")
+async def search_models(q: str, limit: int = 20, kind: str | None = None) -> list[dict[str, Any]]:
+    """Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien. kind=lora sucht nur LoRAs."""
+    try:
+        return await hfsearch.search(q, min(max(limit, 1), 50), lora_only=kind == "lora")
     except httpx.HTTPError as e:
         raise HTTPException(502, t(f"Hugging Face nicht erreichbar: {e}", f"Hugging Face not reachable: {e}")) from e
 
@@ -478,9 +537,13 @@ async def download_model(req: DownloadRequest) -> Job:
         if entry is None:
             raise HTTPException(404, t(f"Unbekanntes Modell: {req.model_id}", f"Unknown model: {req.model_id}"))
     elif req.repo and req.file:
+        if req.kind == "lora" and req.family not in loras.BASES:
+            raise HTTPException(400, t(f"Unbekannte LoRA-Basis: {req.family}", f"Unknown LoRA base: {req.family}"))
         entry = registry.register_custom(
-            req.repo, req.file, req.target, req.kind, req.family, req.workflow,
+            req.repo, req.file, "loras" if req.kind == "lora" else req.target, req.kind, req.family,
+            None if req.kind == "lora" else req.workflow,
             license_=req.license, size_gb=req.size_gb,
+            trigger=req.trigger, source_url=req.source_url, url=req.url,
         )
     else:
         raise HTTPException(400, t("model_id oder repo+file erforderlich", "model_id or repo+file required"))
@@ -671,7 +734,8 @@ async def problem_report(req: ProblemReportRequest) -> dict[str, Any]:
 @app.post("/api/prompt/expand", response_model=ExpandPromptResult)
 async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
     """Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine
-    volle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Nur Text.
+    volle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Mit target auch
+    einen Video-, Ton- oder 3D-Prompt (prompt_targets.py). Nur Text.
 
     Blockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden
     Bild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.

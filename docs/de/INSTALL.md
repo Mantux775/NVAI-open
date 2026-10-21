@@ -137,6 +137,26 @@ PBR-Texturen) gibt es nur bei der Installation aus dem Quelltext (siehe
 Die beiden empfohlenen Bildmodelle, Qwen-Image-2512 und FLUX 3 Image Klein, beschreibt
 [MODELLE.md](MODELLE.md) ausführlich.
 
+### LoRAs (Hugging Face und Civitai)
+
+Seit 0.5.3 findet „Modelle“ → „Modelle und LoRAs suchen“ auch LoRAs: auf Hugging Face mit dem
+Umschalter „LoRAs“, auf Civitai im eigenen Kasten darunter. Vor jedem Download liest NV-AI nur
+den Dateikopf und erkennt daran, zu welchem Modell die LoRA passt: SDXL (Pony, Illustrious,
+NoobAI …), SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan (1.3B, 5B, 14B) und LTX-2/2.3.
+Getestet an 79 LoRAs von Hugging Face, alle richtig erkannt. LoRAs landen in `loras` im
+Modellordner.
+
+Beim Generieren steht jede passende LoRA unter dem gewählten Bild- oder Videomodell: anhaken,
+Stärke einstellen (üblich 0,6–1,0) und mit „+ Trigger“ ihre Trigger-Wörter in den Prompt
+übernehmen. LoRAs für Wan 2.2 A14B kommen meist als High-Noise- und Low-Noise-Datei: beide laden,
+NV-AI hängt jede an ihren Experten. REST und MCP: `loras=[{"model_id": "…", "strength": 0.8}]`.
+
+Civitai verlangt für fast jeden Download einen eigenen API-Schlüssel (civitai.com → Settings →
+API Keys); er liegt im Datenordner. Ohne Schlüssel funktioniert die Suche, und NV-AI verlässt
+sich auf Civitais Angabe zum Basismodell; mit Schlüssel prüft es den Dateikopf wie bei Hugging
+Face. Lizenzen und Inhalte von LoRAs stehen nur auf deren Seiten — dort prüfen, bevor etwas
+veröffentlicht wird.
+
 ### Speicherorte
 
 „Modelle“ → „Speicherorte“ (seit 0.5.2) zeigt Datenordner (Verlauf, Bilder, Protokolle) und

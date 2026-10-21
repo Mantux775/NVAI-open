@@ -11,7 +11,12 @@ JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild.
-ModelKind = Literal["image", "audio", "video", "3d", "controlnet"]
+ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora"]
+
+
+class LoraRef(BaseModel):
+    model_id: str = Field(..., description="LoRA aus list_models(kind='lora')")
+    strength: float = Field(1.0, ge=-2.0, le=3.0, description="Staerke; 0,6-1,0 ist ueblich")
 
 
 # ------------------------------------------------------------ Anfragen
@@ -107,6 +112,11 @@ class GenerateImageRequest(BaseModel):
     controlnet_canny_low: float = Field(0.4, ge=0.01, le=0.99)
     controlnet_canny_high: float = Field(0.8, ge=0.01, le=0.99)
 
+    loras: list[LoraRef] = Field(
+        default_factory=list, max_length=8,
+        description="LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke",
+    )
+
 
 class GenerateAudioRequest(BaseModel):
     prompt: str = Field(..., description="Klangbeschreibung (SFX) oder Genre-Tags (Musik)")
@@ -144,21 +154,37 @@ class GenerateVideoRequest(BaseModel):
         None, description="Fuer Bild-zu-Video: Asset-ID des Startbilds"
     )
 
+    loras: list[LoraRef] = Field(
+        default_factory=list, max_length=8,
+        description="LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke",
+    )
+
+
+ExpandTarget = Literal["image", "video", "video_sound", "video_start", "sfx", "music", "3d"]
+
 
 class ExpandPromptRequest(BaseModel):
     prompt: str = Field(..., min_length=1, description="Knapper Prompt, der ausgebaut werden soll")
+    target: ExpandTarget = Field(
+        "image",
+        description="Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound "
+                    "(LTX-2.5, mit Ton), video_start (nur Bewegung, liest das Startbild in "
+                    "reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), "
+                    "3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
+    )
     width: int = Field(1024, ge=256, le=2048, multiple_of=8,
                        description="Geplantes Format -- der Upsampler richtet den Bildaufbau danach")
     height: int = Field(1024, ge=256, le=2048, multiple_of=8)
     reference_asset_ids: list[str] = Field(
         default_factory=list, max_length=10,
-        description="Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3)",
+        description="Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3, "
+                    "Startbild bei video_start)",
     )
 
 
 class ExpandPromptResult(BaseModel):
     prompt: str = Field(..., description="Der eingegebene Prompt")
-    expanded: str = Field(..., description="Die ausgebaute Bildbeschreibung, fuer jedes Bildmodell")
+    expanded: str = Field(..., description="Der ausgebaute Prompt, fuer jedes Modell des Ziels")
     seconds: float = Field(..., description="Dauer inklusive Warten auf die GPU")
 
 
@@ -297,6 +323,11 @@ class ModelInfo(BaseModel):
     # Bedienelemente im Frontend und fuer Claude ueber list_models. Siehe
     # registry.features_for.
     features: dict[str, Any] = {}
+    # Generatoren: welche LoRA-Basen sie nehmen (leer = keine). LoRAs: ihre Basis steht in
+    # family, dazu Trigger-Woerter und die Quelle.
+    lora_bases: list[str] = []
+    trigger: str = ""
+    source_url: str = ""
 
 
 class DownloadRequest(BaseModel):
@@ -310,6 +341,10 @@ class DownloadRequest(BaseModel):
     # Aus der Pruefung (GET /api/models/inspect), damit der Katalog sie zeigt
     license: str | None = None
     size_gb: float | None = None
+    # LoRAs: Trigger-Woerter und Herkunft (Hugging Face oder Civitai)
+    trigger: str = ""
+    source_url: str | None = None
+    url: str | None = Field(None, description="Direkter Download (Civitai) statt repo+file")
     clean: bool = Field(
         False, description="Alten/unvollstaendigen Stand vorher loeschen und frisch laden"
     )

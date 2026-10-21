@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "x-api-version": 1
  },
  "paths": {
@@ -421,10 +421,216 @@
     }
    }
   },
+  "/api/settings/civitai": {
+   "get": {
+    "summary": "Civitai Status",
+    "description": "Ist ein Civitai-API-Schluessel hinterlegt, und fuer wen?",
+    "operationId": "civitai_status_api_settings_civitai_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Civitai Status Api Settings Civitai Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "summary": "Set Civitai Token",
+    "description": "Prueft den Schluessel bei Civitai und legt ihn im Datenordner ab. Nur vom eigenen Rechner.",
+    "operationId": "set_civitai_token_api_settings_civitai_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": {
+         "type": "string"
+        },
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Set Civitai Token Api Settings Civitai Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Delete Civitai Token",
+    "operationId": "delete_civitai_token_api_settings_civitai_delete",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Delete Civitai Token Api Settings Civitai Delete"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/civitai/search": {
+   "get": {
+    "summary": "Civitai Search",
+    "description": "LoRAs auf Civitai, mit Basis, Trigger-Woertern und passenden Katalogmodellen.",
+    "operationId": "civitai_search_api_civitai_search_get",
+    "parameters": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Q"
+      }
+     },
+     {
+      "name": "lora_base",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Lora Base"
+      }
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 20,
+       "title": "Limit"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "additionalProperties": true
+         },
+         "title": "Response Civitai Search Api Civitai Search Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/civitai/check": {
+   "get": {
+    "summary": "Civitai Check",
+    "description": "Prueft eine Civitai-LoRA vor dem Laden (mit Schluessel am Dateikopf).",
+    "operationId": "civitai_check_api_civitai_check_get",
+    "parameters": [
+     {
+      "name": "url",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Url"
+      }
+     },
+     {
+      "name": "base_model",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Base Model"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Civitai Check Api Civitai Check Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/models/search": {
    "get": {
     "summary": "Search Models",
-    "description": "Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien.",
+    "description": "Weitere Modelle auf Hugging Face -- Repos samt Checkpoint-Dateien. kind=lora sucht nur LoRAs.",
     "operationId": "search_models_api_models_search_get",
     "parameters": [
      {
@@ -444,6 +650,22 @@
        "type": "integer",
        "default": 20,
        "title": "Limit"
+      }
+     },
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
       }
      }
     ],
@@ -1153,7 +1375,7 @@
   "/api/prompt/expand": {
    "post": {
     "summary": "Expand Prompt",
-    "description": "Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine\nvolle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Nur Text.\n\nBlockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden\nBild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.",
+    "description": "Prompt ausbauen: der Upsampler von FLUX 3 macht aus einer knappen Eingabe eine\nvolle Bildbeschreibung -- fuer jedes Bildmodell, nicht nur FLUX 3. Mit target auch\neinen Video-, Ton- oder 3D-Prompt (prompt_targets.py). Nur Text.\n\nBlockiert bis fertig. Laeuft in der GPU-Queue, wartet also hinter einem laufenden\nBild. Der Job wird danach geloescht, damit der Verlauf nur Bilder zeigt.",
     "operationId": "expand_prompt_api_prompt_expand_post",
     "requestBody": {
      "content": {
@@ -1820,7 +2042,8 @@
        "audio",
        "video",
        "3d",
-       "controlnet"
+       "controlnet",
+       "lora"
       ],
       "title": "Kind",
       "default": "image"
@@ -1864,6 +2087,34 @@
       ],
       "title": "Size Gb"
      },
+     "trigger": {
+      "type": "string",
+      "title": "Trigger",
+      "default": ""
+     },
+     "source_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Url"
+     },
+     "url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Url",
+      "description": "Direkter Download (Civitai) statt repo+file"
+     },
      "clean": {
       "type": "boolean",
       "title": "Clean",
@@ -1881,6 +2132,21 @@
       "minLength": 1,
       "title": "Prompt",
       "description": "Knapper Prompt, der ausgebaut werden soll"
+     },
+     "target": {
+      "type": "string",
+      "enum": [
+       "image",
+       "video",
+       "video_sound",
+       "video_start",
+       "sfx",
+       "music",
+       "3d"
+      ],
+      "title": "Target",
+      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
+      "default": "image"
      },
      "width": {
       "type": "integer",
@@ -1906,7 +2172,7 @@
       "type": "array",
       "maxItems": 10,
       "title": "Reference Asset Ids",
-      "description": "Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3)"
+      "description": "Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3, Startbild bei video_start)"
      }
     },
     "type": "object",
@@ -1925,7 +2191,7 @@
      "expanded": {
       "type": "string",
       "title": "Expanded",
-      "description": "Die ausgebaute Bildbeschreibung, fuer jedes Bildmodell"
+      "description": "Der ausgebaute Prompt, fuer jedes Modell des Ziels"
      },
      "seconds": {
       "type": "number",
@@ -2473,6 +2739,15 @@
       "minimum": 0.01,
       "title": "Controlnet Canny High",
       "default": 0.8
+     },
+     "loras": {
+      "items": {
+       "$ref": "#/components/schemas/LoraRef"
+      },
+      "type": "array",
+      "maxItems": 8,
+      "title": "Loras",
+      "description": "LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke"
      }
     },
     "type": "object",
@@ -2583,6 +2858,15 @@
       ],
       "title": "Image Asset Id",
       "description": "Fuer Bild-zu-Video: Asset-ID des Startbilds"
+     },
+     "loras": {
+      "items": {
+       "$ref": "#/components/schemas/LoraRef"
+      },
+      "type": "array",
+      "maxItems": 8,
+      "title": "Loras",
+      "description": "LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke"
      }
     },
     "type": "object",
@@ -2706,6 +2990,28 @@
     ],
     "title": "Job"
    },
+   "LoraRef": {
+    "properties": {
+     "model_id": {
+      "type": "string",
+      "title": "Model Id",
+      "description": "LoRA aus list_models(kind='lora')"
+     },
+     "strength": {
+      "type": "number",
+      "maximum": 3.0,
+      "minimum": -2.0,
+      "title": "Strength",
+      "description": "Staerke; 0,6-1,0 ist ueblich",
+      "default": 1.0
+     }
+    },
+    "type": "object",
+    "required": [
+     "model_id"
+    ],
+    "title": "LoraRef"
+   },
    "ModelFile": {
     "properties": {
      "repo": {
@@ -2773,7 +3079,8 @@
        "audio",
        "video",
        "3d",
-       "controlnet"
+       "controlnet",
+       "lora"
       ],
       "title": "Kind"
      },
@@ -2914,6 +3221,24 @@
       "type": "object",
       "title": "Features",
       "default": {}
+     },
+     "lora_bases": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Lora Bases",
+      "default": []
+     },
+     "trigger": {
+      "type": "string",
+      "title": "Trigger",
+      "default": ""
+     },
+     "source_url": {
+      "type": "string",
+      "title": "Source Url",
+      "default": ""
      }
     },
     "type": "object",

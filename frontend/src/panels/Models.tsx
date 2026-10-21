@@ -6,6 +6,7 @@ import { GpuSettings } from '../components/GpuSettings'
 import { ContentBadge } from '../components/ContentBadge'
 import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
+import { CivitaiSearch } from './CivitaiSearch'
 import { HfToken } from './HfToken'
 
 interface Props {
@@ -25,6 +26,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'video', label: 'Video' },
   { id: '3d', label: '3D' },
   { id: 'controlnet', label: 'ControlNet' },
+  { id: 'lora', label: 'LoRA' },
 ]
 
 export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props) {
@@ -247,7 +249,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
           >
             {hfOpen
               ? t('Suche schließen', 'Close search')
-              : t('Auf Hugging Face suchen', 'Search Hugging Face')}
+              : t('Modelle und LoRAs suchen', 'Search models and LoRAs')}
           </button>
           {busyDownloads > 0 && (
             <button className="btn small ghost danger-text" onClick={cancelDownloads}>
@@ -302,6 +304,15 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
             setExpanded((s) => new Set(s).add(id))
             setTimeout(() => document.getElementById(`model-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50)
           }}
+          onQueued={(text) => {
+            setMessage(text)
+            load()
+          }}
+        />
+      )}
+      {hfOpen && (
+        <CivitaiSearch
+          catalog={models}
           onQueued={(text) => {
             setMessage(text)
             load()
@@ -381,6 +392,9 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                   {!m.workflow && <span className="badge">{t('kein Workflow', 'no workflow')}</span>}
                 </h3>
                 <p className="best-for">{m.best_for}</p>
+                {m.kind === 'lora' && m.trigger && (
+                  <p className="muted small">{t('Trigger', 'Trigger')}: <code>{m.trigger}</code></p>
+                )}
                 {m.gpu_note && <p className="warn-text small">{m.gpu_note}</p>}
                 <p className="muted small">
                   {t(

@@ -50,13 +50,15 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checks, setChecks] = useState<Record<string, HfCheck | 'checking'>>({})
+  // LoRAs: eigene Suche (HF-Filter "lora"), die Prüfung ordnet jede Datei einem Modell zu.
+  const [loraMode, setLoraMode] = useState(false)
 
   const search = async () => {
     if (!query.trim()) return
     setBusy(true)
     setError(null)
     try {
-      setResults(await api.searchHf(query.trim()))
+      setResults(await api.searchHf(query.trim(), 50, loraMode ? 'lora' : undefined))
       setSearched(query.trim())
       setChecks({})
     } catch (e) {
@@ -100,7 +102,8 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
   const inCatalog = useMemo(() => (searched ? catalogHits(catalog, searched) : []), [catalog, searched])
   // Standard: nur Repos mit ladbaren Checkpoints oder erkennbaren Modellteilen. LoRAs,
   // GGUF-, Diffusers- und Sammel-Repos ohne Modell blendet der Schalter wieder ein.
-  const visible = results?.filter((r) => showAll || r.kind === 'checkpoint' || r.kind === 'parts') ?? []
+  const visible = results?.filter((r) =>
+    loraMode ? r.kind === 'lora' : showAll || r.kind === 'checkpoint' || r.kind === 'parts') ?? []
   const hidden = (results?.length ?? 0) - visible.length
 
   const fileRow = (repo: string, file: string, license: string, label?: string) => {
@@ -120,6 +123,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
             <span className={c.ok ? 'ok-text small' : 'warn-text small'}>
               {c.verdict}
               {c.size_gb !== null && ` · ${c.size_gb} GB`}
+              {c.kind === 'lora' && c.trigger && ` · ${t('Trigger', 'Trigger')}: ${c.trigger}`}
             </span>
             {c.ok && (
               <button className="btn small primary" onClick={() => download(c, license)}>
@@ -134,8 +138,27 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
 
   return (
     <section className="panel hf-search">
-      <h3>{t('Weitere Modelle auf Hugging Face', 'More models on Hugging Face')}</h3>
-      <p className="muted small">
+      <div className="row-between">
+        <h3>{loraMode ? t('LoRAs auf Hugging Face', 'LoRAs on Hugging Face')
+          : t('Weitere Modelle auf Hugging Face', 'More models on Hugging Face')}</h3>
+        <div className="seg">
+          <button className={loraMode ? 'btn small ghost' : 'btn small'}
+            onClick={() => { setLoraMode(false); setResults(null) }}>{t('Modelle', 'Models')}</button>
+          <button className={loraMode ? 'btn small' : 'btn small ghost'}
+            onClick={() => { setLoraMode(true); setResults(null) }}>LoRAs</button>
+        </div>
+      </div>
+      {loraMode && (
+        <p className="muted small">
+          {t('Die Prüfung liest nur den Dateikopf und erkennt daran, zu welchem Modell eine LoRA passt '
+            + '(SDXL, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan, LTX-2). Geladen wird nach „loras“ im '
+            + 'Modellordner; beim Generieren stehen sie dann unter dem passenden Modell.',
+          'The check only reads the file header and recognizes which model a LoRA fits (SDXL, '
+            + 'Qwen-Image, Z-Image, FLUX.1/Chroma, Wan, LTX-2). It is downloaded to “loras” in the models '
+            + 'folder; when generating, it shows up under the matching model.')}
+        </p>
+      )}
+      {!loraMode && <p className="muted small">
         {t(
           'Vor dem Laden prüft NV-AI die Datei. Laden lassen sich vollständige SDXL-Checkpoints '
             + '(zum Beispiel Juggernaut, Pony, Illustrious) und SD-1.5-Checkpoints. Teile neuerer Modelle '
@@ -146,7 +169,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
             + 'models (Qwen, FLUX, Wan …) are recognized, and the check names the matching catalog '
             + 'model. The license is stated in the repo — please check it there before publishing images.',
         )}
-      </p>
+      </p>}
       <form
         className="hf-form"
         onSubmit={(e) => {
@@ -156,7 +179,9 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
       >
         <input
           type="search"
-          placeholder={t('z. B. juggernaut xl, pony, qwen image', 'e.g. juggernaut xl, pony, qwen image')}
+          placeholder={loraMode
+            ? t('z. B. wan 2.2 camera, qwen image pixel art, sdxl anime', 'e.g. wan 2.2 camera, qwen image pixel art, sdxl anime')
+            : t('z. B. juggernaut xl, pony, qwen image', 'e.g. juggernaut xl, pony, qwen image')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -166,7 +191,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
       </form>
       {error && <div className="error">{error}</div>}
 
-      {inCatalog.length > 0 && (
+      {!loraMode && inCatalog.length > 0 && (
         <div className="hf-catalog">
           <div className="muted small">{t('Schon im Katalog:', 'Already in the catalog:')}</div>
           {inCatalog.map((m) => (
@@ -184,7 +209,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
         </div>
       )}
 
-      {results && (
+      {results && !loraMode && (
         <label className="hf-toggle muted small">
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
           {t(
@@ -202,7 +227,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
       )}
       {visible.map((r) => {
         const parts = [...r.parts]
-          .filter((p) => showAll || p.kind !== 'lora')
+          .filter((p) => loraMode || showAll || p.kind !== 'lora')
           .sort((a, b) => PART_ORDER.indexOf(a.kind) - PART_ORDER.indexOf(b.kind))
         return (
           <div key={r.repo} className="hf-result">
@@ -219,6 +244,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
               {r.gated && <span className="badge warn">{t('Lizenz bestätigen', 'Accept license')}</span>}
             </div>
             {r.note && <p className="muted small">{r.note}</p>}
+            {loraMode && r.trigger && <p className="muted small">{t('Trigger', 'Trigger')}: <code>{r.trigger}</code></p>}
             {r.files.map((f) => fileRow(r.repo, f, r.license))}
             {parts.map((p) => fileRow(r.repo, p.file, r.license, PART_LABEL[p.kind]()))}
           </div>

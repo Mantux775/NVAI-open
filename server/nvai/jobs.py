@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import comfy, config, db, flux3_prompt, gpu, i18n, mesh_workers, registry, workflows
+from . import comfy, config, db, flux3_prompt, gpu, i18n, loras, mesh_workers, prompt_targets, registry, workflows
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -384,6 +384,28 @@ def _resolve_model(p: dict[str, Any], kind: str) -> dict[str, Any]:
     return entry
 
 
+def _resolve_loras(p: dict[str, Any], entry: dict[str, Any]) -> list[dict[str, Any]]:
+    """LoRA-Angaben der Anfrage pruefen und in Dateinamen fuer loras.apply uebersetzen."""
+    out = []
+    for ref in p.get("loras") or []:
+        lora = registry.get_entry(ref["model_id"])
+        if lora is None or lora.get("kind") != "lora":
+            raise RuntimeError(t(f"Unbekannte LoRA: {ref['model_id']}", f"Unknown LoRA: {ref['model_id']}"))
+        if not registry.is_installed(lora):
+            raise RuntimeError(t(f"LoRA '{lora['name']}' ist nicht geladen.",
+                                 f"LoRA '{lora['name']}' is not downloaded."))
+        if not loras.compatible(lora, entry):
+            raise RuntimeError(t(
+                f"LoRA '{lora['name']}' ist für {loras.BASES.get(lora['family'], lora['family'])} "
+                f"und passt nicht zu {_name(entry)}.",
+                f"LoRA '{lora['name']}' is for {loras.BASES.get(lora['family'], lora['family'])} "
+                f"and does not fit {_name(entry)}."))
+        name = workflows.file_name(lora["files"][0])
+        out.append({"model_id": lora["id"], "file": name, "strength": float(ref.get("strength", 1.0)),
+                    "expert": loras.expert_of(name)})
+    return out
+
+
 async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict[str, Any]) -> list[str]:
     """Gemeinsamer Pfad fuer Bild, Audio und Video: Modell aufloesen, Graph bauen,
     ausfuehren, Ergebnisse in die Library legen."""
@@ -392,6 +414,11 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     await _ensure_backend(ctx)
 
     graph, seed = workflows.build(entry, p)
+    lora_files = _resolve_loras(p, entry)
+    if lora_files:
+        loras.apply(graph, lora_files)
+        extra_meta = {**extra_meta, "loras": [
+            {"model_id": lo["model_id"], "strength": lo["strength"]} for lo in lora_files]}
     comfy.set_loaded_model(_name(entry))  # fuer die VRAM-Anzeige
     ctx.progress(0.02, t("generiert", "generating"))
 
@@ -516,10 +543,35 @@ async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list
     return {"upsampled": True, "caption": caption}
 
 
+async def _expand_other(p: dict[str, Any], upsampler: dict[str, Any], ref_images: list[str],
+                        ctx: JobContext) -> str:
+    """Prompt ausbauen fuer Video, Ton und 3D: derselbe Upsampler mit NV-AIs eigenen
+    Systemprompts (prompt_targets.py)."""
+    target = p["target"]
+    upsampler_file = workflows.file_name(upsampler)
+    system = prompt_targets.SYSTEM[target]
+    user = prompt_targets.user_text(target, p["prompt"])
+    images = ref_images[:1] if target in prompt_targets.WITH_IMAGE else []
+    cache_key = flux3_prompt.cache_key(upsampler_file, target, user, p.get("reference_asset_ids") or [])
+    text = flux3_prompt.cache_get(cache_key)
+    if text is None:
+        if comfy.text_backend() is comfy.MAIN:
+            await _ensure_backend(ctx)
+        ctx.progress(0.0, t("Upsampler baut den Prompt aus", "upsampler is expanding the prompt"))
+        graph = flux3_prompt.build_graph(upsampler_file, "i2i" if images else "t2i", user, images,
+                                         system_text=system)
+        texts = await comfy.run_text_workflow(graph)
+        text = prompt_targets.clean(target, texts[-1] if texts else "")
+        if not text:
+            raise RuntimeError(t("Der Upsampler lieferte keinen Text.", "The upsampler returned no text."))
+        flux3_prompt.cache_put(cache_key, text)
+    return text
+
+
 @register("expand_prompt")
 async def _expand_prompt(job: Job, ctx: JobContext) -> list[str]:
-    """"Prompt ausbauen" fuer jedes Bildmodell: nur Text, kein Bild. Das Ergebnis
-    steht danach in job.params["expanded"]."""
+    """"Prompt ausbauen" fuer jedes Modell: nur Text, kein Bild. Das Ergebnis steht
+    danach in job.params["expanded"]. target waehlt Bild, Video, Ton oder 3D."""
     p = job.params
     upsampler = prompt_upsampler()
     if upsampler is None:
@@ -535,8 +587,11 @@ async def _expand_prompt(job: Job, ctx: JobContext) -> list[str]:
                              f"At most {flux3_prompt.MAX_REFERENCES} reference images."))
     ref_images = [_stage_image(a, t(f"Referenzbild {i + 1}", f"Reference image {i + 1}"))
                   for i, a in enumerate(ref_ids)]
-    p["expanded"] = await _upsample(p["prompt"], upsampler, ref_ids, ref_images,
-                                    int(p.get("width", 1024)), int(p.get("height", 1024)), ctx)
+    if p.get("target", "image") != "image":
+        p["expanded"] = await _expand_other(p, upsampler, ref_images, ctx)
+    else:
+        p["expanded"] = await _upsample(p["prompt"], upsampler, ref_ids, ref_images,
+                                        int(p.get("width", 1024)), int(p.get("height", 1024)), ctx)
     db.update_job(job.id, params=p)
     return []
 

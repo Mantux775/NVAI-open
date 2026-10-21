@@ -48,6 +48,20 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
 
+### Neu in 0.5.3
+
+| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
+|---|---|---|---|
+| LTX-2.3 (`ltx23-nvfp4`) | Video mit Ton; Basis der meisten Community-LoRAs für LTX | 4 s in 1280 × 704 in 101 s, Bild zu Video 448 × 832 in 65 s | LTX-2 Community (unter 10 Mio. US-$ Umsatz) |
+| Mochi 1 preview (`mochi-1-preview-fp8`) | Text zu Video mit flüssiger Bewegung | 49 Frames in 848 × 480 in 351 s | Apache-2.0 |
+| Kandinsky 5.0 Video Lite, destilliert (`kandinsky5-lite-t2v-distilled`) | kleines MIT-Videomodell, 5 s | 768 × 512 in rund 300 s | MIT, VAE unter Tencent-Lizenz |
+| Kandinsky 5.0 Video Lite T2V / I2V | dasselbe mit 50 Schritten; I2V nur im Querformat 768 × 512 | rund 26–27 Minuten | MIT, VAE unter Tencent-Lizenz |
+
+LoRAs (ebenfalls neu in 0.5.3) laufen mit SDXL, SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan und
+LTX-2/2.3, siehe [INSTALL.md](INSTALL.md#loras-hugging-face-und-civitai). Gemessen: Eine Pixel-Art-LoRA
+an Qwen-Image-2512 änderte bei gleichem Seed deutlich den Stil (168 statt 102 s); ein Orbit-LoRA-Paar
+an Wan 2.2 I2V A14B machte aus einer leichten Drehung eine ganze Kamerafahrt um die Figur.
+
 ### Neu in 0.5.2
 
 | Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
@@ -311,6 +325,15 @@ auf einem Mac mini M1 mit 8 GB: 22–25 s, beim ersten Mal nach dem App-Start 35
 Mit nur „a medieval blacksmith“ malte Qwen-Image-2512 ein Kriegerporträt in Lederrüstung, mit dem
 ausgebauten Text eine arbeitende Schmiede mit Esse, Amboss, Zange und Funken. Der Upsampler füllt
 aber jede Lücke: Er setzte dem Schmied auch einen Eisenhelm auf. Den Text also erst lesen.
+
+Seit 0.5.3 sitzt der Knopf auch in den Reitern **Video**, **Audio** und **3D** (Windows). Derselbe
+Upsampler folgt dann NV-AIs eigenen Anweisungen (`target` in der API): Bei Video ergänzt er
+Bewegung, eine Kamerafahrt, Ort und Licht, bei LTX-2.5 auch das Hörbare, mit Startbild nur die
+Bewegung. Für Stable Audio schreibt er Klang-Tags (Quelle, Material, Raum, Mikrofon), für ACE-Step
+Genre-, Instrument- und Stimmungs-Tags. Im 3D-Reiter erzeugt „Objekt aus Text“ zuerst mit dem
+aktiven Bildmodell ein Quellbild: ein geschlossenes Objekt ohne Boden und Schatten. Gemessen auf
+der RTX 5060 Ti: 3–12 s je Prompt. Das Modell ist auf Bildbeschreibungen trainiert; Klang-Tags
+beginnen manchmal trotzdem mit einem ganzen Satz.
 
 ### Referenzbilder
 

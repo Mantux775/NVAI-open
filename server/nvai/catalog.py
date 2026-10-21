@@ -117,6 +117,21 @@ QWEN21_SIZES = [
     {"label": "2048 × 2048 — Qwen nativ, maximal", "w": 2048, "h": 2048},
 ]
 
+
+# Kandinsky 5.0 Video Lite: Text-Encoder und VAE wie in ComfyUIs Vorlagen. Qwen2.5-VL kommt
+# aus demselben Repo wie bei Qwen-Image, damit die Datei nur einmal auf der Platte liegt.
+KANDINSKY5_SHARED = [
+    {"repo": "Comfy-Org/Qwen-Image_ComfyUI",
+     "file": "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "target": "text_encoders"},
+    {"repo": "comfyanonymous/flux_text_encoders", "file": "clip_l.safetensors", "target": "text_encoders"},
+    {"repo": "Kijai/HunyuanVideo_comfy", "file": "hunyuan_video_vae_bf16.safetensors", "target": "vae"},
+]
+KANDINSKY5_VAE_WARNING = (
+    "Das Modell steht unter MIT, der VAE stammt aber von HunyuanVideo (Tencent Hunyuan Community "
+    "License). Die gilt laut Tencent nicht in der EU, in Großbritannien und Südkorea — vor "
+    "kommerzieller Nutzung dort prüfen."
+)
+
 IMAGE_MODELS: list[dict[str, Any]] = [
     {
         "id": "sdxl-base",
@@ -1331,6 +1346,168 @@ VIDEO_MODELS: list[dict[str, Any]] = [
                  "NVFP4: rechnet auf RTX 50 in Hardware", "Lizenz erlaubt die EU"],
         "cons": ["38 GB Download", "Kostenlos nur unter 10 Mio. US-$ Umsatz",
                  "Breite und Höhe werden auf Vielfache von 64 gerundet", "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "ltx23-nvfp4",
+        "name": "LTX-2.3 (NVFP4, mit Ton)",
+        "kind": "video",
+        "family": "ltx23",
+        "workflow": "ltx23",
+        "files": [
+            {"repo": "Lightricks/LTX-2.3-nvfp4", "file": "ltx-2.3-22b-dev-nvfp4.safetensors",
+             "target": "checkpoints"},
+            {"repo": "Comfy-Org/ltx-2",
+             "file": "split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+             "target": "text_encoders"},
+            {"repo": "Comfy-Org/ltx-2.3",
+             "file": "split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
+             "target": "loras"},
+            {"repo": "Lightricks/LTX-2.3", "file": "ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+             "target": "latent_upscale_models"},
+        ],
+        "size_gb": 34.89,
+        "vram_gb": 16,
+        "license": "LTX-2 Community License",
+        "commercial_ok": True,
+        "warning": ("LTX-2 Community License: kostenlos nur unter 10 Mio. US-$ Jahresumsatz."),
+        "best_for": "Video mit Ton; Basis der meisten Community-LoRAs und -Feintunings für LTX",
+        "description": (
+            "Lightricks, Vorgänger von LTX-2.5 mit derselben Architektur (22 Mrd. Parameter, Bild "
+            "und Ton in einem Durchgang). Für 2.3 gibt es weit mehr Community-Erweiterungen als für "
+            "2.5: LoRAs für Stile, Figuren und Bewegung, und Feintunings ohne Inhaltsfilter. Dafür "
+            "ist es der richtige Unterbau.\n\n"
+            "NV-AI rechnet wie ComfyUIs Vorlage video_ltx2_3_t2v.json: dev-Checkpoint in NVFP4 "
+            "plus destillierte LoRA (Stärke 0,5), zwei Stufen mit festen Sigmas, Text-Encoder "
+            "Gemma 3 12B (fp4). Mit Startbild Bild zu Video. Gemessen auf einer RTX 5060 Ti, 97 "
+            "Frames (4 s) bei 24 fps: 1280 × 704 mit Ton in 101 s, Bild zu Video 448 × 832 in 65 s. "
+            "Im Test Schmied mit Hammerklang; mit Startbild blieb die Figur erhalten."
+        ),
+        "pros": ["Video mit passendem Ton", "Text und Bild zu Video in einem Modell",
+                 "Größte Auswahl an Community-LoRAs für LTX", "Kein Gated-Repo"],
+        "cons": ["35 GB Download", "Kostenlos nur unter 10 Mio. US-$ Umsatz",
+                 "Neuere Fassung LTX-2.5 ist bei gleicher Größe besser",
+                 "Breite und Höhe werden auf Vielfache von 64 gerundet"],
+    },
+    {
+        "id": "kandinsky5-lite-t2v",
+        "name": "Kandinsky 5.0 Video Lite T2V (2B)",
+        "kind": "video",
+        "family": "kandinsky5",
+        "workflow": "kandinsky5_t2v",
+        "files": [
+            {"repo": "kandinskylab/Kandinsky-5.0-T2V-Lite-sft-5s",
+             "file": "model/kandinsky5lite_t2v_sft_5s.safetensors", "target": "diffusion_models"},
+            *KANDINSKY5_SHARED,
+        ],
+        "size_gb": 14.69,
+        "vram_gb": 12,
+        "license": "MIT (VAE: Tencent Hunyuan Community License)",
+        "commercial_ok": True,
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Kleines, MIT-lizenziertes Videomodell, 5 s in 768 × 512",
+        "description": (
+            "Kandinsky Lab (Sber), 2 Mrd. Parameter, MIT-Lizenz. Text-Encoder Qwen2.5-VL 7B und "
+            "CLIP-L, der VAE stammt von HunyuanVideo. Auf 5 s trainiert: 121 Frames bei 24 fps in "
+            "768 × 512 (Hersteller), längere Clips nicht.\n\n"
+            "Werte aus ComfyUIs Vorlage video_kandinsky5_t2v.json: 50 Schritte, cfg 5, "
+            "euler_ancestral, beta, shift 5. Der Text-Encoder ist derselbe wie bei Qwen-Image und "
+            "wird nur einmal geladen. Gemessen auf einer RTX 5060 Ti: 5 s Video in 768 × 512 in "
+            "26 Minuten (1578 s) — für Entwürfe die destillierte Fassung nehmen."
+        ),
+        "pros": ["MIT-Lizenz für das Modell", "Nur 2 Mrd. Parameter",
+                 "Text-Encoder mit Qwen-Image geteilt", "Negativprompt wirkt (cfg 5)"],
+        "cons": ["VAE unter Tencent-Lizenz", "50 Schritte", "Höchstens 5 s",
+                 "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "kandinsky5-lite-t2v-distilled",
+        "name": "Kandinsky 5.0 Video Lite T2V, destilliert (16 Schritte)",
+        "kind": "video",
+        "family": "kandinsky5",
+        "workflow": "kandinsky5_t2v_distilled",
+        "files": [
+            {"repo": "kandinskylab/Kandinsky-5.0-T2V-Lite-distilled16steps-5s",
+             "file": "model/kandinsky5lite_t2v_distilled16steps_5s.safetensors",
+             "target": "diffusion_models"},
+            *KANDINSKY5_SHARED,
+        ],
+        "size_gb": 14.69,
+        "vram_gb": 12,
+        "license": "MIT (VAE: Tencent Hunyuan Community License)",
+        "commercial_ok": True,
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Schnelle Videoentwürfe mit Kandinsky",
+        "description": (
+            "Dieselbe Kandinsky 5.0 Lite, auf 16 Schritte und ohne CFG destilliert. Laut "
+            "Modellkarte auf einer H100 35 s statt 77 s für 5 s Video. NV-AI rechnet mit 16 "
+            "Schritten und cfg 1; der Negativprompt wirkt dabei nicht. Gemessen auf einer RTX 5060 "
+            "Ti: 5 s Video (121 Frames, 768 × 512) in rund 300 s. Im Test ein Schmied mit "
+            "schlüssiger Hammerbewegung und Glut."
+        ),
+        "pros": ["Rund dreimal weniger Schritte", "MIT-Lizenz für das Modell"],
+        "cons": ["VAE unter Tencent-Lizenz", "Negativprompt wirkungslos (cfg 1)", "Höchstens 5 s"],
+    },
+    {
+        "id": "kandinsky5-lite-i2v",
+        "name": "Kandinsky 5.0 Video Lite I2V (2B)",
+        "kind": "video",
+        "family": "kandinsky5",
+        "workflow": "kandinsky5_i2v",
+        "files": [
+            {"repo": "kandinskylab/Kandinsky-5.0-I2V-Lite-5s",
+             "file": "model/kandinsky5lite_i2v_5s.safetensors", "target": "diffusion_models"},
+            *KANDINSKY5_SHARED,
+        ],
+        "size_gb": 14.69,
+        "vram_gb": 12,
+        "license": "MIT (VAE: Tencent Hunyuan Community License)",
+        "commercial_ok": True,
+        "warning": KANDINSKY5_VAE_WARNING,
+        "best_for": "Ein Standbild beleben, mit kleinem Modell",
+        "description": (
+            "Bild-zu-Video-Fassung von Kandinsky 5.0 Lite. Das Startbild wird auf das gewählte "
+            "Format zugeschnitten und nach dem Rechnen wieder als erster Frame eingesetzt, wie in "
+            "ComfyUIs Vorlage video_kandinsky5_i2v.json. Startbild ist Pflicht. Gemessen auf einer "
+            "RTX 5060 Ti: 5 s in 768 × 512 in 27 Minuten (1617 s). Im Querformat hielt es die Szene "
+            "und setzte die Anweisung um; im Hochformat 512 × 768 sprang das Video nach dem ersten "
+            "Frame in eine Nahaufnahme — nur 768 × 512 verwenden."
+        ),
+        "pros": ["MIT-Lizenz für das Modell", "Startbild bleibt als erster Frame exakt erhalten"],
+        "cons": ["VAE unter Tencent-Lizenz", "Braucht ein Startbild", "Nur im Querformat 768 × 512 verlässlich",
+                 "27 Minuten für 5 s"],
+    },
+    {
+        "id": "mochi-1-preview-fp8",
+        "name": "Mochi 1 preview (fp8)",
+        "kind": "video",
+        "family": "mochi",
+        "workflow": "mochi",
+        "files": [
+            {"repo": "Comfy-Org/mochi_preview_repackaged",
+             "file": "split_files/diffusion_models/mochi_preview_fp8_scaled.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "comfyanonymous/flux_text_encoders",
+             "file": "t5xxl_fp8_e4m3fn_scaled.safetensors", "target": "text_encoders"},
+            {"repo": "Comfy-Org/mochi_preview_repackaged",
+             "file": "split_files/vae/mochi_vae.safetensors", "target": "vae"},
+        ],
+        "size_gb": 16.11,
+        "vram_gb": 14,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Apache-lizenziertes Text-zu-Video mit flüssiger Bewegung",
+        "description": (
+            "Genmo, 10 Mrd. Parameter, Apache-2.0. Laut Hersteller stark bei Bewegung und "
+            "Prompttreue, gedacht für 480p (848 × 480) bei 30 fps. Text-Encoder T5-XXL (mit Chroma "
+            "geteilt).\n\n"
+            "NV-AI rechnet wie ComfyUIs Mochi-Beispiel: 30 Schritte, cfg 4,5, euler. Frames werden "
+            "auf 6n+1 gerundet, der VAE dekodiert gekachelt. Gemessen auf einer RTX 5060 Ti: 49 "
+            "Frames in 848 × 480 in 351 s mit Laden. Im Test ein Fuchs, der sauber durch Schnee "
+            "läuft, mit seitlicher Kamerafahrt."
+        ),
+        "pros": ["Apache-2.0, auch kommerziell", "Negativprompt wirkt", "Nur Text, keine Lizenzbedingungen"],
+        "cons": ["Nur Text zu Video", "Preview-Stand von 2024, kein Nachfolger",
+                 "Laut Modellkarte NSFW-Inhalte eingeschränkt"],
     },
     {
         "id": "ltxv-2b-095",

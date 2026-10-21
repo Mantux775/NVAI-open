@@ -9,12 +9,13 @@ import json
 import os
 import threading
 import contextlib
+import time
 from pathlib import Path
 from typing import Any, Callable
 
 from huggingface_hub import hf_hub_download, snapshot_download
 
-from . import catalog, config, content, gpu, i18n, workflows
+from . import catalog, config, content, gpu, i18n, loras, workflows
 from .catalog import ALL_MODELS
 from .i18n import t
 
@@ -187,6 +188,18 @@ def _custom_texts(entry: dict[str, Any]) -> dict[str, Any]:
         "cons": [t("Nicht von NV-AI getestet; die Lizenz steht nur im Repo",
                    "Not tested by NV-AI; the license is only stated in the repo")],
     }
+    if entry.get("kind") == "lora":
+        base = loras.BASES.get(entry["family"], entry["family"])
+        source = entry.get("source_url") or f"https://huggingface.co/{repo}"
+        texts.update({
+            "best_for": t(f"LoRA für {base}", f"LoRA for {base}"),
+            "description": t(f"LoRA für {base}, hinzugefügt aus {source}\n\nDie Lizenz bitte dort "
+                             "prüfen, bevor Ergebnisse veröffentlicht werden.",
+                             f"LoRA for {base}, added from {source}\n\nPlease check the license "
+                             "there before publishing results."),
+            "cons": [t("Nicht von NV-AI getestet; die Lizenz steht nur an der Quelle",
+                       "Not tested by NV-AI; the license is only stated at the source")],
+        })
     if entry.get("license") == "siehe Repo":
         texts["license"] = t("siehe Repo", "see repo")
     if entry.get("family") == "sd15":
@@ -248,6 +261,9 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None) -> ModelIn
         runnable=installed and entry.get("workflow") is not None,
         fits_vram=gpu.fits(entry.get("vram_gb", 0)),
         features=features_for(text),
+        lora_bases=list(loras.bases_for(entry)),
+        trigger=entry.get("trigger", ""),
+        source_url=entry.get("source_url", ""),
         **gpu_advice(entry),
         **content.lookup(entry["id"]),
     )
@@ -407,6 +423,54 @@ def clean_partial(entry: dict[str, Any]) -> int:
     return removed
 
 
+def civitai_token() -> str | None:
+    """Civitai-API-Schluessel des Nutzers (viele Downloads brauchen einen). Umgebung vor Datei."""
+    token = os.getenv("CIVITAI_TOKEN", "").strip()
+    if token:
+        return token
+    p = config.DATA_DIR / "civitai_token"
+    try:
+        return p.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def _download_url(url: str, dest: Path, label: str, base: float, span: float,
+                  on_progress: Callable[[float, str], None] | None,
+                  should_stop: Callable[[], bool] | None) -> None:
+    import httpx
+
+    headers = {}
+    token = civitai_token()
+    if token and "civitai.com" in url:
+        headers["Authorization"] = f"Bearer {token}"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_name(dest.name + ".part")
+    with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=60) as r:
+        if r.status_code in (401, 403):
+            raise RuntimeError(i18n.t(
+                "Civitai verlangt für diesen Download einen API-Schlüssel – unter „Modelle“ → "
+                "„Civitai“ eintragen.",
+                "Civitai requires an API key for this download – enter it under “Models” → “Civitai”."))
+        r.raise_for_status()
+        total = int(r.headers.get("content-length") or 0)
+        done = 0
+        last = 0.0
+        with open(part, "wb") as fh:
+            for chunk in r.iter_bytes(1 << 20):
+                if should_stop and should_stop():
+                    fh.close()
+                    part.unlink(missing_ok=True)
+                    raise DownloadCancelled()
+                fh.write(chunk)
+                done += len(chunk)
+                if on_progress and total and time.monotonic() - last > 0.5:
+                    last = time.monotonic()
+                    on_progress(base + span * done / total,
+                                f"{label}: {done / 1e9:.2f} / {total / 1e9:.2f} GB")
+    part.replace(dest)
+
+
 def download(
     entry: dict[str, Any],
     on_progress: Callable[[float, str], None] | None = None,
@@ -442,6 +506,12 @@ def download(
 
         if on_progress:
             on_progress(i * span, f"{label}: startet")
+
+        # Direkte URL (Civitai): ohne huggingface_hub, gestreamt in eine .part-Datei.
+        if f.get("url"):
+            _download_url(f["url"], dest, label, i * span, span, on_progress, should_stop)
+            paths.append(dest)
+            continue
 
         kwargs: dict[str, Any] = {}
         if on_progress:
@@ -604,9 +674,15 @@ def register_custom(
     repo: str, file: str, target: str = "checkpoints",
     kind: str = "image", family: str = "sdxl", workflow: str | None = "sdxl",
     license_: str | None = None, size_gb: float | None = None,
+    trigger: str = "", source_url: str | None = None, url: str | None = None,
 ) -> dict[str, Any]:
-    """Nimmt ein freies HF-Repo in den Nutzer-Katalog auf (Suche oder von Hand)."""
-    model_id = f"custom-{repo.split('/')[-1]}-{Path(file).stem}".lower()
+    """Nimmt ein freies HF-Repo in den Nutzer-Katalog auf (Suche oder von Hand).
+
+    LoRAs (kind "lora") landen in loras/, family ist ihre LoRA-Basis (loras.BASES). Mit url
+    (Civitai) wird direkt von dort geladen; repo ist dann nur ein Name fuer die Anzeige.
+    """
+    prefix = "lora" if kind == "lora" else "custom"
+    model_id = f"{prefix}-{repo.split('/')[-1]}-{Path(file).stem}".lower().replace(" ", "_")
     entries = _load_user_catalog()
     for e in entries:
         if e["id"] == model_id:
@@ -629,6 +705,16 @@ def register_custom(
         "cons": ["Nicht von NV-AI getestet; die Lizenz steht nur im Repo"],
         "custom": True,
     }
+    if kind == "lora":
+        source = source_url or f"https://huggingface.co/{repo}"
+        entry.update({
+            "workflow": None, "vram_gb": 0, "trigger": trigger, "source_url": source,
+            "best_for": loras.BASES.get(family, family),
+            "description": (f"LoRA für {loras.BASES.get(family, family)}, hinzugefügt aus {source}\n\n"
+                            "Die Lizenz bitte dort prüfen, bevor Ergebnisse veröffentlicht werden."),
+        })
+        if url:
+            entry["files"][0]["url"] = url
     if family == "sd15":
         from .hfsearch import SD15_SIZES
         # Der Prompt-Hinweis kommt sprachabhaengig aus _custom_texts.

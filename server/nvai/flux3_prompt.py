@@ -210,18 +210,19 @@ def reconcile(text: str, locked: list[dict]) -> str:
 # ------------------------------------------------------------ Graph
 
 def build_graph(upsampler_file: str, system_key: str, user_text: str,
-                ref_images: list[str]) -> dict[str, Any]:
+                ref_images: list[str], system_text: str | None = None) -> dict[str, Any]:
     """ComfyUI-Graph, der nur die Beschreibung erzeugt. PreviewAny liefert den Text
     als UI-Ausgabe zurueck (comfy.run_text_workflow).
 
     Nachgebaut nach ComfyUIs Vorlagen image_flux3_klein_*: CLIPLoader Typ "flux3"
-    laedt auch den Upsampler, TextGenerate traegt den Systemprompt.
+    laedt auch den Upsampler, TextGenerate traegt den Systemprompt. system_text ersetzt
+    BFLs Systemprompt (Video, Audio, 3D: prompt_targets.py).
     """
     task = "i2i" if ref_images else "t2i"
     graph: dict[str, Any] = {
         "1": {"class_type": "CLIPLoader", "inputs": {
             "clip_name": upsampler_file, "type": "flux3", "device": "default"}},
-        "2": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": PROMPTS[system_key]}},
+        "2": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": system_text or PROMPTS[system_key]}},
         "3": {"class_type": "TextGenerate", "inputs": {
             "clip": ["1", 0], "prompt": user_text, "max_length": MAX_TOKENS,
             "sampling_mode": "on",

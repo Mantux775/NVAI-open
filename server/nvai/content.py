@@ -83,8 +83,12 @@ CONTENT: dict[str, tuple[str, str, str, str]] = {
     "wan21-i2v-480p-14b": ("partial", *_WAN),
     "wan22-ti2v-5b": ("partial", *_WAN),
     "wan22-i2v-a14b": ("partial", *_WAN),
+    "mochi-1-preview-fp8": ("censored",
+                            "Laut Modellkarte wurden Schritte unternommen, um NSFW-Inhalte zu begrenzen.",
+                            "According to the model card, steps have been taken to limit NSFW content.",
+                            "https://huggingface.co/genmo/mochi-1-preview"),
     # Ohne verlaessliche Angabe (bewusst nicht eingetragen): Juggernaut XL v9, Qwen-Image 2.1,
-    # LongCat-Image, LTX-Video 0.9.5.
+    # LongCat-Image, LTX-Video 0.9.5, LTX-2.3, Kandinsky 5.0 Video Lite.
 }
 
 

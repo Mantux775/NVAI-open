@@ -48,6 +48,20 @@ such ("according to BFL").
 
 Without a `model_id`, NV-AI uses the active image model.
 
+### New in 0.5.3
+
+| Model | Use for | Measured (RTX 5060 Ti) | License |
+|---|---|---|---|
+| LTX-2.3 (`ltx23-nvfp4`) | video with sound; the base most community LTX LoRAs are made for | 4 s at 1280 × 704 in 101 s, image to video 448 × 832 in 65 s | LTX-2 Community (below US$10M revenue) |
+| Mochi 1 preview (`mochi-1-preview-fp8`) | text to video with smooth motion | 49 frames at 848 × 480 in 351 s | Apache-2.0 |
+| Kandinsky 5.0 Video Lite, distilled (`kandinsky5-lite-t2v-distilled`) | small MIT video model, 5 s | 768 × 512 in about 300 s | MIT, VAE under Tencent's license |
+| Kandinsky 5.0 Video Lite T2V / I2V | the same with 50 steps; I2V only in landscape 768 × 512 | about 26–27 minutes | MIT, VAE under Tencent's license |
+
+LoRAs (also new in 0.5.3) work with SDXL, SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan and
+LTX-2/2.3; see [INSTALL.md](INSTALL.md#loras-hugging-face-and-civitai). Measured: a pixel-art LoRA
+on Qwen-Image-2512 changed the style clearly at the same seed (168 s instead of 102 s); an orbit
+LoRA pair on Wan 2.2 I2V A14B turned a slight turn into a full camera orbit.
+
 ### New in 0.5.2
 
 | Model | Use for | Measured (RTX 5060 Ti) | License |
@@ -307,6 +321,15 @@ Labs' instructions for text-to-image prompts; no extra download. Measured on a M
 With only "a medieval blacksmith", Qwen-Image-2512 painted a warrior portrait in leather armor;
 with the expanded text it painted a working forge with hearth, anvil, tongs and sparks. The
 upsampler fills every gap, though: it also gave the smith an iron helmet. Read the text first.
+
+Since 0.5.3 the button is also on the **Video**, **Audio** and **3D** tabs (Windows). The same
+upsampler then follows NV-AI's own instructions (`target` in the API): for video it adds motion,
+one camera move, setting and light; with LTX-2.5 also what can be heard; with a start image only
+the motion. For Stable Audio it writes sound tags (source, material, room, microphone), for
+ACE-Step genre, instrument and mood tags. On the 3D tab, "Object from text" first creates a
+source image with the active image model: one closed object without floor or shadow. Measured
+on the RTX 5060 Ti: 3–12 s per prompt. The model is trained on image descriptions; sound tags
+sometimes still start with a full sentence.
 
 ### Reference images
 
