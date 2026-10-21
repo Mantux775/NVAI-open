@@ -6,34 +6,36 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.1.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.1/NV-AI-Setup-0.5.1.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.1.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.1/NV-AI-0.4.1.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.2.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.2/NV-AI-Setup-0.5.2.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.2/NV-AI-0.4.2.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.1 for Windows, NV-AI 0.4.1 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.1))
+October 2026: NV-AI 0.5.2 for Windows, NV-AI 0.4.2 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.2))
 
 | | |
 |---|---|
-| Report a problem | Describe what went wrong, NV-AI creates an anonymized report with timestamp and logs and opens a prefilled GitHub issue (Windows and Mac) |
-| Graphics cards in the header | With several cards, click a card at the top and tick what it should do |
-| AMD Radeon | The Windows setup installs PyTorch with ROCm instead of CUDA (experimental, [testers wanted](https://github.com/Mantux775/NVAI-open/issues/2)) |
-| Several graphics cards | Image models, language models and 3D each on their own NVIDIA card (experimental, [testers wanted](https://github.com/Mantux775/NVAI-open/issues/1)) |
-| Expand prompt on the Mac | A few words become a full image description, in NV-AI and in the PhotoCraft add-on |
-| Mac menu bar | Follows the app's language setting |
+| LTX-2.5 | Video with matching sound, from text or a start image; 4 seconds at 1280 × 704 in about 72 s |
+| Boogu-Image 0.1 | Apache-2.0 image model with Turbo (about 10 s) and Edit: change an image by instruction, the rest stays |
+| HiDream-O1-Image | MIT image model for large pictures, trained at 4 megapixels |
+| Censored or uncensored | Every image and video model is labelled, with the source in the tooltip |
+| Cancel | Each download and each queued or running job, also from the PhotoCraft add-on |
+| Storage locations | Choose data and model folders under "Models" |
+
+Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
 
 | | |
 |---|---|
-| Problem melden | Beschreiben, was schiefging; NV-AI erstellt einen anonymisierten Bericht mit Zeitstempel und Protokollen und öffnet ein vorausgefülltes GitHub-Issue (Windows und Mac) |
-| Grafikkarten in der Kopfleiste | Mit mehreren Karten oben eine Karte anklicken und anhaken, was sie machen soll |
-| AMD Radeon | Das Windows-Setup installiert PyTorch mit ROCm statt CUDA (experimentell, [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/2)) |
-| Mehrere Grafikkarten | Bildmodelle, Sprachmodelle und 3D je auf einer eigenen NVIDIA-Karte (experimentell, [Tester gesucht](https://github.com/Mantux775/NVAI-open/issues/1)) |
-| Prompt ausbauen auf dem Mac | Aus ein paar Worten wird eine volle Bildbeschreibung, in NV-AI und im PhotoCraft-Add-on |
-| Menüleiste auf dem Mac | Folgt der Spracheinstellung der App |
+| LTX-2.5 | Video mit passendem Ton, aus Text oder Startbild; 4 Sekunden in 1280 × 704 in rund 72 s |
+| Boogu-Image 0.1 | Bildmodell unter Apache-2.0 mit Turbo (rund 10 s) und Edit: Bild nach Anweisung ändern, der Rest bleibt |
+| HiDream-O1-Image | Bildmodell unter MIT für große Bilder, auf 4 Megapixel trainiert |
+| Zensiert oder unzensiert | Jedes Bild- und Videomodell ist gekennzeichnet, mit Quelle im Tooltip |
+| Abbrechen | Jeden Download und jeden wartenden oder laufenden Auftrag, auch aus dem PhotoCraft-Add-on |
+| Speicherorte | Daten- und Modellordner unter „Modelle“ wählen |
 
-Coming with the next release (0.5.2, already in the source): new models Boogu-Image 0.1 (Apache-2.0, with editing), HiDream-O1-Image (MIT, 4 MP) and LTX-2.5 (video with sound), cancel each download and queued job, labels for censored and uncensored models, choose data and model folders under "Models", NV-AI and ComfyUI version next to the logo. / Mit dem nächsten Release (0.5.2, schon im Quelltext): neue Modelle Boogu-Image 0.1 (Apache-2.0, mit Bearbeiten), HiDream-O1-Image (MIT, 4 MP) und LTX-2.5 (Video mit Ton), jeden Download und wartenden Auftrag abbrechen, Kennzeichnung zensierter und unzensierter Modelle, Daten- und Modellordner unter „Modelle“ wählen, Versionen von NV-AI und ComfyUI neben dem Logo.
+Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -97,7 +99,7 @@ Testers wanted: I only have one NVIDIA card. The multi-card mode is tested with 
 
 ### Uncensored models
 
-NV-AI has no content filter of its own: no prompt blocklist, no image check, nothing is sent anywhere. What a model will draw depends only on how it was trained. Since 0.5.2 the model list labels every image and video model as uncensored, partly censored, censored or unknown, with the source in the tooltip. Some models in the catalog are trained without filters and can be downloaded with one click under "Models":
+NV-AI has no content filter of its own: no prompt blocklist, no image check, nothing is sent anywhere. What a model will draw depends only on how it was trained. The model list labels every image and video model as uncensored, partly censored, censored or unknown, with the source in the tooltip. Some models in the catalog are trained without filters and can be downloaded with one click under "Models":
 
 | Model | Good for | Download / VRAM | License |
 |---|---|---|---|
@@ -246,7 +248,7 @@ Tester gesucht: Ich habe nur eine NVIDIA-Karte. Der Mehrkartenbetrieb ist mit ei
 
 ### Unzensierte Modelle
 
-NV-AI hat keinen eigenen Inhaltsfilter: keine Sperrliste für Prompts, keine Bildprüfung, nichts wird irgendwohin geschickt. Was ein Modell zeichnet, hängt nur von seinem Training ab. Seit 0.5.2 kennzeichnet die Modellliste jedes Bild- und Videomodell als unzensiert, teilweise zensiert, zensiert oder unbekannt, mit Quelle im Tooltip. Einige Modelle im Katalog sind ohne Filter trainiert und unter „Modelle“ mit einem Klick geladen:
+NV-AI hat keinen eigenen Inhaltsfilter: keine Sperrliste für Prompts, keine Bildprüfung, nichts wird irgendwohin geschickt. Was ein Modell zeichnet, hängt nur von seinem Training ab. Die Modellliste kennzeichnet jedes Bild- und Videomodell als unzensiert, teilweise zensiert, zensiert oder unbekannt, mit Quelle im Tooltip. Einige Modelle im Katalog sind ohne Filter trainiert und unter „Modelle“ mit einem Klick geladen:
 
 | Modell | Gut für | Download / VRAM | Lizenz |
 |---|---|---|---|
