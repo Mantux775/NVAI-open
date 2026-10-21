@@ -7,7 +7,7 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 | | |
 |---|---|
 | **Windows 10/11** with an NVIDIA graphics card | [NV-AI-Setup-0.4.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.4.0/NV-AI-Setup-0.4.0.exe) |
-| **macOS 15+** on Apple Silicon (signed and notarized) | NV-AI-0.3.0.dmg follows shortly – Apple is still checking the signed build. / Wird in Kürze nachgereicht. |
+| **macOS 15+** on Apple Silicon (signed and notarized) | [NV-AI-0.3.0.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.4.0/NV-AI-0.3.0.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
