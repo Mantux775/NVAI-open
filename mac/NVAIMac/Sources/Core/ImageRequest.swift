@@ -28,6 +28,8 @@ struct ImageJobRequest: Sendable {
     var denoise: Double
     var maskAssetID: String?
     var referenceAssetIDs: [String]
+    /// Outpainting: Ränder in Pixeln; Format und Prompt setzt dann JobQueue.runImage.
+    var outpaint: Outpaint.Edges? = nil
     /// Der Auftrag, wie er ankam – erscheint im Job unter `params`.
     var params: JSONValue
     /// Sprache des Clients (Accept-Language) bzw. der App – für Stufen und Fehler des Jobs.
@@ -84,6 +86,25 @@ struct ImageJobRequest: Sendable {
         if mask != nil && image == nil {
             throw APIError(422, t("Eine Maske (mask_asset_id) braucht ein Ausgangsbild (image_asset_id).", "A mask (mask_asset_id) needs a start image (image_asset_id)."))
         }
+        var outpaint: Outpaint.Edges?
+        if let v = o["outpaint"], !v.isNull {
+            let values = v.arrayValue?.compactMap(\.intValue) ?? []
+            guard v.arrayValue?.count == 4, values.count == 4,
+                  values.allSatisfy({ (0...Outpaint.maxEdge).contains($0) }) else {
+                throw APIError(422, t("outpaint muss [links, oben, rechts, unten] in Pixeln sein, je 0 bis 1024.",
+                                      "outpaint must be [left, top, right, bottom] in pixels, 0 to 1024 each."))
+            }
+            let edges = Outpaint.Edges(left: values[0], top: values[1], right: values[2], bottom: values[3])
+            if edges.any {
+                guard image != nil else {
+                    throw APIError(422, t("Outpainting braucht ein Ausgangsbild (image_asset_id).", "Outpainting needs a source image (image_asset_id)."))
+                }
+                if mask != nil || !refs.isEmpty {
+                    throw APIError(422, t("Outpainting nimmt genau ein Bild, ohne Maske und weitere Referenzen.", "Outpainting takes exactly one image, without a mask or further references."))
+                }
+                outpaint = edges
+            }
+        }
         if flag("hires") {
             throw APIError(422, t("hires gibt es in NV-AI für Mac nicht (features.hires = false). Größeres Format wählen.", "NV-AI for Mac has no hires pass (features.hires = false). Choose a larger size instead."))
         }
@@ -120,6 +141,9 @@ struct ImageJobRequest: Sendable {
             if !refs.isEmpty {
                 throw APIError(422, t("„\(m.name)“ kann keine Referenzbilder (features.references = 0).", "\"\(m.name)\" cannot use reference images (features.references = 0)."))
             }
+            if outpaint != nil {
+                throw APIError(422, t("„\(m.name)“ kann nicht erweitern (features.outpaint = null). FLUX.2 Klein wählen.", "\"\(m.name)\" cannot extend images (features.outpaint = null). Use FLUX.2 Klein."))
+            }
             if mask != nil {
                 throw APIError(422, t("„\(m.name)“ kann keine Masken (features.mask = false). Für Füllen FLUX.2 Klein wählen.", "\"\(m.name)\" cannot use masks (features.mask = false). Use FLUX.2 Klein for fills."))
             }
@@ -134,6 +158,6 @@ struct ImageJobRequest: Sendable {
         return ImageJobRequest(prompt: prompt, negativePrompt: negative, modelID: model.id, engine: model.engine,
                                width: width, height: height, steps: steps, guidance: Float(cfg),
                                seed: seed.map { UInt64($0) }, batch: batch, imageAssetID: image, denoise: denoise,
-                               maskAssetID: mask, referenceAssetIDs: refs, params: body)
+                               maskAssetID: mask, referenceAssetIDs: refs, outpaint: outpaint, params: body)
     }
 }

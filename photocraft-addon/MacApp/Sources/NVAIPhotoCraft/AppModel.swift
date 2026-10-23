@@ -170,6 +170,7 @@ final class AppModel {
             }
             s.masks = (try? await nvai.supportsMasks()) ?? false
             s.expand = (try? await nvai.supportsExpand()) ?? false
+            s.outpaint = (try? await nvai.supportsOutpaint()) ?? false
             s.downloads = (try? await nvai.downloads()) ?? []
             s.activeModel = health["active_models"]?["image"]?.stringValue
             s.loaded = (health["vram_loaded"]?.arrayValue ?? []).compactMap { $0["model"]?.stringValue }
@@ -210,13 +211,45 @@ final class AppModel {
 
     // MARK: Modelle und Texte
 
-    var suitableModels: [ModelOption] { models.filter { $0.suits(form.mode) } }
+    // MARK: Arbeitsfläche erweitern
+
+    /// Ränder [links, oben, rechts, unten] in Pixeln. Bewusst nicht gespeichert: Nach dem Start
+    /// stehen sie wieder auf 0, damit ein zweiter Klick die Arbeitsfläche nicht noch einmal erweitert.
+    var extend = [0, 0, 0, 0]
+    var extending: Bool { form.mode == .fill && extend.contains { $0 > 0 } }
+    /// Beim Erweitern gehen mit NV-AIs outpaint auch Bearbeitungsmodelle (FLUX 3, FLUX.2 Klein).
+    private var extendByOutpaint: Bool { extending && nv.outpaint }
+
+    var suitableModels: [ModelOption] {
+        extendByOutpaint ? models.filter { $0.outpaint != nil } : models.filter { $0.suits(form.mode) }
+    }
 
     /// Ohne Wahl nimmt der Ablauf das aktive Modell – oder, wenn es nicht passt, das beste passende.
+    /// Beim Erweitern ein nahtloses Bearbeitungsmodell (wie Planning.chooseModel).
     var fallbackModel: ModelOption? {
         let list = suitableModels
+        if extendByOutpaint {
+            let seamless = list.filter { $0.outpaint == "reference" }
+            if let first = seamless.first { return seamless.first { $0.id == nv.activeModel } ?? first }
+        }
         return list.first { $0.id == nv.activeModel } ?? list.first { !$0.weakPrompt } ?? list.first
     }
+
+    /// Hinweis, wenn das gewählte Modell beim Erweitern eine Kante lassen kann.
+    var extendWarning: String? {
+        extendByOutpaint && currentModel?.outpaint == "mask"
+            ? t("Dieses Modell malt den Rand oft als eigene Szene an; nahtloser wird es mit FLUX.2 Klein bzw. FLUX 3.",
+                "This model often paints the border as a separate scene; FLUX.2 Klein or FLUX 3 give seamless transitions.")
+            : nil
+    }
+
+    /// Zielgröße der Arbeitsfläche, z. B. „1728 × 832 → 2240 × 832“.
+    var extendTarget: String? {
+        guard extending, let doc = pc.document else { return nil }
+        return "\(doc.width) × \(doc.height) → \(doc.width + extend[0] + extend[2]) × \(doc.height + extend[1] + extend[3])"
+    }
+
+    var goLabel: String { extending ? t("Erweitern und füllen", "Extend and fill") : form.mode.go }
 
     var selectedModelID: String {
         get {
@@ -280,7 +313,10 @@ final class AppModel {
                 : t("NV-AI verlangt einen gültigen Token", "NV-AI requires a valid token")
         }
         if noModels { return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI") }
-        if form.mode == .fill && !nv.masks { return "NV-AI kennt noch keine Masken" }
+        if form.mode == .fill && !nv.masks { return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet") }
+        if extending && pc.document?.selection != nil {
+            return t("Zum Erweitern bitte erst die Auswahl aufheben", "To extend, please deselect first")
+        }
         let prompt = form.prompt.trimmed
         if form.mode == .generate && prompt.isEmpty { return t("Bitte beschreiben, was entstehen soll", "Please describe what should be created") }
         if referenceEdit && prompt.isEmpty { return t("Bitte beschreiben, was sich ändern soll", "Please describe what should change") }
@@ -313,6 +349,7 @@ final class AppModel {
         if let steps = Int(form.steps.trimmed) { p["steps"] = .int(min(150, max(1, steps))) }
         if let cfg = Double(form.cfg.trimmed.replacingOccurrences(of: ",", with: ".")) { p["cfg"] = .double(min(30, max(0, cfg))) }
         if let seed = Int(form.seed.trimmed), seed >= 0 { p["seed"] = .int(seed) }
+        if extending { p["extend"] = .array(extend.map { .int(min(Planning.extendMax, max(0, $0))) }) }
         return .object(p)
     }
 
@@ -320,6 +357,7 @@ final class AppModel {
         guard blocker == nil, let nvai else { return }
         message = nil
         let task = GenerationTask(id: Self.taskID(), mode: form.mode.rawValue, prompt: form.prompt, params: params())
+        extend = [0, 0, 0, 0]
         let item = TaskItem(task: task)
         current = item
         shown = item

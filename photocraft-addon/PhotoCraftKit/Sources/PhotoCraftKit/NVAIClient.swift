@@ -171,6 +171,11 @@ public final class NVAIClient: @unchecked Sendable {
 
     /// Kennt der Server „Prompt ausbauen“ (`POST /api/prompt/expand`, NV-AI ab 0.4 unter Windows,
     /// NV-AI für Mac ab 0.4)? Steht in `/api/version` unter `features`.
+    /// Kennt NV-AI `outpaint` (Windows ab 0.5.4, Mac ab 0.4.3)? Dann legt der Server Rand und Maske selbst an.
+    public func supportsOutpaint() async throws -> Bool {
+        try await version()?.features.contains("outpaint") ?? false
+    }
+
     public func supportsExpand() async throws -> Bool {
         try await version()?.features.contains("expand_prompt") ?? false
     }

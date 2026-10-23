@@ -49,6 +49,8 @@ struct NVAIState: Equatable {
     var masks = false
     /// „Prompt ausbauen“ (`POST /api/prompt/expand`): NV-AI ab 0.4.
     var expand = false
+    /// Erweitern (`outpaint`): NV-AI für Windows ab 0.5.4, für Mac ab 0.4.3.
+    var outpaint = false
     /// Laufende und wartende Modell-Downloads von NV-AI.
     var downloads: [NVAIClient.Download] = []
     var busy = false
@@ -78,6 +80,8 @@ struct ModelOption: Identifiable, Equatable {
     let hires: Bool
     let promptHint: String
     let placeholder: String
+    /// Wie das Modell erweitert: "reference" (nahtlos), "mask" (oft harte Kante) oder nil.
+    let outpaint: String?
 
     init(_ m: JSONValue, masks: Bool) {
         let features = m["features"] ?? [:]
@@ -96,6 +100,7 @@ struct ModelOption: Identifiable, Equatable {
         hires = features["hires"]?.boolValue ?? true
         promptHint = features["prompt_hint"]?.stringValue ?? ""
         placeholder = features["placeholder"]?.stringValue ?? ""
+        outpaint = features["outpaint"]?.stringValue
     }
 
     func suits(_ mode: Mode) -> Bool {

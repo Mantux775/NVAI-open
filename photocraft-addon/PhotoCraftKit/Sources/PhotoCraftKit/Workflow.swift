@@ -90,9 +90,21 @@ public final class Workflow {
     public func capture(_ task: GenerationTask) async throws -> (context: RGBAImage?, mask: GrayImage?) {
         let rel = "jobs/\(task.id)"
         try FileManager.default.createDirectory(at: url(rel), withIntermediateDirectories: true)
-        let ui = try await pc.inspect()
-        guard let doc = ui["document"], !doc.isNull else {
+        var ui = try await pc.inspect()
+        guard var doc = ui["document"], !doc.isNull else {
             throw WorkflowError.message(t("In PhotoCraft ist kein Dokument geöffnet.", "No document is open in PhotoCraft."))
+        }
+        let steps = task.mode == "fill" ? Planning.extendSteps(task.params["extend"]) : []
+        if !steps.isEmpty {
+            // Outpainting: Arbeitsfläche transparent erweitern, danach füllt der übliche Weg ohne
+            // Auswahl die leeren Ränder. Jeder Schritt lässt sich in PhotoCraft einzeln zurücknehmen.
+            if doc["hasSelection"]?.truthy ?? false {
+                throw WorkflowError.message(t("Zum Erweitern bitte erst die Auswahl aufheben (Auswahl › Aufheben).",
+                                              "To extend, please deselect first (Select › Deselect)."))
+            }
+            for step in steps { _ = try await pc.execute("image.canvasSize", step) }
+            ui = try await pc.inspect()
+            if let fresh = ui["document"], !fresh.isNull { doc = fresh }
         }
         let width = doc["width"]?.intValue ?? 0, height = doc["height"]?.intValue ?? 0
         task.docName = doc["name"]?.stringValue ?? ""
@@ -199,11 +211,15 @@ public final class Workflow {
         let region = task.region ?? Rect(0, 0, task.docSize.0, task.docSize.1)
         let active = try await nvai.health()["active_models"]?["image"]?.stringValue
         let models = try await nvai.imageModels()
+        // Erweitern über NV-AIs outpaint; ältere Server füllen per Maske wie bisher.
+        let outpaint = task.alphaMask && !Planning.extendSteps(task.params["extend"]).isEmpty
+            ? try await nvai.supportsOutpaint() : false
         let (model, warning) = try Planning.chooseModel(mode: task.mode, wanted: task.params["model_id"]?.stringValue,
-                                                        active: active, models: models, masksSupported: masks)
+                                                        active: active, models: models, masksSupported: masks,
+                                                        extend: outpaint)
         let plan = try Planning.plan(mode: task.mode, prompt: task.prompt, params: task.params, model: model,
                                      regionSize: (region.w, region.h), hasMask: task.hasMask, alphaMask: task.alphaMask,
-                                     masksSupported: masks)
+                                     masksSupported: masks, outpaint: outpaint)
         task.modelName = plan.modelName
         task.technique = plan.technique
         task.working = plan.working
@@ -215,7 +231,19 @@ public final class Workflow {
             let ids = uploads
             Task { for id in ids { try? await nvai.deleteAsset(id) } }
         }
-        if plan.sendImage, let context {
+        if plan.technique == "outpaint" {
+            // Nur den deckenden Teil schicken; Rand und weiche Übergänge legt NV-AI an.
+            guard let context, let cut = Planning.outpaintEdges(context, working: (gw, gh)) else {
+                throw WorkflowError.message(t("Kein durchsichtiger Rand zum Füllen gefunden.", "No transparent border found to fill."))
+            }
+            progress(0.06, t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+            let src = Imaging.resize(Imaging.flattenForModel(crop(context, cut.box)), to: cut.size)
+            let asset = try await nvai.upload(png: try Imaging.pngData(src), filename: "photocraft-\(task.id)-context.png")
+            guard let id = asset["id"]?.stringValue else { throw NVAIError.invalidResponse(t("Upload ohne id", "upload without id")) }
+            uploads.append(id)
+            payload["image_asset_id"] = .string(id)
+            payload["outpaint"] = .array(cut.edges.map { .int($0) })
+        } else if plan.sendImage, let context {
             progress(0.06, t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
             let src = Imaging.resize(Imaging.flattenForModel(context), to: (gw, gh))
             let asset = try await nvai.upload(png: try Imaging.pngData(src), filename: "photocraft-\(task.id)-context.png")

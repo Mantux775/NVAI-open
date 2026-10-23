@@ -39,6 +39,7 @@ struct PanelView: View {
                 ExpandRow()
                 DownloadsRow()
                 ModelRow()
+                if model.form.mode == .fill { ExtendFields() }
                 if model.showsStrength { StrengthSlider(value: $model.form.strength) }
                 DisclosureGroup(t("Erweitert", "Advanced"), isExpanded: $model.form.advanced) {
                     AdvancedFields().padding(.top, 6)
@@ -415,6 +416,49 @@ private struct ModelRow: View {
     }
 }
 
+/// „Arbeitsfläche erweitern (Outpainting)“: Ränder in Pixeln, Schnellwahl, Zielgröße.
+private struct ExtendFields: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(t("Arbeitsfläche erweitern (Outpainting)", "Extend the canvas (outpainting)"))
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if let target = model.extendTarget { Text(target).font(.caption.monospacedDigit()).foregroundStyle(.tint) }
+            }
+            HStack(spacing: 8) {
+                ForEach(0..<4, id: \.self) { i in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text([t("Links", "Left"), t("Oben", "Top"), t("Rechts", "Right"), t("Unten", "Bottom")][i])
+                            .font(.caption2).foregroundStyle(.secondary)
+                        TextField("0", value: $model.extend[i], format: .number)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+            HStack(spacing: 6) {
+                Button(t("↔ breiter", "↔ wider")) { model.extend = [256, 0, 256, 0] }
+                Button(t("↕ höher", "↕ taller")) { model.extend = [0, 256, 0, 256] }
+                Button(t("↓ nach unten", "↓ downwards")) { model.extend = [0, 0, 0, 384] }
+                Button(t("rundum", "all around")) { model.extend = [128, 128, 128, 128] }
+                Button(t("aus", "off")) { model.extend = [0, 0, 0, 0] }
+            }
+            .controlSize(.small)
+            if let warning = model.extendWarning {
+                Text(warning).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+            Text(t("Ohne Auswahl: PhotoCraft vergrößert die Arbeitsfläche transparent, NV-AI malt den neuen Rand passend dazu. "
+                   + "Der Prompt beschreibt das ganze Bild.",
+                   "Without a selection: PhotoCraft enlarges the canvas transparently and NV-AI paints the new border to match. "
+                   + "The prompt describes the whole picture."))
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 private struct StrengthSlider: View {
     @Binding var value: Double
 
@@ -567,7 +611,7 @@ private struct GoButton: View {
             Button { model.generate() } label: {
                 HStack {
                     Spacer()
-                    Text(model.isRunning ? t("Läuft …", "Running …") : model.form.mode.go).fontWeight(.semibold)
+                    Text(model.isRunning ? t("Läuft …", "Running …") : model.goLabel).fontWeight(.semibold)
                     Text("⌘↩").font(.caption).opacity(0.7)
                     Spacer()
                 }

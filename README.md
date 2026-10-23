@@ -7,17 +7,17 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.4.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-Setup-0.5.4.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-0.4.2.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.3.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-0.4.3.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.4 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.4)); the Mac app stays at 0.4.2
+October 2026: NV-AI 0.5.4 for Windows and 0.4.3 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.4))
 
 | | |
 |---|---|
-| Outpainting | Extend an image beyond its edges: pick left, top, right, bottom in pixels, NV-AI paints the new border. With FLUX 3 the transition is seamless and the original stays pixel for pixel; in the web interface, over MCP and in the PhotoCraft add-on ("Extend the canvas") |
+| Outpainting | Extend an image beyond its edges: pick left, top, right, bottom in pixels, NV-AI paints the new border. With FLUX 3 (Mac: FLUX.2 Klein) the transition is seamless and the original stays pixel for pixel; in the web interface, the Mac app, over MCP and in the PhotoCraft add-on on Windows and Mac ("Extend the canvas") |
 | Shorter "Expand prompt" | 60 to 80 words instead of up to 260, so there is little left to delete |
 | Realism LoRAs tested | Boreal and Lenovo UltraReal for Qwen-Image-2512 (both allow selling images), Wuli Turbo (an image in 18 instead of 100 s), Wan 2.2 Lightning (video in 90 instead of 585 s) |
 | Smaller fixes | LoRA list folds away, Civitai and Apache LoRAs show the right license, the Civitai file check no longer fails at random |
@@ -26,7 +26,7 @@ Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5,
 
 | | |
 |---|---|
-| Outpainting | Ein Bild über den Rand hinaus erweitern: links, oben, rechts, unten in Pixeln wählen, NV-AI malt den neuen Rand. Mit FLUX 3 ist der Übergang nahtlos, und das Original bleibt pixelgenau; in der Weboberfläche, über MCP und im PhotoCraft-Add-on („Arbeitsfläche erweitern“) |
+| Outpainting | Ein Bild über den Rand hinaus erweitern: links, oben, rechts, unten in Pixeln wählen, NV-AI malt den neuen Rand. Mit FLUX 3 (Mac: FLUX.2 Klein) ist der Übergang nahtlos, und das Original bleibt pixelgenau; in der Weboberfläche, der Mac-App, über MCP und im PhotoCraft-Add-on unter Windows und Mac („Arbeitsfläche erweitern“) |
 | Kürzeres „Prompt ausbauen“ | 60 bis 80 Wörter statt bis zu 260, es bleibt kaum etwas zu streichen |
 | Realismus-LoRAs getestet | Boreal und Lenovo UltraReal für Qwen-Image-2512 (beide erlauben den Verkauf der Bilder), Wuli Turbo (ein Bild in 18 statt 100 s), Wan 2.2 Lightning (Video in 90 statt 585 s) |
 | Kleinere Fehler | LoRA-Liste klappt ein, Civitai- und Apache-LoRAs zeigen die richtige Lizenz, die Civitai-Dateiprüfung scheitert nicht mehr zufällig |

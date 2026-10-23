@@ -93,6 +93,10 @@ public enum Planning {
         case "img2img": return img2img
         case "refine": return img2img || (f["references"]?.intValue ?? 0) > 0
         case "mask": return f["mask"]?.truthy ?? (img2img && masksSupported)
+        case "outpaint":
+            // NV-AI ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
+            if let v = f["outpaint"] { return v.truthy }
+            return capable(model, "mask", masksSupported: masksSupported)
         default: preconditionFailure("unbekannte Fähigkeit: \(need)")
         }
     }
@@ -107,10 +111,19 @@ public enum Planning {
     }
 
     /// Modell für den Auftrag; passt das aktive nicht, ein passendes (volle Modelle vor Lightning).
+    /// `extend`: Arbeitsfläche erweitern über NV-AIs `outpaint`. Ohne eigene Wahl nimmt das ein
+    /// Bearbeitungsmodell (features.outpaint == "reference"), denn Maskenmodelle ließen an der alten
+    /// Bildkante eine harte Naht (gemessen 23.10.2026).
     public static func chooseModel(mode: String, wanted: String?, active: String?, models: [JSONValue],
-                                   masksSupported: Bool) throws -> (JSONValue, PlanWarning?) {
+                                   masksSupported: Bool, extend: Bool = false) throws -> (JSONValue, PlanWarning?) {
         let runnable = models.filter { $0["runnable"]?.truthy ?? true }
-        let need = needFor(mode)
+        let need = extend && mode == "fill" ? "outpaint" : needFor(mode)
+        if need == "outpaint" && (wanted ?? "").isEmpty {
+            let seamless = runnable.filter { features($0)["outpaint"]?.stringValue == "reference" }
+            if let first = seamless.first {
+                return (seamless.first { $0["id"]?.stringValue == active } ?? first, nil)
+            }
+        }
         var byID: [String: JSONValue] = [:]
         for m in runnable {
             if let id = m["id"]?.stringValue { byID[id] = m } // wie Pythons dict: der letzte gewinnt
@@ -121,7 +134,8 @@ public enum Planning {
         if let chosen, need == nil || capable(chosen, need!, masksSupported: masksSupported) {
             return (chosen, nil)
         }
-        let what = need == "mask" ? t("keine Masken", "masks") : t("keine Bilder überarbeiten", "image editing")
+        let what = need == "mask" ? t("keine Masken", "masks")
+            : need == "outpaint" ? t("nicht erweitern", "extending") : t("keine Bilder überarbeiten", "image editing")
         if wantedID != nil, let chosen {
             let name = chosen["name"]?.stringValue ?? ""
             throw PlanError(code: "model_incapable", message: t("„\(name)“ kann \(what) – bitte ein anderes Modell wählen.",
@@ -130,6 +144,7 @@ public enum Planning {
         let candidates = runnable.filter { need == nil || capable($0, need!, masksSupported: masksSupported) }
         guard !candidates.isEmpty else {
             let reason = ["mask": t("mit Masken arbeiten.", "work with masks."),
+                          "outpaint": t("Bilder erweitern.", "extend images."),
                           "refine": t("Bilder überarbeiten.", "edit images.")][need ?? ""] ?? t("laufen.", "run.")
             throw PlanError(code: "no_capable_model", message: t("Kein installiertes Bildmodell in NV-AI kann ",
                                                                  "No image model installed in NV-AI can ") + reason)
@@ -172,6 +187,51 @@ public enum Planning {
         Geometry.contextRegion(transparent, width: width, height: height, marginFrac: max(margin, outpaintMargin))
     }
 
+    // MARK: Erweitern (Outpainting)
+
+    /// Je Seite höchstens so viel neue Arbeitsfläche (Pixel).
+    public static let extendMax = 2048
+
+    /// Befehle `image.canvasSize`, die die Arbeitsfläche transparent erweitern. `extend` ist
+    /// [links, oben, rechts, unten]; je Seite ein relativer Schritt mit dem Anker auf der Gegenseite,
+    /// gleiche Ränder links und rechts (oben und unten) in einem Schritt mit mittigem Anker.
+    public static func extendSteps(_ extend: JSONValue?) -> [JSONValue] {
+        let list = extend?.arrayValue ?? []
+        guard list.count == 4 else { return [] }
+        let v = list.map { max(0, min(extendMax, $0.intValue ?? 0)) }
+        var steps: [JSONValue] = []
+        func step(_ w: Int, _ h: Int, _ anchor: String) {
+            steps.append(.object(["width": .int(w), "height": .int(h), "relative": .bool(true),
+                                  "anchor": .string(anchor), "extensionColor": .string("transparent")]))
+        }
+        for (a, b, horizontal, anchorA, anchorB) in [(v[0], v[2], true, "right", "left"), (v[1], v[3], false, "bottom", "top")] {
+            func size(_ n: Int) -> (Int, Int) { horizontal ? (n, 0) : (0, n) }
+            if a > 0 && a == b { let s = size(a + b); step(s.0, s.1, "center"); continue }
+            if a > 0 { let s = size(a); step(s.0, s.1, anchorA) }
+            if b > 0 { let s = size(b); step(s.0, s.1, anchorB) }
+        }
+        return steps
+    }
+
+    /// Für NV-AIs `outpaint`: deckender Teil des Ausschnitts (Box im Ausschnitt), Größe des
+    /// hochzuladenden Bildes und [links, oben, rechts, unten], schon auf die Arbeitsgröße skaliert.
+    public static func outpaintEdges(_ context: RGBAImage, working: (Int, Int)) -> (box: Rect, size: (Int, Int), edges: [Int])? {
+        var x0 = context.width, y0 = context.height, x1 = 0, y1 = 0
+        for y in 0..<context.height {
+            for x in 0..<context.width where context.pixels[(y * context.width + x) * 4 + 3] >= 250 {
+                x0 = min(x0, x); y0 = min(y0, y); x1 = max(x1, x + 1); y1 = max(y1, y + 1)
+            }
+        }
+        guard x1 > x0, y1 > y0 else { return nil }
+        let w = context.width, h = context.height
+        if x0 == 0 && y0 == 0 && x1 == w && y1 == h { return nil }
+        let sx = Double(working.0) / Double(w), sy = Double(working.1) / Double(h)
+        func r(_ v: Double) -> Int { Int(v.rounded(.toNearestOrEven)) }
+        let size = (max(1, r(Double(x1 - x0) * sx)), max(1, r(Double(y1 - y0) * sy)))
+        let edges = [r(Double(x0) * sx), r(Double(y0) * sy), r(Double(w - x1) * sx), r(Double(h - y1) * sy)].map { min(1024, $0) }
+        return (Rect(x0, y0, x1 - x0, y1 - y0), size, edges)
+    }
+
     // MARK: Request
 
     static func trimmed(_ v: JSONValue?) -> String {
@@ -180,12 +240,14 @@ public enum Planning {
 
     public static func plan(mode: String, prompt: String, params: JSONValue, model: JSONValue?,
                             regionSize: (Int, Int), hasMask: Bool, alphaMask: Bool,
-                            masksSupported: Bool) throws -> Plan {
+                            masksSupported: Bool, outpaint: Bool = false) throws -> Plan {
         let model = model ?? .object([:])
         let f = features(model)
         let workflow = model["workflow"]?.stringValue
         let prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let technique = techniqueFor(mode: mode, model: model, hasMask: hasMask, masksSupported: masksSupported)
+        // „outpaint“: Erweitern über NV-AIs outpaint-Feld; Rand, Maske und denoise setzt der Server.
+        let technique = outpaint && mode == "fill" ? "outpaint"
+            : techniqueFor(mode: mode, model: model, hasMask: hasMask, masksSupported: masksSupported)
         var warnings: [PlanWarning] = []
 
         let gw: Int, gh: Int
@@ -255,7 +317,7 @@ public enum Planning {
         }
 
         let sendImage = mode == "fill" || mode == "refine"
-        if sendImage && technique != "reference" {
+        if sendImage && technique != "reference" && technique != "outpaint" {
             let strength = (params["strength"]?.truthy ?? false) ? (params["strength"]?.doubleValue ?? 0.5) : 0.5
             payload["denoise"] = .double(mode == "fill" ? 1.0 : strength)
         }

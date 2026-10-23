@@ -13,6 +13,9 @@ struct GenerateView: View {
     @State private var strength = 0.5
     @State private var mask: URL?
     @State private var references: [URL] = []
+    /// Outpainting: Ränder links, oben, rechts, unten in Pixeln.
+    @State private var outpaintOn = false
+    @State private var edges = [0, 0, 0, 0]
     @State private var lastJobID: String?
     @State private var message: String?
     @State private var negative = ""
@@ -40,7 +43,7 @@ struct GenerateView: View {
         let f = activeModel?.features ?? [:]
         steps = f["steps"] as? Int ?? 4
         guidance = f["cfg"] as? Double ?? 7.5
-        if isCoreML { references = []; mask = nil }
+        if isCoreML { references = []; mask = nil; outpaintOn = false }
     }
 
     var body: some View {
@@ -111,7 +114,13 @@ struct GenerateView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         imageRow(startImage, choose: { startImage = Panels.chooseImage(t("Ausgangsbild wählen", "Choose start image")) },
                                  clear: { startImage = nil; mask = nil })
-                        if startImage != nil {
+                        if startImage != nil && !isCoreML {
+                            Toggle(t("Über den Rand hinaus erweitern (Outpainting)", "Extend beyond the edges (outpainting)"),
+                                   isOn: $outpaintOn)
+                        }
+                        if startImage != nil && outpaintOn && !isCoreML {
+                            outpaintFields
+                        } else if startImage != nil {
                             HStack {
                                 Text(t("Stärke", "Strength") + String(format: " %.2f", strength))
                                 Slider(value: $strength, in: 0.1...1.0)
@@ -166,6 +175,37 @@ struct GenerateView: View {
             }
             .padding(14)
         }
+    }
+
+    /// Ränder fürs Erweitern, mit Schnellwahl und Zielformat.
+    @ViewBuilder
+    private var outpaintFields: some View {
+        let labels = [t("Links", "Left"), t("Oben", "Top"), t("Rechts", "Right"), t("Unten", "Bottom")]
+        HStack {
+            ForEach(0..<4, id: \.self) { i in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(labels[i]).font(.caption)
+                    TextField("0", value: $edges[i], format: .number).frame(width: 64)
+                }
+            }
+        }
+        HStack {
+            Button(t("↔ breiter", "↔ wider")) { edges = [256, 0, 256, 0] }
+            Button(t("↕ höher", "↕ taller")) { edges = [0, 256, 0, 256] }
+            Button(t("↓ nach unten", "↓ downwards")) { edges = [0, 0, 0, 384] }
+            Button(t("rundum", "all around")) { edges = [128, 128, 128, 128] }
+        }
+        .controlSize(.small)
+        if let url = startImage, let source = try? ImageFiles.load(url) {
+            let e = Outpaint.Edges(left: edges[0], top: edges[1], right: edges[2], bottom: edges[3])
+            let size = Outpaint.size(of: source, e)
+            Text("\(source.width) × \(source.height) → \(size.width) × \(size.height)").font(.callout.monospacedDigit())
+        }
+        Text(t("Das Bild bleibt, nur der neue Rand wird gemalt; das Format ergibt sich aus Bild und Rand. "
+               + "Der Prompt beschreibt das ganze erweiterte Bild.",
+               "The image stays; only the new border is painted, the size follows from image and border. "
+               + "The prompt describes the whole extended picture."))
+            .font(.caption).foregroundStyle(.secondary)
     }
 
     /// „✨ Prompt ausbauen“: aus ein paar Worten eine volle Bildbeschreibung, mit Zurücknehmen.
@@ -321,12 +361,16 @@ struct GenerateView: View {
             body["cfg"] = .double(guidance)
         }
         do {
-            if let startImage {
+            let extending = outpaintOn && !isCoreML && edges.contains { $0 > 0 }
+            if let startImage, extending {
+                body["image_asset_id"] = .string(try await upload(startImage))
+                body["outpaint"] = .array(edges.map { .int(max(0, min(Outpaint.maxEdge, $0))) })
+            } else if let startImage {
                 body["image_asset_id"] = .string(try await upload(startImage))
                 body["denoise"] = .double(mask != nil ? 1.0 : strength)
                 if let mask { body["mask_asset_id"] = .string(try await upload(mask)) }
             }
-            if !references.isEmpty {
+            if !references.isEmpty && !extending {
                 var ids: [JSONValue] = []
                 for url in references { ids.append(.string(try await upload(url))) }
                 body["reference_asset_ids"] = .array(ids)

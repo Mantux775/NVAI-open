@@ -7,7 +7,7 @@ enum APIRouter {
     /// Was dieser Server von GenerateImageRequest versteht – kein „upsampler“: FLUX 3 gibt es hier nicht.
     /// „expand_prompt“: POST /api/prompt/expand wie unter Windows, hier mit dem Qwen3 von FLUX.2 Klein.
     static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
-                           "cancel_job"]
+                           "cancel_job", "outpaint"]
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
         // Texte (Beschreibungen, Hinweise, Fehler) in der Sprache des Clients: de → Deutsch, sonst Englisch.

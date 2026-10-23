@@ -22,7 +22,7 @@ messages. Jobs keep the language of the request that created them.
 
 | Engine | Models | Capabilities | Memory |
 |---|---|---|---|
-| MLX ([flux-2-swift-mlx](https://github.com/VincentGourbin/flux-2-swift-mlx) 3.1.0) | FLUX.2 Klein 4B, 4-bit or 8-bit (Apache-2.0) | generate, image-to-image (`denoise`), masked fill, up to 3 reference images | 4-bit from 8 GB, 8-bit from 24 GB |
+| MLX ([flux-2-swift-mlx](https://github.com/VincentGourbin/flux-2-swift-mlx) 3.1.0) | FLUX.2 Klein 4B, 4-bit or 8-bit (Apache-2.0) | generate, image-to-image (`denoise`), masked fill, up to 3 reference images, outpainting (since 0.4.3) | 4-bit from 8 GB, 8-bit from 24 GB |
 | Core ML ([ml-stable-diffusion](https://github.com/apple/ml-stable-diffusion)) | Stable Diffusion 1.5/2.1/SDXL as compiled Core ML pipelines, plus results from the Hugging Face search | generate, image-to-image (with VAE encoder), negative prompt; fixed size | from 8 GB |
 
 Measured on an M1 with 8 GB (FLUX.2 Klein 4B, 4-bit, 4 steps):
@@ -31,6 +31,21 @@ Measured on an M1 with 8 GB (FLUX.2 Klein 4B, 4-bit, 4 steps):
 - **PhotoCraft-style jobs at 1184 × 880:** generate 109 s (7.9 GB peak), refine (`denoise` 0.5) 65 s, fill 109 s. The area outside the mask stays unchanged (mean difference 0.12/255).
 
 On 8 GB, 1 megapixel is the practical limit; 16 GB or more is comfortable.
+
+## Outpainting (since 0.4.3)
+
+`outpaint=[left, top, right, bottom]` with `image_asset_id` extends an image beyond its edges, as on
+Windows (feature `outpaint`, `features.outpaint = "reference"`). FLUX.2 Klein gets the image on a grey
+border as a reference image and continues the scene; afterwards the original is put back pixel for
+pixel with a 96 px soft transition (`Sources/Core/Outpaint.swift`). In the app: "Start image" →
+"Extend beyond the edges".
+
+Measured on the M1 (harbour scene, +256 px to the right): 768 × 512 seamless in 86 s, 4.9 GB peak,
+old part unchanged (0.0/255). At 1248 × 832 FLUX.2 Klein pasted in an unrelated picture and left grey
+areas (two seeds out of two). That is why NV-AI computes outpainting at no more than 0.4 megapixels
+and scales the new border up; if more than 2 % of the border stays grey, it computes once more with
+the next seed. The full chain from the PhotoCraft add-on (canvas 512 → 768 px) took 334 s including
+one such retry and was seamless.
 
 ## Cancelling and content labels
 

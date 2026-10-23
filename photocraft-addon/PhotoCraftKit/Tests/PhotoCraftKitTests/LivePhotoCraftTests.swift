@@ -58,6 +58,40 @@ final class LivePhotoCraftTests: XCTestCase {
         await pc.close()
     }
 
+    /// „Arbeitsfläche erweitern“ mit NV-AI: ein Foto (`PHOTOCRAFT_LIVE_IMAGE`, Pfad im Austauschordner) um
+    /// 256 px nach rechts erweitern. Prüft Breite und Technik „outpaint“ und speichert das Ergebnis als
+    /// `jobs/<id>/final.png` zum Ansehen.
+    func testExtendWithRealNVAI() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let port = env["PHOTOCRAFT_LIVE_PORT"].flatMap({ UInt16($0) }), let token = env["PHOTOCRAFT_LIVE_TOKEN"],
+              let exchangePath = env["PHOTOCRAFT_LIVE_EXCHANGE"], let image = env["PHOTOCRAFT_LIVE_IMAGE"],
+              let nvaiURL = env["NVAI_LIVE_URL"].flatMap(URL.init(string:)) else {
+            throw XCTSkip("keine Testinstanz, kein Bild oder kein NV-AI angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
+        }
+        let pc = ControlClient(port: port, tokenURL: URL(fileURLWithPath: token))
+        let nvai = NVAIClient(baseURL: nvaiURL, token: env["NVAI_LIVE_TOKEN"])
+        _ = try await pc.call("app.open", ["path": .string(image)])
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        let ui = try await pc.inspect()
+        let testDoc = ui["session"]?["active"]?.intValue ?? 0
+        let width = ui["document"]?["width"]?.intValue ?? 0
+
+        let wf = Workflow(pc: pc, exchange: URL(fileURLWithPath: exchangePath))
+        let t = GenerationTask(id: "live-extend-\(UUID().uuidString.prefix(8))", mode: "fill",
+                               prompt: "Full-color outdoor photograph of a busy harbour market on an overcast morning, "
+                                   + "more market stalls and shoppers on the wet cobbled quay.",
+                               params: ["variants": 1, "extend": [0, 0, 256, 0], "auto_place": true, "seed": 11])
+        try await wf.run(t, nvai: nvai)
+        let doc = try await pc.document()
+        XCTAssertEqual(doc["width"]?.intValue, width + 256)
+        XCTAssertEqual(t.technique, "outpaint")
+        XCTAssertEqual(t.variants.count, 1)
+        _ = try await pc.call("app.save", ["path": .string("jobs/\(t.id)/final.png")])
+        print("Ergebnis: jobs/\(t.id)/final.png, Modell \(t.modelName)")
+        _ = try await pc.execute("file.close", ["document": .int(testDoc)])
+        await pc.close()
+    }
+
     /// Ein echter Auftrag „Füllen“ mit NV-AI (eine Variante, etwa 1–2 min GPU) – zusätzlich `NVAI_LIVE_URL`
     /// (und bei entferntem NV-AI `NVAI_LIVE_TOKEN`). Prüft die ganze Kette wie die App: Erfassen, Hochladen,
     /// Inpainting, Einfügen mit Ebenenmaske – und dass die Uploads danach in NV-AI gelöscht sind.

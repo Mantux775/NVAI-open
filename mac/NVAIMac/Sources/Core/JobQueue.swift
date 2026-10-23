@@ -349,7 +349,8 @@ actor JobQueue {
         return try ImageFiles.load(AssetStore.shared.fileURL(asset.filename))
     }
 
-    private func runImage(_ id: String, _ req: ImageJobRequest) async throws {
+    private func runImage(_ id: String, _ request: ImageJobRequest) async throws {
+        var req = request
         guard let any = Models.find(req.modelID) else { throw APIError(404, t("Unbekanntes Modell: \(req.modelID)", "Unknown model: \(req.modelID)")) }
         if case .coreml(let m) = any {
             try await runCoreML(id, req, model: m)
@@ -366,6 +367,22 @@ actor JobQueue {
         if let a = req.imageAssetID { image = try await loadImage(a, t("Ausgangsbild", "Start image")) }
         if let m = req.maskAssetID { mask = try await loadImage(m, t("Maske", "Mask")) }
         for r in req.referenceAssetIDs { refs.append(try await loadImage(r, t("Referenzbild", "Reference image"))) }
+
+        // Outpainting: Bild auf grauem Rand als Referenz, Format = Bild plus Rand (siehe Outpaint).
+        var original: CGImage?
+        if let edges = req.outpaint, let source = image {
+            let size = Outpaint.size(of: source, edges)
+            guard size.width <= 2048, size.height <= 2048 else {
+                throw APIError(422, t("Erweitert wäre das Bild \(size.width) × \(size.height) px, erlaubt sind höchstens 2048.",
+                                      "Extended, the image would be \(size.width) × \(size.height) px; at most 2048 is allowed."))
+            }
+            original = source
+            image = nil
+            refs = [Outpaint.padded(source, edges)]
+            req.width = size.width
+            req.height = size.height
+            req.prompt = Outpaint.prompt(req.prompt)
+        }
 
         let mode: EngineMode
         if let image, let mask {
@@ -393,18 +410,33 @@ actor JobQueue {
         let baseSeed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
         for index in 0..<req.batch {
             if jobs[id]?.cancelRequested == true { break }
-            let seed = baseSeed &+ UInt64(index)
+            var seed = baseSeed &+ UInt64(index)
             update(id) { $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)") : t("rechnet", "generating") }
             let sampler = PeakMemorySampler()
             sampler.start()
             let started = Date()
-            let job = EngineJob(mode: mode, prompt: req.prompt, width: req.width, height: req.height,
-                                steps: req.steps, guidance: req.guidance, seed: seed)
+            // Erweitern: höchstens Outpaint.maxPixels rechnen, sonst führt FLUX.2 Klein die Szene nicht weiter.
+            let gen: (width: Int, height: Int) = req.outpaint != nil
+                ? Outpaint.generationSize(req.width, req.height) : (req.width, req.height)
             let result: CGImage
             do {
-                result = try await Flux2Engine.shared.generate(job) { step, total in
-                    Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
+                func render(_ s: UInt64) async throws -> CGImage {
+                    let job = EngineJob(mode: mode, prompt: req.prompt, width: gen.width, height: gen.height,
+                                        steps: req.steps, guidance: req.guidance, seed: s)
+                    return try await Flux2Engine.shared.generate(job) { step, total in
+                        Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
+                    }
                 }
+                var image = try await render(seed)
+                // Blieb Grau im neuen Rand stehen (gemessen bei einem von zwei Seeds), einmal nachrechnen.
+                if let original, let edges = req.outpaint,
+                   Outpaint.greyShare(image, original: original, edges) > Outpaint.greyLimit,
+                   jobs[id]?.cancelRequested != true {
+                    AppLog.info("Job \(id): grey left in the border, retrying with the next seed")
+                    seed = seed &+ 1000
+                    image = try await render(seed)
+                }
+                result = image
             } catch {
                 _ = sampler.stop()
                 throw error
@@ -412,7 +444,11 @@ actor JobQueue {
             let seconds = Date().timeIntervalSince(started)
             let peak = sampler.stop()
 
-            let png = try ImageFiles.pngData(ImageFiles.resized(result, width: req.width, height: req.height))
+            var final = ImageFiles.resized(result, width: req.width, height: req.height)
+            if let original, let edges = req.outpaint {
+                final = Outpaint.compositeOriginal(result: final, original: original, edges)
+            }
+            let png = try ImageFiles.pngData(final)
             var meta: [String: JSONValue] = [
                 "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height),
                 "steps": .int(req.steps), "cfg": .double(Double(req.guidance)),
@@ -424,6 +460,7 @@ actor JobQueue {
             if index == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
             if let a = req.imageAssetID { meta["image_asset_id"] = .string(a); meta["denoise"] = .double(req.denoise) }
             if let m = req.maskAssetID { meta["mask_asset_id"] = .string(m) }
+            if let e = req.outpaint { meta["outpaint"] = .array([e.left, e.top, e.right, e.bottom].map { .int($0) }) }
             if !req.referenceAssetIDs.isEmpty { meta["reference_asset_ids"] = .array(req.referenceAssetIDs.map { .string($0) }) }
 
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
