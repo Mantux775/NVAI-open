@@ -157,6 +157,23 @@ sich auf Civitais Angabe zum Basismodell; mit Schlüssel prüft es den Dateikopf
 Face. Lizenzen und Inhalte von LoRAs stehen nur auf deren Seiten — dort prüfen, bevor etwas
 veröffentlicht wird.
 
+**Getestete LoRAs (RTX 5060 Ti, Qwen-Image-2512 voll, gleicher Seed, Stärke 0,9).** Alle erlauben,
+die erzeugten Bilder zu verkaufen. Einmal geladen kostet eine LoRA kaum Zeit (94–106 statt 100 s).
+
+| LoRA | Quelle, Lizenz | Ergebnis |
+|---|---|---|
+| Boreal (Boring Reality) v3 | Civitai, Bilder dürfen verkauft werden | Wirkt am ehesten wie ein echtes Foto: natürliche Haut, kein HDR-Look. Empfohlen |
+| Lenovo UltraReal | Hugging Face `Danrisi/Lenovo_Qwen`, Apache-2.0, 47 MB | Natürlicher und fotografischer, hält sich am engsten an den Prompt. Empfohlen |
+| Real Life | Civitai, Bilder dürfen verkauft werden | Natürlich, ersetzte aber den verlangten schlichten Hintergrund |
+| flymy Realism | Hugging Face, Apache-2.0 | Kaum anders als ohne LoRA; ersetzte ebenfalls den Hintergrund |
+| Skin Fix | Civitai, Bilder dürfen verkauft werden | Sichtbar weich, weniger Detail |
+| Wuli Turbo 4 Schritte | Hugging Face, Apache-2.0 | Kein Stil: Schritte 4 und cfg 1 einstellen, 18 statt 100 s bei fast gleicher Qualität |
+
+Für Video: **Wan2.2-Lightning I2V** (`lightx2v/Wan2.2-Lightning`, Apache-2.0, High- und Low-Datei)
+an Wan 2.2 I2V A14B mit Schritten 4 und cfg 1 brauchte 90 statt 585 s (640 × 640, 49 Frames) bei
+vergleichbarer Qualität; nur die Kamerafahrt fiel schwächer aus. **LTX-2.3 Crisp Enhance** zeichnete
+Flamme und Stein schärfer, veränderte aber den Bildaufbau, und ihre Seite nennt keine Lizenz.
+
 ### Speicherorte
 
 „Modelle“ → „Speicherorte“ (seit 0.5.2) zeigt Datenordner (Verlauf, Bilder, Protokolle) und

@@ -213,6 +213,12 @@ running.
   With 28 steps this took 82 s including a cold start. Use the full model for new objects. In
   testing, Lightning mostly just continued the surroundings, which is enough for retouching
   something out.
+- **Outpainting** (since 0.5.4, `image_asset_id` + `outpaint=[left, top, right, bottom]` in pixels):
+  the image is extended beyond its edges; the size is image plus border. **Use FLUX 3:** it gets the
+  image on a grey border as a reference and continues the scene, then NV-AI puts the original back.
+  Measured on a harbour scene (+384 px on the right): seamless, the old part deviated by 0.0 out of
+  255, two variants in 66 s. Qwen-Image-2512 extends via a mask, but in testing it painted the border
+  as a separate scene with a hard edge (also with a 128/256 px transition and 50 steps).
 - **Second pass** (`hires=True`) for hands, faces and fine technical detail.
 
 ### Sizes
@@ -477,6 +483,7 @@ Applies equally to the MCP tool and to the body of `POST /api/generate/image`.
 | `hires`, `hires_scale`, `hires_denoise` | ✓ | — | |
 | `image_asset_id` + `denoise` | refine an image | becomes the first reference | |
 | `mask_asset_id` | ✓ inpainting (with `image_asset_id`, `denoise=1.0`) | — (error message) | white = new, black = keep; upload the mask via `POST /api/upload` |
+| `outpaint` | ✓ via mask, often a hard edge | ✓ seamless, original pixel for pixel | `[left, top, right, bottom]`, the size follows |
 | `reference_asset_ids` | — | up to 10 | error message with other models |
 | `upsample_prompt` | — | on by default | |
 | `slg`, `controlnet_*` | — | — | only for SD 3.5 models (no longer in the catalog) |
@@ -499,6 +506,7 @@ model. Other programs can adapt their controls to it, as the NV-AI web UI does.
 | `bbox` | placement by box | false | true |
 | `img2img` | start image with `denoise` | true | false |
 | `mask` | inpainting with `mask_asset_id` | true | false |
+| `outpaint` | how extending works (`"mask"`, `"reference"`, null) | "mask" | "reference" |
 | `hires` | second pass useful | true | false |
 | `text_rendering` | text in the image | true | true |
 | `sizes` | additional recommended sizes `{label, w, h}` | 7 native | 4, up to 2048² |

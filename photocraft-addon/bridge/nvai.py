@@ -156,6 +156,11 @@ class NVAI:
         self._mask_support = (now, ok)
         return ok
 
+    def supports_outpaint(self) -> bool:
+        """Kennt NV-AI ``outpaint`` (ab 0.5.4)? Dann legt der Server Rand und Maske selbst an."""
+        info = self.version()
+        return info is not None and "outpaint" in (info.get("features") or [])
+
     def supports_expand(self) -> bool:
         """Kennt die laufende NV-AI ``POST /api/prompt/expand`` („Prompt ausbauen“)?"""
         info = self.version()

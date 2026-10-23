@@ -1,7 +1,7 @@
 """Pydantic-Schemas fuer die REST-API. Werden vom MCP-Server wiederverwendet."""
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -51,6 +51,14 @@ class GenerateImageRequest(BaseModel):
         description="Nur mit image_asset_id: Maske, weiss = neu erzeugen, schwarz = behalten. "
                     "Graustufen gehen stufenlos ueber. Macht aus Bild-zu-Bild ein Inpainting; "
                     "mit denoise 1.0 entsteht im weissen Bereich voellig neuer Inhalt",
+    )
+    outpaint: list[Annotated[int, Field(ge=0, le=1024)]] | None = Field(
+        None, min_length=4, max_length=4,
+        description="Nur mit image_asset_id: Bild ueber den Rand hinaus erweitern (Outpainting), "
+                    "[links, oben, rechts, unten] in Pixeln, je 0-1024. Breite und Hoehe ergeben "
+                    "sich aus Bild plus Rand; den Rest setzt der Server. Der Prompt beschreibt das "
+                    "ganze erweiterte Bild. Nahtlos mit Modellen mit Referenzbildern (FLUX 3); "
+                    "Maskenmodelle (Qwen-Image-2512) lassen oft eine Kante am alten Bildrand",
     )
 
     # --- FLUX 3: Prompt-Upsampler und Referenzbilder ---

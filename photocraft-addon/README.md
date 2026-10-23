@@ -8,7 +8,7 @@ Photoshop's "Generative Fill":
 
 | Mode | What happens |
 |---|---|
-| **Fill** | The selection is regenerated to match its surroundings (inpainting). Without a prompt the surroundings simply continue – handy for retouching. Without a selection, transparent edges get filled, e.g. after *Image › Canvas Size* with a transparent extension (outpainting); a short prompt describing the scene helps there. |
+| **Fill** | The selection is regenerated to match its surroundings (inpainting). Without a prompt the surroundings simply continue – handy for retouching. Without a selection, transparent edges get filled, e.g. after *Image › Canvas Size* with a transparent extension (outpainting); a short prompt describing the scene helps there. Since 0.4.2 **Extend the canvas** does this in one step: enter left, top, right, bottom in pixels (or pick "wider", "taller" …), the add-on enlarges the canvas and fills the new border. With NV-AI 0.5.4 or later it uses FLUX 3 when available, which gave seamless transitions in testing. |
 | **Generate** | A new image in the selection – or on the whole canvas if nothing is selected. |
 | **Refine** | The selection (or the whole image) is re-rendered. Image-to-image models use the *strength* to set how much changes; reference-edit models such as **FLUX 3** take the prompt as an instruction: say what changes and what stays ("Replace the rope handles with iron handles; keep everything else unchanged."). |
 

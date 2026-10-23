@@ -103,6 +103,11 @@ let promptBefore = null; // eigener Prompt vor dem Ausbauen, zum Zurücknehmen
 let expandNote = "";
 let starting = ""; // "photocraft" | "nvai" während eines Starts, "check" während „Erneut prüfen“
 let errorText = "";
+// Outpainting-Ränder [links, oben, rechts, unten]. Bewusst nicht gespeichert: Nach dem Start
+// stehen sie wieder auf 0, damit ein zweiter Klick die Arbeitsfläche nicht noch einmal erweitert.
+let extend = [0, 0, 0, 0];
+const EXTEND_IDS = ["#extend-left", "#extend-top", "#extend-right", "#extend-bottom"];
+const extending = () => settings.mode === "fill" && extend.some((v) => v > 0);
 
 // ------------------------------------------------------------------ Helfer
 
@@ -307,12 +312,16 @@ function renderMode() {
   $("#prompt").placeholder = mode.placeholder;
   $("#strength-field").hidden = settings.mode !== "refine";
   $("#margin-field").hidden = settings.mode !== "fill";
+  $("#extend-field").hidden = settings.mode !== "fill";
   renderModels();
   renderGo();
 }
 
+// Erweitern kennt NV-AI ab 0.5.4 (m.outpaint); dann gehen auch Bearbeitungsmodelle wie FLUX 3.
+const outpaintKnown = () => models.some((m) => m.outpaint);
+
 function suitable(m) {
-  const need = MODE_NEEDS[settings.mode];
+  const need = extending() && outpaintKnown() ? "outpaint" : MODE_NEEDS[settings.mode];
   return !need || Boolean(m[need]);
 }
 
@@ -321,12 +330,15 @@ function renderModels() {
   const list = models.filter(suitable);
   const active = list.find((m) => m.active);
   // Ohne Wahl nimmt die Brücke das aktive Modell – oder, wenn es nicht passt, das beste passende.
-  const fallback = active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
+  // Beim Erweitern wählt die Brücke ohne eigene Wahl ein nahtloses Bearbeitungsmodell.
+  const seamless = extending() ? list.filter((m) => m.outpaint === "reference") : [];
+  const fallback = seamless.length ? seamless.find((m) => m.active) || seamless[0]
+    : active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
   const waitingForMasks = MODE_NEEDS[settings.mode] === "mask" && state?.nvai?.connected && !state.nvai.masks;
   const first = !models.length ? (modelsFetched ? t("Kein Bildmodell installiert", "No image model installed") : t("Aktives Modell", "Active model"))
     : !fallback ? (waitingForMasks ? t("Füllen braucht Masken-Unterstützung in NV-AI", "Fill needs mask support in NV-AI")
       : t("Kein passendes Modell installiert", "No suitable model installed"))
-    : active ? t(`Aktives Modell (${active.name})`, `Active model (${active.name})`)
+    : active && fallback === active ? t(`Aktives Modell (${active.name})`, `Active model (${active.name})`)
     : t(`Automatisch (${fallback.name})`, `Automatic (${fallback.name})`);
   select.replaceChildren(el("option", { value: "", text: first }));
   for (const m of list) {
@@ -409,6 +421,9 @@ function blocker() {
   }
   if (noModels()) return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI");
   if (settings.mode === "fill" && !nv.masks) return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet");
+  if (extending() && state?.photocraft?.document?.hasSelection) {
+    return t("Zum Erweitern bitte erst die Auswahl aufheben", "To extend, please deselect first");
+  }
   if (settings.mode === "generate" && !settings.prompt.trim()) return t("Bitte beschreiben, was entstehen soll", "Please describe what should be created");
   if (settings.mode === "refine" && currentModel?.reference_edit && !settings.prompt.trim()) {
     return t("Bitte beschreiben, was sich ändern soll", "Please describe what should change");
@@ -421,8 +436,23 @@ function renderGo() {
   const go = $("#go");
   go.disabled = Boolean(why);
   go.title = why || "";
-  $("#go-label").textContent = state?.task?.status === "running" ? t("Läuft …", "Running …") : modeTexts(settings.mode).go;
+  $("#go-label").textContent = state?.task?.status === "running" ? t("Läuft …", "Running …")
+    : extending() ? t("Erweitern und füllen", "Extend and fill") : modeTexts(settings.mode).go;
+  renderExtend();
   renderExpand();
+}
+
+/** Zielgröße der Arbeitsfläche neben der Überschrift „Arbeitsfläche erweitern“. */
+function renderExtend() {
+  EXTEND_IDS.forEach((id, i) => {
+    const input = $(id);
+    if (document.activeElement !== input) input.value = extend[i];
+  });
+  const doc = state?.photocraft?.document;
+  $("#extend-warn").hidden = !(extending() && currentModel?.outpaint === "mask");
+  $("#extend-out").textContent = doc && extending()
+    ? `${doc.width} × ${doc.height} → ${doc.width + extend[0] + extend[2]} × ${doc.height + extend[1] + extend[3]}`
+    : "";
 }
 
 // ------------------------------------------------------------ Prompt ausbauen
@@ -669,12 +699,15 @@ async function generate() {
     cfg: num(settings.cfg),
     seed: num(settings.seed),
     margin: Number(settings.margin),
+    extend: extending() ? extend : null,
     hires: settings.hires,
     native: settings.native,
     auto_place: settings.autoPlace,
   };
   try {
     const task = await api("/api/generate", { method: "POST", body: JSON.stringify(body) });
+    extend = [0, 0, 0, 0];
+    renderModels();
     shownTask = task;
     if (state) state.task = task;
     lastStatus = "running";
@@ -912,6 +945,21 @@ function bind() {
       renderSliders();
     });
   };
+  EXTEND_IDS.forEach((id, i) => {
+    $(id).addEventListener("input", (e) => {
+      extend[i] = Math.max(0, Math.min(2048, Math.round(Number(e.target.value) || 0)));
+      renderModels();
+      renderGo();
+    });
+  });
+  for (const b of $$("[data-extend]")) {
+    b.addEventListener("click", () => {
+      extend = b.dataset.extend.split(",").map(Number);
+      renderModels();
+      renderGo();
+    });
+  }
+
   bindValue("#strength", "strength", Number);
   bindValue("#margin", "margin", Number);
   bindValue("#negative", "negative");

@@ -240,6 +240,7 @@ async def generate_image(
     image_asset_id: str | None = None,
     denoise: float = 1.0,
     mask_asset_id: str | None = None,
+    outpaint: list[int] | None = None,
     reference_asset_ids: list[str] | None = None,
     upsample_prompt: bool | None = None,
     controlnet_model_id: str | None = None,
@@ -288,6 +289,13 @@ async def generate_image(
             keep) as an uploaded asset. With denoise=1.0 this is inpainting. Use the full
             Qwen model -- Lightning mostly just continues the surroundings. FLUX 3 can't
             do masks.
+        outpaint: Only with image_asset_id: extend the image beyond its edges,
+            [left, top, right, bottom] in pixels (0-1024 each). width/height follow from
+            image plus border; the server sets everything else. The prompt describes the
+            whole extended picture. Use flux3-klein-nvfp4 (or another model with
+            reference images): measured seamless, and the original stays pixel for pixel.
+            Qwen-Image-2512 works via a mask but often paints the border as a separate
+            scene with a hard edge at the old image border.
         reference_asset_ids: FLUX 3: up to 10 image assets. Refer to them in the
             prompt as "the first image", "the second image": "Put the soldier from the first
             image into the trench from the second image" or "Replace the rope handles with
@@ -319,6 +327,7 @@ async def generate_image(
         "slg": slg, "slg_scale": slg_scale,
         "image_asset_id": image_asset_id, "denoise": denoise,
         "mask_asset_id": mask_asset_id,
+        "outpaint": outpaint,
         "reference_asset_ids": reference_asset_ids or [],
         "upsample_prompt": upsample_prompt,
         "controlnet_model_id": controlnet_model_id,

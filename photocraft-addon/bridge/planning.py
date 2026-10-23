@@ -114,6 +114,11 @@ def capable(model: dict[str, Any], need: str, masks_supported: bool) -> bool:
         return img2img or int(features.get("references") or 0) > 0
     if need == "mask":
         return bool(features.get("mask", img2img and masks_supported))
+    if need == "outpaint":
+        # NV-AI ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
+        if "outpaint" in features:
+            return bool(features["outpaint"])
+        return capable(model, "mask", masks_supported)
     raise ValueError(f"unbekannte Fähigkeit: {need}")
 
 
@@ -122,22 +127,34 @@ def need_for(mode: str) -> str | None:
 
 
 def choose_model(mode: str, wanted: str | None, active: str | None, models: list[dict[str, Any]],
-                 masks_supported: bool) -> tuple[dict[str, Any], Warning | None]:
+                 masks_supported: bool, extend: bool = False) -> tuple[dict[str, Any], Warning | None]:
     """Modell für den Auftrag. Passt das aktive nicht zum Modus, wird ein passendes gewählt
-    (volle Modelle vor Lightning) und als Warnung vermerkt."""
+    (volle Modelle vor Lightning) und als Warnung vermerkt.
+
+    ``extend``: Arbeitsfläche erweitern über NV-AIs ``outpaint``. Ohne eigene Wahl nimmt das
+    ein Bearbeitungsmodell (FLUX 3 & Co.), denn Maskenmodelle hinterließen an der alten
+    Bildkante eine harte Naht (gemessen 23.10.2026).
+    """
     runnable = [m for m in models if m.get("runnable", True)]
-    need = need_for(mode)
+    need = "outpaint" if extend and mode == "fill" else need_for(mode)
+    if need == "outpaint" and not wanted:
+        seamless = [m for m in runnable if (m.get("features") or {}).get("outpaint") == "reference"]
+        if seamless:
+            return next((m for m in seamless if m["id"] == active), seamless[0]), None
     by_id = {m["id"]: m for m in runnable}
     chosen = by_id.get(wanted or active or "")
     if chosen and (need is None or capable(chosen, need, masks_supported)):
         return chosen, None
-    what = (t("keine Masken", "masks") if need == "mask" else t("keine Bilder überarbeiten", "image editing"))
+    what = (t("keine Masken", "masks") if need == "mask"
+            else t("nicht erweitern", "extending") if need == "outpaint"
+            else t("keine Bilder überarbeiten", "image editing"))
     if wanted and chosen:
         raise PlanError("model_incapable", t(f"„{chosen['name']}“ kann {what} – bitte ein anderes Modell wählen.",
                                              f"\"{chosen['name']}\" does not support {what} – please choose another model."))
     candidates = [m for m in runnable if need is None or capable(m, need, masks_supported)]
     if not candidates:
         reason = {"mask": t("mit Masken arbeiten.", "work with masks."),
+                  "outpaint": t("Bilder erweitern.", "extend images."),
                   "refine": t("Bilder überarbeiten.", "edit images.")}.get(need, t("laufen.", "run."))
         raise PlanError("no_capable_model", t("Kein installiertes Bildmodell in NV-AI kann ",
                                               "No image model installed in NV-AI can ") + reason)
@@ -198,17 +215,76 @@ def outpaint_region(transparent: imaging.Rect, width: int, height: int, margin: 
     return imaging.context_region(transparent, width, height, max(margin, OUTPAINT_MARGIN))
 
 
+# Je Seite hoechstens so viel neue Arbeitsflaeche (Pixel) beim Erweitern.
+EXTEND_MAX = 2048
+
+
+def extend_steps(extend: list[int] | None) -> list[dict[str, Any]]:
+    """Befehle `image.canvasSize`, die die Arbeitsfläche transparent erweitern.
+
+    `extend` ist [links, oben, rechts, unten] in Pixeln. Je Seite ein relativer Schritt mit
+    dem Anker auf der Gegenseite, damit das Bild dort bleibt; gleiche Ränder links und
+    rechts (oben und unten) gehen in einem Schritt mit mittigem Anker.
+    """
+    left, top, right, bottom = (max(0, min(EXTEND_MAX, int(v))) for v in (extend or [0, 0, 0, 0]))
+    steps: list[dict[str, Any]] = []
+
+    def step(width: int, height: int, anchor: str) -> None:
+        steps.append({"width": width, "height": height, "relative": True, "anchor": anchor,
+                      "extensionColor": "transparent"})
+
+    for a, b, dim, anchor_a, anchor_b in ((left, right, "w", "right", "left"),
+                                          (top, bottom, "h", "bottom", "top")):
+        size = (lambda n: (n, 0)) if dim == "w" else (lambda n: (0, n))
+        if a and a == b:
+            step(*size(a + b), "center")
+            continue
+        if a:
+            step(*size(a), anchor_a)
+        if b:
+            step(*size(b), anchor_b)
+    return steps
+
+
+def outpaint_edges(context: Any, working: tuple[int, int]
+                   ) -> tuple[tuple[int, int, int, int], tuple[int, int], list[int]] | None:
+    """Für NV-AIs ``outpaint``: deckender Teil des Ausschnitts und die Ränder drumherum.
+
+    Gibt (Box im Ausschnitt, Größe des hochzuladenden Bildes, [links, oben, rechts, unten])
+    zurück, Bild und Ränder schon auf die Arbeitsgröße skaliert; ``None``, wenn nichts
+    durchsichtig ist oder nichts deckt.
+    """
+    if "A" not in context.getbands():
+        return None
+    box = context.getchannel("A").point(lambda v: 255 if v >= 250 else 0).getbbox()
+    if box is None:
+        return None
+    w, h = context.size
+    x0, y0, x1, y1 = box
+    if (x0, y0, x1, y1) == (0, 0, w, h):
+        return None
+    sx, sy = working[0] / w, working[1] / h
+    size = (max(1, round((x1 - x0) * sx)), max(1, round((y1 - y0) * sy)))
+    edges = [round(x0 * sx), round(y0 * sy), round((w - x1) * sx), round((h - y1) * sy)]
+    return box, size, [min(1024, e) for e in edges]
+
+
 # ------------------------------------------------------------------ Request
 
 def plan(mode: str, prompt: str, params: dict[str, Any], model: dict[str, Any] | None,
          region_size: tuple[int, int], has_mask: bool, alpha_mask: bool,
-         masks_supported: bool) -> Plan:
-    """Den Request an ``/api/generate/image`` planen (ohne Asset-IDs)."""
+         masks_supported: bool, outpaint: bool = False) -> Plan:
+    """Den Request an ``/api/generate/image`` planen (ohne Asset-IDs).
+
+    ``outpaint``: Erweitern über NV-AIs ``outpaint``-Feld (Technik „outpaint“); Rand, Maske
+    und denoise setzt dann der Server.
+    """
     model = model or {}
     features = model.get("features") or {}
     workflow = model.get("workflow")
     prompt = (prompt or "").strip()
-    technique = technique_for(mode, model, has_mask, masks_supported)
+    technique = ("outpaint" if outpaint and mode == "fill"
+                 else technique_for(mode, model, has_mask, masks_supported))
     warnings: list[Warning] = []
 
     fixed = fixed_size(model)
@@ -268,7 +344,7 @@ def plan(mode: str, prompt: str, params: dict[str, Any], model: dict[str, Any] |
             "objects, choose the full model.")))
 
     send_image = mode in ("fill", "refine")
-    if send_image and technique != "reference":
+    if send_image and technique not in ("reference", "outpaint"):
         payload["denoise"] = 1.0 if mode == "fill" else float(params.get("strength") or 0.5)
     send_mask = has_mask and technique == "inpaint"
     grow, blur = (OUTPAINT_GROW, OUTPAINT_BLUR) if alpha_mask else (MASK_GROW.get(mode, 0), MASK_BLUR.get(mode, 0.0))

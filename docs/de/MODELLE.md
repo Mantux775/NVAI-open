@@ -215,6 +215,12 @@ anderer.
   das Rauschen des VAE-Durchlaufs. Mit 28 Schritten dauerte das 82 s einschließlich Kaltstart.
   Für neue Objekte das volle Modell nehmen. Lightning setzt laut Test meist nur die Umgebung
   fort, was zum Wegretuschieren genügt.
+- **Outpainting** (seit 0.5.4, `image_asset_id` + `outpaint=[links, oben, rechts, unten]` in Pixeln):
+  Das Bild wird über den Rand hinaus erweitert, das Format ist Bild plus Rand. **FLUX 3 nehmen:** Es
+  bekommt das Bild mit grauem Rand als Referenz und führt die Szene weiter, danach legt NV-AI das
+  Original zurück. Gemessen an einer Hafenszene (+384 px rechts): nahtlos, der alte Teil wich um
+  0,0 von 255 ab, zwei Varianten in 66 s. Qwen-Image-2512 erweitert per Maske, malte den Rand im
+  Test aber als eigene Szene mit harter Kante (auch mit 128/256 px Übergang und 50 Schritten).
 - **Zweiter Durchgang** (`hires=True`) für Hände, Gesichter und feine Technik.
 
 ### Formate
@@ -482,6 +488,7 @@ Gilt gleichermaßen für das MCP-Werkzeug und den Body von `POST /api/generate/i
 | `hires`, `hires_scale`, `hires_denoise` | ✓ | — | |
 | `image_asset_id` + `denoise` | Bild nachbessern | wird zur ersten Referenz | |
 | `mask_asset_id` | ✓ Inpainting (mit `image_asset_id`, `denoise=1.0`) | — (Fehlermeldung) | weiß = neu, schwarz = behalten; Maske per `POST /api/upload` |
+| `outpaint` | ✓ per Maske, oft harte Kante | ✓ nahtlos, Original pixelgenau | `[links, oben, rechts, unten]`, Format ergibt sich |
 | `reference_asset_ids` | — | bis 10 | Fehlermeldung bei anderen Modellen |
 | `upsample_prompt` | — | Standard an | |
 | `slg`, `controlnet_*` | — | — | nur für SD-3.5-Modelle |
@@ -505,6 +512,7 @@ tut.
 | `bbox` | Platzierung per Box | false | true |
 | `img2img` | Startbild mit `denoise` | true | false |
 | `mask` | Inpainting mit `mask_asset_id` | true | false |
+| `outpaint` | Weg beim Erweitern (`"mask"`, `"reference"`, null) | "mask" | "reference" |
 | `hires` | zweiter Durchgang sinnvoll | true | false |
 | `text_rendering` | Schrift im Bild | true | true |
 | `sizes` | zusätzliche empfohlene Formate `{label, w, h}` | 7 native | 4 bis 2048² |

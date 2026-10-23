@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import comfy, config, db, flux3_prompt, gpu, i18n, loras, mesh_workers, prompt_targets, registry, workflows
+from . import comfy, config, db, flux3_prompt, gpu, i18n, imagesize, loras, mesh_workers, prompt_targets, registry, workflows
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -587,13 +587,94 @@ async def _expand_prompt(job: Job, ctx: JobContext) -> list[str]:
                              f"At most {flux3_prompt.MAX_REFERENCES} reference images."))
     ref_images = [_stage_image(a, t(f"Referenzbild {i + 1}", f"Reference image {i + 1}"))
                   for i, a in enumerate(ref_ids)]
-    if p.get("target", "image") != "image":
+    target = p.get("target", "image")
+    # Bilder mit Referenzen oder Box-Tabelle brauchen BFLs Systemprompts (Bearbeiten,
+    # Platzierung); ein schlichter Bildprompt nimmt NV-AIs kurzen.
+    if target == "image" and not ref_ids and flux3_prompt.detect(p["prompt"]) is None:
+        p["target"] = target
+        p["expanded"] = await _expand_other(p, upsampler, [], ctx)
+    elif target != "image":
         p["expanded"] = await _expand_other(p, upsampler, ref_images, ctx)
     else:
         p["expanded"] = await _upsample(p["prompt"], upsampler, ref_ids, ref_images,
                                         int(p.get("width", 1024)), int(p.get("height", 1024)), ctx)
     db.update_job(job.id, params=p)
     return []
+
+
+# Bearbeitungsmodelle bekommen das Bild mit grauem Rand und diese Anweisung vor dem Prompt.
+OUTPAINT_INSTRUCTION = ("Extend the picture into the flat grey border: continue the scene seamlessly "
+                        "with the same light, perspective and style, and keep the existing picture "
+                        "unchanged.")
+
+
+async def _prepare_outpaint(p: dict[str, Any], entry: dict[str, Any], ref_ids: list[str],
+                            ctx: JobContext) -> None:
+    """Outpainting vorbereiten: Zielformat aus Bild plus Rand, je nach Modell auf zwei Wegen.
+
+    Maskenmodelle (Qwen-Image-2512 u. a.): Rand und weiche Maske legt ImagePadForOutpaint im
+    Graphen an. Das Modell malt den Rand aber oft als eigene Szene an -- gemessen eine harte
+    Kante, auch mit 128 und 256 px Uebergang.
+    Bearbeitungsmodelle (FLUX 3, Qwen-Image 2.1, Boogu Edit, HiDream-O1): bekommen das Bild mit
+    grauem Rand als Referenz und fuehren die Szene nahtlos weiter; danach legt der Graph das
+    Original pixelgenau zurueck (workflows._composite_original).
+    """
+    feats = registry.features_for(entry)
+    by_reference = feats.get("references", 0) > 0
+    if not by_reference and not feats.get("mask"):
+        raise RuntimeError(t(
+            f"'{_name(entry)}' kann nicht erweitern. FLUX 3 liefert dafuer die nahtlosesten "
+            "Uebergaenge, Qwen-Image-2512 voll geht auch.",
+            f"'{_name(entry)}' cannot extend images. FLUX 3 gives the most seamless transitions; "
+            "the full Qwen-Image-2512 works too.",
+        ))
+    source_id = ref_ids[0] if by_reference and ref_ids else p.get("image_asset_id")
+    if not source_id:
+        raise RuntimeError(t("Outpainting braucht ein Ausgangsbild (image_asset_id).",
+                             "Outpainting needs a source image (image_asset_id)."))
+    if p.get("mask_asset_id"):
+        raise RuntimeError(t("Outpainting und eigene Maske gehen nicht zusammen.",
+                             "Outpainting and a custom mask cannot be combined."))
+    if len(ref_ids) > 1:
+        raise RuntimeError(t("Outpainting nimmt genau ein Bild, keine weiteren Referenzen.",
+                             "Outpainting takes exactly one image, no further references."))
+    asset = db.get_asset(source_id)
+    dims = imagesize.size(config.ASSET_DIR / asset.filename) if asset else None
+    if dims is None:
+        raise RuntimeError(t("Groesse des Ausgangsbildes nicht lesbar (PNG, JPEG oder WebP).",
+                             "Cannot read the source image size (PNG, JPEG or WebP)."))
+    left, top, right, bottom = (int(v) for v in p["outpaint"])
+    # Auf Vielfache von 16 runden: das verlangen FLUX-artige Latents, und die paar
+    # Pixel Abweichung gleicht das ImageScale nach dem Rand aus.
+    width = max(256, round((dims[0] + left + right) / 16) * 16)
+    height = max(256, round((dims[1] + top + bottom) / 16) * 16)
+    if width > 2560 or height > 2560:
+        raise RuntimeError(t(
+            f"Erweitert waere das Bild {width} x {height} px, erlaubt sind hoechstens 2560. "
+            "Weniger Rand waehlen oder das Bild vorher verkleinern.",
+            f"Extended, the image would be {width} x {height} px; at most 2560 is allowed. "
+            "Choose a smaller border or scale the image down first.",
+        ))
+    p["outpaint"] = [left, top, right, bottom]
+    p["width"], p["height"] = width, height
+    p["denoise"] = 1.0
+    if not by_reference:
+        return
+
+    # Referenzweg: Bild mit grauem Rand als eigene Datei, damit auch der Upsampler von
+    # FLUX 3 sieht, was zu fuellen ist.
+    await _ensure_backend(ctx)
+    ctx.progress(0.01, t("legt den Rand an", "adding the border"))
+    p["outpaint_source"] = p["reference_images"][0]
+    padded = await comfy.run_workflow(workflows.outpaint_pad_graph(p["outpaint_source"], p["outpaint"]))
+    if not padded:
+        raise RuntimeError(t("ComfyUI lieferte das erweiterte Bild nicht.",
+                             "ComfyUI did not return the extended image."))
+    p["reference_images"] = [comfy.stage_input(padded[0])]
+    for path in padded:
+        path.unlink(missing_ok=True)
+    if not p["prompt"].startswith(OUTPAINT_INSTRUCTION):
+        p["prompt"] = f"{OUTPAINT_INSTRUCTION} {p['prompt']}".strip()
 
 
 @register("txt2img")
@@ -643,6 +724,11 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
                 "A mask (mask_asset_id) needs a source image (image_asset_id).",
             ))
         p["mask_image"] = _stage_image(p["mask_asset_id"], t("Maske", "Mask"))
+
+    if any(p.get("outpaint") or []):
+        await _prepare_outpaint(p, entry, ref_ids, ctx)
+    else:
+        p["outpaint"] = None
 
     # Qwens Modellkarte rechnet mit ihrem Negativprompt. Hier eingesetzt statt erst im
     # Builder, damit er in den Asset-Metadaten steht.
@@ -701,6 +787,7 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
         "image_asset_id": p.get("image_asset_id"),
         "denoise": p.get("denoise") if p.get("image_asset_id") else None,
         "mask_asset_id": p.get("mask_asset_id"),
+        "outpaint": p.get("outpaint"),
         "controlnet_model_id": cn_id,
         "controlnet_strength": p.get("controlnet_strength") if cn_id else None,
         "reference_asset_ids": ref_ids or None,

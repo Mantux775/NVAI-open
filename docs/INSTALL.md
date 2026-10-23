@@ -154,6 +154,23 @@ it is stored in the data folder. Without a key the search works and NV-AI relies
 base-model label; with a key it checks the file header as on Hugging Face. Licenses and content
 of LoRAs are only stated on their pages — check them there before publishing anything.
 
+**Tested LoRAs (RTX 5060 Ti, Qwen-Image-2512 full, same seed, strength 0.9).** All allow selling
+the generated images. A LoRA hardly costs time once loaded (94–106 s instead of 100 s).
+
+| LoRA | Source, license | Result |
+|---|---|---|
+| Boreal (Boring Reality) v3 | Civitai, generated images may be sold | Looks most like a real photo: natural skin, no HDR look. Recommended |
+| Lenovo UltraReal | Hugging Face `Danrisi/Lenovo_Qwen`, Apache-2.0, 47 MB | More natural and photographic, stays closest to the prompt. Recommended |
+| Real Life | Civitai, images may be sold | Natural, but replaced the requested plain background |
+| flymy Realism | Hugging Face, Apache-2.0 | Close to no LoRA; also replaced the background |
+| Skin Fix | Civitai, images may be sold | Visibly soft, less detail |
+| Wuli Turbo 4 steps | Hugging Face, Apache-2.0 | Not a style: set steps 4 and cfg 1, 18 s instead of 100 s at almost the same quality |
+
+For video: **Wan2.2-Lightning I2V** (`lightx2v/Wan2.2-Lightning`, Apache-2.0, high and low file)
+on Wan 2.2 I2V A14B with steps 4 and cfg 1 took 90 s instead of 585 s (640 × 640, 49 frames) at
+comparable quality; only the camera push-in came out weaker. **LTX-2.3 Crisp Enhance** drew flame
+and stone sharper but changed the layout of the shot, and its page states no license.
+
 ### Storage locations
 
 "Models" → "Storage locations" (since 0.5.2) shows the data folder (history, images, logs) and

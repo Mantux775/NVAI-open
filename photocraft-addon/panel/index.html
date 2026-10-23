@@ -96,6 +96,25 @@
     <span class="range-labels"><span data-de="behutsam">subtle</span><span data-de="deutlich">clear</span><span data-de="fast neu">almost new</span></span>
   </label>
 
+  <div class="field" id="extend-field">
+    <span class="label"><span data-de="Arbeitsfläche erweitern (Outpainting)">Extend the canvas (outpainting)</span> <output id="extend-out"></output></span>
+    <div class="grid4">
+      <label class="field"><span class="label" data-de="Links">Left</span><input id="extend-left" type="number" min="0" max="2048" step="64" value="0"></label>
+      <label class="field"><span class="label" data-de="Oben">Top</span><input id="extend-top" type="number" min="0" max="2048" step="64" value="0"></label>
+      <label class="field"><span class="label" data-de="Rechts">Right</span><input id="extend-right" type="number" min="0" max="2048" step="64" value="0"></label>
+      <label class="field"><span class="label" data-de="Unten">Bottom</span><input id="extend-bottom" type="number" min="0" max="2048" step="64" value="0"></label>
+    </div>
+    <div class="extend-presets">
+      <button class="chip" type="button" data-extend="256,0,256,0" data-de="↔ breiter">↔ wider</button>
+      <button class="chip" type="button" data-extend="0,256,0,256" data-de="↕ höher">↕ taller</button>
+      <button class="chip" type="button" data-extend="0,0,0,384" data-de="↓ nach unten">↓ downwards</button>
+      <button class="chip" type="button" data-extend="128,128,128,128" data-de="rundum">all around</button>
+      <button class="chip" type="button" data-extend="0,0,0,0" data-de="aus">off</button>
+    </div>
+    <span class="small warn-text" id="extend-warn" hidden data-de="Dieses Modell malt den Rand oft als eigene Szene an; nahtloser wird es mit FLUX 3.">This model often paints the border as a separate scene; FLUX 3 gives seamless transitions.</span>
+    <span class="muted small" data-de="Ohne Auswahl: PhotoCraft vergrößert die Arbeitsfläche transparent, NV-AI malt den neuen Rand passend dazu. Der Prompt beschreibt das ganze Bild.">Without a selection: PhotoCraft enlarges the canvas transparently and NV-AI paints the new border to match. The prompt describes the whole picture.</span>
+  </div>
+
   <details class="advanced" id="advanced">
     <summary data-de="Erweitert">Advanced</summary>
     <label class="field">

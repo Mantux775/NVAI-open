@@ -261,10 +261,13 @@ class TaskManager:
         region = Rect.from_list(t.region or [0, 0, *t.doc_size])
 
         active = (self.nv.health().get("active_models") or {}).get("image")
+        # Erweitern über NV-AIs outpaint (ab 0.5.4); ältere Server füllen per Maske wie bisher.
+        outpaint = bool(t.alpha_mask and planning.extend_steps(p.get("extend"))
+                        and self.nv.supports_outpaint())
         model, warning = planning.choose_model(t.mode, p.get("model_id") or None, active,
-                                               self.nv.image_models(), masks)
+                                               self.nv.image_models(), masks, extend=outpaint)
         plan = planning.plan(t.mode, t.prompt, p, model, (region.w, region.h), t.has_mask,
-                             t.alpha_mask, masks)
+                             t.alpha_mask, masks, outpaint=outpaint)
         t.model_name, t.technique, t.working = plan.model_name, plan.technique, list(plan.working)
         warnings = ([warning] if warning else []) + plan.warnings
         t.warning = " ".join(w.message for w in warnings) or None
@@ -273,7 +276,23 @@ class TaskManager:
 
         uploads: list[str] = []
         try:
-            if plan.send_image and context is not None:
+            edges = (planning.outpaint_edges(context, (gw, gh))
+                     if plan.technique == "outpaint" and context is not None else None)
+            if plan.technique == "outpaint" and edges is None:
+                raise ValueError(_t("Kein durchsichtiger Rand zum Füllen gefunden.",
+                                    "No transparent border found to fill."))
+            if edges is not None:
+                # Arbeitsfläche erweitert und NV-AI kann Outpainting (ab 0.5.4): nur den deckenden
+                # Teil schicken, Rand und weiche Maske legt der Server an. Der eigene Maskenweg
+                # liess an der alten Bildkante eine harte Naht (gemessen 23.10.2026).
+                self._stage(t, 0.06, _t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+                box, size, border = edges
+                src = imaging.flatten_for_model(context.crop(box)).resize(size, Image.Resampling.LANCZOS)
+                asset = self.nv.upload(src, f"photocraft-{t.id}-context.png")
+                uploads.append(asset["id"])
+                payload["image_asset_id"] = asset["id"]
+                payload["outpaint"] = border
+            elif plan.send_image and context is not None:
                 self._stage(t, 0.06, _t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
                 src = imaging.flatten_for_model(context).resize((gw, gh), Image.Resampling.LANCZOS)
                 asset = self.nv.upload(src, f"photocraft-{t.id}-context.png")
@@ -371,9 +390,23 @@ class TaskManager:
         with self._pc_lock:
             ui = self.pc.inspect()
             doc = ui.get("document")
-            session = ui.get("session") or {}
             if not doc:
                 raise PhotoCraftError(_t("In PhotoCraft ist kein Dokument geöffnet.", "No document is open in PhotoCraft."))
+            steps = planning.extend_steps(t.params.get("extend")) if t.mode == "fill" else []
+            if steps:
+                # Outpainting: Arbeitsfläche transparent erweitern, danach füllt der übliche
+                # Weg ohne Auswahl die leeren Ränder. Jeder Schritt lässt sich in PhotoCraft
+                # einzeln zurücknehmen.
+                if doc.get("hasSelection"):
+                    raise ValueError(_t(
+                        "Zum Erweitern bitte erst die Auswahl aufheben (Auswahl › Aufheben).",
+                        "To extend, please deselect first (Select › Deselect).",
+                    ))
+                for step in steps:
+                    self.pc.execute("image.canvasSize", step)
+                ui = self.pc.inspect()
+                doc = ui.get("document") or doc
+            session = ui.get("session") or {}
             width, height = int(doc["width"]), int(doc["height"])
             t.doc_name, t.doc_index, t.doc_size = doc.get("name") or "", int(session.get("active", 0)), [width, height]
             canvas = Rect(0, 0, width, height)

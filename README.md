@@ -6,32 +6,32 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.3.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.3/NV-AI-Setup-0.5.3.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.3/NV-AI-0.4.2.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.4.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-Setup-0.5.4.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-0.4.2.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.3 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.3)); the Mac app stays at 0.4.2
+October 2026: NV-AI 0.5.4 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.4)); the Mac app stays at 0.4.2
 
 | | |
 |---|---|
-| LoRAs | Search Hugging Face and Civitai, NV-AI checks which model a LoRA fits before downloading; pick LoRAs with a strength slider when generating, images and video |
-| New video models | LTX-2.3 with sound (101 s for 4 s at 1280 × 704), Mochi 1 (Apache-2.0), Kandinsky 5.0 Video Lite (MIT) |
-| Expand prompt everywhere | Now also for video (motion, camera, sound), sound effects, music tags and 3D ("object from text") |
-| Image to video with LTX | The start image picker now also shows up for LTX-2.5 and LTX-2.3 |
+| Outpainting | Extend an image beyond its edges: pick left, top, right, bottom in pixels, NV-AI paints the new border. With FLUX 3 the transition is seamless and the original stays pixel for pixel; in the web interface, over MCP and in the PhotoCraft add-on ("Extend the canvas") |
+| Shorter "Expand prompt" | 60 to 80 words instead of up to 260, so there is little left to delete |
+| Realism LoRAs tested | Boreal and Lenovo UltraReal for Qwen-Image-2512 (both allow selling images), Wuli Turbo (an image in 18 instead of 100 s), Wan 2.2 Lightning (video in 90 instead of 585 s) |
+| Smaller fixes | LoRA list folds away, Civitai and Apache LoRAs show the right license, the Civitai file check no longer fails at random |
 
-Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
+Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
 
 | | |
 |---|---|
-| LoRAs | Auf Hugging Face und Civitai suchen, NV-AI prüft vor dem Laden, zu welchem Modell eine LoRA passt; beim Generieren mit Stärke-Regler auswählen, für Bild und Video |
-| Neue Videomodelle | LTX-2.3 mit Ton (101 s für 4 s in 1280 × 704), Mochi 1 (Apache-2.0), Kandinsky 5.0 Video Lite (MIT) |
-| Prompt ausbauen überall | Jetzt auch für Video (Bewegung, Kamera, Ton), Soundeffekte, Musik-Tags und 3D („Objekt aus Text“) |
-| Bild zu Video mit LTX | Die Startbild-Auswahl gibt es jetzt auch bei LTX-2.5 und LTX-2.3 |
+| Outpainting | Ein Bild über den Rand hinaus erweitern: links, oben, rechts, unten in Pixeln wählen, NV-AI malt den neuen Rand. Mit FLUX 3 ist der Übergang nahtlos, und das Original bleibt pixelgenau; in der Weboberfläche, über MCP und im PhotoCraft-Add-on („Arbeitsfläche erweitern“) |
+| Kürzeres „Prompt ausbauen“ | 60 bis 80 Wörter statt bis zu 260, es bleibt kaum etwas zu streichen |
+| Realismus-LoRAs getestet | Boreal und Lenovo UltraReal für Qwen-Image-2512 (beide erlauben den Verkauf der Bilder), Wuli Turbo (ein Bild in 18 statt 100 s), Wan 2.2 Lightning (Video in 90 statt 585 s) |
+| Kleinere Fehler | LoRA-Liste klappt ein, Civitai- und Apache-LoRAs zeigen die richtige Lizenz, die Civitai-Dateiprüfung scheitert nicht mehr zufällig |
 
-Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
+Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 

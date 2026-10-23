@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "x-api-version": 1
  },
  "paths": {
@@ -2579,6 +2579,25 @@
       ],
       "title": "Mask Asset Id",
       "description": "Nur mit image_asset_id: Maske, weiss = neu erzeugen, schwarz = behalten. Graustufen gehen stufenlos ueber. Macht aus Bild-zu-Bild ein Inpainting; mit denoise 1.0 entsteht im weissen Bereich voellig neuer Inhalt"
+     },
+     "outpaint": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer",
+         "maximum": 1024.0,
+         "minimum": 0.0
+        },
+        "type": "array",
+        "maxItems": 4,
+        "minItems": 4
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Outpaint",
+      "description": "Nur mit image_asset_id: Bild ueber den Rand hinaus erweitern (Outpainting), [links, oben, rechts, unten] in Pixeln, je 0-1024. Breite und Hoehe ergeben sich aus Bild plus Rand; den Rest setzt der Server. Der Prompt beschreibt das ganze erweiterte Bild. Nahtlos mit Modellen mit Referenzbildern (FLUX 3); Maskenmodelle (Qwen-Image-2512) lassen oft eine Kante am alten Bildrand"
      },
      "upsample_prompt": {
       "anyOf": [

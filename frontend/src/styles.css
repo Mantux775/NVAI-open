@@ -723,9 +723,29 @@ kbd {
 
 /* LoRAs: Umschalter in der Suche und Auswahl beim Generieren */
 .seg { display: inline-flex; gap: 4px; }
-.lora-picker { margin-top: 8px; }
+
+.lora-picker { margin: 16px 0 6px; }
+.lora-picker summary { cursor: pointer; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.6px; }
+.lora-picker summary .muted { text-transform: none; letter-spacing: 0; }
+.lora-picker[open] summary { margin-bottom: 6px; }
 .lora-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0; }
 .lora-row label { display: flex; align-items: center; gap: 6px; flex: 1 1 180px; min-width: 0; }
 .lora-row label input[type="checkbox"] { width: auto; }
 .lora-row .lora-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lora-row input[type="range"] { flex: 1 1 100px; max-width: 160px; }
+
+/* Kurze Erklaerung "Wozu sind LoRAs gut?" in der Modell-Liste */
+.lora-intro {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.lora-intro summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.lora-intro p { margin: 8px 0 0; color: var(--text); line-height: 1.5; max-width: 900px; }
+
+/* Outpainting: Randbreiten und Schnellwahl */
+.outpaint .row label { min-width: 0; }
+.outpaint-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }

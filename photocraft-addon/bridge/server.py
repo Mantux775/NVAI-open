@@ -183,6 +183,8 @@ def models() -> list[dict[str, Any]]:
                 "img2img": capable(m, "img2img", masks),
                 "refine": capable(m, "refine", masks),
                 "mask": capable(m, "mask", masks),
+                # Erweitern: nur mit NV-AI ab 0.5.4; "reference" ist nahtlos, "mask" oft mit Kante.
+                "outpaint": features.get("outpaint") if nv.supports_outpaint() else None,
                 "reference_edit": capable(m, "refine", masks) and not capable(m, "img2img", masks),
                 "weak_prompt": m.get("workflow") in WEAK_PROMPT_WORKFLOWS,
                 # Bedienhinweise aus NV-AI (BILDMODELLE.md, Abschnitt 7).
@@ -213,6 +215,10 @@ class GenerateRequest(BaseModel):
     cfg: float | None = Field(None, ge=0.0, le=30.0)
     seed: int | None = Field(None, ge=0)
     margin: float = Field(0.35, ge=0.0, le=1.5, description="Fill only: context margin relative to the selection")
+    extend: list[int] | None = Field(
+        None, min_length=4, max_length=4,
+        description="Fill only, without a selection: first extend the canvas transparently by "
+                    "[left, top, right, bottom] pixels (0-2048 each), then fill the new edges (outpainting)")
     hires: bool = False
     native: bool = Field(False, description="Work at the model's native resolution (more detail, about twice the time)")
     auto_place: bool = True

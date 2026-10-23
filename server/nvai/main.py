@@ -63,6 +63,7 @@ API_VERSION = 1
 API_FEATURES = [
     "model_features",  # GET /api/models: je Modell "features" (Regler, Formate, Faehigkeiten)
     "mask",            # generate/image: mask_asset_id (Inpainting)
+    "outpaint",        # generate/image: outpaint=[links, oben, rechts, unten] (Bild erweitern)
     "references",      # generate/image: reference_asset_ids (FLUX 3)
     "upsampler",       # generate/image: upsample_prompt; Asset-meta "caption"
     "upload",          # POST /api/upload

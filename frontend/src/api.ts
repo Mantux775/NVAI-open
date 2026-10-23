@@ -183,6 +183,8 @@ export interface ModelFeatures {
   references: number
   bbox: boolean
   img2img: boolean
+  /** Maske (Inpainting) und damit auch Outpainting. */
+  mask: boolean
   hires: boolean
   text_rendering: boolean
   /** Zusätzliche, für dieses Modell empfohlene Formate. */
@@ -266,6 +268,8 @@ export interface ImageParams {
   /** Vorhandenes Bild ueberarbeiten statt neu wuerfeln */
   image_asset_id?: string | null
   denoise?: number
+  /** Bild über den Rand hinaus erweitern: [links, oben, rechts, unten] in Pixeln */
+  outpaint?: number[] | null
   /** Nur FLUX 3: bis zu 10 Referenzbilder, im Prompt "the first image", ... */
   reference_asset_ids?: string[]
   /** Nur FLUX 3: Upsampler an (null = Modellstandard) */

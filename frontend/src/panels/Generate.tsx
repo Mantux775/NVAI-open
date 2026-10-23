@@ -128,6 +128,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [slgScale, setSlgScale] = useState(3.0)
   const [useSource, setUseSource] = useState(false)
   const [denoise, setDenoise] = useState(0.5)
+  const [outpaintOn, setOutpaintOn] = useState(false)
+  const [pad, setPad] = useState({ left: 0, top: 0, right: 0, bottom: 0 })
+  const [srcDims, setSrcDims] = useState<{ w: number; h: number } | null>(null)
   const [cnId, setCnId] = useState('')
   const [cnImageId, setCnImageId] = useState('')
   const [cnStrength, setCnStrength] = useState(0.7)
@@ -281,6 +284,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const negWorks = feat?.negative_prompt !== false
   const canImg2img = feat?.img2img !== false
   const canHires = feat?.hires !== false
+  // Erweitern geht über Masken (Qwen) oder über ein Referenzbild (FLUX 3 und andere
+  // Bearbeitungsmodelle; dort deutlich nahtloser).
+  const outpaintByRef = (feat?.references ?? 0) > 0
+  const canOutpaint = (canImg2img && feat?.mask !== false) || outpaintByRef
+  const outpainting = mode === 'image' && useSource && canOutpaint && outpaintOn
+    && pad.left + pad.top + pad.right + pad.bottom > 0
   const maxRefs = feat?.references ?? 0
   const sizes = useMemo(() => [...IMAGE_SIZES, ...(feat?.sizes ?? [])], [feat])
   const chips = useMemo(() => {
@@ -365,12 +374,28 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     }
   }
 
+  // Größe des Quellbilds, damit das Outpainting das Zielformat vorher anzeigen kann.
+  const sourceUrl = sourceImages.find((a) => a.id === sourceId)?.url
+  useEffect(() => {
+    setSrcDims(null)
+    if (!sourceUrl) return
+    const img = new Image()
+    img.onload = () => setSrcDims({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = sourceUrl
+  }, [sourceUrl])
+  const padTo = srcDims && {
+    w: Math.round((srcDims.w + pad.left + pad.right) / 16) * 16,
+    h: Math.round((srcDims.h + pad.top + pad.bottom) / 16) * 16,
+  }
+  const padPreset = (left: number, top: number, right: number, bottom: number) =>
+    setPad({ left, top, right, bottom })
+
   const canGenerate =
     mode === '3d'
       ? !!sourceId
       : needsStart
         ? !!prompt.trim() && !!sourceId
-        : mode === 'image' && useSource && canImg2img
+        : mode === 'image' && useSource && (canImg2img || outpainting)
           ? !!prompt.trim() && !!sourceId
           : mode === 'image' && cnId
             ? !!prompt.trim() && !!cnImageId
@@ -571,9 +596,10 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           scheduler: scheduler || null,
           hires: hires && canHires, hires_scale: hiresScale, hires_denoise: hiresDenoise,
           slg, slg_scale: slgScale,
-          image_asset_id: useSource && canImg2img && sourceId ? sourceId : null,
-          denoise: useSource && canImg2img ? denoise : 1.0,
-          reference_asset_ids: maxRefs > 0 ? refIds.filter((id) => sourceImages.some((a) => a.id === id)) : [],
+          image_asset_id: useSource && (canImg2img || outpainting) && sourceId ? sourceId : null,
+          denoise: outpainting ? 1.0 : useSource && canImg2img ? denoise : 1.0,
+          outpaint: outpainting ? [pad.left, pad.top, pad.right, pad.bottom] : null,
+          reference_asset_ids: maxRefs > 0 && !outpainting ? refIds.filter((id) => sourceImages.some((a) => a.id === id)) : [],
           upsample_prompt: feat?.upsampler ? upsample : null,
           controlnet_model_id: cnId || null,
           controlnet_image_asset_id: cnId ? cnImageId || null : null,
@@ -838,8 +864,15 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           <p className="hint small warn">{selected.warning}</p>
         )}
         {(mode === 'image' || mode === 'video') && (selected?.lora_bases?.length ?? 0) > 0 && (
-          <div className="lora-picker">
-            <h3>LoRAs</h3>
+          <details className="lora-picker">
+            <summary>
+              LoRAs{' '}
+              <span className="muted small">
+                {activeLoras.length > 0
+                  ? t(`${activeLoras.length} aktiv`, `${activeLoras.length} active`)
+                  : t(`${loraChoices.length} verfügbar`, `${loraChoices.length} available`)}
+              </span>
+            </summary>
             {loraChoices.length === 0 ? (
               <p className="hint small">
                 {t('Keine passende LoRA geladen. ', 'No matching LoRA downloaded. ')}
@@ -873,32 +906,42 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )
               })
             )}
-          </div>
+          </details>
         )}
 
         {mode === 'image' && (
           <>
             <h3>{t('Format', 'Size')}</h3>
-            <select
-              value={imgSize.label}
-              onChange={(e) => setImgSize(sizes.find((s) => s.label === e.target.value)!)}
-            >
-              {sizes.map((s) => (
-                <option key={s.label}>{s.label}</option>
-              ))}
-            </select>
-            <p className="hint small">
-              {t(
-                'Stehende Figuren im Hochformat — im Quadrat fehlen ihnen oft die Beine.',
-                'Standing figures in portrait format — in a square they often lose their legs.',
-              )}
-              {feat?.sizes?.length
-                ? t(
-                    ' Die modelleigenen Formate unten in der Liste geben mehr Detail und kosten mehr Zeit.',
-                    ' The model-specific sizes at the end of the list give more detail and take longer.',
-                  )
-                : ''}
-            </p>
+            {outpainting ? (
+              <p className="hint small">
+                {t('Beim Erweitern ergibt sich das Format aus Bild und Rand',
+                  'When extending, the size follows from image and border')}
+                {padTo ? ` (${padTo.w} × ${padTo.h}).` : '.'}
+              </p>
+            ) : (
+              <>
+                <select
+                  value={imgSize.label}
+                  onChange={(e) => setImgSize(sizes.find((s) => s.label === e.target.value)!)}
+                >
+                  {sizes.map((s) => (
+                    <option key={s.label}>{s.label}</option>
+                  ))}
+                </select>
+                <p className="hint small">
+                  {t(
+                    'Stehende Figuren im Hochformat — im Quadrat fehlen ihnen oft die Beine.',
+                    'Standing figures in portrait format — in a square they often lose their legs.',
+                  )}
+                  {feat?.sizes?.length
+                    ? t(
+                        ' Die modelleigenen Formate unten in der Liste geben mehr Detail und kosten mehr Zeit.',
+                        ' The model-specific sizes at the end of the list give more detail and take longer.',
+                      )
+                    : ''}
+                </p>
+              </>
+            )}
 
             {feat?.upsampler && (
               <label className="check">
@@ -1036,22 +1079,94 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 </span>
               </label>
             )}
-            {canImg2img && useSource && (
+            {!canImg2img && canOutpaint && (
+              <label className="check">
+                <input type="checkbox" checked={useSource && outpaintOn}
+                  onChange={(e) => { setUseSource(e.target.checked); setOutpaintOn(e.target.checked) }} />
+                {t('Vorhandenes Bild erweitern (Outpainting)', 'Extend an existing image (outpainting)')}
+              </label>
+            )}
+            {(canImg2img || canOutpaint) && useSource && (
               <>
                 {sourcePicker(false)}
-                <div className="row">
-                  <label>
-                    {t('Änderungsgrad', 'Denoise')}
-                    <input type="number" min={0.1} max={1} step={0.05} value={denoise}
-                      onChange={(e) => setDenoise(Number(e.target.value))} />
+                {canImg2img && canOutpaint && (
+                  <label className="check">
+                    <input type="checkbox" checked={outpaintOn}
+                      onChange={(e) => setOutpaintOn(e.target.checked)} />
+                    {t('Über den Rand hinaus erweitern (Outpainting)', 'Extend beyond the edges (outpainting)')}
                   </label>
-                </div>
-                <p className="hint small">
-                  {t(
-                    '0,3 behutsam · 0,5 deutlich · 1,0 verwirft die Vorlage',
-                    '0.3 gentle · 0.5 noticeable · 1.0 discards the source',
-                  )}
-                </p>
+                )}
+                {canOutpaint && outpaintOn ? (
+                  <div className="outpaint">
+                    <div className="row">
+                      {([
+                        ['left', t('Links', 'Left')],
+                        ['top', t('Oben', 'Top')],
+                        ['right', t('Rechts', 'Right')],
+                        ['bottom', t('Unten', 'Bottom')],
+                      ] as const).map(([side, label]) => (
+                        <label key={side}>
+                          {label}
+                          <input type="number" min={0} max={1024} step={64} value={pad[side]}
+                            onChange={(e) => setPad((p) => ({
+                              ...p, [side]: Math.max(0, Math.min(1024, Number(e.target.value) || 0)),
+                            }))} />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="outpaint-presets">
+                      <button className="btn small ghost" onClick={() => padPreset(256, 0, 256, 0)}>
+                        {t('↔ breiter', '↔ wider')}
+                      </button>
+                      <button className="btn small ghost" onClick={() => padPreset(0, 256, 0, 256)}>
+                        {t('↕ höher', '↕ taller')}
+                      </button>
+                      <button className="btn small ghost" onClick={() => padPreset(0, 0, 0, 384)}>
+                        {t('↓ nach unten', '↓ downwards')}
+                      </button>
+                      <button className="btn small ghost" onClick={() => padPreset(128, 128, 128, 128)}>
+                        {t('rundum', 'all around')}
+                      </button>
+                    </div>
+                    <p className="hint small">
+                      {srcDims && padTo && (
+                        <>{srcDims.w} × {srcDims.h} → <b>{padTo.w} × {padTo.h}</b>
+                          {(padTo.w > 2560 || padTo.h > 2560) && (
+                            <span className="warn-text"> {t('(zu groß, höchstens 2560)', '(too large, at most 2560)')}</span>
+                          )}
+                          {' · '}</>
+                      )}
+                      {t(
+                        'Das Bild bleibt, nur der neue Rand wird gemalt. Der Prompt beschreibt das ganze erweiterte Bild.',
+                        'The image stays; only the new border is painted. The prompt describes the whole extended picture.',
+                      )}
+                      {!outpaintByRef && (
+                        <span className="warn-text">
+                          {t(
+                            ' Dieses Modell malt den Rand oft als eigene Szene an; nahtloser wird es mit FLUX 3.',
+                            ' This model often paints the border as a separate scene; FLUX 3 gives seamless transitions.',
+                          )}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                ) : canImg2img && (
+                  <>
+                    <div className="row">
+                      <label>
+                        {t('Änderungsgrad', 'Denoise')}
+                        <input type="number" min={0.1} max={1} step={0.05} value={denoise}
+                          onChange={(e) => setDenoise(Number(e.target.value))} />
+                      </label>
+                    </div>
+                    <p className="hint small">
+                      {t(
+                        '0,3 behutsam · 0,5 deutlich · 1,0 verwirft die Vorlage',
+                        '0.3 gentle · 0.5 noticeable · 1.0 discards the source',
+                      )}
+                    </p>
+                  </>
+                )}
               </>
             )}
 

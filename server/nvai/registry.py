@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import contextlib
 import time
@@ -167,6 +168,10 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     # Masken (Inpainting) laufen ueber denselben Startbild-Pfad wie Bild-zu-Bild -- FLUX 3
     # (img2img: false) bleibt damit automatisch aussen vor.
     merged.setdefault("mask", bool(merged.get("img2img")))
+    # Outpainting: "reference" (Bearbeitungsmodell, nahtlos), "mask" (Qwen u. a., oft mit
+    # Kante am alten Bildrand) oder None. Siehe jobs._prepare_outpaint.
+    merged.setdefault("outpaint", "reference" if merged.get("references") else
+                      "mask" if merged.get("mask") else None)
     if i18n.lang() != "de" and merged.get("sizes"):
         merged["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
                            for s in merged["sizes"]]
@@ -249,7 +254,8 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None) -> ModelIn
         size_gb=entry["size_gb"],
         vram_gb=entry.get("vram_gb", 0),
         license=text["license"],
-        commercial_ok=entry["commercial_ok"],
+        commercial_ok=entry["commercial_ok"] or (
+            bool(entry.get("custom")) and commercial_from_license(entry.get("license"))),
         warning=text.get("warning", ""),
         best_for=text.get("best_for", ""),
         description=text.get("description", ""),
@@ -670,6 +676,23 @@ def _shared_with_other_installed(
     return target.resolve() in in_use_snapshot(model_id, protect_ids)
 
 
+def _slug(text: str) -> str:
+    """Teil einer Modell-ID: Emojis und Satzzeichen aus Civitai-Namen werden zu "_"."""
+    return re.sub(r"[^\w.-]+", "_", text.lower()).strip("_") or "lora"
+
+
+# Lizenzen, unter denen Ergebnisse verkauft werden duerfen. Civitai nennt die Freigaben als
+# Liste; "Image" heisst: erzeugte Bilder duerfen kommerziell genutzt werden.
+_COMMERCIAL_LICENSES = {"apache-2.0", "mit", "cc-by-4.0", "cc0-1.0", "bsd-3-clause"}
+
+
+def commercial_from_license(license_: str | None) -> bool:
+    text = (license_ or "").strip()
+    if text.lower().startswith("civitai:"):
+        return "image" in {x.strip().lower() for x in text.split(":", 1)[1].split(",")}
+    return text.lower() in _COMMERCIAL_LICENSES
+
+
 def register_custom(
     repo: str, file: str, target: str = "checkpoints",
     kind: str = "image", family: str = "sdxl", workflow: str | None = "sdxl",
@@ -682,7 +705,7 @@ def register_custom(
     (Civitai) wird direkt von dort geladen; repo ist dann nur ein Name fuer die Anzeige.
     """
     prefix = "lora" if kind == "lora" else "custom"
-    model_id = f"{prefix}-{repo.split('/')[-1]}-{Path(file).stem}".lower().replace(" ", "_")
+    model_id = f"{prefix}-{_slug(repo.split('/')[-1])}-{_slug(Path(file).stem)}"
     entries = _load_user_catalog()
     for e in entries:
         if e["id"] == model_id:
@@ -697,7 +720,7 @@ def register_custom(
         "size_gb": size_gb or 0.0,
         "vram_gb": {"sdxl": 8, "sd15": 4}.get(family, 0),
         "license": license_ or "siehe Repo",
-        "commercial_ok": False,
+        "commercial_ok": commercial_from_license(license_),
         "best_for": "von Hugging Face hinzugefügt",
         "description": (f"Aus der Suche hinzugefügt: https://huggingface.co/{repo}\n\n"
                         "Die Lizenz bitte im Repo prüfen, bevor Bilder veröffentlicht werden."),

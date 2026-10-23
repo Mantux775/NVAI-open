@@ -110,3 +110,54 @@ def test_layer_name_is_short_and_numbered():
     name = layer_name("generate", "a " * 60, 1, 2)
     assert name.startswith("NV-AI Generate: ") and name.endswith("(2)") and len(name) < 80
     assert layer_name("fill", "", 0, 1) == "NV-AI Fill"
+
+
+def test_extend_steps_anchor_on_the_opposite_side():
+    assert planning.extend_steps(None) == []
+    assert planning.extend_steps([0, 0, 0, 0]) == []
+    steps = planning.extend_steps([256, 0, 0, 128])
+    assert [(s["width"], s["height"], s["anchor"]) for s in steps] == [(256, 0, "right"), (0, 128, "top")]
+    assert all(s["relative"] and s["extensionColor"] == "transparent" for s in steps)
+
+
+def test_extend_steps_equal_edges_in_one_centered_step():
+    steps = planning.extend_steps([200, 64, 200, 0])
+    assert [(s["width"], s["height"], s["anchor"]) for s in steps] == [(400, 0, "center"), (0, 64, "bottom")]
+
+
+def test_extend_steps_clamps():
+    steps = planning.extend_steps([-5, 0, 99999, 0])
+    assert [(s["width"], s["anchor"]) for s in steps] == [(planning.EXTEND_MAX, "left")]
+
+
+def test_outpaint_edges_scales_box_and_edges():
+    from PIL import Image
+    img = Image.new("RGBA", (400, 200), (0, 0, 0, 0))
+    img.paste((10, 20, 30, 255), (0, 0, 300, 200))  # rechts 100 px durchsichtig
+    box, size, edges = planning.outpaint_edges(img, (800, 400))
+    assert box == (0, 0, 300, 200)
+    assert size == (600, 400)
+    assert edges == [0, 0, 200, 0]
+    assert planning.outpaint_edges(Image.new("RGBA", (10, 10), (1, 2, 3, 255)), (10, 10)) is None
+    assert planning.outpaint_edges(Image.new("RGB", (10, 10)), (10, 10)) is None
+
+
+def test_extend_prefers_seamless_reference_model():
+    qwen = {**QWEN, "features": {**QWEN["features"], "outpaint": "mask"}}
+    flux = {**FLUX3, "features": {**FLUX3["features"], "outpaint": "reference"}}
+    model, warning = choose_model("fill", None, qwen["id"], [qwen, flux], True, extend=True)
+    assert model["id"] == flux["id"] and warning is None
+    # Eigene Wahl bleibt, wenn das Modell erweitern kann.
+    model, _ = choose_model("fill", qwen["id"], None, [qwen, flux], True, extend=True)
+    assert model["id"] == qwen["id"]
+    # Ohne extend bleibt Füllen beim Maskenmodell.
+    model, _ = choose_model("fill", None, flux["id"], [qwen, flux], True)
+    assert model["id"] == qwen["id"]
+
+
+def test_plan_outpaint_leaves_mask_and_denoise_to_the_server():
+    flux = {**FLUX3, "features": {**FLUX3["features"], "outpaint": "reference"}}
+    p = plan("fill", "", {"variants": 2}, flux, (1216, 832), True, True, True, outpaint=True)
+    assert p.technique == "outpaint"
+    assert not p.send_mask and p.send_image
+    assert "denoise" not in p.payload

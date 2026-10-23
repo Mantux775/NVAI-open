@@ -293,6 +293,35 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
       {error && <div className="error">{error}</div>}
       {message && <div className="notice">{message}</div>}
 
+      {/* key: beim Wechsel auf den LoRA-Filter neu aufgeklappt */}
+      <details className="lora-intro" open={filter === 'lora'} key={filter === 'lora' ? 'open' : 'closed'}>
+        <summary>{t('Wozu sind LoRAs gut?', 'What are LoRAs for?')}</summary>
+        <p>
+          {t(
+            'Eine LoRA ist ein kleiner Zusatz (meist 50 MB bis 1 GB) zu einem großen Modell. Sie bringt ihm '
+              + 'eine Sache bei, die es allein nicht so gut kann: einen Stil (Pixel-Art, Film-Look), mehr '
+              + 'Realismus (Hautstruktur, natürliches Licht), eine Kamerafahrt im Video oder eine bestimmte '
+              + 'Figur. Das Modell selbst bleibt unverändert, die LoRA wird nur beim Generieren dazugeschaltet.',
+            'A LoRA is a small add-on (usually 50 MB to 1 GB) for a large model. It teaches the model one '
+              + 'thing it cannot do as well on its own: a style (pixel art, film look), more realism (skin '
+              + 'texture, natural light), a camera move in a video or a specific character. The model itself '
+              + 'stays unchanged; the LoRA is only switched on while generating.',
+          )}
+        </p>
+        <p>
+          {t(
+            'So geht es: Über „Modelle und LoRAs suchen“ eine LoRA laden, NV-AI prüft vorher, zu welchem '
+              + 'Modell sie passt. Beim Generieren erscheint sie unter dem gewählten Modell: anhaken, Stärke '
+              + 'meist 0,6 bis 1,0, und die Trigger-Wörter in den Prompt. Eine LoRA kostet etwas Rechenzeit. '
+              + 'Ob Ergebnisse verkauft werden dürfen, steht bei jeder LoRA unter Lizenz.',
+            'How to use: load a LoRA via “Search models and LoRAs”; NV-AI checks first which model it fits. '
+              + 'When generating it appears below the selected model: tick it, strength usually 0.6 to 1.0, '
+              + 'and put the trigger words into the prompt. A LoRA costs some extra time. Whether results '
+              + 'may be sold is shown under license for each LoRA.',
+          )}
+        </p>
+      </details>
+
       <HfToken />
 
       {hfOpen && (

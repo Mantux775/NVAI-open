@@ -188,12 +188,17 @@ async def _read(c: httpx.AsyncClient, url: str, start: int, end: int) -> tuple[b
         if "/" in content_range:
             tail = content_range.rsplit("/", 1)[1]
             total = int(tail) if tail.isdigit() else None
+        # 200 statt 206: Range ignoriert, die Datei kommt ab Byte 0. Civitais CDN macht das
+        # bei derselben Datei mal so, mal so (gemessen) -- dann bis start ueberspringen.
+        skip = start if r.status_code == 200 else 0
+        if skip and total is None and r.headers.get("content-length", "").isdigit():
+            total = int(r.headers["content-length"])
         buf = bytearray()
         async for chunk in r.aiter_bytes():
             buf += chunk
-            if len(buf) >= want:
+            if len(buf) >= skip + want:
                 break
-    return bytes(buf[:want]), total
+    return bytes(buf[skip:skip + want]), total
 
 
 def classify(keys: list[str]) -> tuple[str, str]:

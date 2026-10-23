@@ -52,6 +52,7 @@ class FakePhotoCraft:
         self.recent: list[str] = []
         self._next_layer = 100
         self.transcript: list[dict[str, Any]] = []
+        self.canvas_steps: list[dict[str, Any]] = []
 
     # --------------------------------------------------------- Aufbau
 
@@ -147,6 +148,12 @@ class FakePhotoCraft:
             d["channels"].append(p.get("name") or "Alpha 1")
             d["dirty"] = True
             return {"channel": len(d["channels"]) - 1, "document": self.active, "name": d["channels"][-1]}
+        if c == "image.canvasSize":
+            self.canvas_steps.append(dict(p))
+            w = d["width"] + p["width"] if p.get("relative") else p["width"]
+            h = d["height"] + p["height"] if p.get("relative") else p["height"]
+            d.update(width=w, height=h, dirty=True)
+            return {"width": w, "height": h, "offset": [0, 0]}
         if c == "image.crop":
             d.update(width=p["width"], height=p["height"], selection=None, dirty=True)
             return {"x": p["x"], "y": p["y"], "width": p["width"], "height": p["height"],
