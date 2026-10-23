@@ -183,6 +183,9 @@ def models() -> list[dict[str, Any]]:
                 "img2img": capable(m, "img2img", masks),
                 "refine": capable(m, "refine", masks),
                 "mask": capable(m, "mask", masks),
+                # Füllen: "reference" (FLUX 3, NV-AI ab 0.5.6: grau markiert, ausgerichtet) oder "mask".
+                "fill": ("reference" if features.get("mask") == "reference"
+                         else "mask" if capable(m, "mask", masks) else None),
                 # Erweitern: nur mit NV-AI ab 0.5.4; "reference" ist nahtlos, "mask" oft mit Kante.
                 "outpaint": features.get("outpaint") if nv.supports_outpaint() else None,
                 "reference_edit": capable(m, "refine", masks) and not capable(m, "img2img", masks),

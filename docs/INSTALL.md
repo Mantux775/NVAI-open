@@ -47,7 +47,10 @@ anything.
   language models and 3D. Since 0.5.1 also directly in the header: click a card and tick what it
   should do. If the language models get their own card, NV-AI starts a second
   ComfyUI for them (port 8189, logs in `comfyui-text.log`). The choice is stored in
-  `gpus.json` in the data folder; deleting it puts everything back on card 0.
+  `gpus.json` in the data folder. Without a choice, or after "Distribute automatically",
+  everything runs on the strongest card (since 0.5.6). Measurements with two cards are in the
+  README: a second card did not make room for larger models, and splitting the work brought no
+  gain in that PC.
 - For testing without the hardware: `NVAI_SIMULATE_GPUS=2` reports the one card twice, and
   `NVAI_TEXT_BACKEND=separate` forces the second ComfyUI on a single card.
 

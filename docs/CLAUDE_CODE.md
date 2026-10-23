@@ -313,7 +313,7 @@ For all models:
 | `hires=True` | anything with hands, faces, fine technical detail (not with FLUX 3). Recomputes details in a second pass. Costs ~50 % more time |
 | `reference_asset_ids` | FLUX 3: change an almost-right image in a targeted way instead of rerolling |
 | `image_asset_id` + `denoise` | other models: refine an almost-right image. 0.3 gentle, 0.5 noticeable. With FLUX 3 the image becomes the first reference |
-| `image_asset_id` + `mask_asset_id` + `denoise=1.0` | regenerate only one area (inpainting): white in the mask is recomputed, black is kept, gray levels blend smoothly. Upload the mask via `POST /api/upload`. Measured with full Qwen: lettering cleanly replaced, 0.6 out of 255 deviation outside the mask. In testing, Lightning (cfg 1) mostly just continued the surroundings. FLUX 3 can't do masks (`features.mask`) |
+| `image_asset_id` + `mask_asset_id` + `denoise=1.0` | regenerate only one area (inpainting): white in the mask is recomputed, black is kept, gray levels blend smoothly. Upload the mask via `POST /api/upload`. Measured with full Qwen: lettering cleanly replaced, 0.6 out of 255 deviation outside the mask. In testing, Lightning (cfg 1) mostly just continued the surroundings. Since 0.5.6 FLUX 3 fills too (`features.mask == "reference"`): the server greys the area, lets FLUX 3 paint it and puts back only the area, aligned. Measured: crates removed with the cobblestones running on, a seagull added. To change something already there (lettering on a sign), edit with a reference image instead |
 | `steps=16` | with Chroma instead of the default 26 — measured 58 instead of 90 s at the same quality |
 | `batch_size=4` | whenever you want to choose. One model load instead of four |
 

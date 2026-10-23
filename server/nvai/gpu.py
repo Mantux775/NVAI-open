@@ -12,6 +12,7 @@ Grafikspeicher (qwMemorySize), WMI meldet hoechstens 4 GB.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,11 @@ _TTL = 300.0
 
 ROLES = ("image", "text", "mesh")
 ASSIGNMENT_FILE = config.DATA_DIR / "gpus.json"
+
+# Karten nach Steckplatz zaehlen, wie nvidia-smi. CUDA sortiert sonst "schnellste zuerst", dann
+# meinte --cuda-device 1 in ComfyUI auf manchen Rechnern eine andere Karte als GPU 1 in NV-AI.
+# Wird vom Server an ComfyUI und die 3D-Worker vererbt.
+os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
 
 
 def _nvidia() -> list[dict[str, Any]]:
@@ -129,7 +135,6 @@ def list_gpus(force: bool = False) -> list[dict[str, Any]]:
 
 
 def _simulated() -> int:
-    import os
     try:
         n = int(os.getenv("NVAI_SIMULATE_GPUS", "0"))
     except ValueError:
@@ -172,26 +177,82 @@ def vendor() -> str | None:
 
 # ----------------------------------------------------------- Zuordnung
 
-def assignment() -> dict[str, int]:
-    """Welche Karte welche Arbeit macht: image (Bildmodelle), text (Prompt-Upsampler,
-    "Prompt ausbauen"), mesh (3D-Worker). Ohne Einstellung alles auf Karte 0 --
-    genau das Verhalten vor 0.5."""
-    data: dict[str, Any] = {}
+def strength(card: dict[str, Any]) -> tuple[float, float]:
+    """Womit eine Karte rechnet: zuerst der Grafikspeicher (er entscheidet, ob ein Modell ohne
+    Nachladen passt), bei Gleichstand die Architektur (12.0 = RTX 50 mit FP4-Einheiten fuer
+    NVFP4-Modelle, 8.9 = RTX 40)."""
+    return (float(card.get("vram_total_mb") or 0), float(card.get("compute_cap") or 0))
+
+
+def card_vram_gb(index: int) -> float | None:
+    """Grafikspeicher einer Karte in GB, None wenn sie unbekannt ist."""
+    card = next((c for c in list_gpus() if c["index"] == index), None)
+    return card["vram_total_gb"] if card and card.get("vram_total_gb") else None
+
+
+def strongest() -> int:
+    """Index der staerksten Karte, 0 ohne erkannte Karte."""
+    cards = list_gpus()
+    return max(cards, key=strength)["index"] if cards else 0
+
+
+def recommended() -> dict[str, int]:
+    """Automatische Verteilung: alles auf die staerkste Karte (meister Grafikspeicher, dann
+    neueste Architektur).
+
+    Gemessen mit RTX 5060 Ti 16 GB und RTX 4060 8 GB am Riser-Kabel (PCIe 3.0 x4), 23.10.2026:
+    FLUX 3 auf der 4060 29 statt 9 s, Qwen-Image-2512 1095 statt 97 s. Text-Encoder auf die 4060:
+    kein Gewinn, ComfyUI laedt Gewichte ohnehin dynamisch nach. Upsampler auf der 4060: int8 passt
+    nicht (134-203 s je Prompt), w4a8 allein 7,5-8,6 s, FLUX 3 mit neuem Prompt dann aber 35-41
+    statt 31-34 s. Volllast auf beiden Karten zugleich liess die 4060 einmal vom Bus fallen
+    (nvlddmkm 153 "BusReset TDR"; Ollama lief dort mit beiden Karten unter Volllast stabil).
+    Eine zweite Karte bleibt deshalb eine bewusste Wahl, siehe README.
+    """
+    best = strongest()
+    return {role: best for role in ROLES}
+
+
+def _stored() -> dict[str, Any]:
     try:
         data = json.loads(ASSIGNMENT_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
-        pass
+        return {}
+
+
+def is_auto() -> bool:
+    """Automatik an: keine eigene Einstellung gespeichert oder ausdruecklich zurueckgesetzt.
+    Eine Datei ohne "auto" stammt von 0.5.0 bis 0.5.5 und ist eine eigene Wahl."""
+    data = _stored()
+    return not data or bool(data.get("auto"))
+
+
+def assignment() -> dict[str, int]:
+    """Welche Karte welche Arbeit macht: image (Bild-, Video- und Audiomodelle), text
+    (Prompt-Upsampler, "Prompt ausbauen"), mesh (3D-Worker). Ohne eigene Einstellung die
+    staerkste Karte fuer alles (bis 0.5.5: Karte 0, auch wenn das die schwaechere war)."""
+    if is_auto():
+        return recommended()
+    data = _stored()
     count = len(list_gpus())
+    best = strongest()
     out = {}
     for role in ROLES:
-        v = data.get(role, 0)
-        out[role] = v if isinstance(v, int) and 0 <= v < max(count, 1) else 0
+        v = data.get(role, best)
+        out[role] = v if isinstance(v, int) and 0 <= v < max(count, 1) else best
     return out
 
 
-def set_assignment(values: dict[str, int]) -> dict[str, int]:
+def set_assignment(values: dict[str, Any]) -> dict[str, int]:
+    """Eigene Verteilung speichern; {"auto": true} schaltet zur Automatik zurueck."""
+    if values.get("auto") is True:
+        config.ensure_dirs()
+        ASSIGNMENT_FILE.write_text(json.dumps({"auto": True}, indent=2), encoding="utf-8")
+        return assignment()
     count = len(list_gpus(force=True))
     for role, v in values.items():
+        if role == "auto":
+            continue
         if role not in ROLES:
             raise ValueError(t(f"Unbekannte Aufgabe: {role} (erlaubt: image, text, mesh)",
                                f"Unknown task: {role} (allowed: image, text, mesh)"))
@@ -199,9 +260,9 @@ def set_assignment(values: dict[str, int]) -> dict[str, int]:
             raise ValueError(t(f"Keine Grafikkarte {v} (gefunden: {count})",
                                f"No graphics card {v} (found: {count})"))
     current = assignment()
-    current.update(values)
+    current.update({k: v for k, v in values.items() if k != "auto"})
     config.ensure_dirs()
-    ASSIGNMENT_FILE.write_text(json.dumps(current, indent=2), encoding="utf-8")
+    ASSIGNMENT_FILE.write_text(json.dumps({**current, "auto": False}, indent=2), encoding="utf-8")
     return current
 
 
@@ -215,7 +276,6 @@ def separate_text_backend() -> bool:
     """Eigenes ComfyUI fuer die Sprachmodelle? Ja, wenn sie auf einer anderen Karte
     liegen als die Bildmodelle. NVAI_TEXT_BACKEND=separate erzwingt es auch mit einer
     Karte -- nur zum Testen der Aufteilung."""
-    import os
     if os.getenv("NVAI_TEXT_BACKEND", "").lower() == "separate":
         return True
     a = assignment()

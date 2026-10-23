@@ -47,7 +47,9 @@ der Treiber zu alt ist. Ohne NVIDIA-Karte lässt sich NV-AI installieren, erzeug
   3D je eine Karte wählen. Seit 0.5.1 auch direkt in der Kopfleiste: Karte anklicken und anhaken,
   was sie machen soll. Bekommen die Sprachmodelle eine eigene Karte, startet NV-AI dafür ein
   zweites ComfyUI (Port 8189, Protokoll in `comfyui-text.log`). Die Wahl steht in `gpus.json` im
-  Datenordner; wer die Datei löscht, hat wieder alles auf Karte 0.
+  Datenordner. Ohne eigene Wahl oder nach „Automatisch verteilen“ rechnet alles auf der stärksten
+  Karte (seit 0.5.6). Messwerte mit zwei Karten stehen im README: Eine zweite Karte schaffte keinen
+  Platz für größere Modelle, und das Aufteilen brachte in diesem PC keinen Gewinn.
 - Zum Testen ohne die Hardware: `NVAI_SIMULATE_GPUS=2` meldet die eine Karte doppelt, und
   `NVAI_TEXT_BACKEND=separate` erzwingt das zweite ComfyUI auf einer einzigen Karte.
 

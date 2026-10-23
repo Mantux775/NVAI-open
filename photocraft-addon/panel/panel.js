@@ -338,8 +338,9 @@ function renderModels() {
   const list = models.filter(suitable);
   const active = list.find((m) => m.active);
   // Ohne Wahl nimmt die Brücke das aktive Modell – oder, wenn es nicht passt, das beste passende.
-  // Beim Erweitern wählt die Brücke ohne eigene Wahl ein nahtloses Bearbeitungsmodell.
-  const seamless = settings.mode === "extend" ? list.filter((m) => m.outpaint === "reference") : [];
+  // Beim Erweitern und Füllen wählt die Brücke ohne eigene Wahl ein Bearbeitungsmodell (FLUX 3).
+  const seamless = settings.mode === "extend" ? list.filter((m) => m.outpaint === "reference")
+    : settings.mode === "fill" ? list.filter((m) => m.fill === "reference") : [];
   const fallback = seamless.length ? seamless.find((m) => m.active) || seamless[0]
     : active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
   const waitingForMasks = MODE_NEEDS[settings.mode] === "mask" && state?.nvai?.connected && !state.nvai.masks;
@@ -391,6 +392,10 @@ function renderModelHints() {
   if (settings.mode === "fill" && m?.weak_prompt) {
     hints.push(t("Schnelle Modelle setzen beim Füllen meist nur die Umgebung fort – für neue Objekte das volle Modell wählen.",
       "Fast models mostly just continue the surroundings when filling – choose the full model for new objects."));
+  }
+  if (settings.mode === "fill" && m?.fill === "reference") {
+    hints.push(t("FLUX 3 malt den markierten Bereich neu und richtet ihn an der Umgebung aus. Nur ändern, was schon da ist (etwa die Schrift auf einem Schild): „Überarbeiten“.",
+      "FLUX 3 repaints the selected area and aligns it with its surroundings. To change only what is already there (such as the lettering on a sign): \"Refine\"."));
   }
   if (m?.warning) hints.push(m.warning);
   $("#model-hint").hidden = !hints.length;

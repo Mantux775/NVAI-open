@@ -286,9 +286,11 @@ async def generate_image(
             FLUX 3 it becomes the first reference instead.
         denoise: Only with image_asset_id: 0.3 gentle, 0.6 noticeable, 1.0 discards everything.
         mask_asset_id: Only with image_asset_id: mask (white = generate anew, black =
-            keep) as an uploaded asset. With denoise=1.0 this is inpainting. Use the full
-            Qwen model -- Lightning mostly just continues the surroundings. FLUX 3 can't
-            do masks.
+            keep) as an uploaded asset. With denoise=1.0 this is inpainting. With
+            flux3-klein-nvfp4 the server marks the area grey, lets FLUX 3 fill it from the
+            prompt and puts back only the masked area, aligned (measured: a replaced sign kept
+            its position and perspective, Qwen-Image-2512 painted it flat and frontal). With
+            Qwen use the full model -- Lightning mostly just continues the surroundings.
         outpaint: Only with image_asset_id: extend the image beyond its edges,
             [left, top, right, bottom] in pixels (0-1024 each). width/height follow from
             image plus border; the server sets everything else. The prompt describes the

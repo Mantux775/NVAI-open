@@ -167,3 +167,17 @@ def test_extend_is_its_own_mode_that_computes_like_fill():
     assert "extend" in planning.MODES and "extend" not in planning.BASE_MODES
     assert planning.base_mode("extend") == "fill" and planning.base_mode("refine") == "refine"
     assert planning.layer_name("extend", "harbour", 0, 1) == "NV-AI Extend: harbour"
+
+
+def test_fill_prefers_reference_fill_model_on_new_servers():
+    # NV-AI ab 0.5.6 meldet FLUX 3 mit mask "reference": Füllen nimmt es ohne eigene Wahl.
+    flux = {**FLUX3, "features": {**FLUX3["features"], "mask": "reference", "outpaint": "reference"}}
+    assert capable(flux, "mask", masks_supported=True)
+    model, warning = choose_model("fill", None, QWEN["id"], [QWEN, flux], True)
+    assert model["id"] == flux["id"] and warning is None
+    # Eigene Wahl bleibt.
+    model, _ = choose_model("fill", QWEN["id"], None, [QWEN, flux], True)
+    assert model["id"] == QWEN["id"]
+    # Technik bleibt „inpaint“: Bild und Maske gehen an NV-AI, das Grau und Ausrichten macht der Server.
+    p = plan("fill", "a seagull on the water", {"variants": 1}, flux, (1024, 768), True, False, True)
+    assert p.technique == "inpaint" and p.send_image and p.send_mask

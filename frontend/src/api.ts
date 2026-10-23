@@ -243,6 +243,8 @@ export interface GpuInfo {
   vram_total_mb: number
   vram_used_mb: number | null
   roles: GpuRole[]
+  /** Die Karte mit dem meisten Grafikspeicher (bei Gleichstand der neueren Architektur). */
+  strongest?: boolean
 }
 
 export interface DeleteResult {
@@ -356,6 +358,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/** Welche Upsampler-Fassung die Karte der Sprachmodelle bekommt und ob sie ganz hineinpasst. */
+export interface UpsamplerFit {
+  variant: 'int8' | 'w4a8' | 'bf16'
+  need_gb: number
+  card: number
+  card_gb: number | null
+  fits: boolean
+}
+
 export const api = {
   health: () => req<Health>('/api/health'),
   version: () => req<{ version: string; comfyui: string | null }>('/api/version'),
@@ -363,9 +374,11 @@ export const api = {
   freeVram: () => req<{ ok: boolean; freed: string[] }>('/api/backend/free', { method: 'POST' }),
   gpus: () =>
     req<{ gpus: GpuInfo[]; assignment: Record<GpuRole, number>; vendor: 'nvidia' | 'amd' | null;
-      separate_text_backend: boolean }>('/api/gpus'),
-  setGpus: (a: Partial<Record<GpuRole, number>>) =>
-    req<{ assignment: Record<GpuRole, number>; separate_text_backend: boolean }>(
+      separate_text_backend: boolean; recommended?: Record<GpuRole, number>; auto?: boolean
+      upsampler?: UpsamplerFit | null }>('/api/gpus'),
+  /** Teilangaben verschieben einzelne Aufgaben; {auto: true} stellt die automatische Verteilung her. */
+  setGpus: (a: Partial<Record<GpuRole, number>> | { auto: true }) =>
+    req<{ assignment: Record<GpuRole, number>; separate_text_backend: boolean; auto?: boolean }>(
       '/api/gpus', { method: 'PUT', body: JSON.stringify(a) },
     ),
   /** Stoppt den laufenden GPU-Job (Generierung), nicht die Downloads. */

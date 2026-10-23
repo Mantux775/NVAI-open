@@ -11,6 +11,7 @@ import contextlib
 import json
 import time
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -433,6 +434,9 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     if p.get("outpaint_passes"):
         paths, outpaint_meta = await _outpaint_passes(ctx, entry, p, lora_files, seed)
         extra_meta = {**extra_meta, **outpaint_meta}
+    elif p.get("inpaint_reference"):
+        paths, fill_meta = await _inpaint_by_reference(entry, p, graph, lora_files, seed, on_progress)
+        extra_meta = {**extra_meta, **fill_meta}
     else:
         paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout)
     ctx.progress(0.99, t("speichert", "saving"))
@@ -550,23 +554,63 @@ async def _outpaint_passes(ctx: JobContext, entry: dict[str, Any], p: dict[str, 
     return paths, meta
 
 
-async def _align_outpaint(result: Path, original: Path, edges: list[int], reserve: list[int],
-                          size: tuple[int, int]) -> dict[str, Any]:
-    """outpaint_align.py im ComfyUI-venv: Versatz messen, Original deckungsgleich zuruecklegen,
-    Reserve abschneiden, auf `size` bringen."""
+async def _align_script(target: Path, *args: Any) -> dict[str, Any]:
+    """outpaint_align.py im ComfyUI-venv (numpy, Pillow) aufrufen; `target` muss danach existieren."""
     script = Path(__file__).with_name("outpaint_align.py")
-    tmp = result.with_name(result.stem + "_aligned.png")
     proc = await asyncio.create_subprocess_exec(
-        str(comfy.comfy_python()), "-I", str(script), str(result), str(original),
-        *(str(int(v)) for v in edges), str(tmp), *(str(int(v)) for v in reserve),
-        str(size[0]), str(size[1]),
+        str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await proc.communicate()
-    if proc.returncode != 0 or not tmp.exists():
-        raise RuntimeError(t(f"Ausrichten beim Erweitern fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
-                             f"Aligning the extension failed: {err.decode(errors='replace')[-300:]}"))
-    tmp.replace(result)
+    if proc.returncode != 0 or not target.exists():
+        raise RuntimeError(t(f"Ausrichten fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
+                             f"Aligning failed: {err.decode(errors='replace')[-300:]}"))
     return json.loads(out.decode().strip().splitlines()[-1])
+
+
+async def _align_outpaint(result: Path, original: Path, edges: list[int], reserve: list[int],
+                          size: tuple[int, int]) -> dict[str, Any]:
+    """Versatz messen, Original deckungsgleich zuruecklegen, Reserve abschneiden, auf `size` bringen."""
+    tmp = result.with_name(result.stem + "_aligned.png")
+    info = await _align_script(tmp, result, original, *(int(v) for v in edges), tmp,
+                               *(int(v) for v in reserve), size[0], size[1])
+    tmp.replace(result)
+    return info
+
+
+async def _inpaint_by_reference(entry: dict[str, Any], p: dict[str, Any], graph: dict[str, Any],
+                                lora_files: list[dict[str, Any]], seed: int,
+                                on_progress: Any) -> tuple[list[Path], dict[str, Any]]:
+    """Fuellen per Referenzbild (_prepare_inpaint_reference): rechnen, jede Variante am Bild
+    ausrichten und nur den Maskenbereich einsetzen. Wie beim Erweitern: stark umgebaut
+    (Korrelation unter 0,9) -> einmal mit anderem Seed neu, die bessere bleibt."""
+    input_dir = config.COMFY_ROOT / "input"
+    fill = p["inpaint_reference"]
+    original, mask = input_dir / fill["original"], input_dir / fill["mask"]
+
+    async def align(path: Path) -> dict[str, Any]:
+        tmp = path.with_name(path.stem + "_filled.png")
+        info = await _align_script(tmp, "--inpaint", path, original, mask, tmp)
+        tmp.replace(path)
+        return info
+
+    outs = await comfy.run_workflow(graph, on_progress=on_progress, timeout=900.0)
+    measured = []
+    for k, out in enumerate(outs):
+        info = await align(out)
+        if info["score"] < OUTPAINT_MIN_SCORE:
+            retry_graph, _ = workflows.build(entry, {**p, "seed": seed + 1000 + k, "batch_size": 1})
+            if lora_files:
+                loras.apply(retry_graph, lora_files)
+            retry = await comfy.run_workflow(retry_graph, timeout=900.0)
+            if retry:
+                second = await align(retry[0])
+                if second["score"] > info["score"]:
+                    retry[0].replace(out)
+                    info = {**second, "retried": True}
+                else:
+                    retry[0].unlink(missing_ok=True)
+        measured.append(info)
+    return outs, {"inpaint_align": measured, "width": fill["size"][0], "height": fill["size"][1]}
 
 
 def _stage_image(asset_id: str, wofuer: str) -> str:
@@ -585,17 +629,51 @@ def _stage_image(asset_id: str, wofuer: str) -> str:
     return comfy.stage_input(src)
 
 
-def prompt_upsampler() -> dict[str, Any] | None:
-    """Die Upsampler-Datei von FLUX 3, falls ein FLUX-3-Eintrag sie geladen hat.
+# Was eine Karte fuer die Upsampler-Fassung mindestens an Grafikspeicher haben sollte: Dateigroesse
+# auf Hugging Face (black-forest-labs/flux-3-image-klein-comfy) plus Luft fuer ComfyUI und Windows.
+UPSAMPLER_NEED_GB = {"w4a8": 6.72 + 1.2, "int8": 9.75 + 1.5, "bf16": 18.82 + 1.5}
 
-    Qwen3.5-9B, Apache-2.0. Sie baut auch fuer die anderen Bildmodelle einen knappen
-    Prompt zur vollen Bildbeschreibung aus ("Prompt ausbauen").
+
+def _upsampler_variant(f: dict[str, Any]) -> str:
+    name = f.get("file", "")
+    return "w4a8" if "w4a8" in name else "bf16" if "bf16" in name else "int8"
+
+
+def prompt_upsampler() -> dict[str, Any] | None:
+    """Die Upsampler-Datei von FLUX 3 (Qwen3.5-9B, Apache-2.0), passend zur Karte der Sprachmodelle.
+
+    Sie baut auch fuer die anderen Bildmodelle einen knappen Prompt zur vollen Bildbeschreibung aus
+    ("Prompt ausbauen"). Es gibt sie als int8 (9,75 GB, Standard) und w4a8 (6,72 GB). Passt int8
+    nicht in die Karte, nimmt NV-AI w4a8, wenn sie geladen ist. Gemessen 23.10.2026 auf einer RTX 4060
+    mit 8 GB: "Prompt ausbauen" mit int8 134-203 s, weil ComfyUI die Gewichte fuer jedes erzeugte Wort
+    erneut ueber PCIe holen musste; mit w4a8 7,5-8,6 s (RTX 5060 Ti mit int8: 10,8-11,0 s).
     """
+    found: dict[str, dict[str, Any]] = {}
     for entry in registry.all_entries():
         for f in entry.get("files", []):
             if "upsampler" in f.get("file", "") and registry.file_path(f).exists():
-                return f
-    return None
+                found.setdefault(_upsampler_variant(f), f)
+    if not found:
+        return None
+    vram = gpu.card_vram_gb(gpu.assignment()["text"])
+    for variant in ("int8", "bf16", "w4a8"):
+        if variant in found and (vram is None or UPSAMPLER_NEED_GB[variant] <= vram):
+            return found[variant]
+    # Nichts passt ganz: die kleinste vorhandene Fassung, sie laedt am wenigsten nach.
+    return found.get("w4a8") or found.get("int8") or next(iter(found.values()))
+
+
+def upsampler_fit() -> dict[str, Any] | None:
+    """Welche Upsampler-Fassung die Karte der Sprachmodelle bekommt und ob sie ganz hineinpasst
+    (Hinweis unter "Grafikkarten"). None, wenn kein Upsampler geladen ist."""
+    f = prompt_upsampler()
+    if f is None:
+        return None
+    card = gpu.assignment()["text"]
+    vram = gpu.card_vram_gb(card)
+    need = UPSAMPLER_NEED_GB[_upsampler_variant(f)]
+    return {"variant": _upsampler_variant(f), "need_gb": round(need, 1), "card": card, "card_gb": vram,
+            "fits": vram is None or need <= vram}
 
 
 async def _upsample(prompt: str, upsampler: dict[str, Any], ref_ids: list[str],
@@ -645,7 +723,7 @@ async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list
     if flux3_prompt.is_finished(prompt):
         return {"upsampled": False}
 
-    upsampler = next((f for f in entry["files"] if "upsampler" in f.get("file", "")), None)
+    upsampler = prompt_upsampler() or next((f for f in entry["files"] if "upsampler" in f.get("file", "")), None)
     if upsampler is None:
         return {"upsampled": False}
     caption = await _upsample(prompt, upsampler, ref_ids, p.get("reference_images") or [],
@@ -783,6 +861,59 @@ async def _prepare_outpaint(p: dict[str, Any], entry: dict[str, Any], ref_ids: l
         p["prompt"] = f"{OUTPAINT_INSTRUCTION} {p['prompt']}".strip()
 
 
+# Fuellen mit Bearbeitungsmodellen: der Maskenbereich ist grau, diese Anweisung steht vor dem Prompt.
+INPAINT_INSTRUCTION = ("Fill the flat grey area with new content that blends seamlessly into the picture, "
+                       "with the same light, perspective and style, and keep everything outside the grey "
+                       "area unchanged.")
+# So viele Pixel bekommt der Ausschnitt um die Maske beim Fuellen (FLUX 3 rechnet nativ bei 1 MP);
+# kleine Masken werden dafuer vergroessert, grosse verkleinert, eingesetzt wird in Originalgroesse.
+INPAINT_PIXELS = 1_000_000
+
+
+async def _prepare_inpaint_reference(p: dict[str, Any], ref_ids: list[str]) -> None:
+    """Fuellen (Maske) mit einem Bearbeitungsmodell wie FLUX 3, das selbst keine Maske nimmt.
+
+    Wie beim Erweitern: Ein Ausschnitt um die Maske (35 % Umgebung) kommt mit grau gefaerbtem
+    Maskenbereich als Referenz, davor INPAINT_INSTRUCTION. Danach misst outpaint_align.py den Versatz
+    ausserhalb des Graus (FLUX gibt das Bild nie pixelgenau wieder), rueckt das Ergebnis zurueck und
+    setzt nur den Maskenbereich mit weichem Rand ein; ausserhalb bleibt das Bild pixelgleich
+    (_inpaint_by_reference). Gemessen am Fischmarkt: Kisten entfernt mit durchlaufendem Pflaster,
+    Moewe aufs Wasser gesetzt. Vorhandenes umschreiben (Schild) gelingt besser ohne Grau, als
+    Bearbeitung mit Referenzbild ("Ueberarbeiten" im Add-on); grau malte FLUX ein neues Schild.
+    """
+    if len(ref_ids) != 1 or p.get("image_asset_id"):
+        raise RuntimeError(t("Fuellen mit einer Maske nimmt genau ein Bild (image_asset_id), keine "
+                             "weiteren Referenzen.",
+                             "Filling with a mask takes exactly one image (image_asset_id), no further "
+                             "references."))
+    asset = db.get_asset(ref_ids[0])
+    dims = imagesize.size(config.ASSET_DIR / asset.filename) if asset else None
+    if dims is None:
+        raise RuntimeError(t("Groesse des Ausgangsbildes nicht lesbar (PNG, JPEG oder WebP).",
+                             "Cannot read the source image size (PNG, JPEG or WebP)."))
+    mask = _stage_image(p["mask_asset_id"], t("Maske", "Mask"))
+    original = p["reference_images"][0]
+    input_dir = config.COMFY_ROOT / "input"
+    grey = input_dir / f"nvai_fill_{uuid.uuid4().hex[:8]}.png"
+    try:
+        prep = await _align_script(grey, "--inpaint-prepare", input_dir / original, input_dir / mask, grey)
+    except RuntimeError as exc:
+        if "Maske ist leer" in str(exc):
+            raise RuntimeError(t("Die Maske ist leer: weiss markiert, was neu entstehen soll.",
+                                 "The mask is empty: white marks what should be created anew.")) from exc
+        raise
+    cw, ch = prep["size"]
+    scale = (INPAINT_PIXELS / (cw * ch)) ** 0.5
+    p["width"] = min(2048, max(256, round(cw * scale / 16) * 16))
+    p["height"] = min(2048, max(256, round(ch * scale / 16) * 16))
+    p["reference_images"] = [grey.name]
+    p["inpaint_reference"] = {"original": original, "mask": mask, "size": list(dims)}
+    prompt = p.get("prompt", "").strip()
+    if not prompt.startswith(INPAINT_INSTRUCTION):
+        p["prompt"] = (f"{INPAINT_INSTRUCTION} Fill it with: {prompt}" if prompt else
+                       f"{INPAINT_INSTRUCTION} Continue the surrounding scene so that the area fits in naturally.")
+
+
 @register("txt2img")
 async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     p = job.params
@@ -819,11 +950,18 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
         p["start_image"] = _stage_image(p["image_asset_id"], t("Startbild", "Start image"))
 
     # Inpainting: Die Maske legt fest, wo neu gerechnet wird (weiss) und wo das Startbild
-    # bleibt (schwarz). Sie haengt am Startbild-Pfad -- ohne Bild-zu-Bild keine Maske.
-    if p.get("mask_asset_id"):
-        if not registry.features_for(entry).get("mask"):
-            raise RuntimeError(t(f"'{_name(entry)}' kann keine Masken (Inpainting).",
-                                 f"'{_name(entry)}' cannot use masks (inpainting)."))
+    # bleibt (schwarz). Maskenmodelle haengen sie am Startbild-Pfad an; Bearbeitungsmodelle
+    # (features.mask == "reference", FLUX 3) fuellen ueber ein grau markiertes Referenzbild.
+    mask_mode = registry.features_for(entry).get("mask") if p.get("mask_asset_id") else None
+    if p.get("mask_asset_id") and not mask_mode:
+        raise RuntimeError(t(f"'{_name(entry)}' kann keine Masken (Inpainting).",
+                             f"'{_name(entry)}' cannot use masks (inpainting)."))
+    if mask_mode == "reference":
+        if any(p.get("outpaint") or []):
+            raise RuntimeError(t("Outpainting und eigene Maske gehen nicht zusammen.",
+                                 "Outpainting and a custom mask cannot be combined."))
+        await _prepare_inpaint_reference(p, ref_ids)
+    elif mask_mode:
         if not p.get("start_image"):
             raise RuntimeError(t(
                 "Eine Maske (mask_asset_id) braucht ein Ausgangsbild (image_asset_id).",
@@ -842,7 +980,9 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
         p["negative_prompt"] = workflows.QWEN_IMAGE_NEGATIVE
 
     # Beim Outpainting per Referenz baut jeder Durchgang seinen Prompt selbst aus (_outpaint_passes).
-    caption_meta = (await _flux3_caption(p, entry, ref_ids, ctx)
+    # Beim Fuellen beschreibt der Upsampler das grau markierte Bild: eigener Cache-Schluessel.
+    caption_ids = [f"fill:{p['reference_images'][0]}"] if p.get("inpaint_reference") else ref_ids
+    caption_meta = (await _flux3_caption(p, entry, caption_ids, ctx)
                     if is_flux3 and not p.get("outpaint_passes") else {})
 
     # ControlNet: Modelldatei aufloesen und Referenzbild bereitstellen. Beides muss

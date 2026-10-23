@@ -63,6 +63,7 @@ API_VERSION = 1
 API_FEATURES = [
     "model_features",  # GET /api/models: je Modell "features" (Regler, Formate, Faehigkeiten)
     "mask",            # generate/image: mask_asset_id (Inpainting)
+    "mask_reference",  # ... auch mit Bearbeitungsmodellen (features.mask == "reference", FLUX 3)
     "outpaint",        # generate/image: outpaint=[links, oben, rechts, unten] (Bild erweitern)
     "references",      # generate/image: reference_asset_ids (FLUX 3)
     "upsampler",       # generate/image: upsample_prompt; Asset-meta "caption"
@@ -71,6 +72,7 @@ API_FEATURES = [
     "expand_prompt",   # POST /api/prompt/expand: Prompt fuer jedes Bildmodell ausbauen
     "expand_targets",  # ... auch fuer Video, Video mit Ton/Startbild, SFX, Musik und 3D (target)
     "gpus",            # GET/PUT /api/gpus: mehrere Karten, Aufgaben je Karte (experimentell)
+    "gpus_auto",       # ... mit "recommended"/"auto", PUT {"auto": true}: staerkste Karte automatisch
     "report",          # POST /api/report: anonymisierter Fehlerbericht fuer GitHub
     "cancel_job",      # POST /api/jobs/{id}/cancel: einzelne Jobs abbrechen, Downloads sofort
     "folders",         # GET/PUT /api/settings/folders, POST /api/restart: Daten- und Modellordner
@@ -344,6 +346,7 @@ def _gpus_overview() -> list[dict[str, Any]]:
     cards = gpu_info.list_gpus()
     used = gpu_info.usage()
     roles = gpu_info.assignment()
+    best = gpu_info.strongest()
     out = []
     for c in cards:
         out.append({
@@ -351,6 +354,7 @@ def _gpus_overview() -> list[dict[str, Any]]:
             "vram_used_mb": used.get(c["index"]),
             "roles": [r for r in gpu_info.ROLES if roles[r] == c["index"]] if len(cards) > 1
             else list(gpu_info.ROLES),
+            "strongest": c["index"] == best,
         })
     return out
 
@@ -360,14 +364,17 @@ async def get_gpus() -> dict[str, Any]:
     """Karten und Zuordnung: image (Bildmodelle), text (Sprachmodelle: Prompt-Upsampler,
     Prompt ausbauen), mesh (3D). Experimentell seit 0.5."""
     return {"gpus": _gpus_overview(), "assignment": gpu_info.assignment(),
+            "recommended": gpu_info.recommended(), "auto": gpu_info.is_auto(),
             "vendor": gpu_info.vendor(),
-            "separate_text_backend": gpu_info.separate_text_backend()}
+            "separate_text_backend": gpu_info.separate_text_backend(),
+            "upsampler": jobs.upsampler_fit()}
 
 
 @app.put("/api/gpus")
-async def put_gpus(body: dict[str, int]) -> dict[str, Any]:
-    """Neue Zuordnung speichern. Laufende Backends werden beendet und starten beim
-    naechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet."""
+async def put_gpus(body: dict[str, Any]) -> dict[str, Any]:
+    """Neue Zuordnung speichern ({"image": 1, ...}, Teilangaben genuegen) oder mit
+    {"auto": true} zur automatischen Verteilung zurueck. Laufende Backends werden beendet und
+    starten beim naechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet."""
     if jobs.current_job_id():
         raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
                                    "A job is running. Please try again afterwards."))
@@ -380,7 +387,8 @@ async def put_gpus(body: dict[str, int]) -> dict[str, Any]:
         if await w.is_running():
             await w.unload()
         w.stop()
-    return {"assignment": new, "separate_text_backend": gpu_info.separate_text_backend()}
+    return {"assignment": new, "auto": gpu_info.is_auto(),
+            "separate_text_backend": gpu_info.separate_text_backend()}
 
 
 @app.post("/api/backend/free")

@@ -165,9 +165,11 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
         "prompt_hint": "", "placeholder": "",
     }
     merged = base | (entry.get("features") or {})
-    # Masken (Inpainting) laufen ueber denselben Startbild-Pfad wie Bild-zu-Bild -- FLUX 3
-    # (img2img: false) bleibt damit automatisch aussen vor.
-    merged.setdefault("mask", bool(merged.get("img2img")))
+    # Masken (Inpainting): True laeuft ueber denselben Startbild-Pfad wie Bild-zu-Bild.
+    # "reference" (seit 0.5.6): Bearbeitungsmodelle wie FLUX 3 fuellen ueber ein grau markiertes
+    # Referenzbild, NV-AI richtet das Ergebnis aus (jobs._prepare_inpaint_reference). Getestet mit
+    # FLUX 3; die anderen Bearbeitungsmodelle stehen im Katalog ausdruecklich auf False.
+    merged.setdefault("mask", "reference" if merged.get("references") else bool(merged.get("img2img")))
     # Outpainting: "reference" (Bearbeitungsmodell, nahtlos), "mask" (Qwen u. a., oft mit
     # Kante am alten Bildrand) oder None. Siehe jobs._prepare_outpaint.
     merged.setdefault("outpaint", "reference" if merged.get("references") else
@@ -241,11 +243,21 @@ def localized(entry: dict[str, Any]) -> dict[str, Any]:
 def installed_files() -> set[Path]:
     """Alle Dateien, die ein vollstaendig installiertes Modell braucht (aufgeloeste Pfade)."""
     keep: set[Path] = set()
+    upsampler_in_use = False
     for e in all_entries():
         if is_installed(e):
             for f in e["files"]:
                 with contextlib.suppress(OSError):
                     keep.add(file_path(f).resolve())
+                upsampler_in_use |= "prompt_upsampler" in f.get("file", "")
+    if upsampler_in_use:
+        # Die Upsampler-Fassungen sind austauschbar (jobs.prompt_upsampler waehlt nach Karte); die
+        # kleine w4a8 gehoert im Katalog zu flux3-klein-int8 und waere sonst ein "Rest".
+        for e in all_entries():
+            for f in e["files"]:
+                if "prompt_upsampler" in f.get("file", "") and _file_installed(f):
+                    with contextlib.suppress(OSError):
+                        keep.add(file_path(f).resolve())
     return keep
 
 

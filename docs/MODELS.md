@@ -210,7 +210,13 @@ running.
   mask is regenerated, black is kept, gray levels blend smoothly. Measured: inside the mask, a
   crate's lettering "MUNITION 7,92" became "FLAK 88" in the same stencil font. Outside the mask
   the image deviated by 0.6 out of 255 on average, i.e. only by the noise of the VAE round trip.
-  With 28 steps this took 82 s including a cold start. Use the full model for new objects. In
+  With 28 steps this took 82 s including a cold start. Since 0.5.6 **FLUX 3** fills too
+  (`features.mask` = `"reference"`): NV-AI cuts out the area with 35 % surroundings, greys it, lets
+  FLUX 3 paint it from the prompt, measures the offset and puts back only the area, outside pixel for
+  pixel. Measured on a fish market: crates removed with the cobblestones running on, a seagull added,
+  about 60–70 s each. To rewrite something already there (lettering on a sign), edit with a reference
+  image instead: filled grey, FLUX painted a new, frontal sign; as an edit it kept position and angle.
+  Use the full model for new objects. In
   testing, Lightning mostly just continued the surroundings, which is enough for retouching
   something out.
 - **Outpainting** (since 0.5.4, `image_asset_id` + `outpaint=[left, top, right, bottom]` in pixels):
@@ -484,7 +490,7 @@ Applies equally to the MCP tool and to the body of `POST /api/generate/image`.
 | `batch_size` | ✓ | ✓ (4 images ~37 s) | one model load instead of many |
 | `hires`, `hires_scale`, `hires_denoise` | ✓ | — | |
 | `image_asset_id` + `denoise` | refine an image | becomes the first reference | |
-| `mask_asset_id` | ✓ inpainting (with `image_asset_id`, `denoise=1.0`) | — (error message) | white = new, black = keep; upload the mask via `POST /api/upload` |
+| `mask_asset_id` | ✓ inpainting (with `image_asset_id`, `denoise=1.0`) | ✓ since 0.5.6 via a reference: area greyed, put back aligned | white = new, black = keep; upload the mask via `POST /api/upload` |
 | `outpaint` | ✓ via mask, often a hard edge | ✓ seamless, original pixel for pixel | `[left, top, right, bottom]`, the size follows |
 | `reference_asset_ids` | — | up to 10 | error message with other models |
 | `upsample_prompt` | — | on by default | |
@@ -507,7 +513,7 @@ model. Other programs can adapt their controls to it, as the NV-AI web UI does.
 | `references` | maximum number of reference images | 0 | 10 |
 | `bbox` | placement by box | false | true |
 | `img2img` | start image with `denoise` | true | false |
-| `mask` | inpainting with `mask_asset_id` | true | false |
+| `mask` | inpainting with `mask_asset_id` (true = mask, `"reference"` = through a greyed reference image) | true | "reference" |
 | `outpaint` | how extending works (`"mask"`, `"reference"`, null) | "mask" | "reference" |
 | `hires` | second pass useful | true | false |
 | `text_rendering` | text in the image | true | true |

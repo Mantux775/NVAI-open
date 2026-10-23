@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NV-AI",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "x-api-version": 1
  },
  "paths": {
@@ -163,15 +163,13 @@
    },
    "put": {
     "summary": "Put Gpus",
-    "description": "Neue Zuordnung speichern. Laufende Backends werden beendet und starten beim\nnaechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet.",
+    "description": "Neue Zuordnung speichern ({\"image\": 1, ...}, Teilangaben genuegen) oder mit\n{\"auto\": true} zur automatischen Verteilung zurueck. Laufende Backends werden beendet und\nstarten beim naechsten Job auf der neuen Karte -- deshalb nur, wenn gerade nichts rechnet.",
     "operationId": "put_gpus_api_gpus_put",
     "requestBody": {
      "content": {
       "application/json": {
        "schema": {
-        "additionalProperties": {
-         "type": "integer"
-        },
+        "additionalProperties": true,
         "type": "object",
         "title": "Body"
        }

@@ -66,7 +66,9 @@ if (Test-Path "$repo\external\comfyui\.git") {
     $tmp = Join-Path $build "comfyui-extract"
     if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
     Expand-Archive $zip $tmp
-    # The GitHub archive has one top folder (ComfyUI-0.42.1)
+    # The GitHub archive has one top folder (ComfyUI-0.42.1). Move-Item does not create the
+    # parent folder (only Expand-Archive above does), so make app\external first.
+    New-Item -ItemType Directory -Force (Split-Path $comfyDest) | Out-Null
     Move-Item (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName $comfyDest
     Remove-Item -Recurse -Force $tmp
 }

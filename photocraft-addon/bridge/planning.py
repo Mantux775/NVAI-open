@@ -140,7 +140,8 @@ def choose_model(mode: str, wanted: str | None, active: str | None, models: list
 
     ``extend``: Arbeitsfläche erweitern über NV-AIs ``outpaint``. Ohne eigene Wahl nimmt das
     ein Bearbeitungsmodell (FLUX 3 & Co.), denn Maskenmodelle hinterließen an der alten
-    Bildkante eine harte Naht (gemessen 23.10.2026).
+    Bildkante eine harte Naht (gemessen 23.10.2026). Füllen bevorzugt genauso ein Modell, das
+    per Referenz füllt (``features.mask == "reference"``), wenn NV-AI das meldet.
     """
     runnable = [m for m in models if m.get("runnable", True)]
     need = "outpaint" if extend and mode == "fill" else need_for(mode)
@@ -148,6 +149,13 @@ def choose_model(mode: str, wanted: str | None, active: str | None, models: list
         seamless = [m for m in runnable if (m.get("features") or {}).get("outpaint") == "reference"]
         if seamless:
             return next((m for m in seamless if m["id"] == active), seamless[0]), None
+    if need == "mask" and not wanted:
+        # Füllen: NV-AI ab 0.5.6 füllt auch mit Bearbeitungsmodellen (features.mask "reference", FLUX 3):
+        # Bereich grau, ausrichten, einsetzen. Gemessen: Kisten entfernt mit durchlaufendem Pflaster;
+        # Qwens Maskenweg malte ein Schild frontal statt in der Perspektive der Kiste.
+        by_reference = [m for m in runnable if (m.get("features") or {}).get("mask") == "reference"]
+        if by_reference:
+            return next((m for m in by_reference if m["id"] == active), by_reference[0]), None
     by_id = {m["id"]: m for m in runnable}
     chosen = by_id.get(wanted or active or "")
     if chosen and (need is None or capable(chosen, need, masks_supported)):

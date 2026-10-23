@@ -213,6 +213,12 @@ anderer.
   Aufschrift „MUNITION 7,92" einer Kiste wurde in der Maske zu „FLAK 88" in derselben
   Schablonenschrift. Außerhalb der Maske wich das Bild im Mittel um 0,6 von 255 ab, also nur um
   das Rauschen des VAE-Durchlaufs. Mit 28 Schritten dauerte das 82 s einschließlich Kaltstart.
+  Seit 0.5.6 füllt auch **FLUX 3** (`features.mask` = `"reference"`): NV-AI schneidet den Bereich
+  mit 35 % Umgebung aus, färbt ihn grau, lässt FLUX 3 nach dem Prompt malen, misst den Versatz und
+  setzt nur den Bereich zurück, außerhalb pixelgleich. Gemessen an einem Fischmarkt: Kisten entfernt
+  mit durchlaufendem Pflaster, Möwe aufs Wasser gesetzt, je rund 60–70 s. Etwas Vorhandenes
+  umschreiben (Schrift auf einem Schild) geht besser als Bearbeitung mit Referenzbild: grau gefüllt
+  malte FLUX ein neues, frontales Schild, als Bearbeitung behielt es Lage und Neigung.
   Für neue Objekte das volle Modell nehmen. Lightning setzt laut Test meist nur die Umgebung
   fort, was zum Wegretuschieren genügt.
 - **Outpainting** (seit 0.5.4, `image_asset_id` + `outpaint=[links, oben, rechts, unten]` in Pixeln):
@@ -490,7 +496,7 @@ Gilt gleichermaßen für das MCP-Werkzeug und den Body von `POST /api/generate/i
 | `batch_size` | ✓ | ✓ (4 Bilder ~37 s) | ein Modell-Load statt vieler |
 | `hires`, `hires_scale`, `hires_denoise` | ✓ | — | |
 | `image_asset_id` + `denoise` | Bild nachbessern | wird zur ersten Referenz | |
-| `mask_asset_id` | ✓ Inpainting (mit `image_asset_id`, `denoise=1.0`) | — (Fehlermeldung) | weiß = neu, schwarz = behalten; Maske per `POST /api/upload` |
+| `mask_asset_id` | ✓ Inpainting (mit `image_asset_id`, `denoise=1.0`) | ✓ seit 0.5.6 per Referenz: Bereich grau, ausgerichtet eingesetzt | weiß = neu, schwarz = behalten; Maske per `POST /api/upload` |
 | `outpaint` | ✓ per Maske, oft harte Kante | ✓ nahtlos, Original pixelgenau | `[links, oben, rechts, unten]`, Format ergibt sich |
 | `reference_asset_ids` | — | bis 10 | Fehlermeldung bei anderen Modellen |
 | `upsample_prompt` | — | Standard an | |
@@ -514,7 +520,7 @@ tut.
 | `references` | maximale Zahl an Referenzbildern | 0 | 10 |
 | `bbox` | Platzierung per Box | false | true |
 | `img2img` | Startbild mit `denoise` | true | false |
-| `mask` | Inpainting mit `mask_asset_id` | true | false |
+| `mask` | Inpainting mit `mask_asset_id` (true = Maske, `"reference"` = über ein grau markiertes Referenzbild) | true | "reference" |
 | `outpaint` | Weg beim Erweitern (`"mask"`, `"reference"`, null) | "mask" | "reference" |
 | `hires` | zweiter Durchgang sinnvoll | true | false |
 | `text_rendering` | Schrift im Bild | true | true |
