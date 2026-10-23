@@ -216,9 +216,9 @@ final class AppModel {
     /// Ränder [links, oben, rechts, unten] in Pixeln. Bewusst nicht gespeichert: Nach dem Start
     /// stehen sie wieder auf 0, damit ein zweiter Klick die Arbeitsfläche nicht noch einmal erweitert.
     var extend = [0, 0, 0, 0]
-    var extending: Bool { form.mode == .fill && extend.contains { $0 > 0 } }
-    /// Beim Erweitern gehen mit NV-AIs outpaint auch Bearbeitungsmodelle (FLUX 3, FLUX.2 Klein).
-    private var extendByOutpaint: Bool { extending && nv.outpaint }
+    var extending: Bool { form.mode == .extend && extend.contains { $0 > 0 } }
+    /// Im Modus Erweitern gehen mit NV-AIs outpaint auch Bearbeitungsmodelle (FLUX 3, FLUX.2 Klein).
+    private var extendByOutpaint: Bool { form.mode == .extend && nv.outpaint }
 
     var suitableModels: [ModelOption] {
         extendByOutpaint ? models.filter { $0.outpaint != nil } : models.filter { $0.suits(form.mode) }
@@ -249,7 +249,7 @@ final class AppModel {
         return "\(doc.width) × \(doc.height) → \(doc.width + extend[0] + extend[2]) × \(doc.height + extend[1] + extend[3])"
     }
 
-    var goLabel: String { extending ? t("Erweitern und füllen", "Extend and fill") : form.mode.go }
+    var goLabel: String { form.mode.go }
 
     var selectedModelID: String {
         get {
@@ -314,6 +314,9 @@ final class AppModel {
         }
         if noModels { return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI") }
         if form.mode == .fill && !nv.masks { return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet") }
+        if form.mode == .extend && !extending {
+            return t("Bitte angeben, wie viele Pixel dazukommen", "Please enter how many pixels to add")
+        }
         if extending && pc.document?.selection != nil {
             return t("Zum Erweitern bitte erst die Auswahl aufheben", "To extend, please deselect first")
         }

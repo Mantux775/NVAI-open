@@ -218,8 +218,11 @@ anderer.
 - **Outpainting** (seit 0.5.4, `image_asset_id` + `outpaint=[links, oben, rechts, unten]` in Pixeln):
   Das Bild wird über den Rand hinaus erweitert, das Format ist Bild plus Rand. **FLUX 3 nehmen:** Es
   bekommt das Bild mit grauem Rand als Referenz und führt die Szene weiter, danach legt NV-AI das
-  Original zurück. Gemessen an einer Hafenszene (+384 px rechts): nahtlos, der alte Teil wich um
-  0,0 von 255 ab, zwei Varianten in 66 s. Qwen-Image-2512 erweitert per Maske, malte den Rand im
+  Original zurück. FLUX 3 gibt das Bild nie genau an derselben Stelle wieder (je Achse Faktor 0,97–1,055 und bis 43 px
+  Versatz, bei Rand auf allen Seiten zoomte es 25–42 % hinein). Deshalb erweitert NV-AI Achse für Achse,
+  misst nach jedem Durchgang den Versatz, rückt das Ergebnis zurück und setzt erst dann das Original
+  ein. Gemessen an einer rundum erweiterten Löwenszene: zwei Varianten in 147 s, Nähte in voller
+  Auflösung sauber. Qwen-Image-2512 erweitert per Maske, malte den Rand im
   Test aber als eigene Szene mit harter Kante (auch mit 128/256 px Übergang und 50 Schritten).
 - **Zweiter Durchgang** (`hires=True`) für Hände, Gesichter und feine Technik.
 

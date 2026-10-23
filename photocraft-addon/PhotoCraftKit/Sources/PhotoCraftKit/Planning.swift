@@ -39,13 +39,18 @@ public struct Plan: Equatable {
 /// Modelle sind die Einträge aus NV-AIs `/api/models` (`id`, `name`, `workflow`, `runnable`,
 /// `features` – siehe BILDMODELLE.md, Abschnitt 7).
 public enum Planning {
+    /// Rechenwege (Golden-Daten); „extend“ (Erweitern) rechnet wie Füllen, siehe baseMode.
     public static let modes = ["fill", "generate", "refine"]
+
+    /// „Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor.
+    public static func baseMode(_ mode: String) -> String { mode == "extend" ? "fill" : mode }
     /// Name des Modus in der gewählten Sprache (Oberfläche, Ebenenname).
     public static func modeLabel(_ mode: String) -> String {
         switch mode {
         case "fill": t("Füllen", "Fill")
         case "generate": t("Generieren", "Generate")
         case "refine": t("Überarbeiten", "Refine")
+        case "extend": t("Erweitern", "Extend")
         default: mode
         }
     }

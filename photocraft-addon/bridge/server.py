@@ -205,7 +205,7 @@ def models() -> list[dict[str, Any]]:
 # ---------------------------------------------------------------- Aufträge
 
 class GenerateRequest(BaseModel):
-    mode: Literal["fill", "generate", "refine"]
+    mode: Literal["fill", "generate", "refine", "extend"]
     prompt: str = Field("", max_length=4000)
     negative_prompt: str = Field("", max_length=2000)
     model_id: str | None = None
@@ -217,7 +217,7 @@ class GenerateRequest(BaseModel):
     margin: float = Field(0.35, ge=0.0, le=1.5, description="Fill only: context margin relative to the selection")
     extend: list[int] | None = Field(
         None, min_length=4, max_length=4,
-        description="Fill only, without a selection: first extend the canvas transparently by "
+        description="Mode extend (or fill without a selection): first extend the canvas transparently by "
                     "[left, top, right, bottom] pixels (0-2048 each), then fill the new edges (outpainting)")
     hires: bool = False
     native: bool = Field(False, description="Work at the model's native resolution (more detail, about twice the time)")

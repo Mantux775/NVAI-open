@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import time
 import traceback
 from pathlib import Path
@@ -429,7 +430,11 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     # Video braucht deutlich mehr Luft: Wan 2.2 A14B laedt mitten im Lauf den
     # zweiten Experten nach, das allein kostet Minuten.
     timeout = 3600.0 if kind == "video" else 900.0
-    paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout)
+    if p.get("outpaint_passes"):
+        paths, outpaint_meta = await _outpaint_passes(ctx, entry, p, lora_files, seed)
+        extra_meta = {**extra_meta, **outpaint_meta}
+    else:
+        paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout)
     ctx.progress(0.99, t("speichert", "saving"))
 
     if not paths:
@@ -456,6 +461,112 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
         )
         asset_ids.append(asset.id)
     return asset_ids
+
+
+# Reserve beim Erweitern (Anteil der Bildseite) und Mindest-Korrelation, darunter wird neu gerechnet.
+OUTPAINT_RESERVE = 0.08
+OUTPAINT_MIN_SCORE = 0.9
+
+
+async def _outpaint_passes(ctx: JobContext, entry: dict[str, Any], p: dict[str, Any],
+                           lora_files: list[dict[str, Any]], seed: int) -> tuple[list[Path], dict[str, Any]]:
+    """Outpainting per Referenzbild: je Durchgang Rand anlegen, rechnen, ausrichten (_prepare_outpaint).
+
+    Der erste Durchgang rechnet alle Varianten in einem Lauf, ein zweiter (andere Achse) jede
+    Variante einzeln weiter. Gerechnet wird mit 8 % Reserve auf den neuen Seiten; sie faengt den
+    Versatz von FLUX ab und wird nach dem Ausrichten abgeschnitten (ohne sie blieben Streifen).
+    Variante stark umgebaut statt nur verschoben (Korrelation unter 0,9, gemessen 0,82 mit
+    doppelten Beinen): einmal mit anderem Seed neu, die bessere bleibt.
+    """
+    is_flux3 = entry["workflow"] in workflows.FLUX3_WORKFLOWS
+    input_dir = config.COMFY_ROOT / "input"
+    passes = p["outpaint_passes"]
+    batch = int(p.get("batch_size") or 1)
+    runs, done = 1 + (len(passes) - 1) * batch, 0
+    sources, measured, caption = [p["outpaint_original"]], [], None
+    paths: list[Path] = []
+    for i, edges in enumerate(passes):
+        left, top, right, bottom = edges
+        last = i == len(passes) - 1
+        produced: list[Path] = []
+        for j, src in enumerate(sources):
+            dims = imagesize.size(input_dir / src)
+            if dims is None:
+                raise RuntimeError(t("Zwischenbild nicht lesbar.", "Intermediate image not readable."))
+            reserve = [round(OUTPAINT_RESERVE * dims[k % 2]) if edges[k] else 0 for k in range(4)]
+            gen_edges = [e + r for e, r in zip(edges, reserve)]
+            ctx.progress(0.02 + 0.96 * done / runs, t("legt den Rand an", "adding the border"))
+            padded = await comfy.run_workflow(workflows.outpaint_pad_graph(src, gen_edges))
+            if not padded:
+                raise RuntimeError(t("ComfyUI lieferte das erweiterte Bild nicht.",
+                                     "ComfyUI did not return the extended image."))
+            ref = comfy.stage_input(padded[0])
+            for path in padded:
+                path.unlink(missing_ok=True)
+            # Ergebnis nach dem Abschneiden: im letzten Durchgang das Zielformat, davor Bild plus Rand.
+            size = ((int(p["width"]), int(p["height"])) if last
+                    else (dims[0] + left + right, dims[1] + top + bottom))
+            pp = {**p, "outpaint": gen_edges, "reference_images": [ref], "caption": None,
+                  "width": max(256, round((dims[0] + gen_edges[0] + gen_edges[2]) / 16) * 16),
+                  "height": max(256, round((dims[1] + gen_edges[1] + gen_edges[3]) / 16) * 16)}
+            if is_flux3:
+                # Eigener Cache-Schluessel je Randbild, sonst kaeme eine fremde Beschreibung zurueck.
+                await _flux3_caption(pp, entry, [f"outpaint:{ref}"], ctx)
+                caption = pp.get("caption") or caption
+
+            async def render(n: int, s: int, done: int = done, pp: dict[str, Any] = pp) -> list[Path]:
+                graph, _ = workflows.build(entry, {**pp, "seed": s, "batch_size": n})
+                if lora_files:
+                    loras.apply(graph, lora_files)
+
+                def on_progress(frac: float, stage: str) -> None:
+                    ctx.progress(0.02 + 0.96 * (done + frac) / runs, stage)
+                return await comfy.run_workflow(graph, on_progress=on_progress, timeout=900.0)
+
+            outs = await render(batch if i == 0 else 1, seed + j)
+            done += 1
+            for k, out in enumerate(outs):
+                info = await _align_outpaint(out, input_dir / src, gen_edges, reserve, size)
+                if info["score"] < OUTPAINT_MIN_SCORE:
+                    retry = await render(1, seed + 1000 + 10 * j + k)
+                    if retry:
+                        second = await _align_outpaint(retry[0], input_dir / src, gen_edges, reserve, size)
+                        if second["score"] > info["score"]:
+                            retry[0].replace(out)
+                            info = {**second, "retried": True}
+                        else:
+                            retry[0].unlink(missing_ok=True)
+                measured.append(info)
+            produced.extend(outs)
+        if not last:
+            sources = [comfy.stage_input(path) for path in produced]
+            for path in produced:
+                path.unlink(missing_ok=True)
+        else:
+            paths = produced
+    meta: dict[str, Any] = {"outpaint_align": measured, "upsampled": caption is not None}
+    if caption:
+        meta["caption"] = caption
+    return paths, meta
+
+
+async def _align_outpaint(result: Path, original: Path, edges: list[int], reserve: list[int],
+                          size: tuple[int, int]) -> dict[str, Any]:
+    """outpaint_align.py im ComfyUI-venv: Versatz messen, Original deckungsgleich zuruecklegen,
+    Reserve abschneiden, auf `size` bringen."""
+    script = Path(__file__).with_name("outpaint_align.py")
+    tmp = result.with_name(result.stem + "_aligned.png")
+    proc = await asyncio.create_subprocess_exec(
+        str(comfy.comfy_python()), "-I", str(script), str(result), str(original),
+        *(str(int(v)) for v in edges), str(tmp), *(str(int(v)) for v in reserve),
+        str(size[0]), str(size[1]),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, err = await proc.communicate()
+    if proc.returncode != 0 or not tmp.exists():
+        raise RuntimeError(t(f"Ausrichten beim Erweitern fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
+                             f"Aligning the extension failed: {err.decode(errors='replace')[-300:]}"))
+    tmp.replace(result)
+    return json.loads(out.decode().strip().splitlines()[-1])
 
 
 def _stage_image(asset_id: str, wofuer: str) -> str:
@@ -616,8 +727,11 @@ async def _prepare_outpaint(p: dict[str, Any], entry: dict[str, Any], ref_ids: l
     Graphen an. Das Modell malt den Rand aber oft als eigene Szene an -- gemessen eine harte
     Kante, auch mit 128 und 256 px Uebergang.
     Bearbeitungsmodelle (FLUX 3, Qwen-Image 2.1, Boogu Edit, HiDream-O1): bekommen das Bild mit
-    grauem Rand als Referenz und fuehren die Szene nahtlos weiter; danach legt der Graph das
-    Original pixelgenau zurueck (workflows._composite_original).
+    grauem Rand als Referenz und fuehren die Szene weiter (_outpaint_passes). Rand auf beiden
+    Achsen geht in zwei Durchgaengen: Rundum zoomte FLUX 3 um 25-42 % ins Bild, statt den Rahmen zu
+    fuellen (der Upsampler beschreibt dann nur das innere Bild); je Achse blieb es bei Faktor
+    0,98-1,015. Nach jedem Durchgang misst outpaint_align.py den Versatz und legt das Original
+    deckungsgleich zurueck.
     """
     feats = registry.features_for(entry)
     by_reference = feats.get("references", 0) > 0
@@ -661,18 +775,10 @@ async def _prepare_outpaint(p: dict[str, Any], entry: dict[str, Any], ref_ids: l
     if not by_reference:
         return
 
-    # Referenzweg: Bild mit grauem Rand als eigene Datei, damit auch der Upsampler von
-    # FLUX 3 sieht, was zu fuellen ist.
-    await _ensure_backend(ctx)
-    ctx.progress(0.01, t("legt den Rand an", "adding the border"))
-    p["outpaint_source"] = p["reference_images"][0]
-    padded = await comfy.run_workflow(workflows.outpaint_pad_graph(p["outpaint_source"], p["outpaint"]))
-    if not padded:
-        raise RuntimeError(t("ComfyUI lieferte das erweiterte Bild nicht.",
-                             "ComfyUI did not return the extended image."))
-    p["reference_images"] = [comfy.stage_input(padded[0])]
-    for path in padded:
-        path.unlink(missing_ok=True)
+    p["outpaint_original"] = p["reference_images"][0]
+    both_axes = (left or right) and (top or bottom)
+    p["outpaint_passes"] = ([[left, 0, right, 0], [0, top, 0, bottom]] if both_axes
+                            else [[left, top, right, bottom]])
     if not p["prompt"].startswith(OUTPAINT_INSTRUCTION):
         p["prompt"] = f"{OUTPAINT_INSTRUCTION} {p['prompt']}".strip()
 
@@ -735,7 +841,9 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     if wf == "qwen_image" and not p.get("negative_prompt"):
         p["negative_prompt"] = workflows.QWEN_IMAGE_NEGATIVE
 
-    caption_meta = await _flux3_caption(p, entry, ref_ids, ctx) if is_flux3 else {}
+    # Beim Outpainting per Referenz baut jeder Durchgang seinen Prompt selbst aus (_outpaint_passes).
+    caption_meta = (await _flux3_caption(p, entry, ref_ids, ctx)
+                    if is_flux3 and not p.get("outpaint_passes") else {})
 
     # ControlNet: Modelldatei aufloesen und Referenzbild bereitstellen. Beides muss
     # da sein -- sonst laesst der Builder das ControlNet stillschweigend weg.

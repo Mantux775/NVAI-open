@@ -128,9 +128,9 @@ extension FormState {
     }
 }
 
-/// Die drei Modi des Panels (Texte wie panel/panel.js).
+/// Die vier Modi des Panels (Texte wie panel/panel.js).
 enum Mode: String, CaseIterable, Identifiable, Codable {
-    case fill, generate, refine
+    case fill, generate, refine, extend
 
     var id: String { rawValue }
     var label: String { Planning.modeLabel(rawValue) }
@@ -140,6 +140,7 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
         case .fill: return t("Auswahl füllen", "Fill selection")
         case .generate: return t("Bild generieren", "Generate image")
         case .refine: return t("Überarbeiten", "Refine")
+        case .extend: return t("Erweitern", "Extend")
         }
     }
 
@@ -154,6 +155,9 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
         case .refine:
             return t("Rechnet die Auswahl oder das ganze Bild neu. Die Stärke bestimmt, wie viel sich ändert.",
                      "Re-renders the selection or the whole image. The strength sets how much changes.")
+        case .extend:
+            return t("Vergrößert die Arbeitsfläche und malt den neuen Rand passend zum Bild (Outpainting). Am nahtlosesten mit FLUX.2 Klein bzw. FLUX 3. Der Prompt beschreibt das ganze Bild.",
+                     "Enlarges the canvas and paints the new border to match the picture (outpainting). Most seamless with FLUX.2 Klein or FLUX 3. The prompt describes the whole picture.")
         }
     }
 
@@ -165,6 +169,8 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
                                  "Describe the image, e.g. \"a red vintage car at sunset, cinematic photo\"")
         case .refine: return t("Wie soll sich der Bereich verändern? z. B. „as an oil painting with visible brush strokes“",
                                "How should the area change? e.g. \"as an oil painting with visible brush strokes\"")
+        case .extend: return t("Was ist auf dem ganzen Bild zu sehen? Leer lassen = die Szene fortsetzen",
+                               "What does the whole picture show? Leave empty = continue the scene")
         }
     }
 

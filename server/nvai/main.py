@@ -603,10 +603,15 @@ async def cleanup_partial() -> dict[str, Any]:
         entry = registry.get_entry(info.id)
         if entry is None:
             continue
-        before = info.disk_gb
+        # Nur melden, was wirklich weg ist -- frueher stand hier die Groesse aller vorhandenen
+        # Dateien, auch der geteilten, die gar nicht geloescht werden.
+        leftovers = registry.own_leftovers(entry, registry.installed_files())
+        size = sum(p.stat().st_size for p in leftovers if p.is_file())
         removed = registry.clean_partial(entry)
-        cleaned.append({"model_id": info.id, "name": info.name,
-                        "removed_items": removed, "freed_gb": before})
+        gone = sum(p.stat().st_size for p in leftovers if p.is_file())
+        if removed:
+            cleaned.append({"model_id": info.id, "name": info.name,
+                            "removed_items": removed, "freed_gb": round((size - gone) / 1024**3, 2)})
     return {"ok": True, "cleaned": cleaned,
             "freed_gb": round(sum(c["freed_gb"] for c in cleaned), 2)}
 

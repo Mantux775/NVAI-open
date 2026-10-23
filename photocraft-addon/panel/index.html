@@ -55,6 +55,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3.5-1 10-10-2.5-2.5-10 10z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 5.5l2.5-2.5L19 5.5 16.5 8z"/><path d="M19 13l.8 2.2 2.2.8-2.2.8L19 19l-.8-2.2L16 16l2.2-.8z"/></svg>
       <span data-de="Überarbeiten">Refine</span>
     </button>
+    <button role="tab" type="button" data-mode="extend">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="7.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="2.5" y="2.5" width="19" height="19" rx="2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2.4"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span data-de="Erweitern">Extend</span>
+    </button>
   </div>
   <p class="mode-hint" id="mode-hint"></p>
   <p class="model-hint" id="model-hint" hidden></p>
@@ -97,7 +101,7 @@
   </label>
 
   <div class="field" id="extend-field">
-    <span class="label"><span data-de="Arbeitsfläche erweitern (Outpainting)">Extend the canvas (outpainting)</span> <output id="extend-out"></output></span>
+    <span class="label"><span data-de="Neuer Rand in Pixeln">New border in pixels</span> <output id="extend-out"></output></span>
     <div class="grid4">
       <label class="field"><span class="label" data-de="Links">Left</span><input id="extend-left" type="number" min="0" max="2048" step="64" value="0"></label>
       <label class="field"><span class="label" data-de="Oben">Top</span><input id="extend-top" type="number" min="0" max="2048" step="64" value="0"></label>
@@ -109,10 +113,9 @@
       <button class="chip" type="button" data-extend="0,256,0,256" data-de="↕ höher">↕ taller</button>
       <button class="chip" type="button" data-extend="0,0,0,384" data-de="↓ nach unten">↓ downwards</button>
       <button class="chip" type="button" data-extend="128,128,128,128" data-de="rundum">all around</button>
-      <button class="chip" type="button" data-extend="0,0,0,0" data-de="aus">off</button>
     </div>
     <span class="small warn-text" id="extend-warn" hidden data-de="Dieses Modell malt den Rand oft als eigene Szene an; nahtloser wird es mit FLUX 3.">This model often paints the border as a separate scene; FLUX 3 gives seamless transitions.</span>
-    <span class="muted small" data-de="Ohne Auswahl: PhotoCraft vergrößert die Arbeitsfläche transparent, NV-AI malt den neuen Rand passend dazu. Der Prompt beschreibt das ganze Bild.">Without a selection: PhotoCraft enlarges the canvas transparently and NV-AI paints the new border to match. The prompt describes the whole picture.</span>
+
   </div>
 
   <details class="advanced" id="advanced">

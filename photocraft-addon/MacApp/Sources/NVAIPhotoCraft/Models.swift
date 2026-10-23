@@ -105,7 +105,7 @@ struct ModelOption: Identifiable, Equatable {
 
     func suits(_ mode: Mode) -> Bool {
         switch mode {
-        case .fill: return mask
+        case .fill, .extend: return mask
         case .refine: return refine
         case .generate: return true
         }

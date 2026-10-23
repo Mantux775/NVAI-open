@@ -134,6 +134,9 @@ class TaskManager:
         if mode == "generate" and not prompt:
             raise ValueError(_t("Zum Generieren bitte beschreiben, was entstehen soll.",
                                 "To generate, please describe what should be created."))
+        if mode == "extend" and not planning.extend_steps(params.get("extend")):
+            raise ValueError(_t("Zum Erweitern bitte angeben, wie viele Pixel links, oben, rechts oder unten dazukommen.",
+                                "To extend, please enter how many pixels to add on the left, top, right or bottom."))
         with self._lock:
             if self.current and self.current.status == "running":
                 raise BusyError(_t("Es läuft bereits ein Auftrag. Bitte abwarten oder abbrechen.",
@@ -248,7 +251,8 @@ class TaskManager:
 
         self.nv.check_compatible()
         masks = self.nv.supports_masks()
-        if t.mode == "fill" and not masks:
+        mode = planning.base_mode(t.mode)
+        if mode == "fill" and not masks and not (t.mode == "extend" and self.nv.supports_outpaint()):
             raise NVAIError(_t(
                 "Die laufende NV-AI-Version kennt noch keine Masken. NV-AI bitte neu starten, "
                 "damit die Inpainting-Erweiterung aktiv wird.",
@@ -264,9 +268,9 @@ class TaskManager:
         # Erweitern über NV-AIs outpaint (ab 0.5.4); ältere Server füllen per Maske wie bisher.
         outpaint = bool(t.alpha_mask and planning.extend_steps(p.get("extend"))
                         and self.nv.supports_outpaint())
-        model, warning = planning.choose_model(t.mode, p.get("model_id") or None, active,
+        model, warning = planning.choose_model(mode, p.get("model_id") or None, active,
                                                self.nv.image_models(), masks, extend=outpaint)
-        plan = planning.plan(t.mode, t.prompt, p, model, (region.w, region.h), t.has_mask,
+        plan = planning.plan(mode, t.prompt, p, model, (region.w, region.h), t.has_mask,
                              t.alpha_mask, masks, outpaint=outpaint)
         t.model_name, t.technique, t.working = plan.model_name, plan.technique, list(plan.working)
         warnings = ([warning] if warning else []) + plan.warnings
@@ -392,7 +396,8 @@ class TaskManager:
             doc = ui.get("document")
             if not doc:
                 raise PhotoCraftError(_t("In PhotoCraft ist kein Dokument geöffnet.", "No document is open in PhotoCraft."))
-            steps = planning.extend_steps(t.params.get("extend")) if t.mode == "fill" else []
+            # „Erweitern“; Füllen mit `extend` nehmen ältere Panels (0.4.2) weiter an.
+            steps = planning.extend_steps(t.params.get("extend")) if t.mode in ("fill", "extend") else []
             if steps:
                 # Outpainting: Arbeitsfläche transparent erweitern, danach füllt der übliche
                 # Weg ohne Auswahl die leeren Ränder. Jeder Schritt lässt sich in PhotoCraft
@@ -413,9 +418,10 @@ class TaskManager:
             sel = Rect.from_list(doc["selectionBounds"]) if doc.get("hasSelection") and doc.get("selectionBounds") else None
             t.selection = sel.as_list() if sel else None
             margin = float(t.params.get("margin", 0.35))
-            region = planning.region_for(t.mode, sel, width, height, margin)
+            mode = planning.base_mode(t.mode)
+            region = planning.region_for(mode, sel, width, height, margin)
 
-            need_context = t.mode in ("fill", "refine")
+            need_context = mode in ("fill", "refine")
             need_mask = sel is not None
             if need_context or need_mask:
                 self._export(t.doc_index, rel, region, canvas, need_context, need_mask)
@@ -428,7 +434,7 @@ class TaskManager:
             mask = Image.open(job_dir / "mask.png").convert("L")
             mask.load()
 
-        if t.mode == "fill" and mask is None:
+        if planning.base_mode(t.mode) == "fill" and mask is None:
             # Ohne Auswahl füllt „Füllen“ die durchsichtigen Stellen (Arbeitsfläche erweitert).
             mask = imaging.mask_from_alpha(context) if context is not None else None
             box = imaging.mask_bbox(mask) if mask is not None else None

@@ -45,8 +45,8 @@ targets:
         PRODUCT_NAME: NV-AI
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
-        MARKETING_VERSION: "0.4.3"
-        CURRENT_PROJECT_VERSION: "7"
+        MARKETING_VERSION: "0.4.4"
+        CURRENT_PROJECT_VERSION: "8"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

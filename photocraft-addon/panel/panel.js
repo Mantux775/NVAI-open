@@ -39,6 +39,13 @@ function modeTexts(mode) {
       editPlaceholder: t("z. B. „Replace the rope handles with forged iron handles; keep everything else unchanged.“",
         "e.g. \"Replace the rope handles with forged iron handles; keep everything else unchanged.\""),
     },
+    extend: {
+      go: t("Erweitern", "Extend"),
+      hint: t("Vergrößert die Arbeitsfläche und malt den neuen Rand passend zum Bild (Outpainting). Am nahtlosesten mit FLUX 3. Der Prompt beschreibt das ganze Bild.",
+        "Enlarges the canvas and paints the new border to match the picture (outpainting). Most seamless with FLUX 3. The prompt describes the whole picture."),
+      placeholder: t("Was ist auf dem ganzen Bild zu sehen? Leer lassen = die Szene fortsetzen",
+        "What does the whole picture show? Leave empty = continue the scene"),
+    },
   }[mode];
 }
 
@@ -59,12 +66,13 @@ function translateStatic() {
 }
 
 const DEFAULTS = {
-  mode: "fill", prompt: "", models: { fill: "", generate: "", refine: "" }, variants: 2, strength: 0.5,
+  mode: "fill", prompt: "", models: { fill: "", generate: "", refine: "", extend: "" }, variants: 2, strength: 0.5,
   negative: "", steps: "", cfg: "", seed: "", margin: 0.35, hires: false, native: false, autoPlace: true,
   advanced: false,
 };
 // Was ein Modell für den jeweiligen Modus können muss (Generieren können alle).
-const MODE_NEEDS = { fill: "mask", refine: "refine", generate: null };
+// Erweitern: mit NV-AI ab 0.5.4 (Mac 0.4.3) jedes Modell mit features.outpaint, sonst Masken.
+const MODE_NEEDS = { fill: "mask", refine: "refine", generate: null, extend: "mask" };
 const defaultTip = () => t("Englische Prompts treffen meist genauer.", "Detailed English prompts work best.");
 const STORE_KEY = "nvai-photocraft-panel";
 
@@ -107,7 +115,7 @@ let errorText = "";
 // stehen sie wieder auf 0, damit ein zweiter Klick die Arbeitsfläche nicht noch einmal erweitert.
 let extend = [0, 0, 0, 0];
 const EXTEND_IDS = ["#extend-left", "#extend-top", "#extend-right", "#extend-bottom"];
-const extending = () => settings.mode === "fill" && extend.some((v) => v > 0);
+const extending = () => settings.mode === "extend" && extend.some((v) => v > 0);
 
 // ------------------------------------------------------------------ Helfer
 
@@ -312,7 +320,7 @@ function renderMode() {
   $("#prompt").placeholder = mode.placeholder;
   $("#strength-field").hidden = settings.mode !== "refine";
   $("#margin-field").hidden = settings.mode !== "fill";
-  $("#extend-field").hidden = settings.mode !== "fill";
+  $("#extend-field").hidden = settings.mode !== "extend";
   renderModels();
   renderGo();
 }
@@ -321,7 +329,7 @@ function renderMode() {
 const outpaintKnown = () => models.some((m) => m.outpaint);
 
 function suitable(m) {
-  const need = extending() && outpaintKnown() ? "outpaint" : MODE_NEEDS[settings.mode];
+  const need = settings.mode === "extend" && outpaintKnown() ? "outpaint" : MODE_NEEDS[settings.mode];
   return !need || Boolean(m[need]);
 }
 
@@ -331,7 +339,7 @@ function renderModels() {
   const active = list.find((m) => m.active);
   // Ohne Wahl nimmt die Brücke das aktive Modell – oder, wenn es nicht passt, das beste passende.
   // Beim Erweitern wählt die Brücke ohne eigene Wahl ein nahtloses Bearbeitungsmodell.
-  const seamless = extending() ? list.filter((m) => m.outpaint === "reference") : [];
+  const seamless = settings.mode === "extend" ? list.filter((m) => m.outpaint === "reference") : [];
   const fallback = seamless.length ? seamless.find((m) => m.active) || seamless[0]
     : active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
   const waitingForMasks = MODE_NEEDS[settings.mode] === "mask" && state?.nvai?.connected && !state.nvai.masks;
@@ -421,6 +429,9 @@ function blocker() {
   }
   if (noModels()) return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI");
   if (settings.mode === "fill" && !nv.masks) return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet");
+  if (settings.mode === "extend" && !extending()) {
+    return t("Bitte angeben, wie viele Pixel dazukommen", "Please enter how many pixels to add");
+  }
   if (extending() && state?.photocraft?.document?.hasSelection) {
     return t("Zum Erweitern bitte erst die Auswahl aufheben", "To extend, please deselect first");
   }
@@ -437,7 +448,7 @@ function renderGo() {
   go.disabled = Boolean(why);
   go.title = why || "";
   $("#go-label").textContent = state?.task?.status === "running" ? t("Läuft …", "Running …")
-    : extending() ? t("Erweitern und füllen", "Extend and fill") : modeTexts(settings.mode).go;
+    : modeTexts(settings.mode).go;
   renderExtend();
   renderExpand();
 }
@@ -449,7 +460,7 @@ function renderExtend() {
     if (document.activeElement !== input) input.value = extend[i];
   });
   const doc = state?.photocraft?.document;
-  $("#extend-warn").hidden = !(extending() && currentModel?.outpaint === "mask");
+  $("#extend-warn").hidden = !(settings.mode === "extend" && currentModel?.outpaint === "mask");
   $("#extend-out").textContent = doc && extending()
     ? `${doc.width} × ${doc.height} → ${doc.width + extend[0] + extend[2]} × ${doc.height + extend[1] + extend[3]}`
     : "";

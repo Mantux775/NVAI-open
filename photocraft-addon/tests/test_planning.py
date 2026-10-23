@@ -161,3 +161,9 @@ def test_plan_outpaint_leaves_mask_and_denoise_to_the_server():
     assert p.technique == "outpaint"
     assert not p.send_mask and p.send_image
     assert "denoise" not in p.payload
+
+
+def test_extend_is_its_own_mode_that_computes_like_fill():
+    assert "extend" in planning.MODES and "extend" not in planning.BASE_MODES
+    assert planning.base_mode("extend") == "fill" and planning.base_mode("refine") == "refine"
+    assert planning.layer_name("extend", "harbour", 0, 1) == "NV-AI Extend: harbour"

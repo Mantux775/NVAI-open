@@ -34,18 +34,19 @@ On 8 GB, 1 megapixel is the practical limit; 16 GB or more is comfortable.
 
 ## Outpainting (since 0.4.3)
 
-`outpaint=[left, top, right, bottom]` with `image_asset_id` extends an image beyond its edges, as on
-Windows (feature `outpaint`, `features.outpaint = "reference"`). FLUX.2 Klein gets the image on a grey
-border as a reference image and continues the scene; afterwards the original is put back pixel for
-pixel with a 96 px soft transition (`Sources/Core/Outpaint.swift`). In the app: "Start image" →
-"Extend beyond the edges".
+`outpaint=[left, top, right, bottom]` with `image_asset_id` extends an image beyond its edges (feature
+`outpaint`, `features.outpaint = "inpaint"`). Unlike Windows, the Mac fills the border with a mask: the
+image goes onto a grey border, FLUX.2 Klein inpaints everything outside it with a 96 px soft
+transition, and the original is put back (`Sources/Core/OutpaintMask.swift`). In the app: "Start
+image" → "Extend beyond the edges".
 
-Measured on the M1 (harbour scene, +256 px to the right): 768 × 512 seamless in 86 s, 4.9 GB peak,
-old part unchanged (0.0/255). At 1248 × 832 FLUX.2 Klein pasted in an unrelated picture and left grey
-areas (two seeds out of two). That is why NV-AI computes outpainting at no more than 0.4 megapixels
-and scales the new border up; if more than 2 % of the border stays grey, it computes once more with
-the next seed. The full chain from the PhotoCraft add-on (canvas 512 → 768 px) took 334 s including
-one such retry and was seamless.
+Why a mask: the reference way that works on Windows with FLUX 3 failed with FLUX.2 Klein 4B. Measured
+on the M1: one side at 768 × 512 worked, but at 1248 × 832 it pasted in an unrelated picture, and with
+a border on all sides (or a very wide format) it left the grey border as it was. With the mask it
+filled all around in one pass (lion scene 1015 × 569 → 1488 × 704 in 116–120 s, 8.2 GB peak) without
+shifting the picture. The transition stays softer than with FLUX 3 on Windows and can remain
+visible as a blurred strip at the old border (seen in a sky and in a market scene). Up to 1.1 megapixels are computed directly; if more than 2 % of the border stays grey, it
+computes once more with the next seed.
 
 ## Cancelling and content labels
 

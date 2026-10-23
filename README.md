@@ -6,32 +6,30 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.4.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-Setup-0.5.4.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.3.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.4/NV-AI-0.4.3.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.5.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.5/NV-AI-Setup-0.5.5.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.5/NV-AI-0.4.4.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.4 for Windows and 0.4.3 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.4))
+October 2026: NV-AI 0.5.5 for Windows and 0.4.4 for Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.5))
 
 | | |
 |---|---|
-| Outpainting | Extend an image beyond its edges: pick left, top, right, bottom in pixels, NV-AI paints the new border. With FLUX 3 (Mac: FLUX.2 Klein) the transition is seamless and the original stays pixel for pixel; in the web interface, the Mac app, over MCP and in the PhotoCraft add-on on Windows and Mac ("Extend the canvas") |
-| Shorter "Expand prompt" | 60 to 80 words instead of up to 260, so there is little left to delete |
-| Realism LoRAs tested | Boreal and Lenovo UltraReal for Qwen-Image-2512 (both allow selling images), Wuli Turbo (an image in 18 instead of 100 s), Wan 2.2 Lightning (video in 90 instead of 585 s) |
-| Smaller fixes | LoRA list folds away, Civitai and Apache LoRAs show the right license, the Civitai file check no longer fails at random |
+| Outpainting, done properly | Extending all around no longer leaves ghost outlines or broken edges: FLUX 3 never returns the picture exactly in place (up to 43 px offset, with a border on all sides it zoomed in by 25 to 42 %), so NV-AI now extends one axis at a time, measures the offset and moves the result back before putting the original in |
+| PhotoCraft add-on: "Extend" tab | Extending is its own fourth mode now, with FLUX 3 preselected; "Fill" is only filling again |
+| Mac | Extending with FLUX.2 Klein through a mask; it fills all around in one pass |
 
-Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
+Since 0.5.4: outpainting, shorter "Expand prompt", tested realism LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon and several graphics cards (experimental, testers wanted: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), expand prompt on the Mac.
 
 | | |
 |---|---|
-| Outpainting | Ein Bild über den Rand hinaus erweitern: links, oben, rechts, unten in Pixeln wählen, NV-AI malt den neuen Rand. Mit FLUX 3 (Mac: FLUX.2 Klein) ist der Übergang nahtlos, und das Original bleibt pixelgenau; in der Weboberfläche, der Mac-App, über MCP und im PhotoCraft-Add-on unter Windows und Mac („Arbeitsfläche erweitern“) |
-| Kürzeres „Prompt ausbauen“ | 60 bis 80 Wörter statt bis zu 260, es bleibt kaum etwas zu streichen |
-| Realismus-LoRAs getestet | Boreal und Lenovo UltraReal für Qwen-Image-2512 (beide erlauben den Verkauf der Bilder), Wuli Turbo (ein Bild in 18 statt 100 s), Wan 2.2 Lightning (Video in 90 statt 585 s) |
-| Kleinere Fehler | LoRA-Liste klappt ein, Civitai- und Apache-LoRAs zeigen die richtige Lizenz, die Civitai-Dateiprüfung scheitert nicht mehr zufällig |
+| Outpainting, jetzt sauber | Rundum erweitern hinterlässt keine Geisterkonturen und verbauten Kanten mehr: FLUX 3 gibt das Bild nie genau an derselben Stelle wieder (bis 43 px Versatz, bei Rand auf allen Seiten zoomte es 25 bis 42 % hinein). NV-AI erweitert deshalb Achse für Achse, misst den Versatz und rückt das Ergebnis zurück, bevor das Original eingesetzt wird |
+| PhotoCraft-Add-on: Reiter „Erweitern“ | Erweitern ist jetzt ein eigener, vierter Modus mit FLUX 3 voreingestellt; „Füllen“ ist wieder nur Füllen |
+| Mac | Erweitern mit FLUX.2 Klein per Maske; füllt rundum in einem Durchgang |
 
-Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
+Seit 0.5.4: Outpainting, kürzeres „Prompt ausbauen“, getestete Realismus-LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon und mehrere Grafikkarten (experimentell, Tester gesucht: [#1](https://github.com/Mantux775/NVAI-open/issues/1), [#2](https://github.com/Mantux775/NVAI-open/issues/2)), Prompt ausbauen auf dem Mac.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -117,6 +115,9 @@ Type a few words, click "Expand prompt", and NV-AI writes a full image descripti
 | Windows | The prompt upsampler of FLUX 3 Image Klein (Qwen3.5-9B) | about 15 s on an RTX 5060 Ti |
 | Mac | The text encoder of FLUX.2 Klein (Qwen3-4B), nothing extra to download | 22 to 25 s on a Mac mini M1 |
 
+![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded prompt](docs/images/expand-prompt.jpg)
+<p align="center"><sub>Left "a medieval blacksmith" as typed, right the expanded prompt with the inventions removed (Qwen-Image-2512).</sub></p>
+
 ### 3D: from an image to a model
 
 Generate an image of an object, then turn it into a GLB model for Unity, Blender or any engine. TRELLIS.2 (MIT) also paints PBR textures (color, metal, roughness, 2048²) in about 75 seconds; TripoSG (MIT) builds the shape only.
@@ -135,7 +136,33 @@ Same prompt, seed and size (832 × 1216), measured on an RTX 5060 Ti with the mo
 
 ![Explorer, full body: FLUX 3, Qwen-Image-2512 and Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 
+![Crate with stencilled lettering: FLUX 3 and Qwen-Image-2512](docs/images/compare-crate.jpg)
+
+![Shop sign "FRESH BREAD DAILY": FLUX 3 and Qwen-Image-2512](docs/images/compare-sign.jpg)
+
+![Lighthouse as an oil painting: FLUX 3 and Qwen-Image-2512](docs/images/compare-lighthouse.jpg)
+
+Editing with FLUX 3: the reference image on the left, "replace the rope handles with iron handles, keep everything else unchanged" on the right, 44 s.
+
+![Editing with a reference image in FLUX 3](docs/images/flux3-edit.jpg)
+
 In short: FLUX 3 is fast and the only one that edits images while keeping the rest intact. Qwen-Image-2512 is better at lettering and at how things are built, and is Apache-2.0. More comparisons, prompt tips and test results: [docs/MODELS.md](docs/MODELS.md). All images in this README were generated with NV-AI.
+
+### Outpainting: extend a picture
+
+Pick how many pixels to add on the left, top, right and bottom, and NV-AI paints the new border to match. With FLUX 3 the original stays as it is: FLUX never returns the picture exactly in place, so NV-AI extends one axis at a time, measures the offset and moves the result back before putting the original in (since 0.5.5; 0.5.4 still showed ghost outlines). In the web interface under "Rework an existing image", over MCP, and in the PhotoCraft add-on as its own "Extend" tab.
+
+![Outpainting all around: original, NV-AI 0.5.4 and 0.5.5](docs/images/outpaint-before-after.jpg)
+
+![Detail at full resolution: ghost head in 0.5.4, clean in 0.5.5](docs/images/outpaint-detail.jpg)
+
+On the Mac, FLUX.2 Klein fills the border through a mask; the transition there stays softer and can remain visible.
+
+### LoRAs for more realism
+
+LoRAs are small add-on files that teach a model a style. Tested on Qwen-Image-2512 with the same seed: Boreal looks most like a real photo, Lenovo UltraReal stays closest to the prompt. Both allow selling the images.
+
+![Portrait without LoRA, with Boreal and with Lenovo UltraReal](docs/images/lora-realism.jpg)
 
 ### Mac app
 
@@ -267,6 +294,9 @@ Ein paar Worte eintippen, auf „Prompt ausbauen“ klicken, und NV-AI schreibt 
 | Windows | Den Prompt-Upsampler von FLUX 3 Image Klein (Qwen3.5-9B) | rund 15 s auf einer RTX 5060 Ti |
 | Mac | Den Text-Encoder von FLUX.2 Klein (Qwen3-4B), kein zusätzlicher Download | 22 bis 25 s auf einem Mac mini M1 |
 
+![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](docs/images/expand-prompt.jpg)
+<p align="center"><sub>Links „a medieval blacksmith“ wie eingetippt, rechts der ausgebaute Prompt, Erfundenes gestrichen (Qwen-Image-2512).</sub></p>
+
 ### 3D: vom Bild zum Modell
 
 Ein Bild eines Objekts erzeugen, dann daraus ein GLB-Modell für Unity, Blender oder jede Engine machen. TRELLIS.2 (MIT) malt dazu PBR-Texturen (Farbe, Metall, Rauheit, 2048²) in rund 75 Sekunden; TripoSG (MIT) baut nur die Form.
@@ -285,7 +315,33 @@ Gleicher Prompt, Seed und Format (832 × 1216), gemessen auf einer RTX 5060 Ti m
 
 ![Entdeckerin, ganze Figur: FLUX 3, Qwen-Image-2512 und Qwen-Image 2.1](docs/images/compare-explorer.jpg)
 
+![Kiste mit Schablonenschrift: FLUX 3 und Qwen-Image-2512](docs/images/compare-crate.jpg)
+
+![Ladenschild „FRESH BREAD DAILY“: FLUX 3 und Qwen-Image-2512](docs/images/compare-sign.jpg)
+
+![Leuchtturm als Ölgemälde: FLUX 3 und Qwen-Image-2512](docs/images/compare-lighthouse.jpg)
+
+Bearbeiten mit FLUX 3: links das Referenzbild, rechts „replace the rope handles with iron handles, keep everything else unchanged“, 44 s.
+
+![Bearbeiten mit Referenzbild in FLUX 3](docs/images/flux3-edit.jpg)
+
 Kurz gesagt: FLUX 3 ist schnell und als einziges Modell in der Lage, Bilder zu bearbeiten und den Rest unverändert zu lassen. Qwen-Image-2512 ist besser bei Schrift und Konstruktion und steht unter Apache-2.0. Weitere Vergleiche, Prompt-Tipps und Testergebnisse: [docs/de/MODELLE.md](docs/de/MODELLE.md). Alle Bilder in diesem README hat NV-AI erzeugt.
+
+### Outpainting: ein Bild erweitern
+
+Angeben, wie viele Pixel links, oben, rechts und unten dazukommen, und NV-AI malt den neuen Rand passend dazu. Mit FLUX 3 bleibt das Original, wie es ist: FLUX gibt das Bild nie genau an derselben Stelle wieder, deshalb erweitert NV-AI Achse für Achse, misst den Versatz und rückt das Ergebnis zurück, bevor das Original eingesetzt wird (seit 0.5.5; 0.5.4 zeigte noch Geisterkonturen). In der Weboberfläche unter „Vorhandenes Bild überarbeiten“, über MCP und im PhotoCraft-Add-on als eigener Reiter „Erweitern“.
+
+![Rundum erweitert: Original, NV-AI 0.5.4 und 0.5.5](docs/images/outpaint-before-after.jpg)
+
+![Ausschnitt in voller Auflösung: Geisterkopf in 0.5.4, sauber in 0.5.5](docs/images/outpaint-detail.jpg)
+
+Auf dem Mac füllt FLUX.2 Klein den Rand per Maske; der Übergang bleibt dort weicher und kann sichtbar bleiben.
+
+### LoRAs für mehr Realismus
+
+LoRAs sind kleine Zusatzdateien, die einem Modell einen Stil beibringen. Getestet an Qwen-Image-2512 mit gleichem Seed: Boreal wirkt am ehesten wie ein echtes Foto, Lenovo UltraReal bleibt am nächsten am Prompt. Beide erlauben den Verkauf der Bilder.
+
+![Porträt ohne LoRA, mit Boreal und mit Lenovo UltraReal](docs/images/lora-realism.jpg)
 
 ### Mac-App
 

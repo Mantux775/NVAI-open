@@ -15,13 +15,20 @@ from typing import Any
 from . import imaging
 from .i18n import t
 
-MODES = ("fill", "generate", "refine")
+# Rechenwege; „Erweitern“ (extend) rechnet wie Füllen, siehe base_mode. Die Golden-Daten decken diese ab.
+BASE_MODES = ("fill", "generate", "refine")
+MODES = BASE_MODES + ("extend",)
 
 
 def mode_label(mode: str) -> str:
     """Name des Modus in der gewählten Sprache (Oberfläche, Ebenenname)."""
     return {"fill": t("Füllen", "Fill"), "generate": t("Generieren", "Generate"),
-            "refine": t("Überarbeiten", "Refine")}.get(mode, mode)
+            "refine": t("Überarbeiten", "Refine"), "extend": t("Erweitern", "Extend")}.get(mode, mode)
+
+
+def base_mode(mode: str) -> str:
+    """„Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor."""
+    return "fill" if mode == "extend" else mode
 
 
 # Leerer Prompt bei „Füllen“: die Umgebung fortsetzen, wie Photoshops Generative Fill ohne Text.

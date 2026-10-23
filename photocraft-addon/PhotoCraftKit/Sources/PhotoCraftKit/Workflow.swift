@@ -94,7 +94,9 @@ public final class Workflow {
         guard var doc = ui["document"], !doc.isNull else {
             throw WorkflowError.message(t("In PhotoCraft ist kein Dokument geöffnet.", "No document is open in PhotoCraft."))
         }
-        let steps = task.mode == "fill" ? Planning.extendSteps(task.params["extend"]) : []
+        // „Erweitern“; Füllen mit `extend` nehmen ältere Apps (0.4.2) weiter an.
+        let steps = task.mode == "fill" || task.mode == "extend" ? Planning.extendSteps(task.params["extend"]) : []
+        let mode = Planning.baseMode(task.mode)
         if !steps.isEmpty {
             // Outpainting: Arbeitsfläche transparent erweitern, danach füllt der übliche Weg ohne
             // Auswahl die leeren Ränder. Jeder Schritt lässt sich in PhotoCraft einzeln zurücknehmen.
@@ -113,9 +115,9 @@ public final class Workflow {
         let canvas = Rect(0, 0, width, height)
         let sel = (doc["hasSelection"]?.truthy ?? false) ? doc["selectionBounds"]?.rectValue : nil
         task.selection = sel
-        var region = Planning.regionFor(mode: task.mode, selection: sel, width: width, height: height, margin: task.margin)
+        var region = Planning.regionFor(mode: mode, selection: sel, width: width, height: height, margin: task.margin)
 
-        let needContext = task.mode == "fill" || task.mode == "refine"
+        let needContext = mode == "fill" || mode == "refine"
         let needMask = sel != nil
         if needContext || needMask {
             try await export(index: task.docIndex, rel: rel, region: region, canvas: canvas, context: needContext, mask: needMask)
@@ -125,7 +127,7 @@ public final class Workflow {
         if needContext { context = try Imaging.readRGBA(url("\(rel)/context.png")) }
         if needMask { mask = try Imaging.readGray(url("\(rel)/mask.png")) }
 
-        if task.mode == "fill" && mask == nil {
+        if mode == "fill" && mask == nil {
             // Ohne Auswahl füllt „Füllen“ die durchsichtigen Stellen (Arbeitsfläche erweitert).
             guard let ctx = context, let alpha = Imaging.maskFromAlpha(ctx), let box = Imaging.maskBBox(alpha) else {
                 throw WorkflowError.message(t("Für „Füllen“ bitte zuerst eine Auswahl treffen – oder die Arbeitsfläche "
@@ -202,7 +204,13 @@ public final class Workflow {
     public func run(_ task: GenerationTask, nvai: NVAIClient, progress: @escaping (Double, String) -> Void = { _, _ in }) async throws {
         try await nvai.checkCompatible()
         let masks = try await nvai.supportsMasks()
-        if task.mode == "fill" && !masks {
+        let mode = Planning.baseMode(task.mode)
+        if task.mode == "extend" && Planning.extendSteps(task.params["extend"]).isEmpty {
+            throw WorkflowError.message(t("Zum Erweitern bitte angeben, wie viele Pixel links, oben, rechts oder unten dazukommen.",
+                                          "To extend, please enter how many pixels to add on the left, top, right or bottom."))
+        }
+        let outpaintServer = try await nvai.supportsOutpaint()
+        if mode == "fill" && !masks && !(task.mode == "extend" && outpaintServer) {
             throw WorkflowError.message(t("Die laufende NV-AI-Version kennt noch keine Masken.",
                                           "The running NV-AI version does not know masks yet."))
         }
@@ -212,12 +220,11 @@ public final class Workflow {
         let active = try await nvai.health()["active_models"]?["image"]?.stringValue
         let models = try await nvai.imageModels()
         // Erweitern über NV-AIs outpaint; ältere Server füllen per Maske wie bisher.
-        let outpaint = task.alphaMask && !Planning.extendSteps(task.params["extend"]).isEmpty
-            ? try await nvai.supportsOutpaint() : false
-        let (model, warning) = try Planning.chooseModel(mode: task.mode, wanted: task.params["model_id"]?.stringValue,
+        let outpaint = task.alphaMask && !Planning.extendSteps(task.params["extend"]).isEmpty && outpaintServer
+        let (model, warning) = try Planning.chooseModel(mode: mode, wanted: task.params["model_id"]?.stringValue,
                                                         active: active, models: models, masksSupported: masks,
                                                         extend: outpaint)
-        let plan = try Planning.plan(mode: task.mode, prompt: task.prompt, params: task.params, model: model,
+        let plan = try Planning.plan(mode: mode, prompt: task.prompt, params: task.params, model: model,
                                      regionSize: (region.w, region.h), hasMask: task.hasMask, alphaMask: task.alphaMask,
                                      masksSupported: masks, outpaint: outpaint)
         task.modelName = plan.modelName

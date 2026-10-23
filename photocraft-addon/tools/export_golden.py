@@ -168,7 +168,7 @@ def planning_cases() -> dict[str, Any]:
     choose = []
     lists = {"all": ["qwen", "flux3", "lightning", "not_installed"], "flux_only": ["flux3"],
              "light_first": ["lightning", "qwen", "flux3"], "old": ["old_server"]}
-    for mode in planning.MODES:
+    for mode in planning.BASE_MODES:
         for list_name, names in lists.items():
             for wanted in (None, "qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "gone-model"):
                 for active in (None, "qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "chroma1-hd-fp8"):
@@ -184,11 +184,11 @@ def planning_cases() -> dict[str, Any]:
 
     technique = [{"in": {"mode": mode, "model": name, "has_mask": has, "masks_supported": masks},
                   "out": planning.technique_for(mode, MODELS[name], has, masks)}
-                 for mode in planning.MODES for name in ("qwen", "flux3", "flux2", "coreml", "old_server")
+                 for mode in planning.BASE_MODES for name in ("qwen", "flux3", "flux2", "coreml", "old_server")
                  for has in (False, True) for masks in (False, True)]
 
     regions = []
-    for mode in planning.MODES:
+    for mode in planning.BASE_MODES:
         for sel, wh in [(None, (1200, 800)), ([700, 120, 400, 300], (1200, 800)), ([680, 430, 340, 280], (1216, 832)),
                         ([0, 0, 50, 50], (640, 480)), ([389, 239, 322, 242], (1200, 800))]:
             r = planning.region_for(mode, Rect.from_list(sel) if sel else None, wh[0], wh[1], 0.35)
@@ -215,7 +215,7 @@ def planning_cases() -> dict[str, Any]:
     prompts = ["", "A brown horse grazing on the meadow."]
     param_sets = [{}, {"variants": 3, "strength": 0.7}, {"native": True, "hires": True},
                   {"steps": 40, "cfg": 3.5, "seed": 7, "negative_prompt": "blurry"}, {"variants": 9}]
-    for mode in planning.MODES:
+    for mode in planning.BASE_MODES:
         for name in ("qwen", "lightning", "flux3", "flux2", "coreml", "old_server"):
             for prompt in prompts:
                 for params in param_sets:

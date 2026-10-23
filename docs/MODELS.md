@@ -216,8 +216,10 @@ running.
 - **Outpainting** (since 0.5.4, `image_asset_id` + `outpaint=[left, top, right, bottom]` in pixels):
   the image is extended beyond its edges; the size is image plus border. **Use FLUX 3:** it gets the
   image on a grey border as a reference and continues the scene, then NV-AI puts the original back.
-  Measured on a harbour scene (+384 px on the right): seamless, the old part deviated by 0.0 out of
-  255, two variants in 66 s. Qwen-Image-2512 extends via a mask, but in testing it painted the border
+  FLUX 3 never returns the picture exactly in place (per axis 0.97–1.055 scale and up to 43 px offset,
+  with a border on all sides it zoomed in by 25–42 %), so NV-AI extends one axis at a time, measures
+  the offset after each pass, moves the result back and only then puts the original in. Measured on a
+  lion scene extended on all sides: two variants in 147 s, clean seams at full resolution. Qwen-Image-2512 extends via a mask, but in testing it painted the border
   as a separate scene with a hard edge (also with a 128/256 px transition and 50 steps).
 - **Second pass** (`hires=True`) for hands, faces and fine technical detail.
 

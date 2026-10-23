@@ -156,8 +156,9 @@ enum ModelCatalog {
             "negative_prompt": false, "default_negative": "",
             "upsampler": false, "references": 3, "bbox": false,
             "img2img": true, "mask": true, "hires": false, "text_rendering": false,
-            // Erweitern über Referenzbild wie FLUX 3 unter Windows (Outpaint.swift).
-            "outpaint": "reference",
+            // Erweitern per Maske (OutpaintMask.swift): "inpaint" = Maskenweg eines Modells, das aufs Füllen
+            // trainiert ist – nahtlos genug, anders als Qwens "mask" unter Windows (keine Warnung im Add-on).
+            "outpaint": "inpaint",
             "sizes": flux2Sizes, "prompt_hint": promptHint, "placeholder": placeholder,
         ]
     }

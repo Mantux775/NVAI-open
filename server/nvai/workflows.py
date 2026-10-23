@@ -730,12 +730,6 @@ def build_hidream_o1(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, i
     return graph, seed
 
 
-# Beim Outpainting mit einem Bearbeitungsmodell: so weit laeuft das zurueckgelegte Original
-# weich in das neu gerechnete Bild aus (Pixel). Gemessen: 96 verdeckt die Kante, ohne dass
-# sich die leicht verschobene Neufassung als Doppelkontur zeigt.
-OUTPAINT_BLEND = 96
-
-
 def outpaint_pad_graph(image: str, outpaint: list[int]) -> Graph:
     """Vorlauf fuer Bearbeitungsmodelle: das Bild mit grauem Rand als eigene Datei."""
     left, top, right, bottom = (int(v) for v in outpaint)
@@ -748,47 +742,7 @@ def outpaint_pad_graph(image: str, outpaint: list[int]) -> Graph:
     }
 
 
-def _composite_original(graph: Graph, p: dict[str, Any]) -> None:
-    """Nach dem Bearbeitungsmodell das Original pixelgenau zuruecklegen.
-
-    FLUX 3 und Co. rechnen das ganze Bild neu (gemessen im Mittel 20/255 Abweichung im
-    alten Teil). Nur der neue Rand und ein weicher Streifen davor bleiben vom Modell.
-    """
-    width, height = int(p["width"]), int(p["height"])
-    left, top, right, bottom = (int(v) for v in p["outpaint"])
-    for nid, node in list(graph.items()):
-        if node["class_type"] != "SaveImage":
-            continue
-        pre = f"op{nid}_"
-        graph[pre + "load"] = {"class_type": "LoadImage", "inputs": {"image": p["outpaint_source"]}}
-        graph[pre + "pad"] = {"class_type": "ImagePadForOutpaint", "inputs": {
-            "image": [pre + "load", 0], "left": left, "top": top, "right": right, "bottom": bottom,
-            "feathering": OUTPAINT_BLEND}}
-        graph[pre + "img"] = {"class_type": "ImageScale", "inputs": {
-            "image": [pre + "pad", 0], "upscale_method": "lanczos",
-            "width": width, "height": height, "crop": "disabled"}}
-        # Maske des Randes umdrehen: 1 = Original behalten, weich auslaufend zum Rand hin.
-        graph[pre + "inv"] = {"class_type": "InvertMask", "inputs": {"mask": [pre + "pad", 1]}}
-        graph[pre + "mimg"] = {"class_type": "MaskToImage", "inputs": {"mask": [pre + "inv", 0]}}
-        graph[pre + "mscale"] = {"class_type": "ImageScale", "inputs": {
-            "image": [pre + "mimg", 0], "upscale_method": "bilinear",
-            "width": width, "height": height, "crop": "disabled"}}
-        graph[pre + "mask"] = {"class_type": "ImageToMask",
-                               "inputs": {"image": [pre + "mscale", 0], "channel": "red"}}
-        graph[pre + "comp"] = {"class_type": "ImageCompositeMasked", "inputs": {
-            "destination": node["inputs"]["images"], "source": [pre + "img", 0],
-            "x": 0, "y": 0, "resize_source": False, "mask": [pre + "mask", 0]}}
-        node["inputs"]["images"] = [pre + "comp", 0]
-
-
 def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
-    graph, seed = _build_image(entry, p)
-    if p.get("outpaint") and p.get("outpaint_source"):
-        _composite_original(graph, p)
-    return graph, seed
-
-
-def _build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry["workflow"]
     if wf in BOOGU_WORKFLOWS:
         return build_boogu(entry, p)

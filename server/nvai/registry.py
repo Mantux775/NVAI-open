@@ -238,9 +238,44 @@ def localized(entry: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def to_info(entry: dict[str, Any], favorites: set[str] | None = None) -> ModelInfo:
+def installed_files() -> set[Path]:
+    """Alle Dateien, die ein vollstaendig installiertes Modell braucht (aufgeloeste Pfade)."""
+    keep: set[Path] = set()
+    for e in all_entries():
+        if is_installed(e):
+            for f in e["files"]:
+                with contextlib.suppress(OSError):
+                    keep.add(file_path(f).resolve())
+    return keep
+
+
+def own_leftovers(entry: dict[str, Any], shared: set[Path]) -> list[Path]:
+    """Was von einem nicht vollstaendigen Modell wirklich ihm allein gehoert: vorhandene Dateien,
+    die kein installiertes Modell braucht, und Download-Fragmente (*.incomplete).
+
+    Geteilte Dateien (Text-Encoder, VAE eines installierten Modells) zaehlen nicht. Vorher galt
+    jedes Modell mit irgendeiner vorhandenen Datei als "unvollstaendig"; das Aufraeumen durfte die
+    geteilten Dateien zu Recht nicht loeschen, meldete aber trotzdem "aufgeraeumt" -- und beim
+    naechsten Mal dieselben Modelle wieder (Nutzermeldung 23.10.2026).
+    """
+    out: list[Path] = []
+    for f in entry["files"]:
+        p = file_path(f)
+        with contextlib.suppress(OSError):
+            if _file_installed(f) and p.resolve() not in shared:
+                out.append(p)
+        if not f.get("snapshot") and p.parent.exists():
+            out.extend(p.parent.glob(f"{p.stem}*.incomplete"))
+    return out
+
+
+def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
+            shared: set[Path] | None = None) -> ModelInfo:
     files = entry_files(entry)
     installed = all(f.installed for f in files)
+    partial = False
+    if not installed:
+        partial = bool(own_leftovers(entry, installed_files() if shared is None else shared))
     favs = get_favorites() if favorites is None else favorites
     text = localized(entry)
     return ModelInfo(
@@ -262,7 +297,7 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None) -> ModelIn
         pros=text.get("pros", []),
         cons=text.get("cons", []),
         installed=installed,
-        partially_installed=any(f.installed for f in files) and not installed,
+        partially_installed=partial,
         disk_gb=round(sum(f.size_gb or 0 for f in files), 2),
         runnable=installed and entry.get("workflow") is not None,
         fits_vram=gpu.fits(entry.get("vram_gb", 0)),
@@ -335,7 +370,8 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
 def list_models(kind: str | None = None) -> list[ModelInfo]:
     # Favoriten einmal laden statt je Eintrag von der Platte lesen.
     favs = get_favorites()
-    infos = [to_info(e, favs) for e in all_entries()]
+    shared = installed_files()
+    infos = [to_info(e, favs, shared) for e in all_entries()]
     if kind:
         infos = [m for m in infos if m.kind == kind]
     # Favoriten nach oben, sonst Reihenfolge des Katalogs beibehalten.

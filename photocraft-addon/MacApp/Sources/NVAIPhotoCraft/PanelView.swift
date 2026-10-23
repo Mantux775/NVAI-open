@@ -39,7 +39,7 @@ struct PanelView: View {
                 ExpandRow()
                 DownloadsRow()
                 ModelRow()
-                if model.form.mode == .fill { ExtendFields() }
+                if model.form.mode == .extend { ExtendFields() }
                 if model.showsStrength { StrengthSlider(value: $model.form.strength) }
                 DisclosureGroup(t("Erweitert", "Advanced"), isExpanded: $model.form.advanced) {
                     AdvancedFields().padding(.top, 6)
@@ -424,7 +424,7 @@ private struct ExtendFields: View {
         @Bindable var model = model
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(t("Arbeitsfläche erweitern (Outpainting)", "Extend the canvas (outpainting)"))
+                Text(t("Neuer Rand in Pixeln", "New border in pixels"))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if let target = model.extendTarget { Text(target).font(.caption.monospacedDigit()).foregroundStyle(.tint) }
@@ -444,17 +444,11 @@ private struct ExtendFields: View {
                 Button(t("↕ höher", "↕ taller")) { model.extend = [0, 256, 0, 256] }
                 Button(t("↓ nach unten", "↓ downwards")) { model.extend = [0, 0, 0, 384] }
                 Button(t("rundum", "all around")) { model.extend = [128, 128, 128, 128] }
-                Button(t("aus", "off")) { model.extend = [0, 0, 0, 0] }
             }
             .controlSize(.small)
             if let warning = model.extendWarning {
                 Text(warning).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
             }
-            Text(t("Ohne Auswahl: PhotoCraft vergrößert die Arbeitsfläche transparent, NV-AI malt den neuen Rand passend dazu. "
-                   + "Der Prompt beschreibt das ganze Bild.",
-                   "Without a selection: PhotoCraft enlarges the canvas transparently and NV-AI paints the new border to match. "
-                   + "The prompt describes the whole picture."))
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

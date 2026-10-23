@@ -26,6 +26,12 @@ final class ExtendTests: XCTestCase {
         XCTAssertEqual(s.map(\.0), [400, 0]); XCTAssertEqual(s.map(\.1), [0, 64]); XCTAssertEqual(s.map(\.2), ["center", "bottom"])
     }
 
+    func testExtendIsItsOwnModeThatComputesLikeFill() {
+        XCTAssertEqual(Planning.baseMode("extend"), "fill")
+        XCTAssertEqual(Planning.baseMode("refine"), "refine")
+        XCTAssertEqual(Planning.layerName(mode: "extend", prompt: "harbour", k: 0, n: 1), "NV-AI Extend: harbour")
+    }
+
     func testClamps() {
         let s = steps([-5, 0, 99999, 0])
         XCTAssertEqual(s.map(\.0), [Planning.extendMax]); XCTAssertEqual(s.map(\.2), ["left"])

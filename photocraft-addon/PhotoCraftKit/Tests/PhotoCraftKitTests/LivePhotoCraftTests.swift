@@ -77,7 +77,7 @@ final class LivePhotoCraftTests: XCTestCase {
         let width = ui["document"]?["width"]?.intValue ?? 0
 
         let wf = Workflow(pc: pc, exchange: URL(fileURLWithPath: exchangePath))
-        let t = GenerationTask(id: "live-extend-\(UUID().uuidString.prefix(8))", mode: "fill",
+        let t = GenerationTask(id: "live-extend-\(UUID().uuidString.prefix(8))", mode: "extend",
                                prompt: "Full-color outdoor photograph of a busy harbour market on an overcast morning, "
                                    + "more market stalls and shoppers on the wet cobbled quay.",
                                params: ["variants": 1, "extend": [0, 0, 256, 0], "auto_place": true, "seed": 11])

@@ -378,10 +378,9 @@ actor JobQueue {
             }
             original = source
             image = nil
-            refs = [Outpaint.padded(source, edges)]
+            refs = []
             req.width = size.width
             req.height = size.height
-            req.prompt = Outpaint.prompt(req.prompt)
         }
 
         let mode: EngineMode
@@ -396,7 +395,7 @@ actor JobQueue {
         } else if !refs.isEmpty {
             mode = .references(refs)
         } else {
-            mode = .text
+            mode = .text   // auch beim Erweitern; dort setzt jeder Durchgang seine Referenz selbst
         }
 
         update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
@@ -415,28 +414,42 @@ actor JobQueue {
             let sampler = PeakMemorySampler()
             sampler.start()
             let started = Date()
-            // Erweitern: höchstens Outpaint.maxPixels rechnen, sonst führt FLUX.2 Klein die Szene nicht weiter.
-            let gen: (width: Int, height: Int) = req.outpaint != nil
-                ? Outpaint.generationSize(req.width, req.height) : (req.width, req.height)
-            let result: CGImage
+            var result: CGImage
             do {
-                func render(_ s: UInt64) async throws -> CGImage {
-                    let job = EngineJob(mode: mode, prompt: req.prompt, width: gen.width, height: gen.height,
+                func render(_ m: EngineMode, _ w: Int, _ h: Int, _ s: UInt64) async throws -> CGImage {
+                    let job = EngineJob(mode: m, prompt: req.prompt, width: w, height: h,
                                         steps: req.steps, guidance: req.guidance, seed: s)
                     return try await Flux2Engine.shared.generate(job) { step, total in
                         Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
                     }
                 }
-                var image = try await render(seed)
-                // Blieb Grau im neuen Rand stehen (gemessen bei einem von zwei Seeds), einmal nachrechnen.
-                if let original, let edges = req.outpaint,
-                   Outpaint.greyShare(image, original: original, edges) > Outpaint.greyLimit,
-                   jobs[id]?.cancelRequested != true {
-                    AppLog.info("Job \(id): grey left in the border, retrying with the next seed")
-                    seed = seed &+ 1000
-                    image = try await render(seed)
+                if let original, let edges = req.outpaint {
+                    // Erweitern per Maske in einem Durchgang (OutpaintMask.swift); der Referenzweg ließ
+                    // mit FLUX.2 Klein den Rand grau.
+                    let padded = Outpaint.padded(original, edges)
+                    guard let fill = Outpaint.mask(for: original, edges) else {
+                        throw APIError(500, t("Maske fürs Erweitern ließ sich nicht anlegen.", "Could not build the extension mask."))
+                    }
+                    let gen = Outpaint.generationSize(req.width, req.height)
+                    func attempt(_ s: UInt64) async throws -> CGImage {
+                        let m = EngineMode.inpaint(ImageFiles.resized(padded, width: gen.width, height: gen.height),
+                                                   mask: ImageFiles.resized(fill, width: gen.width, height: gen.height),
+                                                   references: [])
+                        return ImageFiles.resized(try await render(m, gen.width, gen.height, s),
+                                                  width: padded.width, height: padded.height)
+                    }
+                    var raw = try await attempt(seed)
+                    // Blieb Grau im neuen Rand stehen, einmal mit anderem Seed nachrechnen.
+                    if Outpaint.greyShare(raw, original: original, edges) > Outpaint.greyLimit,
+                       jobs[id]?.cancelRequested != true {
+                        AppLog.info("Job \(id): grey left in the border, retrying with the next seed")
+                        seed = seed &+ 1000
+                        raw = try await attempt(seed)
+                    }
+                    result = Outpaint.compositeOriginal(result: raw, original: original, edges)
+                } else {
+                    result = try await render(mode, req.width, req.height, seed)
                 }
-                result = image
             } catch {
                 _ = sampler.stop()
                 throw error
@@ -444,11 +457,7 @@ actor JobQueue {
             let seconds = Date().timeIntervalSince(started)
             let peak = sampler.stop()
 
-            var final = ImageFiles.resized(result, width: req.width, height: req.height)
-            if let original, let edges = req.outpaint {
-                final = Outpaint.compositeOriginal(result: final, original: original, edges)
-            }
-            let png = try ImageFiles.pngData(final)
+            let png = try ImageFiles.pngData(ImageFiles.resized(result, width: req.width, height: req.height))
             var meta: [String: JSONValue] = [
                 "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height),
                 "steps": .int(req.steps), "cfg": .double(Double(req.guidance)),
@@ -460,7 +469,9 @@ actor JobQueue {
             if index == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
             if let a = req.imageAssetID { meta["image_asset_id"] = .string(a); meta["denoise"] = .double(req.denoise) }
             if let m = req.maskAssetID { meta["mask_asset_id"] = .string(m) }
-            if let e = req.outpaint { meta["outpaint"] = .array([e.left, e.top, e.right, e.bottom].map { .int($0) }) }
+            if let e = req.outpaint {
+                meta["outpaint"] = .array([e.left, e.top, e.right, e.bottom].map { .int($0) })
+            }
             if !req.referenceAssetIDs.isEmpty { meta["reference_asset_ids"] = .array(req.referenceAssetIDs.map { .string($0) }) }
 
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
