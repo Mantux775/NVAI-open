@@ -206,7 +206,7 @@ def recommended() -> dict[str, int]:
     nicht (134-203 s je Prompt), w4a8 allein 7,5-8,6 s, FLUX 3 mit neuem Prompt dann aber 35-41
     statt 31-34 s. Volllast auf beiden Karten zugleich liess die 4060 einmal vom Bus fallen
     (nvlddmkm 153 "BusReset TDR"; Ollama lief dort mit beiden Karten unter Volllast stabil).
-    Eine zweite Karte bleibt deshalb eine bewusste Wahl, siehe README.
+    Eine zweite Karte bleibt deshalb eine bewusste Wahl, Messwerte in Issue #1 auf GitHub.
     """
     best = strongest()
     return {role: best for role in ROLES}

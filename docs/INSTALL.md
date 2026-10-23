@@ -48,8 +48,8 @@ anything.
   should do. If the language models get their own card, NV-AI starts a second
   ComfyUI for them (port 8189, logs in `comfyui-text.log`). The choice is stored in
   `gpus.json` in the data folder. Without a choice, or after "Distribute automatically",
-  everything runs on the strongest card (since 0.5.6). Measurements with two cards are in the
-  README: a second card did not make room for larger models, and splitting the work brought no
+  everything runs on the strongest card (since 0.5.6). Measurements with two cards are in
+  [issue #1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729): a second card did not make room for larger models, and splitting the work brought no
   gain in that PC.
 - For testing without the hardware: `NVAI_SIMULATE_GPUS=2` reports the one card twice, and
   `NVAI_TEXT_BACKEND=separate` forces the second ComfyUI on a single card.

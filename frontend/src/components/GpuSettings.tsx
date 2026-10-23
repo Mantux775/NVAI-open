@@ -4,6 +4,8 @@ import { t } from '../i18n'
 import { GPU_ROLES } from './GpuChip'
 
 const ISSUES = 'https://github.com/Mantux775/NVAI-open/issues'
+// Messwerte mit zwei Karten (RTX 5060 Ti + RTX 4060), seit 0.5.6 nicht mehr im README
+const MEASURED = 'https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729'
 
 /**
  * Mehrere Grafikkarten und AMD (ROCm). Erscheint nur, wenn es etwas einzustellen oder zu sagen
@@ -75,14 +77,14 @@ export function GpuSettings() {
               'Ohne eigene Wahl rechnet alles auf der stärksten Karte. Zwei Karten legen ihren Speicher '
                 + 'nicht für ein Modell zusammen, größere Modelle passen dadurch nicht. Gemessen mit '
                 + 'RTX 5060 Ti und RTX 4060: Bilder auf der schwächeren Karte dauerten 3- bis 11-mal so lange, '
-                + 'die Sprachmodelle dort brachten kaum etwas. Messwerte im README. ',
+                + 'die Sprachmodelle dort brachten kaum etwas. ',
               'Without your own choice everything runs on the strongest card. Two cards do not pool their '
                 + 'memory for one model, so they do not make room for larger models. Measured with an '
                 + 'RTX 5060 Ti and an RTX 4060: images on the weaker card took 3 to 11 times as long, and '
-                + 'the language models there brought little. Measurements in the README. ',
+                + 'the language models there brought little. ',
             )}
-            <a href={ISSUES} target="_blank" rel="noreferrer">
-              {t('Rückmeldungen gern auf GitHub.', 'Feedback welcome on GitHub.')}
+            <a href={MEASURED} target="_blank" rel="noreferrer">
+              {t('Messwerte und Rückmeldungen in Issue #1 auf GitHub.', 'Measurements and feedback in issue #1 on GitHub.')}
             </a>
           </p>
           <div className="gpu-matrix" style={{ gridTemplateColumns: `minmax(150px, 1.2fr) repeat(${gpus.length}, minmax(120px, 1fr))` }}>

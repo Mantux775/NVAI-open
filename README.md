@@ -17,7 +17,7 @@ October 2026: NV-AI 0.5.6 for Windows, the Mac app stays at 0.4.4 ([release note
 
 | | |
 |---|---|
-| Two graphics cards, measured | NV-AI now computes on the strongest card by itself. Before, everything ran on card 0, in my PC the slower RTX 4060: FLUX 3 took 29 instead of 9 s there, Qwen-Image-2512 18 minutes instead of 97 s. What a second card brings and what it doesn't: [Several graphics cards](#several-graphics-cards) |
+| Two graphics cards, measured | NV-AI now computes on the strongest card by itself. Before, everything ran on card 0, in my PC the slower RTX 4060: FLUX 3 took 29 instead of 9 s there, Qwen-Image-2512 18 minutes instead of 97 s. What a second card brings and what it doesn't: [measurements in #1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) |
 | Fill with FLUX 3 | FLUX 3 now fills a masked area too: NV-AI cuts it out with its surroundings, greys it, lets FLUX 3 paint it and puts back only the area, aligned. In the PhotoCraft add-on "Fill" chooses FLUX 3 by itself: [Fill with FLUX 3](#fill-with-flux-3) |
 | Clearer card choice | Which card computes images, language models and 3D is now a table of buttons, the strongest card is marked |
 
@@ -25,7 +25,7 @@ Since 0.5.5: outpainting without ghost outlines, "Extend" tab in the PhotoCraft 
 
 | | |
 |---|---|
-| Zwei Grafikkarten, gemessen | NV-AI rechnet jetzt von selbst auf der stärksten Karte. Bisher lief alles auf Karte 0, bei mir der langsameren RTX 4060: FLUX 3 brauchte dort 29 statt 9 s, Qwen-Image-2512 18 Minuten statt 97 s. Was eine zweite Karte bringt und was nicht: [Mehrere Grafikkarten](#mehrere-grafikkarten) |
+| Zwei Grafikkarten, gemessen | NV-AI rechnet jetzt von selbst auf der stärksten Karte. Bisher lief alles auf Karte 0, bei mir der langsameren RTX 4060: FLUX 3 brauchte dort 29 statt 9 s, Qwen-Image-2512 18 Minuten statt 97 s. Was eine zweite Karte bringt und was nicht: [Messwerte in #1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) |
 | Füllen mit FLUX 3 | FLUX 3 füllt jetzt auch einen maskierten Bereich: NV-AI schneidet ihn mit Umgebung aus, färbt ihn grau, lässt FLUX 3 malen und setzt nur den Bereich ausgerichtet zurück. Im PhotoCraft-Add-on nimmt „Füllen“ FLUX 3 von selbst: [Füllen mit FLUX 3](#füllen-mit-flux-3) |
 | Klarere Kartenwahl | Welche Karte Bilder, Sprachmodelle und 3D rechnet, ist jetzt eine Tabelle aus Schaltflächen, die stärkste Karte ist markiert |
 
@@ -85,34 +85,12 @@ Setup with the Windows setup, data folder and port: [docs/CLAUDE_CODE.md](docs/C
 |---|---|
 | NVIDIA RTX 50 | Uses the NVFP4 versions of FLUX 3 and Qwen-Image, which the card computes natively in hardware |
 | NVIDIA RTX 20, 30, 40 | Recommends the INT8 versions instead; FLUX 3 INT8 runs on 8 GB cards according to Black Forest Labs |
-| Two or more NVIDIA cards | Since 0.5.6 NV-AI computes on the strongest card by itself. In the header or under "Models" → "Graphics cards" image models, language models and 3D can each get their own card; what that brings is measured [below](#several-graphics-cards) |
+| Two or more NVIDIA cards | Since 0.5.6 NV-AI computes on the strongest card by itself. In the header or under "Models" → "Graphics cards" image models, language models and 3D can each get their own card; what that brings is measured in [#1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) |
 | AMD Radeon | Experimental since 0.5: the setup detects a Radeon and installs PyTorch with ROCm 7.2.1 from AMD. Needs driver 26.2.2 or newer and a card on AMD's [compatibility list](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html). Image models in INT8 or FP8; 3D needs NVIDIA for now |
 
 The model list marks which models fit your card and says when a format does not run natively on it.
 
 Testers wanted for AMD: the installation is tested, but no image was generated on a Radeon yet. If you have one, please use "Report a problem" or report in [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2).
-
-### Several graphics cards
-
-Since 0.5.6 NV-AI computes on the strongest card by itself (most memory first, then the newest generation). Before, everything ran on card 0. Measured in my PC with an RTX 5060 Ti 16 GB and an RTX 4060 8 GB on a riser cable (PCIe 3.0 x4), driver 610.62, ComfyUI 0.42.1:
-
-![Time per image on the RTX 5060 Ti and the RTX 4060](docs/images/multi-gpu-strongest-card.png)
-
-| Question | Measured |
-|---|---|
-| Does a second card make room for larger models? | No. Two cards do not pool their memory for one model. Larger models already run on one card because ComfyUI streams what does not fit from system RAM: Qwen-Image-2512 with 20 billion parameters fills 15.5 of the 16 GB |
-| Text encoder on the second card? | No gain (warm runs): FLUX 3 9 → 13 s, Qwen-Image-2512 97 → 99 s, LTX-2.3 video 79 → 81 s |
-| Language model on the second card? | The prompt upsampler in its default int8 version (9.75 GB) does not fit into 8 GB: "Expand prompt" took 134 to 203 s instead of 11 s. NV-AI therefore takes the w4a8 version (6.72 GB) when it is installed: 7.5 to 8.6 s, but FLUX 3 with a new prompt then took 35 to 41 instead of 31 to 34 s |
-| Both cards at full load at once | "Expand prompt" on the RTX 4060 while Qwen rendered on the 5060 Ti: after a few seconds the 4060 dropped off the bus (Windows: "BusReset TDR"), only a restart brought it back. Ollama ran on both cards at full load in the same PC without problems, so the cause is open |
-| PhotoCraft add-on | Works with two cards: expand prompt 10.9 s, extend with FLUX 3 52 s, fill with Qwen 72 s and with FLUX 3 68 s, all on the strongest card |
-
-![Where the language model runs: same card, RTX 4060 with int8, RTX 4060 with w4a8](docs/images/multi-gpu-language-model.png)
-
-Which card does what can be changed in the header (click a card) or under "Models" → "Graphics cards": each task is a row, each card a column, one click moves it. "Distribute automatically" goes back to the strongest card.
-
-![The graphics card table under "Models"](docs/images/multi-gpu-settings.jpg)
-
-In short: with these two cards the gain comes from computing on the right card, not from splitting the work. Results with other cards are welcome in [#1](https://github.com/Mantux775/NVAI-open/issues/1).
 
 ### Uncensored models
 
@@ -298,34 +276,12 @@ Einrichtung mit dem Windows-Setup, Datenordner und Port: [docs/CLAUDE_CODE.md](d
 |---|---|
 | NVIDIA RTX 50 | Nutzt die NVFP4-Fassungen von FLUX 3 und Qwen-Image, die die Karte nativ in Hardware rechnet |
 | NVIDIA RTX 20, 30, 40 | Empfiehlt stattdessen die INT8-Fassungen; FLUX 3 INT8 läuft laut Black Forest Labs schon auf 8-GB-Karten |
-| Zwei oder mehr NVIDIA-Karten | Seit 0.5.6 rechnet NV-AI von selbst auf der stärksten Karte. In der Kopfleiste oder unter „Modelle“ → „Grafikkarten“ können Bildmodelle, Sprachmodelle und 3D je eine eigene Karte bekommen; was das bringt, ist [unten](#mehrere-grafikkarten) gemessen |
+| Zwei oder mehr NVIDIA-Karten | Seit 0.5.6 rechnet NV-AI von selbst auf der stärksten Karte. In der Kopfleiste oder unter „Modelle“ → „Grafikkarten“ können Bildmodelle, Sprachmodelle und 3D je eine eigene Karte bekommen; was das bringt, ist in [#1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) gemessen |
 | AMD Radeon | Experimentell seit 0.5: Das Setup erkennt eine Radeon und installiert PyTorch mit ROCm 7.2.1 von AMD. Nötig sind Treiber 26.2.2 oder neuer und eine Karte auf AMDs [Kompatibilitätsliste](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility.html). Bildmodelle in INT8 oder FP8; 3D braucht vorerst NVIDIA |
 
 Die Modellliste markiert, welche Modelle zur Karte passen, und sagt, wenn ein Format darauf nicht nativ rechnet.
 
 Tester gesucht für AMD: Die Installation ist getestet, auf einer Radeon wurde aber noch kein Bild erzeugt. Wer eine hat: bitte über „Problem melden“ oder in [#2 (AMD Radeon)](https://github.com/Mantux775/NVAI-open/issues/2) berichten.
-
-### Mehrere Grafikkarten
-
-Seit 0.5.6 rechnet NV-AI von selbst auf der stärksten Karte (erst nach Speicher, dann nach der neuesten Generation). Bisher lief alles auf Karte 0. Gemessen in meinem PC mit einer RTX 5060 Ti 16 GB und einer RTX 4060 8 GB an einem Riser-Kabel (PCIe 3.0 x4), Treiber 610.62, ComfyUI 0.42.1:
-
-![Zeit je Bild auf der RTX 5060 Ti und der RTX 4060](docs/images/multi-gpu-strongest-card-de.png)
-
-| Frage | Gemessen |
-|---|---|
-| Passen mit einer zweiten Karte größere Modelle? | Nein. Zwei Karten legen ihren Speicher nicht für ein Modell zusammen. Größere Modelle laufen ohnehin auf einer Karte, weil ComfyUI nachlädt, was nicht passt: Qwen-Image-2512 mit 20 Milliarden Parametern belegt 15,5 der 16 GB |
-| Text-Encoder auf die zweite Karte? | Kein Gewinn (warme Läufe): FLUX 3 9 → 13 s, Qwen-Image-2512 97 → 99 s, LTX-2.3-Video 79 → 81 s |
-| Sprachmodell auf die zweite Karte? | Der Prompt-Upsampler passt in seiner Standardfassung int8 (9,75 GB) nicht in 8 GB: „Prompt ausbauen“ dauerte 134 bis 203 s statt 11 s. NV-AI nimmt deshalb die Fassung w4a8 (6,72 GB), wenn sie geladen ist: 7,5 bis 8,6 s, dafür brauchte FLUX 3 mit neuem Prompt 35 bis 41 statt 31 bis 34 s |
-| Beide Karten zugleich unter Volllast | „Prompt ausbauen“ auf der RTX 4060, während Qwen auf der 5060 Ti rechnete: Nach wenigen Sekunden fiel die 4060 vom Bus (Windows: „BusReset TDR“), erst ein Neustart brachte sie zurück. Ollama lief im selben PC mit beiden Karten unter Volllast ohne Probleme, die Ursache ist also offen |
-| PhotoCraft-Add-on | Läuft mit zwei Karten: Prompt ausbauen 10,9 s, Erweitern mit FLUX 3 52 s, Füllen mit Qwen 72 s und mit FLUX 3 68 s, alles auf der stärksten Karte |
-
-![Wo das Sprachmodell läuft: dieselbe Karte, RTX 4060 mit int8, RTX 4060 mit w4a8](docs/images/multi-gpu-language-model-de.png)
-
-Welche Karte was rechnet, lässt sich in der Kopfleiste (Karte anklicken) oder unter „Modelle“ → „Grafikkarten“ ändern: jede Aufgabe eine Zeile, jede Karte eine Spalte, ein Klick verschiebt sie. „Automatisch verteilen“ legt alles zurück auf die stärkste Karte.
-
-![Die Grafikkarten-Tabelle unter „Modelle“](docs/images/multi-gpu-settings-de.jpg)
-
-Kurz gesagt: Mit diesen beiden Karten kommt der Gewinn davon, auf der richtigen Karte zu rechnen, nicht vom Aufteilen. Ergebnisse mit anderen Karten gern in [#1](https://github.com/Mantux775/NVAI-open/issues/1).
 
 ### Unzensierte Modelle
 
