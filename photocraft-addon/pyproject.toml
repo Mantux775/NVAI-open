@@ -1,7 +1,7 @@
 [project]
 name = "nvai-photocraft-addon"
-version = "0.4.4"
-description = "NV-AI as the local AI for PhotoCraft: generative fill, image generation, refine"
+version = "0.4.5"
+description = "NVAI-open as the local AI for PhotoCraft: generative fill, image generation, refine"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [

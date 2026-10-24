@@ -1,12 +1,12 @@
 """Starter der installierten Windows-Fassung (Startmenue, nvai-start.cmd).
 
-    pythonw -m nvai.launcher            # NV-AI starten, falls es nicht laeuft
+    pythonw -m nvai.launcher            # NVAI-open starten, falls es nicht laeuft
     pythonw -m nvai.launcher --open     # danach die Weboberflaeche oeffnen
-    pythonw -m nvai.launcher --stop     # NV-AI samt ComfyUI beenden
+    pythonw -m nvai.launcher --stop     # NVAI-open samt ComfyUI beenden
     python -m nvai.launcher --stop --quiet   # dasselbe ohne Dialog (Setup, Deinstallation)
     pythonw -m nvai.launcher --restart --quiet   # beenden und neu starten (neue Ordner, /api/restart)
 
-Kehrt zurueck, sobald NV-AI antwortet; der Server laeuft losgeloest weiter.
+Kehrt zurueck, sobald NVAI-open antwortet; der Server laeuft losgeloest weiter.
 Die Einstellungen schreibt das Setup nach HKCU\\Software\\NV-AI (DataDir,
 ModelDir, Port). Fehlt der Schluessel -- etwa im Entwicklungsbaum --, gelten die
 Vorgaben aus config.py. Fehler zeigt ein Meldungsfenster, denn unter pythonw
@@ -101,7 +101,7 @@ def _message(text: str, error: bool = True) -> None:
         return
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, text, "NV-AI", 0x10 if error else 0x40)
+        ctypes.windll.user32.MessageBoxW(None, text, "NVAI-open", 0x10 if error else 0x40)
     except (AttributeError, OSError):
         pass
 
@@ -117,10 +117,10 @@ def _own_instance() -> str:
 
 
 def _foreign_nvai(port: int) -> str:
-    return _t(f"Auf Port {port} läuft bereits ein anderes NV-AI – etwa eine zweite Installation "
+    return _t(f"Auf Port {port} läuft bereits ein anderes NVAI-open – etwa eine zweite Installation "
               f"oder die Entwicklungsfassung.\nBitte jenes zuerst beenden oder in "
               f"HKCU\\{REG_KEY} unter „Port“ einen anderen Port eintragen.",
-              f"Another NV-AI is already running on port {port} – for example a second "
+              f"Another NVAI-open is already running on port {port} – for example a second "
               f"installation or the development version.\nPlease quit it first or set another "
               f"port under \"Port\" in HKCU\\{REG_KEY}.")
 
@@ -129,17 +129,17 @@ def start(open_browser: bool) -> int:
     env, port = _environment()
     info = _version(port)
     if info is None and _port_busy(port):
-        _message(_t(f"Port {port} ist belegt, aber dort antwortet kein NV-AI.\n"
+        _message(_t(f"Port {port} ist belegt, aber dort antwortet kein NVAI-open.\n"
                     f"Anderes Programm beenden oder in HKCU\\{REG_KEY} einen anderen Port eintragen.",
-                    f"Port {port} is in use, but no NV-AI answers there.\n"
+                    f"Port {port} is in use, but no NVAI-open answers there.\n"
                     f"Quit the other program or set another port in HKCU\\{REG_KEY}."))
         return 1
     if info is not None and info.get("name") != "NV-AI":
         _message(_t(f"Auf Port {port} läuft ein anderer Dienst ({info.get('name')}).",
                     f"Another service is running on port {port} ({info.get('name')})."))
         return 1
-    # Ein NV-AI auf dem Port ist nur dann unseres, wenn die Kennung passt. Sonst haette
-    # die Startmenue-Verknuepfung die Oberflaeche eines fremden NV-AI geoeffnet.
+    # Ein NVAI-open auf dem Port ist nur dann unseres, wenn die Kennung passt. Sonst haette
+    # die Startmenue-Verknuepfung die Oberflaeche eines fremden NVAI-open geoeffnet.
     if info is not None and info.get("instance") != _own_instance():
         _message(_foreign_nvai(port))
         return 1
@@ -156,9 +156,9 @@ def start(open_browser: bool) -> int:
         while (info := _version(port)) is None:
             if time.monotonic() > deadline:
                 data_dir = env.get("NVAI_DATA_DIR") or str(server_dir.parent / "data")
-                _message(_t(f"NV-AI ist nach {START_TIMEOUT:.0f} s nicht erreichbar.\n"
+                _message(_t(f"NVAI-open ist nach {START_TIMEOUT:.0f} s nicht erreichbar.\n"
                             f"Protokoll: {Path(data_dir) / 'nvai-server.log'}",
-                            f"NV-AI is not reachable after {START_TIMEOUT:.0f} s.\n"
+                            f"NVAI-open is not reachable after {START_TIMEOUT:.0f} s.\n"
                             f"Log: {Path(data_dir) / 'nvai-server.log'}"))
                 return 1
             time.sleep(0.5)
@@ -172,7 +172,7 @@ def stop() -> int:
     info = _version(port)
     if info is None:
         return 0
-    # Nur das eigene NV-AI beenden -- am 2026-10-19 beendete „NV-AI beenden“ einer
+    # Nur das eigene NVAI-open beenden -- am 2026-10-19 beendete „NVAI-open beenden“ einer
     # Testinstallation die Entwicklungsfassung, die auf demselben Port lief.
     if info.get("instance") != _own_instance():
         _message(_foreign_nvai(port) + _t("\nEs wurde nicht beendet.", "\nIt was not stopped."),
@@ -182,7 +182,7 @@ def stop() -> int:
     try:
         urllib.request.urlopen(req, timeout=5).close()
     except (OSError, urllib.error.HTTPError) as e:
-        _message(_t(f"NV-AI ließ sich nicht beenden: {e}", f"NV-AI could not be stopped: {e}"))
+        _message(_t(f"NVAI-open ließ sich nicht beenden: {e}", f"NVAI-open could not be stopped: {e}"))
         return 1
     deadline = time.monotonic() + 30
     while _port_busy(port) and time.monotonic() < deadline:

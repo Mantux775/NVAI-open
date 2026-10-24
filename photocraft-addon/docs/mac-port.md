@@ -10,7 +10,7 @@ gleich; exportierte PNGs sind bitgleich.
 |---|---|---|
 | Steuerkanal | `bridge/photocraft.py`, Socket | `ControlClient`, Network.framework (`NWConnection`) |
 | PhotoCraft starten | `bridge/launcher.py`, `subprocess` | `NSWorkspace.openApplication` bzw. `open -n` |
-| NV-AI | `bridge/nvai.py`, httpx | `NVAIClient`, URLSession |
+| NVAI-open | `bridge/nvai.py`, httpx | `NVAIClient`, URLSession |
 | Bildaufbereitung | `bridge/imaging.py`, Pillow | `Imaging`, Core Image |
 | Planung | `bridge/planning.py` | `Planning` (reine Funktionen) |
 | Ablauf | `bridge/tasks.py` | `Workflow` |
@@ -20,13 +20,13 @@ gleich; exportierte PNGs sind bitgleich.
 - Golden-Daten: Geometrie und Planung exakt, Bildaufbereitung in Toleranz.
 - Replay aller fünf Befehlsmitschnitte.
 - Protokolltests gegen einen lokalen Fake-Server.
-- Vertragstests gegen den NV-AI-Vertrag (§7).
+- Vertragstests gegen den NVAI-open-Vertrag (§7).
 - PhotoCraft finden und Versionsvergleich, mit denselben Fällen wie die Brücke.
 
 Dazu kommen zwei Live-Tests:
 - gegen eine echte PhotoCraft-Testinstanz: Erfassen, zwei Varianten einfügen und tauschen, Maske,
   Auswahl, „Zuletzt geöffnet“;
-- ein echter Auftrag „Füllen“ mit NV-AI: Qwen-Image, 28 Schritte, 82 s; Ebene mit Maske, Uploads
+- ein echter Auftrag „Füllen“ mit NVAI-open: Qwen-Image, 28 Schritte, 82 s; Ebene mit Maske, Uploads
   danach gelöscht.
 
 Keine Warnungen; Bibliothek und Tests bauen auch im Swift-6-Sprachmodus.
@@ -40,7 +40,7 @@ PHOTOCRAFT_LIVE_PORT=47899 PHOTOCRAFT_LIVE_TOKEN=<token-datei> PHOTOCRAFT_LIVE_E
 **Mac-App:** `MacApp/` ist das Panel als SwiftUI-App auf PhotoCraftKit. `build-app.sh` legt sie auf den
 Schreibtisch, siehe README. Ein Auftrag über die Oberfläche selbst ist geprüft: Generieren mit
 FLUX 3, eine Variante, 32 s, eingefügt und als Ergebnis angezeigt; dazu `--snapshot … --run`. Im
-Normalbetrieb laufen NV-AI und PhotoCraft beide auf dem Mac, NV-AI also unter 127.0.0.1:8100.
+Normalbetrieb laufen NVAI-open und PhotoCraft beide auf dem Mac, NVAI-open also unter 127.0.0.1:8100.
 
 ---
 
@@ -116,10 +116,10 @@ Nur diese Befehle braucht die Brücke. „Gemessen“ heißt: Windows und macOS 
 | `ui.inspect` | – | `session.active`, `session.documents[{index,name,width,height,dirty,revision}]`, `document` (wie `document.inspect` des aktiven), `dialogs[]` | ~8 KB, als Statusabfrage alle 1–1,5 s tragbar |
 | `engine.execute` `document.inspect` | – | `name,width,height,hasSelection,selectionBounds[x,y,w,h],activeLayer,layers[],channels.alpha[]` | `selectionBounds` umfasst weiche Kanten: Ellipse 400,250 300×220 mit `feather:4` → `[389,239,322,242]`. `layers` von oben nach unten; Gruppen haben `children` |
 | `image.duplicate` | `{"name","mergedOnly":true}` | `{"document":i,"name"}`; neue reduzierte Kopie wird aktiv, **übernimmt die Auswahl**, nicht „dirty“ | – |
-| `select.saveSelection` | `{"name":"NV-AI Auswahl"}` | `{"channel","document","name"}`; Alphakanal im aktiven Dokument | macht das Dokument „dirty“ |
+| `select.saveSelection` | `{"name":"NVAI-open Auswahl"}` | `{"channel","document","name"}`; Alphakanal im aktiven Dokument | macht das Dokument „dirty“ |
 | `image.crop` | `{"x","y","width","height"}` | Dokument beschnitten, **Auswahl aufgehoben**, Kanäle mit beschnitten | Auswahl deshalb vorher als Kanal sichern |
 | `app.save` | `{"path":"jobs/<id>/context.png"}` | `{"path","warnings"}`; flacher PNG-Export als **Kopie** (Dokumentpfad bleibt, kein Eintrag in „Zuletzt geöffnet“) | Elternordner muss existieren; nur unter der Schreibwurzel |
-| `engine.execute` `channel.duplicate` | `{"channel":"NV-AI Auswahl","document":"new"}` | `{"document":i}`; neues Graustufendokument wird aktiv; weiß = ausgewählt | – |
+| `engine.execute` `channel.duplicate` | `{"channel":"NVAI-open Auswahl","document":"new"}` | `{"document":i}`; neues Graustufendokument wird aktiv; weiß = ausgewählt | – |
 | `engine.execute` `file.close` | `{"document":i}` | schließt **ohne Rückfrage, auch ungespeichert** | Nur für eigene Hilfsdokumente! Danach wird der **Nachbar-Tab** aktiv (geschlossen i bei aktivem i → `min(i, n-1)`), nicht das vorige Dokument |
 | `ui.menu.invoke` | `{"id":"window.document.<i>"}` | `{"document":i}`; holt Tab i nach vorn | Bei offenem modalem Dialog: „menu command is unavailable while a modal dialog is open“ |
 | `app.open` | `{"path":"jobs/<id>/result-1.png"}` | `{"path","name","warnings"}`; neues Dokument wird aktiv | Trägt den Pfad unter „Zuletzt geöffnet“ ein. Große Dateien können als Hintergrundauftrag laden → `ui.inspect` abfragen, bis das aktive Dokument `name` heißt |
@@ -145,8 +145,8 @@ Plug-in-Installation, `prefs.set` auf `plugIns`, `scriptEvents`, `colorSettings`
    `selectionBounds`). Kein Dokument → Fehler.
 2. Ausschnitt `region` nach §5.2 bestimmen (Modus, Auswahl, Arbeitsfläche).
 3. Nur wenn Kontext (Füllen, Überarbeiten) oder Maske (Auswahl vorhanden) gebraucht wird:
-   1. `image.duplicate {"name":"NV-AI Arbeitskopie","mergedOnly":true}` → `dup`
-   2. mit Auswahl: `select.saveSelection {"name":"NV-AI Auswahl"}`
+   1. `image.duplicate {"name":"NVAI-open Arbeitskopie","mergedOnly":true}` → `dup`
+   2. mit Auswahl: `select.saveSelection {"name":"NVAI-open Auswahl"}`
    3. `region ≠ Arbeitsfläche`: `image.crop` auf `region`
    4. mit Kontext: `app.save {"path":"jobs/<id>/context.png"}`
    5. mit Auswahl: `channel.duplicate {…,"document":"new"}` → `app.save mask.png` →
@@ -162,7 +162,7 @@ Das Dokument des Nutzers und sein Protokoll bleiben beim Erfassen unverändert.
 ### 4.2 Rechnen
 
 1. `GET /api/version` (30 s merken): `api` muss **1** sein und `authorized` wahr – sonst Fehler im
-   Klartext (§7). Masken gibt es, wenn `features` `mask` enthält. Bei 404 (NV-AI vor 0.2.0) stattdessen
+   Klartext (§7). Masken gibt es, wenn `features` `mask` enthält. Bei 404 (NVAI-open vor 0.2.0) stattdessen
    `GET /openapi.json`: Kennt `GenerateImageRequest` `mask_asset_id`? (60 s merken.) Füllen ohne
    Masken → Fehler.
 2. `GET /api/health` (aktives Bildmodell), `GET /api/models?kind=image` → `Planning.chooseModel`.
@@ -174,8 +174,8 @@ Das Dokument des Nutzers und sein Protokoll bleiben beim Erfassen unverändert.
    (§5.4), als RGB-PNG hochladen → `mask_asset_id`.
 6. `POST /api/generate/image` → Job; `GET /api/jobs/{id}` alle 0,5 s (`queued`, `running` mit
    `progress` 0–1 und `stage`, `done` mit `asset_ids`, `error`, `cancelled`). Nicht erreichbar
-   → bis 45 s weiter fragen (NV-AI-Neustart). `cancelled` ohne eigenen Abbruch → Fehler
-   „NV-AI hat den Auftrag abgebrochen (<stage>)“.
+   → bis 45 s weiter fragen (NVAI-open-Neustart). `cancelled` ohne eigenen Abbruch → Fehler
+   „NVAI-open hat den Auftrag abgebrochen (<stage>)“.
 7. Je Asset `GET /api/assets/{id}` → `url` (`/files/<name>`), `meta.seed`, `meta.model_name`,
    `meta.caption` (FLUX 3); Bild laden, auf `region`-Größe bringen (Generieren: füllen und mittig
    beschneiden; sonst exakt strecken), als `jobs/<id>/result-<k>.png` speichern.
@@ -183,7 +183,7 @@ Das Dokument des Nutzers und sein Protokoll bleiben beim Erfassen unverändert.
    Fehlerfall. Liegengebliebene (`meta.original_name` beginnt mit `photocraft-`, älter als 1 h)
    beim Start aufräumen.
 9. Abbrechen: wartender Job → `DELETE /api/jobs/{id}`; laufender → `POST /api/jobs/current/cancel`
-   **nur**, wenn `health.current_job` der eigene ist (NV-AI wird parallel benutzt).
+   **nur**, wenn `health.current_job` der eigene ist (NVAI-open wird parallel benutzt).
 
 ### 4.3 Einfügen (Variante k)
 
@@ -217,7 +217,7 @@ wird wie Pythons `round`: bei exakt .5 zur geraden Zahl (Swift `.rounded(.toNear
 gilt auch für den Rand in `contextRegion`). „Native Auflösung“: `target = 1328²` (Qwen) bzw.
 `1440²` (FLUX 3).
 
-**Festes Format** (`features.fixed_size = N`, Core-ML-Modelle in NV-AI für Mac): Arbeitsgröße ist
+**Festes Format** (`features.fixed_size = N`, Core-ML-Modelle in NVAI-open für Mac): Arbeitsgröße ist
 immer N×N (`Planning.fixedSize`). Solche Modelle rechnen nur N×N und strecken ihr Ergebnis sonst
 selbst auf die angefragte Größe, also verzerrt. Generieren beschneidet das Quadrat danach mittig
 auf das Format der Auswahl. Füllen und Überarbeiten stauchen den Ausschnitt auf N×N und skalieren
@@ -247,7 +247,7 @@ mit der Deckungsmaske multiplizierte Fassung, geteilt durch den Mittelwert der M
 Auf Arbeitsgröße (bilinear), `grow` Mal 3×3-Maximum (= quadratische Dilatation um `grow` px,
 Core Image `CIMorphologyRectangleMaximum` mit `2·grow+1`), dann Gauß-Weichzeichner
 (`CIGaussianBlur`, `inputRadius = blur`). Werte: Füllen 12/10, Überarbeiten 4/8, Erweitern
-24/20 (Arbeitspixel). NV-AI: weiß = neu erzeugen; Graustufen gehen über Differential Diffusion
+24/20 (Arbeitspixel). NVAI-open: weiß = neu erzeugen; Graustufen gehen über Differential Diffusion
 stufenlos über.
 
 ### 5.5 Ergebnis
@@ -281,7 +281,7 @@ Bildoperationen müssen nicht bitgleich zu Pillow sein; die Golden-Daten geben T
 `chooseModel(mode, wanted, active, models, masks)` über `runnable`-Modelle:
 1. `wanted ?? active` vorhanden und fähig → nehmen, keine Warnung.
 2. `wanted` vorhanden, aber unfähig → Fehler `model_incapable`.
-3. Fähige Kandidaten in NV-AI-Reihenfolge, schwache Workflows (`qwen_image_lightning`, `flux`)
+3. Fähige Kandidaten in NVAI-open-Reihenfolge, schwache Workflows (`qwen_image_lightning`, `flux`)
    stabil nach hinten; keiner → Fehler `no_capable_model`.
 4. Warnung `model_unavailable` (gewünschtes fehlt), `active_model_incapable` oder
    `no_active_model`.
@@ -312,11 +312,11 @@ vorhanden **und** Technik `inpaint`; Maskenwerte nach §5.4.
 
 ### 6.5 Ebenenname
 
-`"NV-AI " + Modus` (Füllen/Generieren/Überarbeiten), bei Prompt `": " +` Prompt mit
+`"NVAI-open " + Modus` (Füllen/Generieren/Überarbeiten), bei Prompt `": " +` Prompt mit
 zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei mehreren Varianten
 `" (k+1)"`.
 
-## 7. NV-AI
+## 7. NVAI-open
 
 | Aufruf | Verwendung |
 |---|---|
@@ -333,24 +333,24 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
 | `GET /files/{name}` | Bilddatei |
 
 - **Vertrag:** `contract/nvai-openapi.json` ist eine Kopie von `NV-AI/server/openapi.json`
-  (`info.x-api-version` = 1; NV-AI pflegt das Original). `tests/test_contract.py` und
-  `NVAIContractTests` prüfen ohne laufendes NV-AI: Jeder Aufruf der Clients steht im Vertrag
+  (`info.x-api-version` = 1; NVAI-open pflegt das Original). `tests/test_contract.py` und
+  `NVAIContractTests` prüfen ohne laufendes NVAI-open: Jeder Aufruf der Clients steht im Vertrag
   (Methode, Pfad, Query-Parameter, multipart-Felder). Jeder Request der Planung passt zum Schema
   `GenerateImageRequest` (Typen, Grenzen, Vielfache) und enthält **keine unbekannten Felder**, denn
-  die würde NV-AI still ignorieren. Die gelesenen Felder von `VersionInfo`, `Job`, `Asset` und
+  die würde NVAI-open still ignorieren. Die gelesenen Felder von `VersionInfo`, `Job`, `Asset` und
   `ModelInfo` existieren. Auch die Antworten der Test-Attrappe müssen zum Vertrag passen (Schema
   bzw. Medientyp, `/files/…` etwa `image/*`), sonst prüfen die Tests ins Leere.
-  Die Python-Tests prüfen zusätzlich gegen das Original, wenn NV-AI daneben liegt. Erneuern:
+  Die Python-Tests prüfen zusätzlich gegen das Original, wenn NVAI-open daneben liegt. Erneuern:
   `python tools/export_golden.py --refresh-contract` (kopiert auch nach `Golden/`).
-- **Zugriff (ab NV-AI 0.2.0):** Vom eigenen Rechner nie ein Token. Andere Rechner brauchen
+- **Zugriff (ab NVAI-open 0.2.0):** Vom eigenen Rechner nie ein Token. Andere Rechner brauchen
   **`X-NVAI-Token`** für alles außer `/api/health` und `/api/version`, auch für `/files/…`.
   Die Clients schicken ihn deshalb bei jeder Anfrage mit. Ohne eingerichteten Token (`auth: local`)
-  lehnt NV-AI fremde Rechner ab (403); geöffnet wird es dort mit `scripts\start.ps1 -Lan`, der
+  lehnt NVAI-open fremde Rechner ab (403); geöffnet wird es dort mit `scripts\start.ps1 -Lan`, der
   Token liegt dann in `data\api_token`. `authorized` sagt vorab, ob die Anfragen durchkämen.
   Für beide Fälle gibt es eine eigene Meldung. Im Panel steht dazu der Knopf „Erneut prüfen“:
   `POST /api/nvai/check` liest den Token neu aus `settings.json`, ein Neustart ist nicht nötig.
 - Basis-URL und Token sind konfigurierbar (Python: Umgebung `NVAI_URL`/`NVAI_TOKEN` oder
-  `settings.json` im Datenordner). NV-AI selbst starten nur bei lokaler URL (`127.0.0.1`,
+  `settings.json` im Datenordner). NVAI-open selbst starten nur bei lokaler URL (`127.0.0.1`,
   `localhost`, `::1`).
 - `features` der Modelle (BILDMODELLE.md, Abschnitt 7) steuert auch die Oberfläche: `prompt_hint`,
   `placeholder`, `negative_prompt` (Feld sperren), `hires` (Schalter sperren), `warning`
@@ -372,7 +372,7 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
   Antwort. Replay-Test: Der Swift-Ablauf muss Methode und Parameter in derselben Reihenfolge
   senden; die Antworten werden zurückgespielt. Pfade `jobs/<task-id>/…`.
 
-## 9. Messwerte (RTX 5060 Ti, NV-AI)
+## 9. Messwerte (RTX 5060 Ti, NVAI-open)
 
 | Fall | Ergebnis |
 |---|---|
@@ -388,8 +388,8 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
   bekommt die Datei? Noch nicht geprüft.
 - Panel schwebt per `NSWindow.Level.floating` über PhotoCraft (MacApp). Offen: Fokus ohne PhotoCraft
   zu deaktivieren (`NSPanel` mit `.nonactivatingPanel`).
-- Lokale Mac-NV-AI: „NV-AI für Mac“ (Bundle-ID `com.noerr.nvai.mac`) ist ein eigenes Projekt der
-  NV-AI-Seite. Es rechnet mit FLUX.2 Klein 4B über MLX (Workflow `flux2_klein`) und bietet
+- Lokale Mac-NVAI-open: „NVAI-open für Mac“ (Bundle-ID `com.noerr.nvai.mac`) ist ein eigenes Projekt der
+  NVAI-open-Seite. Es rechnet mit FLUX.2 Klein 4B über MLX (Workflow `flux2_klein`) und bietet
   denselben Vertrag auf 127.0.0.1:8100. Qwen und FLUX 3 gibt es dort vorerst nicht. Die
   `features`:
   - `mask = true`
@@ -400,17 +400,17 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
 
   Die App richtet sich nur nach `features`. Einzige Namensregel: Die Workflows `flux` und
   `qwen_image_lightning` gelten beim Füllen als prompt-schwach (`WEAK_PROMPT_WORKFLOWS`).
-- NV-AI starten: Ist NV-AI lokal eingestellt und nicht erreichbar, und ist NV-AI für Mac
-  installiert, zeigt die App „NV-AI starten“. Der Knopf öffnet sie per NSWorkspace, ohne sie nach
-  vorn zu holen. Danach steht bis zu 120 s „NV-AI startet …“. Gemessen am 19.10.2026: nach 1,6 s
+- NVAI-open starten: Ist NVAI-open lokal eingestellt und nicht erreichbar, und ist NVAI-open für Mac
+  installiert, zeigt die App „NVAI-open starten“. Der Knopf öffnet sie per NSWorkspace, ohne sie nach
+  vorn zu holen. Danach steht bis zu 120 s „NVAI-open startet …“. Gemessen am 19.10.2026: nach 1,6 s
   verbunden (Diagnose `--snapshot … --start-nvai`).
-- Ohne installiertes Bildmodell (frisch installiertes NV-AI) zeigen App und Windows-Panel „In NV-AI
-  ist noch kein Bildmodell installiert“ mit Knopf „NV-AI öffnen“. Die Liste wird nachgeladen, bis
+- Ohne installiertes Bildmodell (frisch installiertes NVAI-open) zeigen App und Windows-Panel „In NVAI-open
+  ist noch kein Bildmodell installiert“ mit Knopf „NVAI-open öffnen“. Die Liste wird nachgeladen, bis
   ein Modell da ist.
-- Echter Auftrag Füllen auf dem Mac ohne PC (19.10.2026): PhotoCraft 0.10.0 und NV-AI für Mac mit
-  FLUX.2 Klein 4B, 1024×1024, 4 Schritte, NV-AI 117,7 s, Speicherspitze 7,9 GB, alle Prüfungen
+- Echter Auftrag Füllen auf dem Mac ohne PC (19.10.2026): PhotoCraft 0.10.0 und NVAI-open für Mac mit
+  FLUX.2 Klein 4B, 1024×1024, 4 Schritte, NVAI-open 117,7 s, Speicherspitze 7,9 GB, alle Prüfungen
   grün (`testFillWithRealNVAI`).
-- Weitergabe: eine DMG mit beiden Apps, Developer ID und notarisiert. Die NV-AI-Seite signiert
+- Weitergabe: eine DMG mit beiden Apps, Developer ID und notarisiert. Die NVAI-open-Seite signiert
   und notarisiert. Die App hat die Bundle-ID `com.noerr.nvai.photocraft`. `build-app.sh --sign
   "<Identität>"` signiert mit Hardened Runtime und Zeitstempel, ohne Identität ad hoc. Ad hoc ist
   gemessen (`flags=0x10002(adhoc,runtime)`, Selbsttest und Fenster laufen). Der Weg mit Developer ID

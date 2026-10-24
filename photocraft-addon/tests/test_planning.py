@@ -84,7 +84,7 @@ COREML = {"id": "coreml-sd21-base", "name": "SD 2.1 (Core ML)", "workflow": "cor
 
 
 def test_fixed_size_models_are_asked_for_their_square():
-    # NV-AI für Mac streckt sonst selbst auf die angefragte Größe – verzerrt.
+    # NVAI-open für Mac streckt sonst selbst auf die angefragte Größe – verzerrt.
     p = plan("generate", "a horse", {"native": True}, COREML, (1216, 832), False, False, True)
     assert p.working == (512, 512) and (p.payload["width"], p.payload["height"]) == (512, 512)
     assert [w.code for w in p.warnings] == ["fixed_size"] and "cropped" in p.warnings[0].message
@@ -108,8 +108,8 @@ def test_regions():
 
 def test_layer_name_is_short_and_numbered():
     name = layer_name("generate", "a " * 60, 1, 2)
-    assert name.startswith("NV-AI Generate: ") and name.endswith("(2)") and len(name) < 80
-    assert layer_name("fill", "", 0, 1) == "NV-AI Fill"
+    assert name.startswith("NVAI-open Generate: ") and name.endswith("(2)") and len(name) < 80
+    assert layer_name("fill", "", 0, 1) == "NVAI-open Fill"
 
 
 def test_extend_steps_anchor_on_the_opposite_side():
@@ -166,11 +166,11 @@ def test_plan_outpaint_leaves_mask_and_denoise_to_the_server():
 def test_extend_is_its_own_mode_that_computes_like_fill():
     assert "extend" in planning.MODES and "extend" not in planning.BASE_MODES
     assert planning.base_mode("extend") == "fill" and planning.base_mode("refine") == "refine"
-    assert planning.layer_name("extend", "harbour", 0, 1) == "NV-AI Extend: harbour"
+    assert planning.layer_name("extend", "harbour", 0, 1) == "NVAI-open Extend: harbour"
 
 
 def test_fill_prefers_reference_fill_model_on_new_servers():
-    # NV-AI ab 0.5.6 meldet FLUX 3 mit mask "reference": Füllen nimmt es ohne eigene Wahl.
+    # NVAI-open ab 0.5.6 meldet FLUX 3 mit mask "reference": Füllen nimmt es ohne eigene Wahl.
     flux = {**FLUX3, "features": {**FLUX3["features"], "mask": "reference", "outpaint": "reference"}}
     assert capable(flux, "mask", masks_supported=True)
     model, warning = choose_model("fill", None, QWEN["id"], [QWEN, flux], True)
@@ -178,6 +178,6 @@ def test_fill_prefers_reference_fill_model_on_new_servers():
     # Eigene Wahl bleibt.
     model, _ = choose_model("fill", QWEN["id"], None, [QWEN, flux], True)
     assert model["id"] == QWEN["id"]
-    # Technik bleibt „inpaint“: Bild und Maske gehen an NV-AI, das Grau und Ausrichten macht der Server.
+    # Technik bleibt „inpaint“: Bild und Maske gehen an NVAI-open, das Grau und Ausrichten macht der Server.
     p = plan("fill", "a seagull on the water", {"variants": 1}, flux, (1024, 768), True, False, True)
     assert p.technique == "inpaint" and p.send_image and p.send_mask

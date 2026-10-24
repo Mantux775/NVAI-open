@@ -23,7 +23,7 @@ public enum Localization {
         }
     }
 
-    /// Wirksame Sprache, „de“ oder „en“ – auch als `Accept-Language` für NV-AI.
+    /// Wirksame Sprache, „de“ oder „en“ – auch als `Accept-Language` für NVAI-open.
     public static var language: String { state.withLock { $0.language } }
 }
 

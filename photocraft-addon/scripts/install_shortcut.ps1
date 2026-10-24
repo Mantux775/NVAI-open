@@ -1,6 +1,6 @@
 ﻿<#
-  Creates the shortcut "NV-AI for PhotoCraft" on the desktop and in the Start menu.
-  It starts NV-AI (if needed), PhotoCraft with its control channel, and the NV-AI panel.
+  Creates the shortcut "NVAI-open for PhotoCraft" on the desktop and in the Start menu.
+  It starts NVAI-open (if needed), PhotoCraft with its control channel, and the NVAI-open panel.
 
   -Remove   remove the shortcuts again
 #>
@@ -9,13 +9,16 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $pyw = Join-Path $root ".venv\Scripts\pythonw.exe"
 $folders = @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))
-$name = "NV-AI for PhotoCraft.lnk"
-# Earlier name of the same shortcut: replaced on install, removed with -Remove.
-$legacy = "PhotoCraft + NV-AI.lnk"
+$name = "NVAI-open for PhotoCraft.lnk"
+# Earlier names of the same shortcut (the app was called NV-AI up to 0.5.7): replaced on install,
+# removed with -Remove.
+$legacy = @("PhotoCraft + NV-AI.lnk", "NV-AI for PhotoCraft.lnk")
 
 foreach ($folder in $folders) {
-    $old = Join-Path $folder $legacy
-    if (Test-Path $old) { Remove-Item $old; Write-Host "removed: $old" }
+    foreach ($l in $legacy) {
+        $old = Join-Path $folder $l
+        if (Test-Path $old) { Remove-Item $old; Write-Host "removed: $old" }
+    }
 }
 if ($Remove) {
     foreach ($folder in $folders) {
@@ -34,7 +37,7 @@ foreach ($folder in $folders) {
     $lnk.TargetPath = $pyw
     $lnk.Arguments = "-m bridge --launch"
     $lnk.WorkingDirectory = $root
-    $lnk.Description = "Start PhotoCraft with local AI (NV-AI)"
+    $lnk.Description = "Start PhotoCraft with local AI (NVAI-open)"
     if (Test-Path $icon) { $lnk.IconLocation = "$icon,0" }
     $lnk.Save()
     Write-Host "created: $t"

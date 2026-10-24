@@ -57,7 +57,7 @@ except ImportError:
 
 from triposg.pipelines.pipeline_triposg import TripoSGPipeline  # noqa: E402
 
-app = FastAPI(title="NV-AI TripoSG-Worker")
+app = FastAPI(title="NVAI-open TripoSG-Worker")
 
 _pipe: TripoSGPipeline | None = None
 _device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -1,7 +1,7 @@
 import Foundation
 
-// `--selftest` prüft Einstellungen, PhotoCraft und NV-AI ohne Fenster – etwa per ssh:
-//   "NV-AI for PhotoCraft.app/Contents/MacOS/NVAIPhotoCraft" --selftest
+// `--selftest` prüft Einstellungen, PhotoCraft und NVAI-open ohne Fenster – etwa per ssh:
+//   "NVAI-open for PhotoCraft.app/Contents/MacOS/NVAIPhotoCraft" --selftest
 if CommandLine.arguments.contains("--selftest") {
     Task.detached {
         let ok = await SelfTest.run()

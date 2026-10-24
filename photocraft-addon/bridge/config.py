@@ -1,8 +1,8 @@
 """Pfade, Ports und Adressen.
 
 Reihenfolge: Umgebungsvariable vor ``settings.json`` im Datenordner vor dem, was die Installer
-eintragen (NV-AI-Setup, PhotoCraft-MSI), vor dem Standardwert. In ``settings.json`` gehört vor
-allem ein entferntes NV-AI, etwa über Tailscale, oder ein portables PhotoCraft:
+eintragen (NVAI-open-Setup, PhotoCraft-MSI), vor dem Standardwert. In ``settings.json`` gehört vor
+allem ein entferntes NVAI-open, etwa über Tailscale, oder ein portables PhotoCraft:
 
     {"nvai_url": "http://pc-name:8100", "nvai_token": "…", "photocraft_exe": "D:/PhotoCraft/photocraft.exe"}
 """
@@ -98,31 +98,32 @@ def version_older(version: str, reference: str) -> bool:
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = int(os.environ.get("ARTCRAFT_BRIDGE_PORT", "8120"))
 
-# Als Add-on des NV-AI-Setups installiert? tools/build_addon.py legt addon.ini neben bridge\ an.
+# Als Add-on des NVAI-open-Setups installiert? tools/build_addon.py legt addon.ini neben bridge\ an.
 ADDON = (ROOT / "addon.ini").is_file()
 
 def _dev_nvai_root() -> Path:
-    """Entwicklungsordner von NV-AI: im öffentlichen Repository der Ordner darüber (dieser liegt
-    dort als photocraft-addon/ in NV-AI), sonst ein Nachbarordner „NV-AI“."""
+    """Entwicklungsordner von NVAI-open: im öffentlichen Repository der Ordner darüber (dieser liegt
+    dort als photocraft-addon/ in NVAI-open), sonst der Nachbarordner „NV-AI“ (so heißt der private
+    Entwicklungsordner weiterhin)."""
     for candidate in (ROOT.parent, ROOT.parent / "NV-AI"):
         if (candidate / "scripts" / "start.ps1").is_file():
             return candidate
     return ROOT.parent / "NV-AI"
 
 
-# Entwicklungsordner von NV-AI (Startskript, openapi.json für die Vertragstests). Ausdrücklich
-# gesetzt hat er Vorrang vor dem Setup – dann wird an NV-AI selbst entwickelt.
+# Entwicklungsordner von NVAI-open (Startskript, openapi.json für die Vertragstests). Ausdrücklich
+# gesetzt hat er Vorrang vor dem Setup – dann wird an NVAI-open selbst entwickelt.
 NVAI_ROOT_EXPLICIT = bool(os.environ.get("NVAI_ROOT") or _settings.get("nvai_root"))
 NVAI_ROOT = Path(os.environ.get("NVAI_ROOT") or _settings.get("nvai_root") or _dev_nvai_root())
 
-# Eintrag des NV-AI-Setups (pro Nutzer).
+# Eintrag des NVAI-open-Setups (pro Nutzer).
 NVAI_REGISTRY_KEY = r"Software\NV-AI"
 NVAI_DEFAULT_PORT = 8100
 
 
 @dataclass(frozen=True)
 class NVAIInstall:
-    """Ein per Setup installiertes NV-AI."""
+    """Ein per Setup installiertes NVAI-open."""
 
     install_dir: Path
     version: str
@@ -131,12 +132,12 @@ class NVAIInstall:
 
     @property
     def start_script(self) -> Path:
-        """Startet NV-AI ohne Fenster, falls es nicht läuft, und kehrt sofort zurück."""
+        """Startet NVAI-open ohne Fenster, falls es nicht läuft, und kehrt sofort zurück."""
         return self.install_dir / "nvai-start.cmd"
 
 
 def nvai_install() -> NVAIInstall | None:
-    """Was das NV-AI-Setup unter HKCU\\Software\\NV-AI einträgt – oder None (etwa im
+    """Was das NVAI-open-Setup unter HKCU\\Software\\NV-AI einträgt – oder None (etwa im
     Entwicklungsstand ohne Setup)."""
     values = winutil.registry_values(NVAI_REGISTRY_KEY, "HKCU") or {}
     install_dir = values.get("InstallDir")
@@ -153,10 +154,10 @@ def nvai_install() -> NVAIInstall | None:
 
 
 def nvai_setup() -> NVAIInstall | None:
-    """Das per Setup installierte NV-AI, zu dem diese Brücke gehört – oder None.
+    """Das per Setup installierte NVAI-open, zu dem diese Brücke gehört – oder None.
 
     Das Add-on gehört immer zum Setup. Aus dem Repository gestartet bleibt die Brücke beim
-    NV-AI-Entwicklungsordner, wenn es ihn gibt: Auf dem Entwicklungsrechner liegt daneben eine
+    NVAI-open-Entwicklungsordner, wenn es ihn gibt: Auf dem Entwicklungsrechner liegt daneben eine
     Testinstallation des Setups mit eigenem Port.
     """
     if NVAI_ROOT_EXPLICIT or (not ADDON and (NVAI_ROOT / "scripts" / "start.ps1").is_file()):
@@ -178,13 +179,13 @@ def load_nvai_token() -> str | None:
     return os.environ.get("NVAI_TOKEN") or _load_settings().get("nvai_token") or None
 
 
-# Wird als Header X-NVAI-Token mitgeschickt. NV-AI verlangt ihn für Anfragen von anderen
+# Wird als Header X-NVAI-Token mitgeschickt. NVAI-open verlangt ihn für Anfragen von anderen
 # Rechnern; von 127.0.0.1 aus nie. /api/health und /api/version gehen immer ohne.
 NVAI_TOKEN = os.environ.get("NVAI_TOKEN") or _settings.get("nvai_token") or None
 
 
 def nvai_is_local() -> bool:
-    """Läuft NV-AI auf diesem Rechner? Nur dann darf die Brücke es selbst starten."""
+    """Läuft NVAI-open auf diesem Rechner? Nur dann darf die Brücke es selbst starten."""
     return (urlparse(NVAI_URL).hostname or "").lower() in ("127.0.0.1", "localhost", "::1")
 
 # Wie lange Auftragsordner (Ausschnitte, Masken, Ergebnisse) aufbewahrt werden.

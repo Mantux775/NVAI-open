@@ -2,7 +2,7 @@ import Foundation
 import Flux2Core
 import FluxTextEncoders
 
-/// Ein Modell, das NV-AI für Mac anbietet. Felder wie `ModelInfo` im NV-AI-Vertrag.
+/// Ein Modell, das NVAI-open für Mac anbietet. Felder wie `ModelInfo` im NVAI-open-Vertrag.
 /// Texte zweisprachig: die Eigenschaften liefern die aktuelle Sprache (App bzw. Accept-Language).
 struct CatalogModel: Identifiable, Sendable, Equatable {
     let id: String

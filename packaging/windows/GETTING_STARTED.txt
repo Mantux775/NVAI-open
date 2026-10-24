@@ -1,7 +1,7 @@
-NV-AI for Windows - Getting Started
+NVAI-open for Windows - Getting Started
 ===================================
 
-NV-AI generates images, audio and video locally on your NVIDIA graphics card.
+NVAI-open generates images, audio and video locally on your NVIDIA graphics card.
 You use it in your browser at http://127.0.0.1:8100.
 
 Requirements
@@ -23,13 +23,13 @@ end. This takes 5 to 20 minutes.
 
 First steps
 -----------
-1. Open "NV-AI" from the Start menu. Your browser shows the interface.
-2. Under "Models", download an image model. NV-AI suggests models that suit
+1. Open "NVAI-open" from the Start menu. Your browser shows the interface.
+2. Under "Models", download an image model. NVAI-open suggests models that suit
    your graphics card.
 3. Under "Generate", enter a prompt. The first job after a start takes an
    extra 30 to 60 seconds because the model is being loaded.
 
-"Quit NV-AI" in the Start menu shuts everything down and frees the graphics
+"Quit NVAI-open" in the Start menu shuts everything down and frees the graphics
 card.
 
 FLUX 3 Image Klein
@@ -39,18 +39,18 @@ For it you need a free account at https://huggingface.co:
 1. Accept the license at
    https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy
 2. Create a token (read access) at https://huggingface.co/settings/tokens
-3. Enter the token in NV-AI (under "Models").
+3. Enter the token in NVAI-open (under "Models").
 License: commercial use only below US$5 million annual revenue; review every
 image before publishing it.
 
 3D models (if installed)
 ------------------------
-In NV-AI under "Models", download TripoSG (7.4 GB). Then turn any generated image
+In NVAI-open under "Models", download TripoSG (7.4 GB). Then turn any generated image
 into a 3D mesh (GLB). Best results: one object, plain background, no cast shadow.
 
 PhotoCraft add-on (if installed)
 --------------------------------
-Start menu: "NV-AI for PhotoCraft". It requires PhotoCraft itself:
+Start menu: "NVAI-open for PhotoCraft". It requires PhotoCraft itself:
 https://github.com/storytold/photocraft/releases/latest (version 0.10.0 or newer)
 
 If something goes wrong
@@ -61,9 +61,9 @@ Please send these files along with your report:
 - %LOCALAPPDATA%\NV-AI\comfyui.log     (generation)
 (If you chose a different data folder, they are in that folder.)
 
-"Repair NV-AI" in the Start menu runs the installation steps again.
+"Repair NVAI-open" in the Start menu runs the installation steps again.
 
 Uninstalling
 ------------
-Via Settings > Apps > NV-AI. Models and images are kept unless you choose to
+Via Settings > Apps > NVAI-open. Models and images are kept unless you choose to
 delete them during uninstallation.

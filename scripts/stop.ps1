@@ -1,10 +1,10 @@
-# Beendet NV-AI und ComfyUI -- gezielt ueber die Prozesse, die auf den Ports
-# lauschen, und nur wenn die Kommandozeile wirklich zu NV-AI gehoert.
+# Beendet NVAI-open und ComfyUI -- gezielt ueber die Prozesse, die auf den Ports
+# lauschen, und nur wenn die Kommandozeile wirklich zu NVAI-open gehoert.
 # Kein pauschales "alle python.exe beenden".
 $ErrorActionPreference = "Stop"
 
 $targets = @(
-    @{ Port = 8100; Match = "nvai.main:app"; Name = "NV-AI-Orchestrator" },
+    @{ Port = 8100; Match = "nvai.main:app"; Name = "NVAI-open-Orchestrator" },
     @{ Port = 8188; Match = "main.py";       Name = "ComfyUI" },
     # Zweites ComfyUI fuer Sprachmodelle (mehrere Grafikkarten, experimentell seit 0.5)
     @{ Port = 8189; Match = "main.py";       Name = "ComfyUI (Text)" }

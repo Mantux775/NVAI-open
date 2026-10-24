@@ -3,7 +3,11 @@ import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type He
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
-import { t } from '../i18n'
+import { locale, t } from '../i18n'
+
+// Dezimalzahl im Format der gewählten Sprache (Deutsch mit Komma)
+const dec = (n: number, digits: number) =>
+  n.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
 type Mode = GenKind
 
@@ -113,6 +117,20 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [vidSize, setVidSize] = useState(VIDEO_SIZES[0])
   const [frames, setFrames] = useState(49)
   const [fps, setFps] = useState(16)
+  // LTX-2.5: Länge in Sekunden statt Frames, und die Zusatzwege (features des Modells)
+  const [ltxSeconds, setLtxSeconds] = useState(5)
+  const [ltxFps, setLtxFps] = useState(24)
+  const [autoDuration, setAutoDuration] = useState(false)
+  const [endId, setEndId] = useState('')
+  const [loop, setLoop] = useState(false)
+  const [quality, setQuality] = useState<'standard' | 'dfr'>('standard')
+  const [temporal, setTemporal] = useState(false)
+  const [audioId, setAudioId] = useState('')
+  const [audioAssets, setAudioAssets] = useState<Asset[]>([])
+  const [motionSpeed, setMotionSpeed] = useState(1)
+  const [multishot, setMultishot] = useState(false)
+  // Person aus einem Foto (seit 0.5.8): Rolle, in der FLUX 3 die Person aus dem Startbild zeigen soll
+  const [roleText, setRoleText] = useState('')
   const [steps, setSteps] = useState('')
   const [seed, setSeed] = useState('')
   const [batch, setBatch] = useState(1)
@@ -203,8 +221,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     } else if (event.type === 'job.done') {
       api.jobAssets(event.job_id).then((assets) => {
         setResults(assets)
-        // 3D aus Text: das frische Bild gleich als Quellbild auswählen.
-        if (mode === '3d' && assets[0]?.kind === 'image') {
+        // 3D aus Text und Person aus einem Foto: das frische Bild gleich als Quell- bzw. Startbild auswählen.
+        if ((mode === '3d' || mode === 'video') && assets[0]?.kind === 'image') {
           setSourceId(assets[0].id)
           loadSources()
         }
@@ -271,10 +289,44 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     [models, selected],
   )
   const activeLoras = loraPicks.filter((p) => loraChoices.some((l) => l.id === p.model_id))
-  const toggleLora = (id: string) =>
+  const toggleLora = (id: string, strength = 0.8) =>
     setLoraPicks((list) => (list.some((p) => p.model_id === id)
       ? list.filter((p) => p.model_id !== id)
-      : [...list, { model_id: id, strength: 0.8 }]))
+      : [...list, { model_id: id, strength }]))
+
+  // LTX-2.5 (seit 0.5.8): eigene Formate, Länge in Sekunden, Zusatzwege laut features.
+  const vfeat = mode === 'video' ? selected?.features : undefined
+  const isLtx25 = mode === 'video' && selected?.family === 'ltx25'
+  const videoSizes = isLtx25 && vfeat?.sizes?.length ? vfeat.sizes : VIDEO_SIZES
+  // 8n+1 Frames, der nächste Wert zu ltxSeconds (wie workflows.ltx_frames_for_seconds: 5 s = 121).
+  // Höchstens 481 Frames (API-Grenze): 20 s bei 24 fps, 19 s bei 25, 16 s bei 30.
+  const ltxMaxSeconds = Math.min(vfeat?.max_seconds ?? 20, Math.floor(480 / ltxFps))
+  const ltxFrames = Math.max(9, Math.min(481,
+    1 + Math.floor((Math.min(ltxSeconds, ltxMaxSeconds) * ltxFps - 1) / 8 + 0.5) * 8))
+  // Empfohlene LoRAs für die gewählte Videofamilie (catalog.LORA_MODELS, features.recommended_for)
+  const recLoras = useMemo(
+    () => models.filter((m) => m.kind === 'lora'
+      && (m.features?.recommended_for ?? []).includes(selected?.family ?? '-')),
+    [models, selected],
+  )
+  useEffect(() => {
+    if (!videoSizes.some((s) => s.label === vidSize.label)) setVidSize(videoSizes[0])
+  }, [videoSizes, vidSize.label])
+  useEffect(() => {
+    if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
+  }, [isLtx25, results])
+  // Fehlt eine optionale Datei (eigene Freigabe auf Hugging Face), steht der Weg dorthin daneben.
+  const missingNote = (name: string) => {
+    const url = vfeat?.missing?.[name]
+    if (!url) return null
+    return (
+      <>
+        {' '}{t('Fehlt noch: ', 'Not available yet: ')}
+        <a href={url} target="_blank" rel="noreferrer">{t('Freigabe auf Hugging Face', 'access on Hugging Face')}</a>
+        {t(', dann LTX-2.5 unter „Modelle“ erneut laden.', ', then download LTX-2.5 again under “Models”.')}
+      </>
+    )
+  }
   const setLoraStrength = (id: string, strength: number) =>
     setLoraPicks((list) => list.map((p) => (p.model_id === id ? { ...p, strength } : p)))
 
@@ -407,8 +459,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     mode === 'image' ? 'image'
       : mode === '3d' ? '3d'
         : mode === 'audio' ? (selected?.family === 'stable_audio3' ? 'music_sa3' : isAce ? 'music' : 'sfx')
-          : usesStart && sourceId ? 'video_start'
-            : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
+          : isLtx25 && multishot ? 'video_multishot'
+            : usesStart && sourceId ? 'video_start'
+              : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
 
   const expandPrompt = async () => {
     if (expanding || busy || !prompt.trim()) return
@@ -465,9 +518,37 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     }
   }
 
+  // Person aus einem Foto: FLUX 3 nimmt das gewählte Startbild als Referenz, behält das Gesicht und
+  // erzeugt vier Startbilder im Videoformat. Gemessen 24.10.: ~95 s für vier Bilder bei 1280 × 704;
+  // das Gesicht trifft FLUX besser, wenn das Foto nur Kopf und Schultern zeigt.
+  const refModel = models
+    .filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0)
+    .sort((a, b) => Number(b.recommended) - Number(a.recommended) || Number(b.family === 'flux3') - Number(a.family === 'flux3'))[0]
+  const personImages = async () => {
+    if (busy || !roleText.trim() || !sourceId || !refModel) return
+    setError(null)
+    setResults([])
+    setProgress(0)
+    setStage(t('in der Warteschlange', 'queued'))
+    const role = roleText.trim().replace(/[ .]+$/, '')
+    try {
+      const job = await api.generateImage({
+        prompt: `Cinematic film still. The person from the first image, with exactly the same face, eyes, nose, `
+          + `mouth and hair color: ${role}. Medium shot from the waist up, the face clearly visible, `
+          + `free space above the head.`,
+        negative_prompt: '', model_id: refModel.id, steps: null, seed: seed ? Number(seed) : null,
+        width: vidSize.w, height: vidSize.h, batch_size: 4, reference_asset_ids: [sourceId],
+      })
+      setJobId(job.id)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   // Der Hinweis zum Prompt steht im leeren Feld selbst, nicht als Absatz darunter.
-  const promptHint = mode === 'image' ? feat?.prompt_hint || '' : HINT[mode]
-  const placeholder = [promptHint, `${t('z. B.', 'e.g.')} ${feat?.placeholder || PLACEHOLDER[mode]}`]
+  const promptHint = mode === 'image' ? feat?.prompt_hint || '' : (isLtx25 && vfeat?.prompt_hint) || HINT[mode]
+  const placeholder = [promptHint, `${t('z. B.', 'e.g.')} ${feat?.placeholder
+    || (isLtx25 && vfeat?.placeholder) || PLACEHOLDER[mode]}`]
     .filter(Boolean).join('\n\n')
 
   const expandRow = () => (
@@ -612,9 +693,19 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         job = await api.generateAudio({ ...common, seconds, lyrics })
       } else if (mode === 'video') {
         job = await api.generateVideo({
-          ...common, width: vidSize.w, height: vidSize.h, frames, fps,
+          ...common, width: vidSize.w, height: vidSize.h,
+          frames: isLtx25 ? ltxFrames : frames, fps: isLtx25 ? ltxFps : fps,
           image_asset_id: usesStart ? sourceId || null : null,
           loras: activeLoras,
+          ...(isLtx25 ? {
+            loop: loop && !!sourceId && quality !== 'dfr',
+            end_image_asset_id: !loop && quality !== 'dfr' && endId ? endId : null,
+            quality,
+            temporal_upscale: quality === 'dfr' && temporal,
+            auto_duration: autoDuration && !audioId,
+            audio_asset_id: audioId || null,
+            motion_speed: motionSpeed,
+          } : {}),
         })
       } else {
         job = await api.generate3D({
@@ -784,6 +875,92 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                         'Optional: with a start image this becomes image-to-video, without one pure text-to-video.',
                       )}
                 </p>
+                <details className="mesh-from-text" open={!!roleText.trim()}>
+                  <summary>{t('Person aus einem Foto (optional)', 'Person from a photo (optional)')}</summary>
+                  <p className="hint small">
+                    {t('Das Foto oben als Startbild wählen oder hochladen, am besten nur Kopf und Schultern. Hier '
+                      + 'beschreiben, wer die Person sein soll: Stil, Kleidung, Ort. FLUX 3 behält das Gesicht und '
+                      + 'erzeugt vier Startbilder im Videoformat. Das ähnlichste oben auswählen, dann unten Bewegung '
+                      + 'und Gesprochenes beschreiben.',
+                    'Pick or upload the photo as the start image above, head and shoulders work best. Describe here '
+                      + 'who the person should be: style, clothing, place. FLUX 3 keeps the face and creates four start '
+                      + 'images in the video format. Pick the most similar one above, then describe the motion and what '
+                      + 'is said below.')}
+                  </p>
+                  <textarea
+                    value={roleText}
+                    onChange={(e) => setRoleText(e.target.value)}
+                    rows={3}
+                    placeholder={t(
+                      'z. B. als Superheldin in Blau und Grün mit langem Umhang, die bei Sonnenuntergang über einer Stadt schwebt',
+                      'e.g. as a superheroine in blue and green with a long cape, floating above a city at sunset',
+                    )}
+                  />
+                  <button
+                    className="btn small full"
+                    onClick={personImages}
+                    disabled={busy || !roleText.trim() || !sourceId || !refModel}
+                    title={!refModel
+                      ? t('Braucht FLUX 3 Image Klein', 'Needs FLUX 3 Image Klein')
+                      : !sourceId
+                        ? t('Erst oben das Foto als Startbild wählen', 'First pick the photo as the start image above')
+                        : t(`Vier Bilder mit ${refModel.name}, rund 1,5 Minuten`, `Four images with ${refModel.name}, about 1.5 minutes`)}
+                  >
+                    {t('Vier Startbilder erzeugen', 'Create four start images')}
+                  </button>
+                  {!refModel && (
+                    <p className="hint small warn">
+                      {t('Braucht FLUX 3 Image Klein: unter „Modelle“ laden.',
+                        'Needs FLUX 3 Image Klein: download it under “Models”.')}
+                    </p>
+                  )}
+                </details>
+                {isLtx25 && vfeat?.end_image && sourceImages.length > 0 && (
+                  <>
+                    <h3>
+                      {t('Endbild', 'End image')}{' '}
+                      <span className="muted small">{t('optional', 'optional')}</span>
+                    </h3>
+                    <label className="check">
+                      <input type="checkbox" checked={loop} disabled={!sourceId || quality === 'dfr'}
+                        onChange={(e) => setLoop(e.target.checked)} />
+                      {t('Schleife: das Startbild ist auch das Endbild (nahtloser Loop)',
+                        'Loop: the start image is also the end image (seamless loop)')}
+                    </label>
+                    {loop && (
+                      <p className="hint small">
+                        {t('Die Kamera ruhig lassen und eine wiederkehrende Bewegung beschreiben (Flammen, Wasser, Atem). '
+                          + 'Mit Kamerafahrt zerfiel im Test der Schluss.',
+                        'Keep the camera still and describe a repeating motion (flames, water, breathing). '
+                          + 'With a camera move the ending fell apart in the test.')}
+                      </p>
+                    )}
+                    {!loop && (
+                      <div className="source-grid">
+                        <button className={endId ? 'source none' : 'source none selected'}
+                          title={t('Ohne Endbild', 'No end image')} onClick={() => setEndId('')}>
+                          {t('ohne', 'none')}
+                        </button>
+                        {sourceImages.map((a) => (
+                          <div key={a.id} className={endId === a.id ? 'source selected' : 'source'}
+                            title={a.prompt || a.filename}>
+                            <img src={a.url} alt={a.prompt} loading="lazy"
+                              onClick={() => quality !== 'dfr' && setEndId(a.id)} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <p className="hint small">
+                      {quality === 'dfr'
+                        ? t('Start- und Endbild gehen nur ohne „Höchste Qualität (DFR)“.',
+                          'Start and end image only work without “Best quality (DFR)”.')
+                        : t('Mit Endbild läuft das Video vom Startbild zum Endbild (Übergang). Eine Stufe in '
+                            + 'voller Auflösung, deshalb langsamer als ohne.',
+                          'With an end image the video runs from the start image to the end image (a '
+                            + 'transition). One stage at full resolution, so slower than without.')}
+                    </p>
+                  </>
+                )}
               </>
             )}
             <h3>{mode === 'audio' && isAce ? t('Genre-Tags', 'Genre tags') : 'Prompt'}</h3>
@@ -906,6 +1083,69 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )
               })
             )}
+          </details>
+        )}
+        {mode === 'video' && recLoras.length > 0 && (
+          <details className="lora-picker rec-loras">
+            <summary>
+              {t(`Empfohlene LoRAs für ${selected?.name.split(' (')[0]}`,
+                `Recommended LoRAs for ${selected?.name.split(' (')[0]}`)}{' '}
+              <span className="muted small">
+                {t(`${recLoras.filter((l) => l.installed).length} von ${recLoras.length} geladen`,
+                  `${recLoras.filter((l) => l.installed).length} of ${recLoras.length} downloaded`)}
+              </span>
+            </summary>
+            <p className="hint small">
+              {t('Geladene LoRAs erscheinen auch oben in der Auswahl. Trigger-Wörter gehören in den Prompt. '
+                  + 'LTX-2.3-LoRAs laufen laut Lightricks meist auch auf LTX-2.5.',
+                'Downloaded LoRAs also appear in the list above. Trigger words go into the prompt. '
+                  + 'According to Lightricks, LTX-2.3 LoRAs mostly run on LTX-2.5 too.')}
+            </p>
+            {recLoras.map((l) => {
+              const dl = downloads.active[l.id]
+              const pick = loraPicks.find((p) => p.model_id === l.id)
+              const use = l.features?.use
+              const useHint = use === 'start_image' ? t('mit Startbild', 'with a start image')
+                : use === 'end_image' ? t('mit Start- und Endbild', 'with a start and end image')
+                  : use === 'audio_input' ? t('mit „Ton vorgeben“', 'with “Given sound”')
+                    : use === 'motion_speed' ? t('mit Startbild und „Zeitlupe“', 'with a start image and “Slow motion”')
+                      : ''
+              return (
+                <div key={l.id} className="rec-lora">
+                  <div className="row-between">
+                    <span className="lora-name">{l.name}</span>
+                    <span className="muted small">{dec(l.size_gb, 2)} GB · {l.license}</span>
+                  </div>
+                  <p className="hint small">
+                    {l.best_for}
+                    {useHint ? ` · ${useHint}` : ''}
+                    {l.trigger ? ` · Trigger: ${l.trigger}` : ''}
+                    {` · ${t('Stärke', 'strength')} ${dec(l.features?.strength ?? 1, 1)}`}
+                  </p>
+                  {l.features?.tested && <p className="hint small tested">{l.features.tested}</p>}
+                  {l.warning && <p className="hint small warn">{l.warning}</p>}
+                  <div className="row">
+                    {l.installed ? (
+                      <button className={pick ? 'btn small primary' : 'btn small'}
+                        onClick={() => toggleLora(l.id, l.features?.strength ?? 1)}>
+                        {pick ? t('✓ aktiv', '✓ active') : t('Aktivieren', 'Activate')}
+                      </button>
+                    ) : dl ? (
+                      <span className="muted small">{dl.stage || t('wartet', 'queued')}</span>
+                    ) : (
+                      <button className="btn small" onClick={() => downloads.start(l.id)}>
+                        {t(`Laden (${dec(l.size_gb, 2)} GB)`, `Download (${dec(l.size_gb, 2)} GB)`)}
+                      </button>
+                    )}
+                    {l.source_url && (
+                      <a className="small" href={l.source_url} target="_blank" rel="noreferrer">
+                        {t('Quelle', 'Source')}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </details>
         )}
 
@@ -1285,30 +1525,144 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             <h3>{t('Format', 'Size')}</h3>
             <select
               value={vidSize.label}
-              onChange={(e) => setVidSize(VIDEO_SIZES.find((s) => s.label === e.target.value)!)}
+              onChange={(e) => setVidSize(videoSizes.find((s) => s.label === e.target.value)!)}
             >
-              {VIDEO_SIZES.map((s) => (
+              {videoSizes.map((s) => (
                 <option key={s.label}>{s.label}</option>
               ))}
             </select>
-            <div className="row">
-              <label>
-                Frames
-                <input type="number" min={9} max={201} step={4} value={frames}
-                  onChange={(e) => setFrames(Number(e.target.value))} />
-              </label>
-              <label>
-                fps
-                <input type="number" min={1} max={60} value={fps}
-                  onChange={(e) => setFps(Number(e.target.value))} />
-              </label>
-            </div>
-            <p className="hint small">
-              {t(
-                `≈ ${est} s Clip · Frames werden auf 4n+1 gerundet`,
-                `≈ ${est} s clip · frames are rounded to 4n+1`,
-              )}
-            </p>
+            {isLtx25 ? (
+              <>
+                <h3>{t('Länge', 'Length')}</h3>
+                <div className="row">
+                  <label>
+                    {t('Sekunden', 'Seconds')}
+                    <input type="number" min={1} max={ltxMaxSeconds} step={1} value={ltxSeconds}
+                      disabled={autoDuration || !!audioId}
+                      onChange={(e) => setLtxSeconds(Number(e.target.value))} />
+                  </label>
+                  <label>
+                    fps
+                    <select value={ltxFps} onChange={(e) => setLtxFps(Number(e.target.value))}>
+                      {[24, 25, 30].map((f) => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label className="check">
+                  <input type="checkbox" checked={autoDuration} disabled={!vfeat?.auto_duration || !!audioId}
+                    onChange={(e) => setAutoDuration(e.target.checked)} />
+                  {t('Länge automatisch aus der beschriebenen Handlung (1–20 s)',
+                    'Automatic length from the described action (1–20 s)')}
+                </label>
+                <p className="hint small">
+                  {audioId
+                    ? t('Mit vorgegebenem Ton bestimmt der Ton die Länge.', 'With a given sound, the sound sets the length.')
+                    : autoDuration
+                      ? t('Pausen ausschreiben („a beat of silence“), sonst wird der Clip kurz.',
+                        'Write pauses out (“a beat of silence”), otherwise the clip gets short.')
+                      : t(`${ltxFrames} Frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`,
+                        `${ltxFrames} frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`)}
+                  {!vfeat?.auto_duration && missingNote('auto_duration')}
+                </p>
+
+                <h3>{t('Qualität', 'Quality')}</h3>
+                {/* row-gap statt row: .row stellt Beschriftungen über das Feld, hier gehören sie daneben */}
+                <div className="row-gap">
+                  <label className="check">
+                    <input type="radio" checked={quality === 'standard'} onChange={() => setQuality('standard')} />
+                    {t('Standard', 'Standard')}
+                  </label>
+                  <label className="check">
+                    <input type="radio" checked={quality === 'dfr'} disabled={!vfeat?.dfr}
+                      onChange={() => setQuality('dfr')} />
+                    {t('Höchste Qualität (DFR)', 'Best quality (DFR)')}
+                  </label>
+                </div>
+                {quality === 'dfr' && (
+                  <label className="check">
+                    <input type="checkbox" checked={temporal} disabled={!vfeat?.temporal_upscale}
+                      onChange={(e) => setTemporal(e.target.checked)} />
+                    {t('48 fps (zeitlich verdoppelt, langsamer)', '48 fps (temporal upscale, slower)')}
+                  </label>
+                )}
+                <p className="hint small">
+                  {t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem Detail-IC-LoRA: '
+                      + 'schärfer, aber deutlich langsamer.',
+                    'DFR computes detail keyframes and a second stage with a detail IC-LoRA: sharper, '
+                      + 'but much slower.')}
+                  {!vfeat?.dfr && missingNote('dfr')}
+                </p>
+
+                {vfeat?.audio_input && (
+                  <>
+                    <h3>
+                      {t('Ton vorgeben', 'Given sound')}{' '}
+                      <span className="muted small">{t('optional', 'optional')}</span>
+                    </h3>
+                    <select value={audioId} onChange={(e) => setAudioId(e.target.value)}>
+                      <option value="">{t('— keiner, LTX-2.5 erzeugt den Ton —', '— none, LTX-2.5 creates the sound —')}</option>
+                      {audioAssets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {(a.prompt || a.filename).slice(0, 60)}
+                          {a.meta?.seconds ? ` (${a.meta.seconds} s)` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="hint small">
+                      {t('Der Ton bleibt unverändert im Video, das Bild richtet sich nach ihm. Höchstens 20 s.',
+                        'The sound stays unchanged in the video and the picture follows it. At most 20 s.')}
+                    </p>
+                  </>
+                )}
+
+                {vfeat?.motion_speed && (
+                  <>
+                    <h3>{t('Zeitlupe', 'Slow motion')}</h3>
+                    <select value={motionSpeed} onChange={(e) => setMotionSpeed(Number(e.target.value))}>
+                      {([[1, t('aus (Echtzeit)', 'off (real time)')], [0.5, '2×'], [0.2, '5×'], [0.1, '10×'],
+                        [0.05, '20×'], [0.025, '40×']] as [number, string][]).map(([v, label]) => (
+                        <option key={v} value={v}>{label}</option>
+                      ))}
+                    </select>
+                    {motionSpeed < 1 && (
+                      <p className="hint small">
+                        {t('Wirkt verlässlich mit der LoRA „Slow Motion Control“ (empfohlene LoRAs) und einem Startbild.',
+                          'Reliable with the “Slow Motion Control” LoRA (recommended LoRAs) and a start image.')}
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {vfeat?.multishot && (
+                  <label className="check">
+                    <input type="checkbox" checked={multishot} onChange={(e) => setMultishot(e.target.checked)} />
+                    {t('Mehrere Einstellungen (Multishot): „Prompt ausbauen“ schreibt 2–4 Einstellungen mit Schnitten',
+                      'Several shots (multi-shot): “Expand prompt” writes 2–4 shots with cuts')}
+                  </label>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="row">
+                  <label>
+                    Frames
+                    <input type="number" min={9} max={201} step={4} value={frames}
+                      onChange={(e) => setFrames(Number(e.target.value))} />
+                  </label>
+                  <label>
+                    fps
+                    <input type="number" min={1} max={60} value={fps}
+                      onChange={(e) => setFps(Number(e.target.value))} />
+                  </label>
+                </div>
+                <p className="hint small">
+                  {t(
+                    `≈ ${est} s Clip · Frames werden auf 4n+1 gerundet`,
+                    `≈ ${est} s clip · frames are rounded to 4n+1`,
+                  )}
+                </p>
+              </>
+            )}
           </>
         )}
 

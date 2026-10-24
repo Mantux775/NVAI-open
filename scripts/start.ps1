@@ -1,5 +1,5 @@
 <#
-  Startet den NV-AI-Orchestrator. ComfyUI wird bei Bedarf automatisch nachgestartet.
+  Startet den NVAI-open-Orchestrator. ComfyUI wird bei Bedarf automatisch nachgestartet.
 
   -Lan   laesst den Server zusaetzlich im Netz lauschen, damit andere Geraete
          ihn erreichen (Mac-App, PhotoCraft-Bruecke, iOS-App; ueber Tailscale
@@ -25,10 +25,10 @@ if ($existing) {
     Write-Host "  PID $pid_  seit $($proc.CreationDate)"
     Write-Host "  $($proc.CommandLine)"
     if ($proc.CommandLine -match "nvai.main:app") {
-        Write-Host "`nDas ist NV-AI -- einfach http://127.0.0.1:$port oeffnen." -ForegroundColor Green
+        Write-Host "`nDas ist NVAI-open -- einfach http://127.0.0.1:$port oeffnen." -ForegroundColor Green
         Write-Host "Zum Neustart vorher: scripts\stop.ps1"
     } else {
-        Write-Host "`nDas ist NICHT NV-AI. Anderen Port waehlen:" -ForegroundColor Yellow
+        Write-Host "`nDas ist NICHT NVAI-open. Anderen Port waehlen:" -ForegroundColor Yellow
         Write-Host '  $env:NVAI_PORT = "8101"; scripts\start.ps1'
     }
     exit 1
@@ -63,12 +63,12 @@ if ($Lan) {
     $ip = (Get-NetIPAddress -AddressFamily IPv4 |
            Where-Object { $_.IPAddress -notlike "127.*" -and $_.PrefixOrigin -ne "WellKnown" } |
            Select-Object -First 1).IPAddress
-    Write-Host "NV-AI lauscht im Netz auf http://${ip}:$port" -ForegroundColor Cyan
+    Write-Host "NVAI-open lauscht im Netz auf http://${ip}:$port" -ForegroundColor Cyan
     Write-Host "  Adresse und Token aus $tokenFrom in Mac-App, PhotoCraft-Bruecke" -ForegroundColor DarkGray
     Write-Host "  oder iOS-App eintragen. Pruefen: GET /api/version zeigt authorized." -ForegroundColor DarkGray
     Write-Host "  Beim ersten Mal fragt die Windows-Firewall -- 'Privates Netz' zulassen." -ForegroundColor DarkGray
 } else {
-    Write-Host "NV-AI startet auf http://127.0.0.1:$port" -ForegroundColor Cyan
+    Write-Host "NVAI-open startet auf http://127.0.0.1:$port" -ForegroundColor Cyan
 }
 
 Push-Location (Join-Path $repo "server")

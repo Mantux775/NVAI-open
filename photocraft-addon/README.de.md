@@ -1,15 +1,15 @@
-# NV-AI für PhotoCraft – lokale KI als Haupt-KI in PhotoCraft
+# NVAI-open für PhotoCraft – lokale KI als Haupt-KI in PhotoCraft
 
 *English: [README.md](README.md)*
 
-Ein schlankes Panel-Fenster neben PhotoCraft, das die lokale Bildgenerierung von **NV-AI**
+Ein schlankes Panel-Fenster neben PhotoCraft, das die lokale Bildgenerierung von **NVAI-open**
 (eigene GPU, keine Cloud) in den Bildbearbeitungs-Alltag holt – ähnlich wie Photoshops
 „Generative Füllung“:
 
 | Modus | Was passiert |
 |---|---|
-| **Füllen** | Die Auswahl wird passend zur Umgebung neu erzeugt (Inpainting). Ohne Prompt setzt sich die Umgebung fort – praktisch zum Wegretuschieren. Ohne Auswahl werden transparente Ränder gefüllt, etwa nach *Bild › Arbeitsfläche* mit transparenter Erweiterung (Outpainting) – dann hilft ein Prompt, der die Szene kurz beschreibt. Der Modus **Erweitern** macht das in einem Schritt. Ab NV-AI 0.5.6 füllt auch FLUX 3 und wird genommen, wenn kein anderes Modell gewählt ist: NV-AI färbt den Bereich grau, lässt FLUX 3 malen und setzt nur die Auswahl ausgerichtet zurück. Im Test entfernte es Kisten mit durchlaufendem Pflaster; um etwas Vorhandenes zu ändern, etwa die Schrift auf einem Schild, hielt **Überarbeiten** mit FLUX 3 Lage und Neigung besser. |
-| **Erweitern** | Outpainting (seit 0.4.3 eigener Modus): links, oben, rechts, unten in Pixeln eingeben (oder „breiter“, „höher“, „nach unten“, „rundum“ wählen); das Add-on vergrößert die Arbeitsfläche und malt den neuen Rand passend dazu. Angeboten wird jedes Modell, das erweitern kann, FLUX 3 zuerst: im Test nahtlos, während Qwen an der alten Bildkante eine harte Naht ließ. Auf dem Mac ist es FLUX.2 Klein per Maske; dort bleibt der Übergang weicher und kann an der alten Bildkante als unscharfer Streifen sichtbar bleiben. Braucht NV-AI ab 0.5.4 (Mac: 0.4.3). |
+| **Füllen** | Die Auswahl wird passend zur Umgebung neu erzeugt (Inpainting). Ohne Prompt setzt sich die Umgebung fort – praktisch zum Wegretuschieren. Ohne Auswahl werden transparente Ränder gefüllt, etwa nach *Bild › Arbeitsfläche* mit transparenter Erweiterung (Outpainting) – dann hilft ein Prompt, der die Szene kurz beschreibt. Der Modus **Erweitern** macht das in einem Schritt. Ab NVAI-open 0.5.6 füllt auch FLUX 3 und wird genommen, wenn kein anderes Modell gewählt ist: NVAI-open färbt den Bereich grau, lässt FLUX 3 malen und setzt nur die Auswahl ausgerichtet zurück. Im Test entfernte es Kisten mit durchlaufendem Pflaster; um etwas Vorhandenes zu ändern, etwa die Schrift auf einem Schild, hielt **Überarbeiten** mit FLUX 3 Lage und Neigung besser. |
+| **Erweitern** | Outpainting (seit 0.4.3 eigener Modus): links, oben, rechts, unten in Pixeln eingeben (oder „breiter“, „höher“, „nach unten“, „rundum“ wählen); das Add-on vergrößert die Arbeitsfläche und malt den neuen Rand passend dazu. Angeboten wird jedes Modell, das erweitern kann, FLUX 3 zuerst: im Test nahtlos, während Qwen an der alten Bildkante eine harte Naht ließ. Auf dem Mac ist es FLUX.2 Klein per Maske; dort bleibt der Übergang weicher und kann an der alten Bildkante als unscharfer Streifen sichtbar bleiben. Braucht NVAI-open ab 0.5.4 (Mac: 0.4.3). |
 | **Generieren** | Ein neues Bild in der Auswahl – oder auf der ganzen Arbeitsfläche, wenn nichts ausgewählt ist. |
 | **Überarbeiten** | Die Auswahl (oder das ganze Bild) wird neu gerechnet. Mit Qwen per Bild-zu-Bild – die *Stärke* bestimmt, wie viel sich ändert. Mit **FLUX 3** per Referenzbild: Der Prompt sagt, was sich ändert und was gleich bleibt („Replace the rope handles with iron handles; keep everything else unchanged.“). |
 
@@ -21,7 +21,7 @@ Versuch möglich ist.
 ## So funktioniert es
 
 ```
-PhotoCraft (mit --control gestartet)          NV-AI (:8100)  →  ComfyUI (:8188)
+PhotoCraft (mit --control gestartet)          NVAI-open (:8100)  →  ComfyUI (:8188)
         ▲   JSON-Zeilen über 127.0.0.1:47821        ▲  REST
         │   (Token-geschützt)                       │
         └──────────── Brücke (:8120) ───────────────┘
@@ -31,7 +31,7 @@ PhotoCraft (mit --control gestartet)          NV-AI (:8100)  →  ComfyUI (:8188
 1. **Erfassen** – Vom aktiven Dokument entsteht kurz eine reduzierte Arbeitskopie. Daraus
    werden Ausschnitt und Auswahlmaske in einen Austauschordner exportiert. Dein Dokument und
    sein Protokoll bleiben dabei unberührt.
-2. **Rechnen** – Ausschnitt und Maske gehen in Arbeitsgröße (~1 Megapixel) an NV-AI.
+2. **Rechnen** – Ausschnitt und Maske gehen in Arbeitsgröße (~1 Megapixel) an NVAI-open.
 3. **Einfügen** – Das Ergebnis wird an exakt der richtigen Stelle als Ebene eingefügt und
    bekommt die Auswahl als Maske.
 
@@ -42,7 +42,7 @@ einer Sandbox ohne Netzwerk. Der Steuerkanal ist deshalb der einzige saubere Weg
 
 ```powershell
 scripts\setup.ps1              # venv (Python 3.12) + Abhängigkeiten + Tests
-scripts\install_shortcut.ps1   # Verknüpfung „NV-AI for PhotoCraft“ (Desktop + Startmenü)
+scripts\install_shortcut.ps1   # Verknüpfung „NVAI-open for PhotoCraft“ (Desktop + Startmenü)
 ```
 
 Voraussetzungen:
@@ -50,37 +50,37 @@ Voraussetzungen:
 - **PhotoCraft 0.10 oder neuer.** Die Brücke findet es über den Eintrag, den der PhotoCraft-Installer
   unter *App Paths* anlegt. Ein portables PhotoCraft trägt man in `settings.json` als
   `"photocraft_exe"` ein. Fehlt PhotoCraft oder ist es älter, zeigt das Panel einen Download-Knopf.
-- **NV-AI**, entweder als Entwicklungsordner (der Ordner über diesem bzw. ein Nachbarordner `NV-AI`)
-  oder per NV-AI-Setup installiert (`HKCU\Software\NV-AI`).
+- **NVAI-open**, entweder als Entwicklungsordner (der Ordner über diesem bzw. ein Nachbarordner `NVAI-open`)
+  oder per NVAI-open-Setup installiert (`HKCU\Software\NV-AI`).
 
-Auf Tester-PCs kommt die Brücke als Add-on des NV-AI-Setups, siehe
+Auf Tester-PCs kommt die Brücke als Add-on des NVAI-open-Setups, siehe
 [`docs/windows-installer.md`](docs/windows-installer.md).
-Für **Füllen** braucht NV-AI Masken (`mask_asset_id`, ab NV-AI 0.2.0). Generieren und Überarbeiten
+Für **Füllen** braucht NVAI-open Masken (`mask_asset_id`, ab NVAI-open 0.2.0). Generieren und Überarbeiten
 laufen auch ohne sie.
 
 **Sprache:** Englisch ist Standard, Deutsch wählbar – im Panel unten rechts („Automatisch“ folgt der
-Systemsprache), in der Mac-App unter *Einstellungen*. NV-AI bekommt die Sprache als
+Systemsprache), in der Mac-App unter *Einstellungen*. NVAI-open bekommt die Sprache als
 `Accept-Language` und liefert seine Modelltexte danach.
 
 ## Benutzen
 
 1. Ein normal gestartetes PhotoCraft speichern und schließen – es lässt sich nachträglich nicht
    anbinden.
-2. **„NV-AI for PhotoCraft“** starten. Das startet bei Bedarf NV-AI (minimiertes Konsolenfenster),
+2. **„NVAI-open for PhotoCraft“** starten. Das startet bei Bedarf NVAI-open (minimiertes Konsolenfenster),
    PhotoCraft mit Steuerkanal und das Panel.
 3. In PhotoCraft eine Auswahl treffen, im Panel Modus und Prompt wählen, **Strg + Enter**.
 
-Tipps (Modellwahl nach `BILDMODELLE.md` von NV-AI):
+Tipps (Modellwahl nach `BILDMODELLE.md` von NVAI-open):
 
 - Englische Prompts in ganzen Sätzen treffen am genauesten. Unter dem Prompt steht die
-  Kurzanleitung, die NV-AI für das gewählte Modell mitliefert.
-- Nur ein paar Worte? **✨ Prompt ausbauen** unter dem Prompt lässt NV-AI daraus eine volle
-  Bildbeschreibung schreiben. Windows: rund 15 s, braucht NV-AI ab 0.4 mit geladenem FLUX 3.
-  Mac: rund 25 s auf einem M1 mit 8 GB, braucht NV-AI für Mac ab 0.4 mit geladenem FLUX.2 Klein
+  Kurzanleitung, die NVAI-open für das gewählte Modell mitliefert.
+- Nur ein paar Worte? **✨ Prompt ausbauen** unter dem Prompt lässt NVAI-open daraus eine volle
+  Bildbeschreibung schreiben. Windows: rund 15 s, braucht NVAI-open ab 0.4 mit geladenem FLUX 3.
+  Mac: rund 25 s auf einem M1 mit 8 GB, braucht NVAI-open für Mac ab 0.4 mit geladenem FLUX.2 Klein
   (dessen Text-Encoder schreibt die Beschreibung, kein zusätzlicher Download). Vor dem Start lesen
   und streichen, was erfunden wurde; „Zurück zum eigenen Prompt“ nimmt es zurück.
-- Lädt NV-AI gerade ein Modell, zeigt das Panel den Download mit Fortschritt und einem ✕ zum
-  Abbrechen (sofort ab NV-AI 0.5.2 bzw. Mac 0.4.2; ältere Fassungen brechen alle Downloads ab).
+- Lädt NVAI-open gerade ein Modell, zeigt das Panel den Download mit Fortschritt und einem ✕ zum
+  Abbrechen (sofort ab NVAI-open 0.5.2 bzw. Mac 0.4.2; ältere Fassungen brechen alle Downloads ab).
 - **Qwen-Image-2512** für Endergebnisse, Schrift und Konstruktion; **FLUX 3** fürs gezielte
   Ändern eines vorhandenen Bereichs (Teil ersetzen, Farbe, Material). FLUX 3 steht unter der
   FLUX Kommunity License (Umsatzgrenze, Prüfpflicht) – das Panel zeigt den Hinweis an.
@@ -95,8 +95,8 @@ Tipps (Modellwahl nach `BILDMODELLE.md` von NV-AI):
 - FLUX 3 zeichnet beim Bearbeiten den ganzen Ausschnitt neu: Aufbau und Farben bleiben, die
   Feinstruktur weicht leicht ab (gemessen ~10 von 255). Die Ebenenmaske begrenzt das auf die
   Auswahl.
-- Passt das in NV-AI aktive Modell nicht zum Modus, nimmt die Brücke ein passendes und sagt es.
-- **Esc** bricht einen laufenden Auftrag ab – nur den eigenen; NV-AI kann parallel anderweitig
+- Passt das in NVAI-open aktive Modell nicht zum Modus, nimmt die Brücke ein passendes und sagt es.
+- **Esc** bricht einen laufenden Auftrag ab – nur den eigenen; NVAI-open kann parallel anderweitig
   benutzt werden.
 - Das Pin-Symbol oben rechts hält das Panel im Vordergrund.
 
@@ -109,9 +109,9 @@ Tipps (Modellwahl nach `BILDMODELLE.md` von NV-AI):
   hochskaliert und wirken weicher – dann in Teilen füllen.
 - Während ein Auftrag erfasst oder eingefügt wird, blitzt in PhotoCraft kurz ein Hilfs-Tab auf.
 
-## NV-AI auf einem anderen Rechner
+## NVAI-open auf einem anderen Rechner
 
-NV-AI muss nicht auf demselben PC laufen, etwa über Tailscale. Adresse und Token stehen in
+NVAI-open muss nicht auf demselben PC laufen, etwa über Tailscale. Adresse und Token stehen in
 `%LOCALAPPDATA%\ArtCraft-LocalAI\settings.json` (oder in den Umgebungsvariablen `NVAI_URL` /
 `NVAI_TOKEN`):
 
@@ -119,41 +119,41 @@ NV-AI muss nicht auf demselben PC laufen, etwa über Tailscale. Adresse und Toke
 {"nvai_url": "http://pc-name:8100", "nvai_token": "…"}
 ```
 
-Der Token geht als Header `X-NVAI-Token` mit. Ab NV-AI 0.2.0 gilt: Vom eigenen Rechner braucht es
+Der Token geht als Header `X-NVAI-Token` mit. Ab NVAI-open 0.2.0 gilt: Vom eigenen Rechner braucht es
 keinen Token, von anderen Rechnern für alles außer `/api/health` und `/api/version`. Damit andere
-Rechner überhaupt zugelassen werden, muss NV-AI dort mit `scripts\start.ps1 -Lan` laufen. Den Token
-findet man dann in `data\api_token` von NV-AI. Fehlt der Token oder passt er nicht, sagt das
+Rechner überhaupt zugelassen werden, muss NVAI-open dort mit `scripts\start.ps1 -Lan` laufen. Den Token
+findet man dann in `data\api_token` von NVAI-open. Fehlt der Token oder passt er nicht, sagt das
 Panel das. Nach dem Eintragen genügt **Erneut prüfen**, ein Neustart der Brücke ist nicht nötig.
 
-Selbst gestartet wird NV-AI nur, wenn die Adresse lokal ist; sonst zeigt das Panel, unter welcher
-Adresse es NV-AI erwartet.
+Selbst gestartet wird NVAI-open nur, wenn die Adresse lokal ist; sonst zeigt das Panel, unter welcher
+Adresse es NVAI-open erwartet.
 
-Die Brücke spricht Version 1 des NV-AI-Vertrags. Er liegt als Kopie unter
+Die Brücke spricht Version 1 des NVAI-open-Vertrags. Er liegt als Kopie unter
 `contract/nvai-openapi.json`, und `tests/test_contract.py` prüft beide Clients dagegen. Meldet
-NV-AI über `/api/version` eine andere Version, verweigert das Panel die Arbeit mit einem Hinweis.
+NVAI-open über `/api/version` eine andere Version, verweigert das Panel die Arbeit mit einem Hinweis.
 
-## Mac-App „NV-AI für PhotoCraft“
+## Mac-App „NVAI-open für PhotoCraft“
 
 `MacApp/` ist das Panel als native Mac-App (SwiftUI auf `PhotoCraftKit`). Sie kann dasselbe wie das
 Windows-Panel: Füllen, Generieren, Überarbeiten, Varianten tauschen und PhotoCraft mit Steuerkanal
 starten. Das Fenster bleibt auf Wunsch über PhotoCraft (Stecknadel oben rechts).
 
 - **Bauen und installieren** (auf dem Mac, mit `PhotoCraftKit/` daneben): `MacApp/build-app.sh` baut
-  die App im Release-Modus mit Hardened Runtime und legt `NV-AI for PhotoCraft.app` auf den
+  die App im Release-Modus mit Hardened Runtime und legt `NVAI-open for PhotoCraft.app` auf den
   Schreibtisch. Ein anderer Zielordner geht als Argument. Ohne weitere Angabe wird ad hoc signiert;
   für die Weitergabe signiert `--sign "Developer ID Application: …"` mit Zeitstempel, danach lässt
   sich die App notarisieren.
 - **PhotoCraft** findet die App über seine Bundle-ID, egal in welchem Ordner. Fehlt es oder ist es
   älter als 0.10.0, zeigt sie einen Hinweis mit Download-Knopf.
-- **NV-AI:** Im Normalbetrieb läuft „NV-AI für Mac“ auf demselben Mac unter
-  `http://127.0.0.1:8100`, ohne Token. Läuft es nicht, startet der Knopf **NV-AI starten** es im
-  Hintergrund. Eine NV-AI auf einem anderen Rechner geht auch: Adresse und Token unter
-  *Einstellungen …* (⌘,) oder im Hinweis „NV-AI verbinden“ eintragen, dann **Verbindung prüfen**.
+- **NVAI-open:** Im Normalbetrieb läuft „NVAI-open für Mac“ auf demselben Mac unter
+  `http://127.0.0.1:8100`, ohne Token. Läuft es nicht, startet der Knopf **NVAI-open starten** es im
+  Hintergrund. Eine NVAI-open auf einem anderen Rechner geht auch: Adresse und Token unter
+  *Einstellungen …* (⌘,) oder im Hinweis „NVAI-open verbinden“ eintragen, dann **Verbindung prüfen**.
 - **Daten:** `~/Library/Application Support/ArtCraft-LocalAI/` enthält `settings.json` (nur für den
   Nutzer lesbar), das Steuer-Token für PhotoCraft, den Austauschordner und `logs/mac-app.log`.
 - **Fehlersuche ohne Bildschirm** (etwa per ssh):
-  - `…/Contents/MacOS/NVAIPhotoCraft --selftest` prüft Einstellungen, PhotoCraft und NV-AI.
-  - `open -n "NV-AI for PhotoCraft.app" --args --snapshot /tmp/panel.png --quit` speichert ein
+  - `…/Contents/MacOS/NVAIPhotoCraft --selftest` prüft Einstellungen, PhotoCraft und NVAI-open.
+  - `open -n "NVAI-open for PhotoCraft.app" --args --snapshot /tmp/panel.png --quit` speichert ein
     Bild des Fensters; mit `--run "<prompt>"` vorher einen Auftrag „Generieren“ mit einer Variante.
 
 ## Mac-Fassung
@@ -161,12 +161,12 @@ starten. Das Fenster bleibt auf Wunsch über PhotoCraft (Stecknadel oben rechts)
 Die Mac-App bekommt das Add-on als natives Swift-Modul. Grundlage hier im Repository:
 
 - [`docs/mac-port.md`](docs/mac-port.md) – Spezifikation: jeder Steuerbefehl mit Parametern,
-  Antwort und Fallen, der komplette Ablauf, Geometrie, Planung, NV-AI-Nutzung.
+  Antwort und Fallen, der komplette Ablauf, Geometrie, Planung, NVAI-open-Nutzung.
 - `golden/*.json` – Golden-Testdaten aus der Python-Referenz (`python tools/export_golden.py`).
-- `contract/nvai-openapi.json` – API-Vertrag von NV-AI (Kopie; erneuern mit
+- `contract/nvai-openapi.json` – API-Vertrag von NVAI-open (Kopie; erneuern mit
   `python tools/export_golden.py --refresh-contract`).
 - `PhotoCraftKit/` – Swift-Paket ohne Oberfläche (Steuerclient über Network.framework,
-  NV-AI-Client, Core-Image-Aufbereitung, Planung, Ablauf). Tests mit `swift test`; die
+  NVAI-open-Client, Core-Image-Aufbereitung, Planung, Ablauf). Tests mit `swift test`; die
   Golden-Daten liegen als Kopie unter `PhotoCraftKit/Tests/PhotoCraftKitTests/Golden`.
 - `tools/chain_probe.py` – prüft die komplette Steuerkette gegen eine PhotoCraft-Testinstanz
   (nur Standardbibliothek; unter Windows und macOS identische Ergebnisse).
@@ -175,7 +175,7 @@ Die Mac-App bekommt das Add-on als natives Swift-Modul. Grundlage hier im Reposi
 
 | Pfad | Inhalt |
 |---|---|
-| `bridge/` | Brücke: PhotoCraft-Client, NV-AI-Client, Bildaufbereitung, Planung, Aufträge, HTTP-Server, Fenster |
+| `bridge/` | Brücke: PhotoCraft-Client, NVAI-open-Client, Bildaufbereitung, Planung, Aufträge, HTTP-Server, Fenster |
 | `panel/` | Oberfläche (HTML/CSS/JS, ohne Build-Schritt) |
 | `%LOCALAPPDATA%\ArtCraft-LocalAI\` | Laufzeitdaten: Token, Austauschordner, Logs, Fensterposition |
 | `…\exchange\jobs\<id>\` | Ausschnitt, Maske, Ergebnisse je Auftrag (nach 3 Tagen gelöscht) |
@@ -191,20 +191,20 @@ ausschließlich im Austauschordner lesen und schreiben.
 |---|---|
 | „PhotoCraft ist nicht installiert“ | PhotoCraft über den Knopf im Panel laden (Datei `…-windows-x64.msi`). Ein portables PhotoCraft in `settings.json` als `photocraft_exe` eintragen |
 | „PhotoCraft … ist älter als 0.10.0“ | Mit älteren Versionen ist der Steuerkanal nicht getestet, also aktualisieren |
-| „NV-AI ist auf diesem PC nicht installiert“ | Weder das NV-AI-Setup (`HKCU\Software\NV-AI`) noch der Entwicklungsordner wurde gefunden |
-| „In NV-AI ist noch kein Bildmodell installiert“ | Frische Installation: In NV-AI (Knopf **NV-AI öffnen**) ein Bildmodell laden. Das Panel merkt es von selbst |
-| „PhotoCraft läuft bereits ohne NV-AI-Anbindung“ | Normal gestartetes PhotoCraft schließen, dann im Panel neu starten |
-| „kennt noch keine Masken“ | NV-AI ohne Masken-Erweiterung oder noch nicht neu gestartet |
-| „Token fehlt oder ist falsch“ | Entferntes NV-AI: Token in `settings.json` eintragen, dann **Erneut prüfen** |
-| „nimmt nur Anfragen vom eigenen Rechner an“ | Entferntes NV-AI läuft ohne `-Lan` – dort mit `scripts\start.ps1 -Lan` starten |
-| „spricht API-Version …“ | Brücke und NV-AI passen nicht zusammen – die ältere Seite aktualisieren |
+| „NVAI-open ist auf diesem PC nicht installiert“ | Weder das NVAI-open-Setup (`HKCU\Software\NV-AI`) noch der Entwicklungsordner wurde gefunden |
+| „In NVAI-open ist noch kein Bildmodell installiert“ | Frische Installation: In NVAI-open (Knopf **NVAI-open öffnen**) ein Bildmodell laden. Das Panel merkt es von selbst |
+| „PhotoCraft läuft bereits ohne NVAI-open-Anbindung“ | Normal gestartetes PhotoCraft schließen, dann im Panel neu starten |
+| „kennt noch keine Masken“ | NVAI-open ohne Masken-Erweiterung oder noch nicht neu gestartet |
+| „Token fehlt oder ist falsch“ | Entferntes NVAI-open: Token in `settings.json` eintragen, dann **Erneut prüfen** |
+| „nimmt nur Anfragen vom eigenen Rechner an“ | Entferntes NVAI-open läuft ohne `-Lan` – dort mit `scripts\start.ps1 -Lan` starten |
+| „spricht API-Version …“ | Brücke und NVAI-open passen nicht zusammen – die ältere Seite aktualisieren |
 | „Das Zieldokument … ist nicht mehr geöffnet“ | Dokument während des Auftrags geschlossen oder in der Größe geändert |
-| „NV-AI hat den Auftrag abgebrochen (… Serverneustart …)“ | NV-AI wurde währenddessen neu gestartet – einfach erneut auslösen |
+| „NVAI-open hat den Auftrag abgebrochen (… Serverneustart …)“ | NVAI-open wurde währenddessen neu gestartet – einfach erneut auslösen |
 
 Entwicklung: `python -m bridge --server` startet nur die Brücke (Panel dann unter
 http://127.0.0.1:8120), `python -m pytest` die Tests (darunter der Abgleich der Golden-Daten).
 
 Für das Windows-Setup auf einem frischen PC hält `requirements.lock` die getesteten Paketstände fest,
 mit Hashes. `python tools/build_addon.py --check` stellt daraus den Ordner `dist\addon` für das
-NV-AI-Setup zusammen und prüft ihn. Wie das Add-on in das NV-AI-Setup kommt, steht in
+NVAI-open-Setup zusammen und prüft ihn. Wie das Add-on in das NVAI-open-Setup kommt, steht in
 [`docs/windows-installer.md`](docs/windows-installer.md).

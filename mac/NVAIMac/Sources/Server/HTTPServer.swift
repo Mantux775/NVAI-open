@@ -63,7 +63,7 @@ struct HTTPResponse: Sendable {
 
 /// Kleiner HTTP/1.1-Server auf Network.framework, nur über das Loopback-Interface erreichbar.
 ///
-/// Eine Verbindung, eine Anfrage, dann `Connection: close` – das reicht für die NV-AI-Clients
+/// Eine Verbindung, eine Anfrage, dann `Connection: close` – das reicht für die NVAI-open-Clients
 /// (URLSession, httpx) und hält den Parser einfach. Bodys kommen mit Content-Length;
 /// chunked lehnt der Server mit 411 ab.
 final class HTTPServer: @unchecked Sendable {

@@ -23,8 +23,8 @@ enum ProblemReport {
         let lastError = jobs.first { $0.status == "error" && $0.error != nil }?.error
 
         var out: [String] = [
-            "NV-AI for Mac problem report",
-            "============================",
+            "NVAI-open for Mac problem report",
+            "================================",
             "Created:      \(local) (\(zone)) / \(iso)",
             "",
             "Description",
@@ -33,7 +33,7 @@ enum ProblemReport {
             "",
             "System",
             "------",
-            "NV-AI:        \(SystemInfo.appVersion) (\(SystemInfo.build))",
+            "NVAI-open:    \(SystemInfo.appVersion) (\(SystemInfo.build))",
             "Mac:          \(SystemInfo.chip), \(SystemInfo.memoryGB) GB",
             "macOS:        \(SystemInfo.macOS)",
             "Active:       \(Models.active.id)",
@@ -76,7 +76,7 @@ enum ProblemReport {
             description.trimmingCharacters(in: .whitespacesAndNewlines),
             "",
             "When / Wann: \(report.time)",
-            "NV-AI for Mac: \(SystemInfo.appVersion) (\(SystemInfo.build)) · macOS \(SystemInfo.macOS)",
+            "NVAI-open for Mac: \(SystemInfo.appVersion) (\(SystemInfo.build)) · macOS \(SystemInfo.macOS)",
             "Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB",
         ]
         if let e = report.lastError { body += ["Last error / Letzter Fehler:", "```", e, "```"] }

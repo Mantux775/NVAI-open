@@ -113,10 +113,10 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          NV<span>-AI</span>
+        <div className="brand" title="NVAI-open">
+          NV<span>AI</span>
           {versions && (
-            <span className="brand-version" title={t('Versionen von NV-AI und ComfyUI', 'Versions of NV-AI and ComfyUI')}>
+            <span className="brand-version" title={t('Versionen von NVAI-open und ComfyUI', 'Versions of NVAI-open and ComfyUI')}>
               {versions.version}
               {versions.comfyui && <><br />ComfyUI {versions.comfyui}</>}
             </span>

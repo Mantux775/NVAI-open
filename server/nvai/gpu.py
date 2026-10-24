@@ -32,7 +32,7 @@ ROLES = ("image", "text", "mesh")
 ASSIGNMENT_FILE = config.DATA_DIR / "gpus.json"
 
 # Karten nach Steckplatz zaehlen, wie nvidia-smi. CUDA sortiert sonst "schnellste zuerst", dann
-# meinte --cuda-device 1 in ComfyUI auf manchen Rechnern eine andere Karte als GPU 1 in NV-AI.
+# meinte --cuda-device 1 in ComfyUI auf manchen Rechnern eine andere Karte als GPU 1 in NVAI-open.
 # Wird vom Server an ComfyUI und die 3D-Worker vererbt.
 os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
 
@@ -119,7 +119,7 @@ def _amd_windows() -> list[dict[str, Any]]:
 
 def list_gpus(force: bool = False) -> list[dict[str, Any]]:
     """Alle nutzbaren Karten. NVIDIA hat Vorrang: steckt eine NVIDIA-Karte im Rechner,
-    rechnet NV-AI mit CUDA, und eine zusaetzliche Radeon (etwa die integrierte Grafik)
+    rechnet NVAI-open mit CUDA, und eine zusaetzliche Radeon (etwa die integrierte Grafik)
     spielt keine Rolle."""
     global _cache, _cached_at
     if not force and _cache is not None and time.time() - _cached_at < _TTL:

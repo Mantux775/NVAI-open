@@ -151,9 +151,12 @@ class GenerateVideoRequest(BaseModel):
         "", description="Leer = modellspezifischer Standard-Negativprompt"
     )
     model_id: str | None = None
-    width: int = Field(832, ge=256, le=1280, multiple_of=16)
-    height: int = Field(480, ge=256, le=1280, multiple_of=16)
-    frames: int = Field(49, ge=9, le=201, description="Anzahl Frames; bei Wan 4n+1")
+    # Bis 1920: LTX-2.5 rechnet 1080p (features.sizes des Modells); die anderen Modelle bleiben
+    # bei ihren eigenen Formaten.
+    width: int = Field(832, ge=256, le=1920, multiple_of=16)
+    height: int = Field(480, ge=256, le=1920, multiple_of=16)
+    frames: int = Field(49, ge=9, le=481,
+                        description="Anzahl Frames; Wan 4n+1, LTX 8n+1 (481 = 20 s bei 24 fps)")
     fps: int = Field(16, ge=1, le=60)
     steps: int | None = Field(None, ge=1, le=100)
     cfg: float | None = Field(None, ge=0.0, le=30.0)
@@ -167,8 +170,27 @@ class GenerateVideoRequest(BaseModel):
         description="LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke",
     )
 
+    # LTX-2.5 (features des Modells: end_image, loop, dfr, temporal_upscale, auto_duration,
+    # audio_input, motion_speed). Andere Modelle lehnen die Felder mit einer Meldung ab.
+    end_image_asset_id: str | None = Field(
+        None, description="LTX-2.5: Endbild (letzter Frame); mit image_asset_id ein Uebergang")
+    loop: bool = Field(False, description="LTX-2.5: Schleife -- das Startbild ist auch das Endbild")
+    quality: Literal["standard", "dfr"] = Field(
+        "standard", description="LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer")
+    temporal_upscale: bool = Field(
+        False, description="LTX-2.5 mit quality=dfr: doppelte Bildrate bei gleicher Dauer (24 -> 48 fps)")
+    auto_duration: bool = Field(
+        False, description="LTX-2.5: Laenge aus dem Prompt vorhersagen; frames gilt dann nicht")
+    audio_asset_id: str | None = Field(
+        None, description="LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, "
+                          "die Laenge auch (hoechstens 20 s)")
+    motion_speed: float = Field(
+        1.0, gt=0.0, le=1.0, description="LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x "
+                                          "langsamer; verlaesslich mit der Slow-Motion-LoRA")
 
-ExpandTarget = Literal["image", "video", "video_sound", "video_start", "sfx", "music", "music_sa3", "3d"]
+
+ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",
+                       "music_sa3", "3d"]
 
 
 class ExpandPromptRequest(BaseModel):
@@ -176,7 +198,8 @@ class ExpandPromptRequest(BaseModel):
     target: ExpandTarget = Field(
         "image",
         description="Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound "
-                    "(LTX-2.5, mit Ton), video_start (nur Bewegung, liest das Startbild in "
+                    "(LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten "
+                    "und Ton), video_start (nur Bewegung, liest das Startbild in "
                     "reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), "
                     "3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
     )
@@ -291,6 +314,8 @@ class ModelFile(BaseModel):
     installed: bool = False
     local_path: str | None = None
     size_gb: float | None = None
+    # Name der Zusatzfunktion, die diese Datei freischaltet (z. B. "dfr"); None = Pflichtdatei
+    optional: str | None = None
 
 
 class ModelInfo(BaseModel):
@@ -380,5 +405,5 @@ class VersionInfo(BaseModel):
     authorized: bool = Field(description="Kaeme diese Anfrage mit ihrem Token durch?")
     instance: str = Field(
         "", description="Kennung dieser Installation (Hash des Programmordners). Der Starter "
-                        "erkennt daran, ob das NV-AI auf dem Port sein eigenes ist."
+                        "erkennt daran, ob das NVAI-open auf dem Port sein eigenes ist."
     )

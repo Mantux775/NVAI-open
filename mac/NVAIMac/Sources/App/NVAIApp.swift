@@ -7,7 +7,7 @@ struct NVAIApp: App {
     @StateObject private var state = AppState.shared
 
     var body: some Scene {
-        WindowGroup("NV-AI") {
+        WindowGroup("NVAI-open") {
             ContentView()
                 .environmentObject(state)
                 .frame(minWidth: 980, minHeight: 660)
@@ -28,7 +28,7 @@ struct NVAIApp: App {
     }
 }
 
-/// „Über NV-AI → Lizenzen …“ im App-Menü.
+/// „Über NVAI-open → Lizenzen …“ im App-Menü.
 struct LicensesMenuItem: View {
     @Environment(\.openWindow) private var openWindow
 
@@ -51,9 +51,9 @@ struct LicensesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(t("NV-AI steht unter der MIT-Lizenz. Es nutzt die folgenden Open-Source-Komponenten. "
+            Text(t("NVAI-open steht unter der MIT-Lizenz. Es nutzt die folgenden Open-Source-Komponenten. "
                    + "Modelle gehören nicht zur App; ihre Lizenz steht in der Modellliste.",
-                   "NV-AI is released under the MIT License. It uses the following open-source components. "
+                   "NVAI-open is released under the MIT License. It uses the following open-source components. "
                    + "Models are not part of the app; the model list shows their license."))
                 .font(.callout)
             ScrollView {

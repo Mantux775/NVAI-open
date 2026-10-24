@@ -1,4 +1,4 @@
-// Kopiert aus ios/NVAILocal (unverändert), für NV-AI für Mac.
+// Kopiert aus ios/NVAILocal (unverändert), für NVAI-open für Mac.
 import Foundation
 
 /// Laedt eine grosse Datei und meldet unterwegs den Fortschritt.

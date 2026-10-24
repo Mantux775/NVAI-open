@@ -23,7 +23,7 @@ function issueUrl(report: ProblemReport, description: string): string {
     description.trim(),
     '',
     `When / Wann: ${s.time}`,
-    `NV-AI: ${s.version} (Windows) · ${s.os}`,
+    `NVAI-open: ${s.version} (Windows) · ${s.os}`,
     `Graphics / Grafik: ${s.graphics} · driver ${s.driver}`,
     s.last_error ? `Last error / Letzter Fehler:\n\`\`\`\n${s.last_error}\n\`\`\`` : '',
     '',
@@ -84,11 +84,11 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
         <h3 id="report-title">{t('Problem melden', 'Report a problem')}</h3>
         <p className="hint small">
           {t(
-            'Beschreib kurz, was passiert ist und was du erwartet hast. NV-AI erstellt daraus einen Bericht mit '
+            'Beschreib kurz, was passiert ist und was du erwartet hast. NVAI-open erstellt daraus einen Bericht mit '
               + 'Zeitstempel, Systemangaben, den letzten Aufträgen und den Enden der Logs. Er ist anonymisiert: '
               + 'Benutzer- und Rechnername, Ordnerpfade, E-Mail- und IP-Adressen und Token werden ersetzt, '
               + 'Prompts und Bilder sind nicht enthalten. Du siehst ihn, bevor du ihn weitergibst.',
-            'Briefly describe what happened and what you expected. NV-AI turns it into a report with a timestamp, '
+            'Briefly describe what happened and what you expected. NVAI-open turns it into a report with a timestamp, '
               + 'system details, the recent jobs and the ends of the logs. It is anonymized: user and computer name, '
               + 'folder paths, e-mail and IP addresses and tokens are replaced, prompts and images are not included. '
               + 'You see it before you pass it on.',

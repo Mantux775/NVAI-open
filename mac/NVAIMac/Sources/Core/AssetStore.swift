@@ -1,6 +1,6 @@
 import Foundation
 
-/// Ein erzeugtes Bild oder ein Upload – Felder wie `Asset` im NV-AI-Vertrag.
+/// Ein erzeugtes Bild oder ein Upload – Felder wie `Asset` im NVAI-open-Vertrag.
 struct AssetRecord: Codable, Sendable, Identifiable, Equatable {
     var id: String
     var jobID: String?

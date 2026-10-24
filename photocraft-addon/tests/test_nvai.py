@@ -1,4 +1,4 @@
-"""NV-AI-Client: Versionsprüfung, Masken-Erkennung und Token – ohne laufendes NV-AI."""
+"""NVAI-open-Client: Versionsprüfung, Masken-Erkennung und Token – ohne laufendes NVAI-open."""
 from __future__ import annotations
 
 import json

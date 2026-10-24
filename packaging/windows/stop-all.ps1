@@ -1,10 +1,10 @@
 <#
-  Stops everything that runs from this program folder: NV-AI, ComfyUI, mesh workers and the
+  Stops everything that runs from this program folder: NVAI-open, ComfyUI, mesh workers and the
   PhotoCraft bridge. Called by the setup before an update and by the uninstaller.
 
     stop-all.ps1 -App <install folder>
 
-  First cleanly via the launcher (POST /api/shutdown, only if the NV-AI on the port belongs
+  First cleanly via the launcher (POST /api/shutdown, only if the NVAI-open on the port belongs
   to this installation), then only processes whose executable lives in <App> - never by name.
   A venv python.exe on Windows starts the base interpreter as a child process; that one lives
   in <App>\python and is caught as well.

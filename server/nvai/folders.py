@@ -25,7 +25,7 @@ REG_KEY = r"Software\NV-AI"
 
 
 def managed() -> bool:
-    """Gehoert dieser Code zur Setup-Installation? Nur dann kann NV-AI die Ordner selbst setzen."""
+    """Gehoert dieser Code zur Setup-Installation? Nur dann kann NVAI-open die Ordner selbst setzen."""
     return bool(config._INSTALLED)  # noqa: SLF001 - bewusst dieselbe Quelle wie config
 
 
@@ -80,16 +80,16 @@ def check(path: str) -> dict[str, Any]:
         probe.write_text("ok", encoding="utf-8")
         probe.unlink()
     except OSError as exc:
-        raise ValueError(t(f"In „{p}“ kann NV-AI nicht schreiben: {exc.strerror or exc}",
-                           f"NV-AI cannot write to \"{p}\": {exc.strerror or exc}")) from exc
+        raise ValueError(t(f"In „{p}“ kann NVAI-open nicht schreiben: {exc.strerror or exc}",
+                           f"NVAI-open cannot write to \"{p}\": {exc.strerror or exc}")) from exc
     return {"path": str(p), "free_gb": _free_gb(p)}
 
 
 def save(data_dir: str | None, models_dir: str | None) -> dict[str, Any]:
     if not managed():
         raise PermissionError(t(
-            "Diese NV-AI läuft aus dem Quelltext. Die Ordner dort über NVAI_DATA_DIR und NVAI_MODEL_DIR setzen.",
-            "This NV-AI runs from source. Set the folders there with NVAI_DATA_DIR and NVAI_MODEL_DIR."))
+            "Dieses NVAI-open läuft aus dem Quelltext. Die Ordner dort über NVAI_DATA_DIR und NVAI_MODEL_DIR setzen.",
+            "This NVAI-open runs from source. Set the folders there with NVAI_DATA_DIR and NVAI_MODEL_DIR."))
     import winreg
     changed: dict[str, str] = {}
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_KEY) as key:
@@ -106,7 +106,7 @@ def browse(initial: str | None) -> str | None:
     if sys.platform != "win32":
         return None
     start = (initial or "").replace("'", "''")
-    title = t("Ordner für NV-AI wählen", "Choose a folder for NV-AI").replace("'", "''")
+    title = t("Ordner für NVAI-open wählen", "Choose a folder for NVAI-open").replace("'", "''")
     script = (
         "Add-Type -AssemblyName System.Windows.Forms;"
         "$f = New-Object System.Windows.Forms.Form; $f.TopMost = $true;"

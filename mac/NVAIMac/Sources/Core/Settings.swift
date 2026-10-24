@@ -1,7 +1,7 @@
 import Foundation
 
 /// Einstellungen in den UserDefaults. Jeder Wert lässt sich beim Start überschreiben,
-/// etwa für Tests: `open -n NV-AI.app --args -serverPort 8110 -modelsDirectory ~/…/models`.
+/// etwa für Tests: `open -n NVAI-open.app --args -serverPort 8110 -modelsDirectory ~/…/models`.
 enum Settings {
     private static var defaults: UserDefaults { .standard }
 
@@ -30,7 +30,7 @@ enum Settings {
         url.lastPathComponent == "models" ? url : url.appendingPathComponent("models", isDirectory: true)
     }
 
-    /// Port des lokalen Servers. 8100 wie NV-AI unter Windows – die PhotoCraft-App sucht dort.
+    /// Port des lokalen Servers. 8100 wie NVAI-open unter Windows – die PhotoCraft-App sucht dort.
     static var serverPort: UInt16 {
         get {
             let value = defaults.integer(forKey: "serverPort")

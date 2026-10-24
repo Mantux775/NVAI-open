@@ -2,14 +2,14 @@ import AppKit
 import PhotoCraftKit
 import SwiftUI
 
-/// „NV-AI für PhotoCraft“ – ein schwebendes Panel neben PhotoCraft (Einstieg: main.swift).
+/// „NVAI-open für PhotoCraft“ – ein schwebendes Panel neben PhotoCraft (Einstieg: main.swift).
 struct NVAIPhotoCraftApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
 
     var body: some Scene {
         // Nach einem Sprachwechsel baut .id die Oberfläche neu auf – t() selbst ist nicht beobachtbar.
-        Window(t("NV-AI für PhotoCraft", "NV-AI for PhotoCraft"), id: "panel") {
+        Window(t("NVAI-open für PhotoCraft", "NVAI-open for PhotoCraft"), id: "panel") {
             PanelView()
                 .environment(model)
                 .id(model.settings.language)
@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Fehlersuche ohne Bildschirmfreigabe (etwa per ssh):
     /// `--snapshot <datei.png> [--start-nvai] [--run <prompt>] [--quit]` speichert nach 5 s ein Bild des
     /// Panels – die App zeichnet dafür nur ihr eigenes Fenster. Mit `--start-nvai` drückt sie vorher
-    /// „NV-AI starten“ und wartet, bis NV-AI antwortet; mit `--run` startet sie „Generieren“ (eine
+    /// „NVAI-open starten“ und wartet, bis NVAI-open antwortet; mit `--run` startet sie „Generieren“ (eine
     /// Variante) und wartet auf das Ergebnis. Den Verlauf schreibt sie ins Log.
     func applicationDidFinishLaunching(_ notification: Notification) {
         let args = CommandLine.arguments

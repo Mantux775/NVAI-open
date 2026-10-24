@@ -10,7 +10,7 @@
 		<string>de</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>NV-AI</string>
+	<string>NVAI-open</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIconName</key>
@@ -20,7 +20,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NV-AI</string>
+	<string>NVAI-open</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -32,7 +32,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>NV-AI: local image generation. MIT License. Models under their own licenses.</string>
+	<string>NVAI-open: local image generation. MIT License. Models under their own licenses.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 	<key>NSSupportsSuddenTermination</key>

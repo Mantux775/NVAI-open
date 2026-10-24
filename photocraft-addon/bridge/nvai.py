@@ -1,4 +1,4 @@
-"""Schlanker Client für die REST-API von NV-AI (FastAPI, Standard: http://127.0.0.1:8100)."""
+"""Schlanker Client für die REST-API von NVAI-open (FastAPI, Standard: http://127.0.0.1:8100)."""
 from __future__ import annotations
 
 import io
@@ -12,25 +12,25 @@ from . import i18n
 from .i18n import t
 
 
-# Vertragsversion der NV-AI-API, die diese Brücke spricht (GET /api/version → "api"). Sie steigt
+# Vertragsversion der NVAI-open-API, die diese Brücke spricht (GET /api/version → "api"). Sie steigt
 # nur bei brechenden Änderungen; der Vertrag liegt in contract/nvai-openapi.json.
 API_VERSION = 1
 
 
 class NVAIError(RuntimeError):
-    """NV-AI hat eine Anfrage abgelehnt oder ein Auftrag ist gescheitert."""
+    """NVAI-open hat eine Anfrage abgelehnt oder ein Auftrag ist gescheitert."""
 
     def __init__(self, message: str, status: int | None = None) -> None:
         super().__init__(message)
-        self.status = status  # HTTP-Status, wenn die Ablehnung von NV-AI selbst kam
+        self.status = status  # HTTP-Status, wenn die Ablehnung von NVAI-open selbst kam
 
 
 class NVAIUnavailable(NVAIError):
-    """NV-AI ist nicht erreichbar."""
+    """NVAI-open ist nicht erreichbar."""
 
 
 class NVAIIncompatible(NVAIError):
-    """NV-AI ist erreichbar, aber nicht nutzbar: andere Vertragsversion oder Zugriff verweigert."""
+    """NVAI-open ist erreichbar, aber nicht nutzbar: andere Vertragsversion oder Zugriff verweigert."""
 
 
 class NVAI:
@@ -40,7 +40,7 @@ class NVAI:
         headers = {"X-NVAI-Token": token} if token else {}
         self._http = httpx.Client(
             base_url=base_url, headers=headers, timeout=httpx.Timeout(30.0, connect=2.0),
-            transport=transport,  # nur für Tests (Vertragsprüfung ohne laufendes NV-AI)
+            transport=transport,  # nur für Tests (Vertragsprüfung ohne laufendes NVAI-open)
         )
         self._mask_support: tuple[float, bool] | None = None
         self._version: tuple[float, dict[str, Any] | None] | None = None
@@ -59,19 +59,19 @@ class NVAI:
         self._mask_support = None
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        # NV-AI liefert Modelltexte und Fehlermeldungen in dieser Sprache (ohne Angabe Englisch).
+        # NVAI-open liefert Modelltexte und Fehlermeldungen in dieser Sprache (ohne Angabe Englisch).
         kwargs["headers"] = {"Accept-Language": i18n.lang(), **kwargs.get("headers", {})}
         try:
             r = self._http.request(method, path, **kwargs)
         except httpx.TransportError as exc:
-            raise NVAIUnavailable(t(f"NV-AI ist nicht erreichbar ({self.base_url}).",
-                                    f"NV-AI is not reachable ({self.base_url}).")) from exc
+            raise NVAIUnavailable(t(f"NVAI-open ist nicht erreichbar ({self.base_url}).",
+                                    f"NVAI-open is not reachable ({self.base_url}).")) from exc
         if r.status_code >= 400:
             try:
                 detail = r.json().get("detail", r.text)
             except ValueError:
                 detail = r.text
-            raise NVAIError(t(f"NV-AI meldet {r.status_code}: {detail}", f"NV-AI reports {r.status_code}: {detail}"),
+            raise NVAIError(t(f"NVAI-open meldet {r.status_code}: {detail}", f"NVAI-open reports {r.status_code}: {detail}"),
                             status=r.status_code)
         if r.headers.get("content-type", "").startswith("application/json"):
             return r.json()
@@ -110,35 +110,35 @@ class NVAI:
             return None  # älter als 0.2.0 – ohne Versionsangabe, wie bisher nutzbar
         if info.get("api") != API_VERSION:
             raise NVAIIncompatible(t(
-                f"NV-AI {info.get('version', '?')} spricht API-Version {info.get('api')}, diese Brücke "
-                f"Version {API_VERSION}. Bitte Brücke oder NV-AI aktualisieren.",
-                f"NV-AI {info.get('version', '?')} speaks API version {info.get('api')}, this bridge "
-                f"version {API_VERSION}. Please update the bridge or NV-AI.",
+                f"NVAI-open {info.get('version', '?')} spricht API-Version {info.get('api')}, diese Brücke "
+                f"Version {API_VERSION}. Bitte Brücke oder NVAI-open aktualisieren.",
+                f"NVAI-open {info.get('version', '?')} speaks API version {info.get('api')}, this bridge "
+                f"version {API_VERSION}. Please update the bridge or NVAI-open.",
             ))
         if not info.get("authorized", True):
             if info.get("auth") == "local":
-                # Ohne Token bedient NV-AI nur den eigenen Rechner (Antwort 403).
+                # Ohne Token bedient NVAI-open nur den eigenen Rechner (Antwort 403).
                 raise NVAIIncompatible(t(
-                    "NV-AI nimmt nur Anfragen vom eigenen Rechner an. Für den Zugriff von hier NV-AI "
+                    "NVAI-open nimmt nur Anfragen vom eigenen Rechner an. Für den Zugriff von hier NVAI-open "
                     "dort mit „scripts\\start.ps1 -Lan“ starten und dessen Token (data\\api_token) "
                     "in settings.json als „nvai_token“ eintragen.",
-                    "NV-AI only accepts requests from its own computer. To use it from here, start NV-AI "
+                    "NVAI-open only accepts requests from its own computer. To use it from here, start NVAI-open "
                     "there with \"scripts\\start.ps1 -Lan\" and put its token (data\\api_token) into "
                     "settings.json as \"nvai_token\".",
                 ))
             raise NVAIIncompatible(t(
-                "NV-AI lehnt den Zugriff ab: Token fehlt oder ist falsch. Den Token von NV-AI "
+                "NVAI-open lehnt den Zugriff ab: Token fehlt oder ist falsch. Den Token von NVAI-open "
                 "(NVAI_TOKEN bzw. data\\api_token) in settings.json als „nvai_token“ eintragen.",
-                "NV-AI refuses access: the token is missing or wrong. Put the NV-AI token "
+                "NVAI-open refuses access: the token is missing or wrong. Put the NVAI-open token "
                 "(NVAI_TOKEN or data\\api_token) into settings.json as \"nvai_token\".",
             ))
         return info
 
     def supports_masks(self) -> bool:
-        """Kennt die laufende NV-AI-Version ``mask_asset_id``?
+        """Kennt die laufende NVAI-open-Version ``mask_asset_id``?
 
         Ältere Server würden das Feld stillschweigend ignorieren und den ganzen Ausschnitt neu
-        rechnen. Ab NV-AI 0.2.0 steht es in ``/api/version`` unter ``features``; davor wird in
+        rechnen. Ab NVAI-open 0.2.0 steht es in ``/api/version`` unter ``features``; davor wird in
         ``/openapi.json`` nachgesehen (Ergebnis 60 s gemerkt).
         """
         info = self.version()
@@ -157,22 +157,22 @@ class NVAI:
         return ok
 
     def supports_outpaint(self) -> bool:
-        """Kennt NV-AI ``outpaint`` (ab 0.5.4)? Dann legt der Server Rand und Maske selbst an."""
+        """Kennt NVAI-open ``outpaint`` (ab 0.5.4)? Dann legt der Server Rand und Maske selbst an."""
         info = self.version()
         return info is not None and "outpaint" in (info.get("features") or [])
 
     def supports_expand(self) -> bool:
-        """Kennt die laufende NV-AI ``POST /api/prompt/expand`` („Prompt ausbauen“)?"""
+        """Kennt die laufende NVAI-open ``POST /api/prompt/expand`` („Prompt ausbauen“)?"""
         info = self.version()
         return info is not None and "expand_prompt" in (info.get("features") or [])
 
     def supports_cancel_job(self) -> bool:
-        """Kennt NV-AI ``POST /api/jobs/{id}/cancel`` (ab 0.5.2: Downloads brechen sofort ab)?"""
+        """Kennt NVAI-open ``POST /api/jobs/{id}/cancel`` (ab 0.5.2: Downloads brechen sofort ab)?"""
         info = self.version()
         return info is not None and "cancel_job" in (info.get("features") or [])
 
     def downloads(self) -> list[dict[str, Any]]:
-        """Laufende und wartende Modell-Downloads von NV-AI (Windows und Mac)."""
+        """Laufende und wartende Modell-Downloads von NVAI-open (Windows und Mac)."""
         out = []
         for j in self._request("GET", "/api/jobs", params={"limit": 50}, timeout=4.0):
             if j.get("kind") != "download" or j.get("status") not in ("queued", "running"):
@@ -184,7 +184,7 @@ class NVAI:
         return out
 
     def cancel_download(self, job_id: str) -> None:
-        """Einen Download abbrechen. Ältere NV-AI kennen nur „alle Downloads abbrechen“."""
+        """Einen Download abbrechen. Ältere NVAI-open kennen nur „alle Downloads abbrechen“."""
         if self.supports_cancel_job():
             self._request("POST", f"/api/jobs/{job_id}/cancel")
         else:
@@ -222,12 +222,12 @@ class NVAI:
 
     def expand_prompt(self, prompt: str, width: int = 1024, height: int = 1024) -> dict[str, Any]:
         """Knappen Prompt zur vollen Bildbeschreibung ausbauen (FLUX-3-Upsampler, für jedes
-        Bildmodell). Blockiert, bis NV-AI fertig ist; wartet hinter einem laufenden Bild."""
+        Bildmodell). Blockiert, bis NVAI-open fertig ist; wartet hinter einem laufenden Bild."""
         return self._request("POST", "/api/prompt/expand", timeout=960.0,
                              json={"prompt": prompt, "width": width, "height": height})
 
     def cancel(self, job_id: str) -> None:
-        """Nur den eigenen Auftrag stoppen – NV-AI wird womöglich gerade auch anderweitig benutzt."""
+        """Nur den eigenen Auftrag stoppen – NVAI-open wird womöglich gerade auch anderweitig benutzt."""
         job = self.job(job_id)
         if job["status"] == "queued":
             # Wartende Aufträge überspringt der Worker, sobald ihr Eintrag fehlt.

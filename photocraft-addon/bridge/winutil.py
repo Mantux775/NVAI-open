@@ -13,8 +13,9 @@ from ctypes import wintypes
 from pathlib import Path
 from typing import Any
 
-# Fenstertitel je Sprache; ein zweiter Start sucht das vorhandene Fenster unter beiden.
-TITLES = ("NV-AI for PhotoCraft", "NV-AI für PhotoCraft")
+# Fenstertitel je Sprache; ein zweiter Start sucht das vorhandene Fenster unter allen. Bis 0.4.4
+# hieß die App „NV-AI für PhotoCraft“: ein noch offenes Fenster von damals wird so auch gefunden.
+TITLES = ("NVAI-open for PhotoCraft", "NVAI-open für PhotoCraft", "NV-AI for PhotoCraft", "NV-AI für PhotoCraft")
 # Dieselbe ID trägt die Startmenü-Verknüpfung des Setups. Die Taskleiste ordnet das Fenster dann
 # ihr zu: Anheften heftet die Verknüpfung an, nicht pythonw.exe.
 APP_ID = "NVAI.PhotoCraft"

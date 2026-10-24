@@ -2,7 +2,7 @@
 
 Jeder sichtbare Text steht im Code als ``t("Deutsch", "English")``. Die Wahl („auto“, „en“,
 „de“) steht in settings.json unter ``language``. „auto“ folgt der Windows-Anzeigesprache: Deutsch
-nur, wenn die deutsch ist, sonst Englisch. NV-AI bekommt dieselbe Sprache als ``Accept-Language``
+nur, wenn die deutsch ist, sonst Englisch. NVAI-open bekommt dieselbe Sprache als ``Accept-Language``
 und liefert seine Modelltexte und Fehlermeldungen danach.
 """
 from __future__ import annotations

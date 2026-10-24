@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def instance_id(root: Path) -> str:
     """Kennung einer Installation: kurzer Hash ihres Programmordners. Der Starter vergleicht
-    sie mit /api/version -- sonst hielt er ein fremdes NV-AI auf demselben Port (etwa die
+    sie mit /api/version -- sonst hielt er ein fremdes NVAI-open auf demselben Port (etwa die
     Entwicklungsfassung) fuer sein eigenes und beendete es (gemessen am 2026-10-19)."""
     import hashlib
     return hashlib.sha256(str(root).lower().encode("utf-8")).hexdigest()[:12]

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Die REST-API von NV-AI, so weit sie die Clients (PhotoCraft-App, eigene Skripte) brauchen.
+/// Die REST-API von NVAI-open, so weit sie die Clients (PhotoCraft-App, eigene Skripte) brauchen.
 /// Formen genau wie in server/openapi.json des Windows-Servers (Vertrag api 1).
 enum APIRouter {
     static let apiVersion = 1
@@ -17,7 +17,7 @@ enum APIRouter {
 
     private static func dispatch(_ req: HTTPRequest) async -> HTTPResponse {
         guard isLocal(req) else {
-            return .error(403, t("NV-AI für Mac nimmt nur Anfragen von diesem Mac an.", "NV-AI for Mac only accepts requests from this Mac."))
+            return .error(403, t("NVAI-open für Mac nimmt nur Anfragen von diesem Mac an.", "NVAI-open for Mac only accepts requests from this Mac."))
         }
         let parts = req.path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         /// "/api/jobs/:id" passt auf /api/jobs/job_123 und liefert ["job_123"].
@@ -51,8 +51,8 @@ enum APIRouter {
                               "seconds": (result.seconds * 10).rounded() / 10])
             }
             if let c = route("POST", "/api/generate/:kind") {
-                throw APIError(404, t("NV-AI für Mac erzeugt nur Bilder (\(c[0]) gibt es hier nicht).",
-                                      "NV-AI for Mac only generates images (\(c[0]) is not available here)."))
+                throw APIError(404, t("NVAI-open für Mac erzeugt nur Bilder (\(c[0]) gibt es hier nicht).",
+                                      "NVAI-open for Mac only generates images (\(c[0]) is not available here)."))
             }
             if route("GET", "/api/jobs") != nil {
                 let limit = Int(req.query["limit"] ?? "") ?? 100
@@ -111,7 +111,7 @@ enum APIRouter {
         }
     }
 
-    /// Wie NV-AI unter Windows: lokal heißt Loopback-Verbindung (erzwingt der Server), dazu
+    /// Wie NVAI-open unter Windows: lokal heißt Loopback-Verbindung (erzwingt der Server), dazu
     /// ein lokaler Host-Header (gegen DNS-Rebinding) und kein fremder Origin (fremde Webseiten).
     static func isLocal(_ req: HTTPRequest) -> Bool {
         let local: Set<String> = ["127.0.0.1", "localhost", "::1"]

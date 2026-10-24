@@ -1,10 +1,10 @@
 <#
-  Builds packaging\windows\build\NV-AI-Setup-<version>.exe.
+  Builds packaging\windows\build\NVAI-open-Setup-<version>.exe.
 
     packaging\windows\build-setup.ps1 [-Addon <folder>]
 
   Assembles build\stage - only what belongs into the setup - and runs Inno Setup:
-    app\server            NV-AI code (without venv), pyproject.toml, openapi.json
+    app\server            NVAI-open code (without venv), pyproject.toml, openapi.json
     app\frontend\dist     the built web interface (run "npm run build" in frontend first)
     app\external\comfyui  ComfyUI exactly at the tested tag (local git archive, otherwise
                           downloaded from GitHub)
@@ -41,7 +41,7 @@ function Copy-Tree($from, $to) {
     if ($LASTEXITCODE -ge 8) { throw "robocopy ${from} -> ${to}: exit $LASTEXITCODE" }
 }
 
-Write-Host "NV-AI ${version}: staging in $stage" -ForegroundColor Cyan
+Write-Host "NVAI-open ${version}: staging in $stage" -ForegroundColor Cyan
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force $app | Out-Null
 
@@ -133,5 +133,5 @@ Write-Host ("Staging: {0:N0} MB" -f $size)
 
 & $iscc /Q "/DAppVersion=$version" "/DStageDir=$stage" "/DWithAddon=$withAddon" (Join-Path $here "nvai-setup.iss")
 if ($LASTEXITCODE -ne 0) { throw "ISCC: exit $LASTEXITCODE" }
-$exe = Join-Path $build "NV-AI-Setup-$version.exe"
+$exe = Join-Path $build "NVAI-open-Setup-$version.exe"
 Write-Host ("Done: {0} ({1:N0} MB)" -f $exe, ((Get-Item $exe).Length / 1MB)) -ForegroundColor Green

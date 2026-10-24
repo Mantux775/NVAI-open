@@ -29,7 +29,7 @@ final class ExtendTests: XCTestCase {
     func testExtendIsItsOwnModeThatComputesLikeFill() {
         XCTAssertEqual(Planning.baseMode("extend"), "fill")
         XCTAssertEqual(Planning.baseMode("refine"), "refine")
-        XCTAssertEqual(Planning.layerName(mode: "extend", prompt: "harbour", k: 0, n: 1), "NV-AI Extend: harbour")
+        XCTAssertEqual(Planning.layerName(mode: "extend", prompt: "harbour", k: 0, n: 1), "NVAI-open Extend: harbour")
     }
 
     func testClamps() {

@@ -52,8 +52,8 @@ export function HfToken() {
     <div className="panel hf-token">
       <p className="small">
         {t(
-          'Für FLUX 3 braucht NV-AI einen Hugging-Face-Token: auf der ',
-          'For FLUX 3, NV-AI needs a Hugging Face token: accept the license on the ',
+          'Für FLUX 3 braucht NVAI-open einen Hugging-Face-Token: auf der ',
+          'For FLUX 3, NVAI-open needs a Hugging Face token: accept the license on the ',
         )}
         <a
           href="https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy"

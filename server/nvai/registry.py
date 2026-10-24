@@ -1,11 +1,13 @@
 """Modell-Registry: Katalog, Download, Loeschen, aktives Modell je Kategorie.
 
 Ein Modell besteht aus 1..n Dateien (moderne Video-Modelle sind in Diffusion-Model,
-Text-Encoder und VAE aufgeteilt). Installiert = alle Dateien liegen lokal.
+Text-Encoder und VAE aufgeteilt). Installiert = alle Pflichtdateien liegen lokal; optionale
+schalten nur Zusatzfunktionen frei (siehe is_installed).
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import threading
@@ -25,6 +27,8 @@ try:
 except ImportError:   # die englischen Texte fehlen noch -- dann bleibt alles deutsch
     _EN, _SIZE_LABELS = {}, {}
 from .schemas import ModelFile, ModelInfo
+
+log = logging.getLogger(__name__)
 
 _USER_CATALOG = config.DATA_DIR / "custom_models.json"
 _ACTIVE_FILE = config.DATA_DIR / "active_models.json"
@@ -72,8 +76,13 @@ def _save_user_catalog(entries: list[dict[str, Any]]) -> None:
     _USER_CATALOG.write_text(json.dumps(entries, indent=2), encoding="utf-8")
 
 
+_CATALOG_IDS = {e["id"] for e in ALL_MODELS}
+
+
 def all_entries() -> list[dict[str, Any]]:
-    return ALL_MODELS + _load_user_catalog()
+    # Ein Nutzereintrag mit der ID eines festen Eintrags (etwa eine empfohlene LoRA, die vorher
+    # ueber die Suche geladen wurde) tritt hinter den festen zurueck -- sonst stuende sie doppelt da.
+    return ALL_MODELS + [e for e in _load_user_catalog() if e["id"] not in _CATALOG_IDS]
 
 
 def get_entry(model_id: str) -> dict[str, Any] | None:
@@ -126,12 +135,25 @@ def entry_files(entry: dict[str, Any]) -> list[ModelFile]:
             target=f["target"],
             installed=installed, local_path=str(p) if installed else None,
             size_gb=_size_gb(p) if installed else None,
+            optional=f.get("optional"),
         ))
     return out
 
 
 def is_installed(entry: dict[str, Any]) -> bool:
-    return all(_file_installed(f) for f in entry["files"])
+    """Alle Pflichtdateien da. Optionale ("optional": Name der Funktion) schalten nur eine
+    Zusatzfunktion frei, etwa das Detail-IC-LoRA fuer DFR bei LTX-2.5 -- das liegt in einem eigenen
+    Repo mit eigener Freigabe auf Hugging Face; ohne sie soll das Modell trotzdem laufen."""
+    return all(_file_installed(f) for f in entry["files"] if not f.get("optional"))
+
+
+def optional_status(entry: dict[str, Any]) -> dict[str, bool]:
+    """Je Zusatzfunktion: sind ihre optionalen Dateien da?"""
+    out: dict[str, bool] = {}
+    for f in entry["files"]:
+        if f.get("optional"):
+            out[f["optional"]] = out.get(f["optional"], True) and _file_installed(f)
+    return out
 
 
 def features_for(entry: dict[str, Any]) -> dict[str, Any]:
@@ -155,7 +177,18 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     """
     wf = entry.get("workflow")
     if entry.get("kind") != "image" or wf not in workflows.IMAGE_WORKFLOWS:
-        return dict(entry.get("features") or {})
+        feats = dict(entry.get("features") or {})
+        # Zusatzfunktionen mit optionalen Dateien gelten nur, wenn die Dateien da sind; sonst steht
+        # unter "missing" die Seite, auf der die Freigabe bzw. der Download wartet.
+        for name, ok in optional_status(entry).items():
+            feats[name] = bool(feats.get(name, True)) and ok
+            if not ok:
+                repo = next(f["repo"] for f in entry["files"] if f.get("optional") == name)
+                feats.setdefault("missing", {})[name] = f"https://huggingface.co/{repo}"
+        if i18n.lang() != "de" and feats.get("sizes"):
+            feats["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
+                              for s in feats["sizes"]]
+        return feats
     d = workflows.defaults_for(wf)
     base: dict[str, Any] = {
         "steps": d["steps"], "cfg": d["cfg"], "negative_prompt": d["cfg"] > 1.0,
@@ -167,7 +200,7 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     merged = base | (entry.get("features") or {})
     # Masken (Inpainting): True laeuft ueber denselben Startbild-Pfad wie Bild-zu-Bild.
     # "reference" (seit 0.5.6): Bearbeitungsmodelle wie FLUX 3 fuellen ueber ein grau markiertes
-    # Referenzbild, NV-AI richtet das Ergebnis aus (jobs._prepare_inpaint_reference). Getestet mit
+    # Referenzbild, NVAI-open richtet das Ergebnis aus (jobs._prepare_inpaint_reference). Getestet mit
     # FLUX 3; die anderen Bearbeitungsmodelle stehen im Katalog ausdruecklich auf False.
     merged.setdefault("mask", "reference" if merged.get("references") else bool(merged.get("img2img")))
     # Outpainting: "reference" (Bearbeitungsmodell, nahtlos), "mask" (Qwen u. a., oft mit
@@ -192,8 +225,8 @@ def _custom_texts(entry: dict[str, Any]) -> dict[str, Any]:
                          "Die Lizenz bitte im Repo prüfen, bevor Bilder veröffentlicht werden.",
                          f"Added from the search: https://huggingface.co/{repo}\n\n"
                          "Please check the license in the repo before publishing images."),
-        "cons": [t("Nicht von NV-AI getestet; die Lizenz steht nur im Repo",
-                   "Not tested by NV-AI; the license is only stated in the repo")],
+        "cons": [t("Nicht von NVAI-open getestet; die Lizenz steht nur im Repo",
+                   "Not tested by NVAI-open; the license is only stated in the repo")],
     }
     if entry.get("kind") == "lora":
         base = loras.BASES.get(entry["family"], entry["family"])
@@ -204,8 +237,8 @@ def _custom_texts(entry: dict[str, Any]) -> dict[str, Any]:
                              "prüfen, bevor Ergebnisse veröffentlicht werden.",
                              f"LoRA for {base}, added from {source}\n\nPlease check the license "
                              "there before publishing results."),
-            "cons": [t("Nicht von NV-AI getestet; die Lizenz steht nur an der Quelle",
-                       "Not tested by NV-AI; the license is only stated at the source")],
+            "cons": [t("Nicht von NVAI-open getestet; die Lizenz steht nur an der Quelle",
+                       "Not tested by NVAI-open; the license is only stated at the source")],
         })
     if entry.get("license") == "siehe Repo":
         texts["license"] = t("siehe Repo", "see repo")
@@ -284,7 +317,7 @@ def own_leftovers(entry: dict[str, Any], shared: set[Path]) -> list[Path]:
 def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
             shared: set[Path] | None = None) -> ModelInfo:
     files = entry_files(entry)
-    installed = all(f.installed for f in files)
+    installed = all(f.installed for f in files if not f.optional)
     partial = False
     if not installed:
         partial = bool(own_leftovers(entry, installed_files() if shared is None else shared))
@@ -561,49 +594,80 @@ def download(
         if on_progress:
             on_progress(i * span, f"{label}: startet")
 
-        # Direkte URL (Civitai): ohne huggingface_hub, gestreamt in eine .part-Datei.
-        if f.get("url"):
-            _download_url(f["url"], dest, label, i * span, span, on_progress, should_stop)
-            paths.append(dest)
+        if f.get("optional"):
+            # Optionale Dateien (eigene Freigabe auf Hugging Face, etwa das Detail-IC-LoRA von
+            # LTX-2.5) duerfen fehlen: der Rest des Modells laeuft, die Funktion bleibt aus.
+            try:
+                paths.extend(_download_file(f, dest, label, i * span, span, on_progress, should_stop))
+            except DownloadCancelled:
+                raise
+            except Exception as exc:  # noqa: BLE001 - Freigabe fehlt, Netz, Repo verschoben
+                log.warning("optionale Datei %s uebersprungen: %s", f.get("file"), exc)
+                if on_progress:
+                    on_progress((i + 1) * span, i18n.t(
+                        f"{label}: übersprungen – Freigabe auf https://huggingface.co/{f['repo']} fehlt",
+                        f"{label}: skipped – access to https://huggingface.co/{f['repo']} is missing"))
             continue
 
-        kwargs: dict[str, Any] = {}
-        if on_progress:
-            kwargs["tqdm_class"] = _progress_tqdm(on_progress, label, i * span, span, should_stop)
-        token = hf_token()
-        if token:
-            kwargs["token"] = token
+        paths.extend(_download_file(f, dest, label, i * span, span, on_progress, should_stop))
 
-        # Snapshot: ganzes Repo als Ordner -- fuer Worker mit from_pretrained().
-        if f.get("snapshot"):
-            dest.mkdir(parents=True, exist_ok=True)
-            snapshot_download(
-                repo_id=f["repo"],
-                local_dir=str(dest),
-                allow_patterns=f.get("allow_patterns"),
-                **kwargs,
-            )
-            paths.append(dest)
-            continue
+    if on_progress:
+        on_progress(1.0, "fertig")
+    return paths
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
+
+def _download_file(f: dict[str, Any], dest: Path, label: str, base: float, span: float,
+                   on_progress: Callable[[float, str], None] | None,
+                   should_stop: Callable[[], bool] | None) -> list[Path]:
+    """Eine Datei bzw. ein Snapshot-Ordner eines Katalogeintrags nach `dest`."""
+    # Direkte URL (Civitai): ohne huggingface_hub, gestreamt in eine .part-Datei.
+    if f.get("url"):
+        _download_url(f["url"], dest, label, base, span, on_progress, should_stop)
+        return [dest]
+
+    kwargs: dict[str, Any] = {}
+    if on_progress:
+        kwargs["tqdm_class"] = _progress_tqdm(on_progress, label, base, span, should_stop)
+    token = hf_token()
+    if token:
+        kwargs["token"] = token
+
+    # Snapshot: ganzes Repo als Ordner -- fuer Worker mit from_pretrained().
+    if f.get("snapshot"):
+        dest.mkdir(parents=True, exist_ok=True)
+        snapshot_download(
+            repo_id=f["repo"],
+            local_dir=str(dest),
+            allow_patterns=f.get("allow_patterns"),
+            **kwargs,
+        )
+        return [dest]
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
         cached = hf_hub_download(
             repo_id=f["repo"],
             filename=f["file"],
             local_dir=str(dest.parent),
             **kwargs,
         )
-        # Repos mit Unterordnern (split_files/...) landen verschachtelt -> flach ziehen,
-        # damit ComfyUI die Datei in models/<target>/ findet.
-        cached_path = Path(cached)
-        if cached_path.resolve() != dest.resolve():
-            cached_path.replace(dest)
-            _prune_empty(cached_path.parent, dest.parent)
-        paths.append(dest)
-
-    if on_progress:
-        on_progress(1.0, "fertig")
-    return paths
+    except Exception as exc:  # noqa: BLE001 - huggingface_hub meldet Sperren als eigene Fehlerklassen
+        if type(exc).__name__ in ("GatedRepoError", "RepositoryNotFoundError") or " 403 " in f" {exc} ":
+            raise RuntimeError(i18n.t(
+                f"Kein Zugriff auf {f['repo']}: Das Repo ist gesperrt. Auf "
+                f"https://huggingface.co/{f['repo']} die Lizenz akzeptieren (mit dem Konto, dessen "
+                "Token in NVAI-open hinterlegt ist) und erneut laden.",
+                f"No access to {f['repo']}: the repo is gated. Accept the license on "
+                f"https://huggingface.co/{f['repo']} (with the account whose token is stored in "
+                "NVAI-open) and download again.")) from exc
+        raise
+    # Repos mit Unterordnern (split_files/...) landen verschachtelt -> flach ziehen,
+    # damit ComfyUI die Datei in models/<target>/ findet.
+    cached_path = Path(cached)
+    if cached_path.resolve() != dest.resolve():
+        cached_path.replace(dest)
+        _prune_empty(cached_path.parent, dest.parent)
+    return [dest]
 
 
 def _prune_empty(start: Path, stop: Path) -> None:
@@ -754,6 +818,9 @@ def register_custom(
     """
     prefix = "lora" if kind == "lora" else "custom"
     model_id = f"{prefix}-{_slug(repo.split('/')[-1])}-{_slug(Path(file).stem)}"
+    fixed = next((e for e in ALL_MODELS if e["id"] == model_id), None)
+    if fixed is not None:   # schon im festen Katalog (empfohlene LoRA): kein zweiter Eintrag
+        return fixed
     entries = _load_user_catalog()
     for e in entries:
         if e["id"] == model_id:
@@ -773,7 +840,7 @@ def register_custom(
         "description": (f"Aus der Suche hinzugefügt: https://huggingface.co/{repo}\n\n"
                         "Die Lizenz bitte im Repo prüfen, bevor Bilder veröffentlicht werden."),
         "pros": [],
-        "cons": ["Nicht von NV-AI getestet; die Lizenz steht nur im Repo"],
+        "cons": ["Nicht von NVAI-open getestet; die Lizenz steht nur im Repo"],
         "custom": True,
     }
     if kind == "lora":

@@ -1,10 +1,10 @@
-# Bildmodelle in NV-AI: Qwen-Image-2512 und FLUX 3 Image Klein
+# Bildmodelle in NVAI-open: Qwen-Image-2512 und FLUX 3 Image Klein
 
 *English: [../MODELS.md](../MODELS.md)*
 
-Referenz für Projekte, die Bilder über NV-AI erzeugen lassen. Sie gilt für Claude Code
+Referenz für Projekte, die Bilder über NVAI-open erzeugen lassen. Sie gilt für Claude Code
 mit dem MCP-Server `nvai` ebenso wie für eigene Programme über die REST-API. Beschrieben sind
-die beiden Bildmodelle, die NV-AI bevorzugt: was sie können, wie man sie anspricht, wie lange
+die beiden Bildmodelle, die NVAI-open bevorzugt: was sie können, wie man sie anspricht, wie lange
 sie brauchen und wo sie scheitern.
 
 Stand: 18. Oktober 2026. Gemessen auf einer RTX 5060 Ti mit 16 GB (ComfyUI 0.41.3, PyTorch 2.11
@@ -46,23 +46,49 @@ Herstellerangabe gekennzeichnet.
 | Nur ein paar Worte Prompt, Modell ohne eigenen Upsampler | erst **✨ Prompt ausbauen** (`expand_prompt`), siehe Abschnitt 5 |
 | Qwen-Image 2.1 ausprobieren (`qwen-image-2.1-int8`) | **nur nicht kommerziell** (Qwen Research License); Bearbeiten wirkte im Test überzeichnet |
 
-Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
+Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
+
+### Neu in 0.5.8
+
+LTX-2.5 (`ltx25-distilled-nvfp4`) ist jetzt das empfohlene Videomodell, mit allen seinen Wegen.
+Gemessen auf einer RTX 5060 Ti bei 24 fps mit Ton; der Grafikspeicher ist dabei fast voll, ComfyUI
+lagert aus.
+
+| Weg | Parameter | Gemessen |
+|---|---|---|
+| Text zu Video | — | 5 s bei 1280 × 704 in 93 s (erster Lauf mit Laden 122 s); 1920 × 1088 in 251 s |
+| Startbild | `image_asset_id` | 5 s bei 1280 × 704 in 109 s |
+| Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erster und letzter Frame treffen die beiden Bilder |
+| Schleife | `loop=True` | 4 s in 125 s; erster und letzter Frame weichen im Mittel um 3,6/255 ab (ohne Schleife 12–44). Nur mit ruhiger Kamera: Mit Kamerafahrt zerfielen die letzten Frames |
+| Länge automatisch | `auto_duration=True` | eine Tür, die langsam aufgeht: 3 s, in 72 s |
+| Ton vorgeben | `audio_asset_id` | 20 s Blasmusik → 19,7 s Video bei 1024 × 576 in 302 s, der Ton unverändert |
+| Mehrere Einstellungen | `expand_prompt(target="video_multishot")` | 8 s in 170 s: zwei Einstellungen mit sauberem Schnitt, in beiden derselbe Leuchtturmwärter |
+| DFR, Zeitlupe | `quality="dfr"`, `motion_speed` | noch nicht getestet: Sie brauchen LoRAs von Lightricks, deren Lizenz auf Hugging Face akzeptiert werden muss |
+
+Geräusche so laut beschreiben, wie sie sein sollen: Sprache und Schmiede kamen mit −14 bis −18 LUFS,
+ein Lagerfeuer, das „crackles softly“, und ein stiller Dorfplatz mit −41 bis −52 LUFS, mit oder ohne
+Schleife. Der erzeugte Ton läuft jetzt durch denselben Limiter wie alle Audioausgaben, bei Video mit
+−2,5 dBFS, weil AAC bei dichtem Ton bis 1,9 dB überschwingt; vorher erreichte er bis +1,7 dBTP. Neu im
+Video-Reiter: „Person aus einem Foto“ lässt FLUX 3 das Gesicht aus einem Foto übernehmen und vier
+Startbilder in einer beschriebenen Rolle erzeugen (95–98 s bei 1280 × 704), die LTX-2.5 dann belebt;
+Schritt für Schritt in [FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md). Empfohlene LoRAs für LTX-2.5 und wie sie abschnitten:
+[INSTALL.md](INSTALL.md#loras-hugging-face-und-civitai).
 
 ### Neu in 0.5.7
 
 | Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
 |---|---|---|---|
-| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumentale Musik, kein Gesang (Chor nur wortlos); in NV-AI bis 5 Minuten | 60 s in 9–12 s (bis 9,7 GB Grafikspeicher), 300 s in 64 s (16-GB-Karte fast voll) | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
+| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumentale Musik, kein Gesang (Chor nur wortlos); in NVAI-open bis 5 Minuten | 60 s in 9–12 s (bis 9,7 GB Grafikspeicher), 300 s in 64 s (16-GB-Karte fast voll) | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
 
 Den Prompt für Stable Audio 3 als einen Satz schreiben: Gattung mit Hauptinstrumenten, Schichten
-und Schlagwerk, die Stimmung, dann „BPM: 100.“. NV-AI hängt „Length: N seconds“ passend zur Dauer
+und Schlagwerk, die Stimmung, dann „BPM: 100.“. NVAI-open hängt „Length: N seconds“ passend zur Dauer
 an. „✨ Prompt ausbauen“ schreibt diese Form (`target="music_sa3"`).
 
-ACE-Step 1.5 Turbo läuft jetzt wie ComfyUIs Vorlage (8 Schritte, CFG 1, shift 3). Vorher nahm NV-AI
+ACE-Step 1.5 Turbo läuft jetzt wie ComfyUIs Vorlage (8 Schritte, CFG 1, shift 3). Vorher nahm NVAI-open
 12 Schritte und CFG 2 ohne shift, das klang hart und gepresst. Die Lizenz ist MIT (im Katalog stand
 Apache-2.0).
 
-Jede Audioausgabe läuft jetzt vor dem Speichern durch NV-AIs eigenen Limiter (Grenze −1 dBFS, 5 ms
+Jede Audioausgabe läuft jetzt vor dem Speichern durch NVAI-opens eigenen Limiter (Grenze −1 dBFS, 5 ms
 Vorlauf, 80 ms Rücklauf); ACE-Step wird vorher um 3 dB abgesenkt. Seine rohe Ausgabe hat Spitzen bis
 +5,7 dBFS, und der MP3-Encoder schnitt alles über 0 dB hart ab. Gemessen mit gleichem Seed, True Peak
 der MP3: Industrial +2,3 → 0,0 dBTP, Blaskapelle +2,0 → +0,2 dBTP (nur mit den 3 dB: +1,3 und +0,9).
@@ -97,7 +123,7 @@ an Wan 2.2 I2V A14B machte aus einer leichten Drehung eine ganze Kamerafahrt um 
 
 Jedes Bild- und Videomodell in der Liste trägt ein Abzeichen: *unzensiert*, *teilweise
 zensiert*, *zensiert* oder *Zensur unbekannt*. Der Tooltip nennt Beleg und Quelle (Modellkarte,
-technischer Bericht). NV-AI selbst filtert nichts. Dieselbe Angabe steht in `GET /api/models`
+technischer Bericht). NVAI-open selbst filtert nichts. Dieselbe Angabe steht in `GET /api/models`
 (`content`, `content_note`, `content_source`).
 
 | Abzeichen | Modelle (Stand Oktober 2026) |
@@ -115,8 +141,8 @@ stattdessen Wan 2.2).
 
 ### Voraussetzung
 
-Der NV-AI-Server muss laufen. Er lauscht auf `http://127.0.0.1:8100`. Beim Windows-Setup
-startet ihn der Startmenü-Eintrag **NV-AI**, im Quelltext-Stand:
+Der NVAI-open-Server muss laufen. Er lauscht auf `http://127.0.0.1:8100`. Beim Windows-Setup
+startet ihn der Startmenü-Eintrag **NVAI-open**, im Quelltext-Stand:
 
 ```powershell
 scripts\start.ps1     # meldet sich, falls er schon läuft
@@ -147,7 +173,7 @@ Die wichtigsten Werkzeuge:
 | `list_assets(kind="image")` | letzte Bilder mit Asset-ID und Pfad |
 | `copy_asset(asset_id, ziel)` | Bild in das eigene Projekt kopieren |
 
-Nach einem Update von NV-AI sieht eine laufende Sitzung die neuen Werkzeugbeschreibungen erst
+Nach einem Update von NVAI-open sieht eine laufende Sitzung die neuen Werkzeugbeschreibungen erst
 nach `/mcp` und Neuverbinden.
 
 ### Per REST
@@ -222,7 +248,7 @@ anderer.
   aufs Holz.
 - **Lange Prompts.** Der Encoder ist ein Sprachmodell, es gibt keine 77-Token-Grenze wie bei
   CLIP.
-- **Negativprompt wirkt** (CFG 4). Bleibt er leer, setzt NV-AI den aus Qwens Modellkarte ein:
+- **Negativprompt wirkt** (CFG 4). Bleibt er leer, setzt NVAI-open den aus Qwens Modellkarte ein:
   `低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。`
   Er steht für niedrige Auflösung, deformierte Glieder und Finger, Übersättigung, Wachsoptik,
   KI-Look, wirre Komposition und verzerrte Schrift.
@@ -233,7 +259,7 @@ anderer.
   Aufschrift „MUNITION 7,92" einer Kiste wurde in der Maske zu „FLAK 88" in derselben
   Schablonenschrift. Außerhalb der Maske wich das Bild im Mittel um 0,6 von 255 ab, also nur um
   das Rauschen des VAE-Durchlaufs. Mit 28 Schritten dauerte das 82 s einschließlich Kaltstart.
-  Seit 0.5.6 füllt auch **FLUX 3** (`features.mask` = `"reference"`): NV-AI schneidet den Bereich
+  Seit 0.5.6 füllt auch **FLUX 3** (`features.mask` = `"reference"`): NVAI-open schneidet den Bereich
   mit 35 % Umgebung aus, färbt ihn grau, lässt FLUX 3 nach dem Prompt malen, misst den Versatz und
   setzt nur den Bereich zurück, außerhalb pixelgleich. Gemessen an einem Fischmarkt: Kisten entfernt
   mit durchlaufendem Pflaster, Möwe aufs Wasser gesetzt, je rund 60–70 s. Etwas Vorhandenes
@@ -243,9 +269,9 @@ anderer.
   fort, was zum Wegretuschieren genügt.
 - **Outpainting** (seit 0.5.4, `image_asset_id` + `outpaint=[links, oben, rechts, unten]` in Pixeln):
   Das Bild wird über den Rand hinaus erweitert, das Format ist Bild plus Rand. **FLUX 3 nehmen:** Es
-  bekommt das Bild mit grauem Rand als Referenz und führt die Szene weiter, danach legt NV-AI das
+  bekommt das Bild mit grauem Rand als Referenz und führt die Szene weiter, danach legt NVAI-open das
   Original zurück. FLUX 3 gibt das Bild nie genau an derselben Stelle wieder (je Achse Faktor 0,97–1,055 und bis 43 px
-  Versatz, bei Rand auf allen Seiten zoomte es 25–42 % hinein). Deshalb erweitert NV-AI Achse für Achse,
+  Versatz, bei Rand auf allen Seiten zoomte es 25–42 % hinein). Deshalb erweitert NVAI-open Achse für Achse,
   misst nach jedem Durchgang den Versatz, rückt das Ergebnis zurück und setzt erst dann das Original
   ein. Gemessen an einer rundum erweiterten Löwenszene: zwei Varianten in 147 s, Nähte in voller
   Auflösung sauber. Qwen-Image-2512 erweitert per Maske, malte den Rand im
@@ -319,7 +345,7 @@ Plain light grey background, soft even light.
 ### Der Prompt-Upsampler
 
 FLUX 3 ist auf lange Bildbeschreibungen trainiert, die sein eigener Upsampler schreibt. BFL
-rät, das Modell nie ohne ihn zu benutzen. In NV-AI läuft er deshalb automatisch vor jedem Bild:
+rät, das Modell nie ohne ihn zu benutzen. In NVAI-open läuft er deshalb automatisch vor jedem Bild:
 
 1. Aus der Anfrage schreibt der Upsampler eine Beschreibung von 100 bis 350 Wörtern. Bei Formaten,
    die nicht quadratisch sind, erfährt er das Seitenverhältnis und komponiert dafür.
@@ -327,7 +353,7 @@ rät, das Modell nie ohne ihn zu benutzen. In NV-AI läuft er deshalb automatisc
 3. Die Beschreibung landet im Ergebnis unter **`caption`**, bei MCP direkt im Rückgabewert und
    bei REST in `meta.caption` des Assets.
 
-Er dekodiert deterministisch: Derselbe Prompt ergibt immer dieselbe Beschreibung. NV-AI
+Er dekodiert deterministisch: Derselbe Prompt ergibt immer dieselbe Beschreibung. NVAI-open
 speichert sie zwischen, deshalb kostet ein neuer Seed mit demselben Prompt nur die Bildzeit.
 Der Zwischenspeicher lebt im Serverprozess und ist nach einem Neustart leer.
 
@@ -352,7 +378,7 @@ Prompt-Feld; man liest sie, streicht, was nicht stimmt, und generiert mit einem 
 Per MCP heißt das `expand_prompt(prompt, width, height)`, per REST `POST /api/prompt/expand`.
 Ein FLUX-3-Modell muss dafür geladen sein. Gemessen: 13–16 s, direkt nach dem Start rund 36 s.
 
-NV-AI für Mac (seit 0.4) und das PhotoCraft-Add-on auf dem Mac haben denselben Knopf und dieselbe
+NVAI-open für Mac (seit 0.4) und das PhotoCraft-Add-on auf dem Mac haben denselben Knopf und dieselbe
 REST-Route. Dort schreibt der Text-Encoder Qwen3-4B von FLUX.2 Klein die Beschreibung, mit den
 Anweisungen von Black Forest Labs für Text-zu-Bild-Prompts; kein zusätzlicher Download. Gemessen
 auf einem Mac mini M1 mit 8 GB: 22–25 s, beim ersten Mal nach dem App-Start 35 s.
@@ -362,7 +388,7 @@ ausgebauten Text eine arbeitende Schmiede mit Esse, Amboss, Zange und Funken. De
 aber jede Lücke: Er setzte dem Schmied auch einen Eisenhelm auf. Den Text also erst lesen.
 
 Seit 0.5.3 sitzt der Knopf auch in den Reitern **Video**, **Audio** und **3D** (Windows). Derselbe
-Upsampler folgt dann NV-AIs eigenen Anweisungen (`target` in der API): Bei Video ergänzt er
+Upsampler folgt dann NVAI-opens eigenen Anweisungen (`target` in der API): Bei Video ergänzt er
 Bewegung, eine Kamerafahrt, Ort und Licht, bei LTX-2.5 auch das Hörbare, mit Startbild nur die
 Bewegung. Für Stable Audio schreibt er Klang-Tags (Quelle, Material, Raum, Mikrofon), für ACE-Step
 Genre-, Instrument- und Stimmungs-Tags. Im 3D-Reiter erzeugt „Objekt aus Text“ zuerst mit dem
@@ -431,7 +457,7 @@ festlegen, was Diffusionsmodelle über den Text allein nicht zuverlässig schaff
 ### Formate
 
 Seiten müssen Vielfache von 16 sein. Die allgemeinen 1-MP-Formate passen. Laut BFL rechnet
-das Modell nativ bis 4K, die NV-AI-API erlaubt bis 2048 × 2048. Gemessen hat 1440² mehr Detail
+das Modell nativ bis 4K, die NVAI-open-API erlaubt bis 2048 × 2048. Gemessen hat 1440² mehr Detail
 gebracht, zum Beispiel ein Seil, das durch eine Öse mit Metallring läuft, bei 26 statt 13 s.
 Einen zweiten Durchgang (`hires`) gibt es bei FLUX 3 nicht. Wer mehr Detail will, wählt direkt
 ein größeres Format.
@@ -478,7 +504,7 @@ Hardware. Wie in BFLs eigener INT8-Vorlage gehört der kleinere Upsampler dazu (
 pro Bild (16 Schritte, 1 MP). Von uns noch nicht gemessen. Prompts, Referenzbilder, Boxen und
 Upsampler funktionieren wie bei NVFP4.
 
-NV-AI erkennt die Karte (`compute_cap` per nvidia-smi) und markiert in `list_models` passende
+NVAI-open erkennt die Karte (`compute_cap` per nvidia-smi) und markiert in `list_models` passende
 Modelle mit `recommended`: auf RTX 50 Qwen und FLUX 3 in NVFP4, auf älteren Karten FLUX 3 INT8
 und Z-Image INT8. Ein Format, das auf der erkannten Karte nicht in Hardware rechnet, bekommt
 einen Hinweis in `gpu_note`.
@@ -528,7 +554,7 @@ Format nach Silhouette: stehende Figur 832 × 1216 (Qwen nativ 1056 × 1584), Fa
 ## 7. Das Feld `features`
 
 `GET /api/models` und `list_models(detailed=True)` liefern je Bildmodell ein Feld `features`.
-Andere Programme können ihre Bedienung danach ausrichten, so wie es die NV-AI-Weboberfläche
+Andere Programme können ihre Bedienung danach ausrichten, so wie es die NVAI-open-Weboberfläche
 tut.
 
 | Schlüssel | Bedeutung | Qwen-50 | FLUX 3 |

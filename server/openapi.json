@@ -1,8 +1,8 @@
 {
  "openapi": "3.1.0",
  "info": {
-  "title": "NV-AI",
-  "version": "0.5.7",
+  "title": "NVAI-open",
+  "version": "0.5.8",
   "x-api-version": 1
  },
  "paths": {
@@ -28,7 +28,7 @@
   "/api/shutdown": {
    "post": {
     "summary": "Shutdown",
-    "description": "Beendet NV-AI samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
+    "description": "Beendet NVAI-open samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
     "operationId": "shutdown_api_shutdown_post",
     "responses": {
      "200": {
@@ -1160,7 +1160,7 @@
   "/api/settings/folders": {
    "get": {
     "summary": "Get Folders",
-    "description": "Daten- und Modellordner, freier Platz, und ob NV-AI sie selbst setzen kann (Setup).",
+    "description": "Daten- und Modellordner, freier Platz, und ob NVAI-open sie selbst setzen kann (Setup).",
     "operationId": "get_folders_api_settings_folders_get",
     "responses": {
      "200": {
@@ -2137,6 +2137,7 @@
        "image",
        "video",
        "video_sound",
+       "video_multishot",
        "video_start",
        "sfx",
        "music",
@@ -2144,7 +2145,7 @@
        "3d"
       ],
       "title": "Target",
-      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
+      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten und Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
       "default": "image"
      },
      "width": {
@@ -2800,7 +2801,7 @@
      "width": {
       "type": "integer",
       "multipleOf": 16.0,
-      "maximum": 1280.0,
+      "maximum": 1920.0,
       "minimum": 256.0,
       "title": "Width",
       "default": 832
@@ -2808,17 +2809,17 @@
      "height": {
       "type": "integer",
       "multipleOf": 16.0,
-      "maximum": 1280.0,
+      "maximum": 1920.0,
       "minimum": 256.0,
       "title": "Height",
       "default": 480
      },
      "frames": {
       "type": "integer",
-      "maximum": 201.0,
+      "maximum": 481.0,
       "minimum": 9.0,
       "title": "Frames",
-      "description": "Anzahl Frames; bei Wan 4n+1",
+      "description": "Anzahl Frames; Wan 4n+1, LTX 8n+1 (481 = 20 s bei 24 fps)",
       "default": 49
      },
      "fps": {
@@ -2885,6 +2886,66 @@
       "maxItems": 8,
       "title": "Loras",
       "description": "LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke"
+     },
+     "end_image_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "End Image Asset Id",
+      "description": "LTX-2.5: Endbild (letzter Frame); mit image_asset_id ein Uebergang"
+     },
+     "loop": {
+      "type": "boolean",
+      "title": "Loop",
+      "description": "LTX-2.5: Schleife -- das Startbild ist auch das Endbild",
+      "default": false
+     },
+     "quality": {
+      "type": "string",
+      "enum": [
+       "standard",
+       "dfr"
+      ],
+      "title": "Quality",
+      "description": "LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer",
+      "default": "standard"
+     },
+     "temporal_upscale": {
+      "type": "boolean",
+      "title": "Temporal Upscale",
+      "description": "LTX-2.5 mit quality=dfr: doppelte Bildrate bei gleicher Dauer (24 -> 48 fps)",
+      "default": false
+     },
+     "auto_duration": {
+      "type": "boolean",
+      "title": "Auto Duration",
+      "description": "LTX-2.5: Laenge aus dem Prompt vorhersagen; frames gilt dann nicht",
+      "default": false
+     },
+     "audio_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Audio Asset Id",
+      "description": "LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, die Laenge auch (hoechstens 20 s)"
+     },
+     "motion_speed": {
+      "type": "number",
+      "maximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Motion Speed",
+      "description": "LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x langsamer; verlaesslich mit der Slow-Motion-LoRA",
+      "default": 1.0
      }
     },
     "type": "object",
@@ -3070,6 +3131,17 @@
        }
       ],
       "title": "Size Gb"
+     },
+     "optional": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Optional"
      }
     },
     "type": "object",
@@ -3455,7 +3527,7 @@
      "instance": {
       "type": "string",
       "title": "Instance",
-      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NV-AI auf dem Port sein eigenes ist.",
+      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NVAI-open auf dem Port sein eigenes ist.",
       "default": ""
      }
     },

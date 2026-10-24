@@ -48,8 +48,8 @@ class PhotoCraft:
             token = self.token_file.read_text(encoding="utf-8").strip()
         except FileNotFoundError:
             raise NotConnected(t(
-                "PhotoCraft wurde noch nicht mit NV-AI-Anbindung gestartet.",
-                "PhotoCraft has not been started with the NV-AI connection yet.",
+                "PhotoCraft wurde noch nicht mit NVAI-open-Anbindung gestartet.",
+                "PhotoCraft has not been started with the NVAI-open connection yet.",
             )) from None
         if len(token) != 64:
             raise NotConnected(t(f"Die Token-Datei {self.token_file} ist ungültig.",
@@ -61,8 +61,8 @@ class PhotoCraft:
         try:
             sock = socket.create_connection(("127.0.0.1", self.port), timeout=2.0)
         except OSError:
-            raise NotConnected(t("PhotoCraft mit NV-AI-Anbindung läuft nicht.",
-                                 "PhotoCraft with the NV-AI connection is not running.")) from None
+            raise NotConnected(t("PhotoCraft mit NVAI-open-Anbindung läuft nicht.",
+                                 "PhotoCraft with the NVAI-open connection is not running.")) from None
         sock.settimeout(self.REPLY_TIMEOUT)
         self._sock, self._io = sock, sock.makefile("rwb")
         try:

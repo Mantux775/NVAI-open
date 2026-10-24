@@ -75,8 +75,8 @@ public actor ControlClient: PhotoCraftControlling {
 
     private func token() throws -> String {
         guard let raw = try? String(contentsOf: tokenURL, encoding: .utf8) else {
-            throw ControlError.notConnected(t("PhotoCraft wurde noch nicht mit NV-AI-Anbindung gestartet.",
-                                              "PhotoCraft has not been started with the NV-AI connection yet."))
+            throw ControlError.notConnected(t("PhotoCraft wurde noch nicht mit NVAI-open-Anbindung gestartet.",
+                                              "PhotoCraft has not been started with the NVAI-open connection yet."))
         }
         let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard token.count == 64 else {
@@ -92,8 +92,8 @@ public actor ControlClient: PhotoCraftControlling {
             try await line.start(timeout: 2)
         } catch {
             line.cancel()
-            throw ControlError.notConnected(t("PhotoCraft mit NV-AI-Anbindung läuft nicht.",
-                                              "PhotoCraft with the NV-AI connection is not running."))
+            throw ControlError.notConnected(t("PhotoCraft mit NVAI-open-Anbindung läuft nicht.",
+                                              "PhotoCraft with the NVAI-open connection is not running."))
         }
         do {
             try await line.send(line: ["id": "auth", "method": "auth", "params": ["token": .string(token)]])

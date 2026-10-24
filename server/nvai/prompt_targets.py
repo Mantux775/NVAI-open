@@ -1,8 +1,8 @@
 """Prompt ausbauen jenseits von Bildern: Video, Soundeffekt, Musik und 3D.
 
-Fuer Bilder nimmt NV-AI BFLs eigene Systemprompts des FLUX-3-Upsamplers
+Fuer Bilder nimmt NVAI-open BFLs eigene Systemprompts des FLUX-3-Upsamplers
 (flux3_prompt.py). Fuer die uebrigen Ziele laeuft dasselbe Sprachmodell (Qwen3.5-9B,
-von BFL feinjustiert, Apache-2.0) mit den Systemprompts unten. Sie sind NV-AIs eigene
+von BFL feinjustiert, Apache-2.0) mit den Systemprompts unten. Sie sind NVAI-opens eigene
 und folgen den Prompt-Regeln der jeweiligen Modelle: Wan und LTX wollen eine fliessende
 Beschreibung mit Bewegung und Kamera, LTX-2.5 zusaetzlich den Ton; Stable Audio den
 Klang statt Musik; ACE-Step kommagetrennte Genre-Tags; die 3D-Modelle ein einzelnes
@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 
-TARGETS = ("image", "video", "video_sound", "video_start", "sfx", "music", "music_sa3", "3d")
+TARGETS = ("image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music", "music_sa3", "3d")
 
 _COMMON = (
     "Output only the finished prompt in English, no heading, no quotation marks, no "
@@ -51,15 +51,30 @@ SYSTEM: dict[str, str] = {
         "orbit). End with the setting, the lighting and the time of day. Describe a single "
         "continuous shot of about four seconds, no cuts. " + _COMMON + _NO_INVENT
     ),
+    # Nach Lightricks' Prompt-Anleitung fuer LTX-2.5 (docs.ltx.io): Einstellung, Ort und Licht,
+    # Handlung mit Verben, Figuren mit koerperlichen Merkmalen, Kamera, zuletzt der Ton; Tempo
+    # ausschreiben, weil die Laengenvorhersage sich an der beschriebenen Handlung orientiert.
     "video_sound": (
         "You turn a short idea into a prompt for a video model that creates picture and "
-        "sound together (LTX-2). Write one flowing paragraph of 50 to 90 words in the "
-        "present tense. Start with the visual style and the shot. Describe the subject, its "
-        "motion from beginning to end, one explicit camera movement, the setting, the "
-        "lighting and the time of day. Finish with one sentence about what can be "
-        "heard: the sounds of the actions, the ambience, music only if the idea asks for it, "
-        "and spoken words in quotation marks only if the idea contains dialogue. Describe a "
-        "single continuous shot of about four seconds, no cuts. " + _COMMON + _NO_INVENT
+        "sound together (LTX-2.5). Write one flowing paragraph of 50 to 90 words in the "
+        "present tense, in this order: the shot and visual style, the setting and lighting, "
+        "the action from beginning to end with a verb in every sentence, the people with "
+        "visible physical cues instead of named emotions, one explicit camera movement, and "
+        "last one sentence about what can be heard: the sounds of the actions, the ambience, "
+        "music only if the idea asks for it, and spoken words in quotation marks only if the "
+        "idea contains dialogue. Describe a single continuous shot, no cuts. " + _COMMON + _NO_INVENT
+    ),
+    "video_multishot": (
+        "You turn a short idea into a multi-shot prompt for a video model that creates picture "
+        "and sound together (LTX-2.5) and cuts between shots within one clip. Write one "
+        "chronological paragraph of 90 to 160 words in the present tense with two to four shots, "
+        "for example a wide establishing shot, then a medium shot, then a close-up. Open with "
+        "the visual style. At every cut name the transition in words (\"A hard cut transitions "
+        "to ...\", \"The view cuts to a close-up of ...\"), re-establish the new shot with its "
+        "scale, angle and who or what is in frame, call recurring people and objects by the same "
+        "words, and state what happens to the sound across the cut (\"the music continues\", "
+        "\"only the wind remains\"). Spoken words go in quotation marks. No shot list, no "
+        "numbering. " + _COMMON + _NO_INVENT
     ),
     "video_start": (
         "The image shows the first frame of a short video. You turn the user's short idea "
@@ -133,6 +148,8 @@ FORMAT = {
     "image": "Write 3 to 5 sentences, 40 to 80 words in total, no more.",
     "video": "Write one paragraph of 40 to 70 words, no more.",
     "video_sound": "Write one paragraph of 50 to 90 words, no more.",
+    "video_multishot": ("Write one paragraph of 90 to 160 words with two to four shots; describe every "
+                        "cut in words, no list."),
     "3d": "Write 40 to 70 words, no more.",
 }
 
@@ -142,7 +159,7 @@ def user_text(target: str, prompt: str) -> str:
 
 
 # Hoechstlaenge in Woertern nach dem Kuerzen. Ton und Musik bleiben ungekuerzt, sie sind kurz.
-BUDGET = {"image": 75, "video": 70, "video_sound": 90, "video_start": 50, "3d": 80}
+BUDGET = {"image": 75, "video": 70, "video_sound": 90, "video_multishot": 170, "video_start": 50, "3d": 80}
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"“])")
 _SOUND = re.compile(r"\b(sounds?|hear|heard|audible|audio|noise|creak\w*|rattl\w*|thud\w*|echo\w*|"
                     r"music|voices?|says?|whisper\w*|hum\w*|roar\w*|clang\w*)\b", re.I)

@@ -1,4 +1,4 @@
-"""NV-AI ohne Konsole betreiben -- Einstieg der installierten Windows-Fassung.
+"""NVAI-open ohne Konsole betreiben -- Einstieg der installierten Windows-Fassung.
 
     pythonw -m nvai.serve
 

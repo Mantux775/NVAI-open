@@ -38,7 +38,7 @@ struct DocumentInfo: Equatable {
     }
 }
 
-/// Stand von NV-AI (aus `/api/health` und `/api/version`).
+/// Stand von NVAI-open (aus `/api/health` und `/api/version`).
 struct NVAIState: Equatable {
     var connected = false
     var error: String?
@@ -47,11 +47,11 @@ struct NVAIState: Equatable {
     /// Erreichbar, aber nicht nutzbar: andere Vertragsversion oder Zugriff verweigert.
     var problem: String?
     var masks = false
-    /// „Prompt ausbauen“ (`POST /api/prompt/expand`): NV-AI ab 0.4.
+    /// „Prompt ausbauen“ (`POST /api/prompt/expand`): NVAI-open ab 0.4.
     var expand = false
-    /// Erweitern (`outpaint`): NV-AI für Windows ab 0.5.4, für Mac ab 0.4.3.
+    /// Erweitern (`outpaint`): NVAI-open für Windows ab 0.5.4, für Mac ab 0.4.3.
     var outpaint = false
-    /// Laufende und wartende Modell-Downloads von NV-AI.
+    /// Laufende und wartende Modell-Downloads von NVAI-open.
     var downloads: [NVAIClient.Download] = []
     var busy = false
     var activeModel: String?
@@ -61,7 +61,7 @@ struct NVAIState: Equatable {
     var usable: Bool { connected && problem == nil }
 }
 
-/// Ein Bildmodell aus NV-AI mit dem, was es in den drei Modi kann (wie `/api/models` der Brücke).
+/// Ein Bildmodell aus NVAI-open mit dem, was es in den drei Modi kann (wie `/api/models` der Brücke).
 struct ModelOption: Identifiable, Equatable {
     let id: String
     let name: String

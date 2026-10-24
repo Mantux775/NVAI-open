@@ -1,4 +1,4 @@
-"""NV-AI und PhotoCraft finden: Registry des NV-AI-Setups, App Paths, Versionen, Startweg."""
+"""NVAI-open und PhotoCraft finden: Registry des NVAI-open-Setups, App Paths, Versionen, Startweg."""
 from __future__ import annotations
 
 import os
@@ -18,7 +18,7 @@ def _registry(monkeypatch, values):
                         lambda path, hive="HKCU": values if (path, hive) == (config.NVAI_REGISTRY_KEY, "HKCU") else None)
 
 
-# ---------------------------------------------------------------- NV-AI
+# ---------------------------------------------------------------- NVAI-open
 
 def test_nvai_install_from_setup_key(monkeypatch):
     _registry(monkeypatch, SETUP_KEY)
@@ -64,7 +64,7 @@ def _dev_folder(tmp_path: Path) -> Path:
 @pytest.mark.parametrize("addon, dev, explicit, uses_setup", [
     (True, False, False, True),    # Tester-PC: Add-on des Setups
     (True, True, False, True),     # Add-on gehört zum Setup, auch wenn ein Entwicklungsordner da ist
-    (False, True, False, False),   # Entwicklungsrechner: bleibt bei NV-AI aus dem Repository
+    (False, True, False, False),   # Entwicklungsrechner: bleibt bei NVAI-open aus dem Repository
     (False, False, False, True),   # aus dem Repository, aber nur das Setup vorhanden
     (True, True, True, False),     # NVAI_ROOT ausdrücklich gesetzt
 ])
@@ -78,7 +78,7 @@ def test_which_nvai_the_bridge_belongs_to(monkeypatch, tmp_path, addon, dev, exp
 
 @pytest.fixture
 def local_nvai(monkeypatch, tmp_path):
-    """NV-AI läuft nicht, liegt lokal; weder Setup noch Entwicklungsordner."""
+    """NVAI-open läuft nicht, liegt lokal; weder Setup noch Entwicklungsordner."""
     monkeypatch.setattr(config, "nvai_is_local", lambda: True)
     monkeypatch.setattr(launcher, "nvai_running", lambda: False)
     monkeypatch.setattr(launcher, "_nvai_started_at", None)
@@ -100,7 +100,7 @@ def test_start_via_setup_script(local_nvai, monkeypatch, tmp_path):
                     '@echo off\r\necho gestartet> "%~dp0started.txt"\r\n')
     assert launcher.nvai_starter() == ("setup", folder / "nvai-start.cmd")
     assert not launcher.nvai_start_pending()
-    assert launcher.start_nvai() == "NV-AI is starting …"
+    assert launcher.start_nvai() == "NVAI-open is starting …"
     assert (folder / "started.txt").read_text().strip() == "gestartet"
     assert launcher.nvai_start_pending()
 

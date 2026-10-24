@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT))
 
 from trellis2.pipelines import Trellis2ImageTo3DPipeline  # noqa: E402
 
-app = FastAPI(title="NV-AI TRELLIS.2-Worker")
+app = FastAPI(title="NVAI-open TRELLIS.2-Worker")
 
 _pipeline: Trellis2ImageTo3DPipeline | None = None
 _device = "cuda" if torch.cuda.is_available() else "cpu"

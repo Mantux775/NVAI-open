@@ -1,6 +1,6 @@
 <#
-  Sets up the Python environments of the installed NV-AI.
-  Called by the setup after copying the files; also runs on its own as "Repair NV-AI".
+  Sets up the Python environments of the installed NVAI-open.
+  Called by the setup after copying the files; also runs on its own as "Repair NVAI-open".
 
     install-runtime.ps1 -App <install folder> -DataDir <data folder> [-With3D] [-WithAddon] [-Gpu auto|nvidia|amd]
 
@@ -65,8 +65,8 @@ function New-Venv($dir, $lock, [string[]]$extra = @()) {
 }
 
 try {
-    Write-Host (L "NV-AI wird eingerichtet. Beim ersten Mal laedt das rund 3 GB (vor allem PyTorch)." `
-                  "Setting up NV-AI. The first time this downloads about 3 GB (mostly PyTorch).")
+    Write-Host (L "NVAI-open wird eingerichtet. Beim ersten Mal laedt das rund 3 GB (vor allem PyTorch)." `
+                  "Setting up NVAI-open. The first time this downloads about 3 GB (mostly PyTorch).")
     Write-Host (L "Je nach Leitung dauert das 5 bis 20 Minuten. Dieses Fenster schliesst sich am Ende selbst." `
                   "Depending on your connection this takes 5 to 20 minutes. This window closes by itself.")
 
@@ -75,7 +75,7 @@ try {
     # registry entry - traces outside the program folder (measured).
     Uv python install --no-bin --no-registry $PythonVersion
 
-    Step (L "NV-AI-Server" "NV-AI server")
+    Step (L "NVAI-open-Server" "NVAI-open server")
     $serverPy = New-Venv (Join-Path $App "server\.venv") (Join-Path $App "locks\server.lock")
     # Editable install: config.ROOT then points to the program folder, where frontend\dist
     # and external\comfyui are found.
@@ -117,12 +117,12 @@ try {
     # On ROCm, PyTorch reports the Radeon through torch.cuda as well (HIP).
     & $comfyPy -c "import torch; ok = torch.cuda.is_available(); print('GPU backend:', 'ROCm ' + torch.version.hip if torch.version.hip else 'CUDA', ok); print('GPU:', torch.cuda.get_device_name(0) if ok else '-')"
     if ($vendor -eq "amd") {
-        Write-Host (L "Zeigt die Zeile oben 'False': AMD-Treiber 26.2.2 oder neuer installieren und 'NV-AI reparieren' starten." `
-                      "If the line above says 'False': install AMD driver 26.2.2 or newer and run 'Repair NV-AI'.")
+        Write-Host (L "Zeigt die Zeile oben 'False': AMD-Treiber 26.2.2 oder neuer installieren und 'NVAI-open reparieren' starten." `
+                      "If the line above says 'False': install AMD driver 26.2.2 or newer and run 'Repair NVAI-open'.")
     }
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning (L "PyTorch-Test fehlgeschlagen. NV-AI startet trotzdem; Details im Protokoll." `
-                         "PyTorch check failed. NV-AI starts anyway; details in the log.")
+        Write-Warning (L "PyTorch-Test fehlgeschlagen. NVAI-open startet trotzdem; Details im Protokoll." `
+                         "PyTorch check failed. NVAI-open starts anyway; details in the log.")
     }
 
     if ($ownCache) {
@@ -136,8 +136,8 @@ try {
 } catch {
     Write-Host "`n$(L 'FEHLER' 'ERROR'): $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "$(L 'Protokoll' 'Log'): $(Join-Path $DataDir 'install.log')"
-    Write-Host (L "Das Setup laesst sich spaeter ueber 'NV-AI reparieren' im Startmenue wiederholen." `
-                  "You can repeat the setup later via 'Repair NV-AI' in the Start menu.")
+    Write-Host (L "Das Setup laesst sich spaeter ueber 'NVAI-open reparieren' im Startmenue wiederholen." `
+                  "You can repeat the setup later via 'Repair NVAI-open' in the Start menu.")
     Stop-Transcript | Out-Null
     Start-Sleep -Seconds 15
     exit 1

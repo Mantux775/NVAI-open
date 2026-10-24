@@ -1,6 +1,6 @@
 import Foundation
 
-/// Sucht Core-ML-Bildmodelle auf Hugging Face und prüft, ob NV-AI sie ausführen kann.
+/// Sucht Core-ML-Bildmodelle auf Hugging Face und prüft, ob NVAI-open sie ausführen kann.
 ///
 /// Übernommen aus ios/NVAILocal (HuggingFace.swift), auf Bildmodelle beschränkt.
 /// Die API ist öffentlich: `/api/models` sucht (mit `expand[]=siblings` samt Dateiliste),

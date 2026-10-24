@@ -1,9 +1,9 @@
 # PhotoCraft-Add-on im Windows-Setup
 
-Das Add-on (Brücke und Panel) ist eine optionale Komponente des NV-AI-Setups („NV-AI-Setup.exe“,
+Das Add-on (Brücke und Panel) ist eine optionale Komponente des NVAI-open-Setups („NVAI-open-Setup.exe“,
 Inno Setup, pro Nutzer). Gedacht ist es für einen frisch installierten PC ohne Python, Git oder
 Node. Den Rahmen (Inno Setup, uv, Python 3.12, Registry-Schlüssel, Verknüpfungen) baut die
-NV-AI-Seite. Hier steht, was das Add-on mitbringt, braucht und selbst erledigt.
+NVAI-open-Seite. Hier steht, was das Add-on mitbringt, braucht und selbst erledigt.
 
 ## Ordner `addon\` bauen
 
@@ -59,7 +59,7 @@ uv pip sync --python "<addon>\.venv\Scripts\python.exe" --require-hashes "<addon
 
 | Feld | Wert |
 |---|---|
-| Name | NV-AI for PhotoCraft (deutsches Setup: NV-AI für PhotoCraft) |
+| Name | NVAI-open for PhotoCraft (deutsches Setup: NVAI-open für PhotoCraft) |
 | Ziel | `"<addon>\.venv\Scripts\pythonw.exe"` |
 | Argumente | `-m bridge --launch` |
 | Arbeitsordner | `<addon>` (die Brücke wird von dort geladen) |
@@ -68,14 +68,14 @@ uv pip sync --python "<addon>\.venv\Scripts\python.exe" --require-hashes "<addon
 
 Die Brücke setzt dieselbe AppUserModelID für ihren Prozess. Die Taskleiste zeigt dann das Symbol
 der Verknüpfung, und Anheften heftet die Verknüpfung an statt `pythonw.exe`. Es erscheint kein
-Konsolenfenster. `--launch` startet bei lokaler NV-AI auch NV-AI, außerdem PhotoCraft mit
+Konsolenfenster. `--launch` startet bei lokaler NVAI-open auch NVAI-open, außerdem PhotoCraft mit
 Steuerkanal, und öffnet dann das Panel. Ein zweiter Start holt das vorhandene Fenster nach vorn.
 
 Vor Deinstallation und Update die Brücke beenden. Das ist `pythonw.exe` aus `<addon>\.venv`;
 Port 8120 gehört ihr. Schließt man ihr Fenster, beendet sie sich. Läuft das Panel ohne WebView2
 im Browser, gibt es kein Fenster, dann muss der Prozess beendet werden.
 
-## Wie das Add-on NV-AI findet
+## Wie das Add-on NVAI-open findet
 
 Unter `HKCU\Software\NV-AI` liest es folgende Werte:
 
@@ -85,17 +85,17 @@ Unter `HKCU\Software\NV-AI` liest es folgende Werte:
 - `Port` (REG_DWORD, Standard 8100)
 
 Die Adresse ist `http://127.0.0.1:<Port>`. Vorrang haben `NVAI_URL` und `nvai_url` in
-`settings.json`, etwa für eine NV-AI auf einem anderen Rechner.
+`settings.json`, etwa für eine NVAI-open auf einem anderen Rechner.
 
-- **Start:** über `<InstallDir>\nvai-start.cmd`, ohne Konsolenfenster. Das Skript startet NV-AI,
+- **Start:** über `<InstallDir>\nvai-start.cmd`, ohne Konsolenfenster. Das Skript startet NVAI-open,
   falls es nicht läuft, und kehrt sofort zurück. Endet es mit einem Fehlercode, zeigt das Panel
-  diesen an. Danach steht dort bis zu 120 s „NV-AI startet …“, bis NV-AI antwortet. Bereit ist
-  NV-AI erst, wenn `/api/version` antwortet; die Brücke prüft das vor jedem Auftrag.
-- **Ohne Eintrag** und ohne Entwicklungsordner meldet das Panel „NV-AI ist auf diesem PC nicht
+  diesen an. Danach steht dort bis zu 120 s „NVAI-open startet …“, bis NVAI-open antwortet. Bereit ist
+  NVAI-open erst, wenn `/api/version` antwortet; die Brücke prüft das vor jedem Auftrag.
+- **Ohne Eintrag** und ohne Entwicklungsordner meldet das Panel „NVAI-open ist auf diesem PC nicht
   installiert“.
 - **Entwicklungsrechner:** Das installierte Add-on (mit `addon.ini`) gehört immer zum Setup. Aus
-  dem Repository gestartet bleibt die Brücke beim Entwicklungsordner von NV-AI (der Ordner darüber
-  oder ein Nachbarordner `NV-AI`, Port 8100), solange es den gibt. Eine Testinstallation des Setups
+  dem Repository gestartet bleibt die Brücke beim Entwicklungsordner von NVAI-open (der Ordner darüber
+  oder ein Nachbarordner `NVAI-open`, Port 8100), solange es den gibt. Eine Testinstallation des Setups
   auf demselben PC lenkt sie so nicht um.
   `NVAI_ROOT` bzw. `nvai_root` erzwingt den Entwicklungsordner.
 
@@ -124,7 +124,7 @@ Der Download-Link ist <https://github.com/storytold/photocraft/releases/latest>.
   127.0.0.1:47821. Dafür fragt die Firewall nicht nach.
 - **Daten:** `%LOCALAPPDATA%\ArtCraft-LocalAI\` mit Steuer-Token, Austauschordner, Logs und
   `settings.json`. Mit `ARTCRAFT_LOCALAI_DATA` lässt sich der Ordner umlegen. Das Log
-  `logs\bridge.log` nennt beim Start, welches NV-AI und welches PhotoCraft gefunden wurde.
+  `logs\bridge.log` nennt beim Start, welches NVAI-open und welches PhotoCraft gefunden wurde.
 - **Microsoft Edge WebView2 Runtime** für das Panel-Fenster (pywebview 6.2.1, dazu .NET Framework ab
   4.6.2). Unter Windows 11 ist sie vorinstalliert, unter Windows 10 nicht immer. Das Setup sollte
   sie bei Bedarf pro Nutzer installieren, das geht ohne Adminrechte. Fehlt sie trotzdem, öffnet die

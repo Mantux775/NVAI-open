@@ -81,10 +81,10 @@ export function GpuSettings() {
           {vendor === 'amd' && (
             <p className="hint small">
               {t(
-                'AMD Radeon erkannt. NV-AI rechnet hier mit ROCm. Das ist neu und von uns noch nicht '
+                'AMD Radeon erkannt. NVAI-open rechnet hier mit ROCm. Das ist neu und von uns noch nicht '
                   + 'auf AMD getestet: Bildmodelle in INT8 oder FP8 sollten laufen, NVFP4-Modelle sind '
                   + 'ein NVIDIA-Format und 3D braucht derzeit NVIDIA. ',
-                'AMD Radeon detected. NV-AI uses ROCm here. This is new and not tested on AMD by us yet: '
+                'AMD Radeon detected. NVAI-open uses ROCm here. This is new and not tested on AMD by us yet: '
                   + 'image models in INT8 or FP8 should run, NVFP4 models are an NVIDIA format and 3D '
                   + 'currently needs NVIDIA. ',
               )}

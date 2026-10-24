@@ -74,7 +74,7 @@ def _explain(message: str) -> str:
 
 
 def _install_nodes() -> None:
-    """NV-AIs eigene Knoten (nvai/comfy_nodes, z. B. der Audio-Limiter) nach ComfyUIs custom_nodes/
+    """NVAI-opens eigene Knoten (nvai/comfy_nodes, z. B. der Audio-Limiter) nach ComfyUIs custom_nodes/
     legen, wenn sie dort fehlen oder veraltet sind. ComfyUI liest sie beim Start ein."""
     dest = config.COMFY_ROOT / "custom_nodes"
     if not dest.is_dir():
@@ -264,7 +264,7 @@ def log_tail(lines: int = 40) -> str:
 
 
 def stop() -> None:
-    """Beendet alle ComfyUI-Prozesse von NV-AI."""
+    """Beendet alle ComfyUI-Prozesse von NVAI-open."""
     MAIN.stop()
     TEXT.stop()
 

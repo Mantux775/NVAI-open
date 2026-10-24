@@ -58,7 +58,7 @@ final class LivePhotoCraftTests: XCTestCase {
         await pc.close()
     }
 
-    /// „Arbeitsfläche erweitern“ mit NV-AI: ein Foto (`PHOTOCRAFT_LIVE_IMAGE`, Pfad im Austauschordner) um
+    /// „Arbeitsfläche erweitern“ mit NVAI-open: ein Foto (`PHOTOCRAFT_LIVE_IMAGE`, Pfad im Austauschordner) um
     /// 256 px nach rechts erweitern. Prüft Breite und Technik „outpaint“ und speichert das Ergebnis als
     /// `jobs/<id>/final.png` zum Ansehen.
     func testExtendWithRealNVAI() async throws {
@@ -66,7 +66,7 @@ final class LivePhotoCraftTests: XCTestCase {
         guard let port = env["PHOTOCRAFT_LIVE_PORT"].flatMap({ UInt16($0) }), let token = env["PHOTOCRAFT_LIVE_TOKEN"],
               let exchangePath = env["PHOTOCRAFT_LIVE_EXCHANGE"], let image = env["PHOTOCRAFT_LIVE_IMAGE"],
               let nvaiURL = env["NVAI_LIVE_URL"].flatMap(URL.init(string:)) else {
-            throw XCTSkip("keine Testinstanz, kein Bild oder kein NV-AI angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
+            throw XCTSkip("keine Testinstanz, kein Bild oder kein NVAI-open angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
         }
         let pc = ControlClient(port: port, tokenURL: URL(fileURLWithPath: token))
         let nvai = NVAIClient(baseURL: nvaiURL, token: env["NVAI_LIVE_TOKEN"])
@@ -92,14 +92,14 @@ final class LivePhotoCraftTests: XCTestCase {
         await pc.close()
     }
 
-    /// Ein echter Auftrag „Füllen“ mit NV-AI (eine Variante, etwa 1–2 min GPU) – zusätzlich `NVAI_LIVE_URL`
-    /// (und bei entferntem NV-AI `NVAI_LIVE_TOKEN`). Prüft die ganze Kette wie die App: Erfassen, Hochladen,
-    /// Inpainting, Einfügen mit Ebenenmaske – und dass die Uploads danach in NV-AI gelöscht sind.
+    /// Ein echter Auftrag „Füllen“ mit NVAI-open (eine Variante, etwa 1–2 min GPU) – zusätzlich `NVAI_LIVE_URL`
+    /// (und bei entferntem NVAI-open `NVAI_LIVE_TOKEN`). Prüft die ganze Kette wie die App: Erfassen, Hochladen,
+    /// Inpainting, Einfügen mit Ebenenmaske – und dass die Uploads danach in NVAI-open gelöscht sind.
     func testFillWithRealNVAI() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let port = env["PHOTOCRAFT_LIVE_PORT"].flatMap({ UInt16($0) }), let token = env["PHOTOCRAFT_LIVE_TOKEN"],
               let exchangePath = env["PHOTOCRAFT_LIVE_EXCHANGE"], let nvaiURL = env["NVAI_LIVE_URL"].flatMap(URL.init(string:)) else {
-            throw XCTSkip("keine PhotoCraft-Testinstanz oder kein NV-AI angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
+            throw XCTSkip("keine PhotoCraft-Testinstanz oder kein NVAI-open angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
         }
         let pc = ControlClient(port: port, tokenURL: URL(fileURLWithPath: token))
         let nvai = NVAIClient(baseURL: nvaiURL, token: env["NVAI_LIVE_TOKEN"])
@@ -130,8 +130,8 @@ final class LivePhotoCraftTests: XCTestCase {
         let leftovers = try await nvai.assets(kind: "upload").filter {
             ($0["meta"]?["original_name"]?.stringValue ?? "").hasPrefix("photocraft-\(t.id)")
         }
-        XCTAssertEqual(leftovers.count, 0, "Uploads in NV-AI gelöscht")
-        print("NV-AI-Livetest: \(t.modelName), \(t.working.map { "\($0.0)×\($0.1)" } ?? "?"), Stufen: \(stages.joined(separator: " → "))")
+        XCTAssertEqual(leftovers.count, 0, "Uploads in NVAI-open gelöscht")
+        print("NVAI-open-Livetest: \(t.modelName), \(t.working.map { "\($0.0)×\($0.1)" } ?? "?"), Stufen: \(stages.joined(separator: " → "))")
 
         _ = try await pc.execute("file.close", ["document": .int(testDoc)]) // eigenes Testdokument, ohne Rückfrage
         await pc.close()

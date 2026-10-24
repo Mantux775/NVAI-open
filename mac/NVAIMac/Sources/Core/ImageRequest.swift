@@ -9,7 +9,7 @@ struct APIError: Error, LocalizedError {
 }
 
 /// Ein Bildauftrag, geprüft und mit Standardwerten ergänzt.
-/// Quelle ist `GenerateImageRequest` aus dem NV-AI-Vertrag; was das gewählte Modell nicht kann,
+/// Quelle ist `GenerateImageRequest` aus dem NVAI-open-Vertrag; was das gewählte Modell nicht kann,
 /// wird klar abgelehnt statt still ignoriert – außer dem negativen Prompt bei FLUX.2 Klein: der
 /// wirkt bei destillierten Modellen (cfg 1) nicht, und die PhotoCraft-App schickt ihn beim Füllen mit.
 struct ImageJobRequest: Sendable {
@@ -106,13 +106,13 @@ struct ImageJobRequest: Sendable {
             }
         }
         if flag("hires") {
-            throw APIError(422, t("hires gibt es in NV-AI für Mac nicht (features.hires = false). Größeres Format wählen.", "NV-AI for Mac has no hires pass (features.hires = false). Choose a larger size instead."))
+            throw APIError(422, t("hires gibt es in NVAI-open für Mac nicht (features.hires = false). Größeres Format wählen.", "NVAI-open for Mac has no hires pass (features.hires = false). Choose a larger size instead."))
         }
         if flag("slg") {
             throw APIError(422, t("slg wirkt nur bei SD-3.5-Modellen und gibt es hier nicht.", "slg only applies to SD 3.5 models and is not available here."))
         }
         if try string("controlnet_model_id") != nil {
-            throw APIError(422, t("ControlNet gibt es in NV-AI für Mac nicht.", "NV-AI for Mac has no ControlNet."))
+            throw APIError(422, t("ControlNet gibt es in NVAI-open für Mac nicht.", "NVAI-open for Mac has no ControlNet."))
         }
 
         let model: AnyModel
@@ -123,7 +123,7 @@ struct ImageJobRequest: Sendable {
             model = Models.active
         }
         guard model.installed else {
-            throw APIError(409, t("„\(model.name)“ ist nicht geladen. In NV-AI unter „Modelle“ herunterladen.", "\"\(model.name)\" is not downloaded. Download it in NV-AI under \"Models\"."))
+            throw APIError(409, t("„\(model.name)“ ist nicht geladen. In NVAI-open unter „Modelle“ herunterladen.", "\"\(model.name)\" is not downloaded. Download it in NVAI-open under \"Models\"."))
         }
         let features = model.features
         let steps = try int("steps") ?? (features["steps"] as? Int ?? 4)

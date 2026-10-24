@@ -688,7 +688,7 @@ def build_hidream_o1(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, i
     ModelNoiseScale (dev 7,6, voll 8,0), BasicScheduler "normal", SamplerCustom. Dev rechnet
     mit SamplerLCM bei cfg 1, die volle Fassung mit dpmpp_2m_sde_gpu bei cfg 5 und glaettet
     Patch-Naehte. Referenzbilder haengt HiDreamO1ReferenceImages an beide Conditionings.
-    Den Prompt-Ausbau der Vorlage (Gemma 4) laesst NV-AI weg -- dafuer gibt es "Prompt ausbauen".
+    Den Prompt-Ausbau der Vorlage (Gemma 4) laesst NVAI-open weg -- dafuer gibt es "Prompt ausbauen".
     """
     wf = entry["workflow"]
     d = defaults_for(wf)
@@ -792,6 +792,10 @@ ACE15_GAIN_DB = -3
 # ACE-Step (rohe Spitzen bis +5,7 dBFS): nach -3 dB griff er bei -1 dB nur 4 % der Zeit um mehr als 1 dB
 # ein; ohne die Absenkung bei -1,5 dB 30 % (Blaskapelle), das presst hoerbar.
 AUDIO_CEILING_DB = -1.0
+# Videoton geht als AAC ins MP4, und AAC schwingt bei dichtem, lautem Material weiter ueber die Grenze
+# als MP3: Schrei und jubelnde Menge (-7,5 LUFS) lagen mit -1 dB nach dem Dekodieren bei +0,7 dBFS
+# (24.10.). Deshalb fuer Video mehr Abstand.
+VIDEO_AUDIO_CEILING_DB = -2.5
 _LIMITER_ID = "90"
 
 
@@ -852,7 +856,7 @@ def _audio_graph(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     if wf == "stable_audio_3":
         # Wie ComfyUIs Vorlage audio_stable_audio_3_medium: Modell und VAE aus dem Checkpoint, der
         # Text-Encoder (T5Gemma) separat; die Laenge steht nur im Latent, ohne
-        # ConditioningStableAudio. Den Prompt-Ausbau der Vorlage (Qwen3.5-2B) uebernimmt NV-AI nicht.
+        # ConditioningStableAudio. Den Prompt-Ausbau der Vorlage (Qwen3.5-2B) uebernimmt NVAI-open nicht.
         te = _file_by_target(entry, "text_encoders")
         # Trainiert auf "... BPM: X. Length: Y seconds": die Laenge passend zur Dauer setzen,
         # eine abweichende Angabe im Prompt ersetzen.
@@ -955,124 +959,313 @@ def normalize_frames(frames: int, workflow: str) -> int:
 
 
 
-# Feste Sigmas der destillierten LTX-2.5-Vorlagen: erste Stufe (halbe Aufloesung), zweite
-# Stufe nach dem Hochskalieren.
+# Feste Sigmas der destillierten LTX-2.5-Vorlagen (ComfyUI): Standard (video_ltx2_5_{t2v,i2v}.json)
+# rechnet die erste Stufe auf halber Aufloesung und nach dem Hochskalieren eine zweite; DFR
+# (video_ltx2_5_dfr_i2v.json) hat eigene Sigmas fuer die Detailstufe und die zeitliche Stufe.
 LTX25_SIGMAS_1 = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
 LTX25_SIGMAS_2 = "0.85, 0.7250, 0.4219, 0.0"
+LTX25_SIGMAS_DFR2 = "0.909375, 0.725, 0.421875, 0.0"
+LTX25_SIGMAS_DFR3 = "0.975, 0.909375, 0.725, 0.421875, 0.0"
+# Aus video_ltx2_5_t2v.json. Bei CFG 1 wirkt er nicht; die FLF-Vorlage bringt einen langen mit, der
+# sichtbar aus einer anderen Demo stammt ("JUST DO IT", Mikrofon) -- nicht uebernommen.
 LTX25_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
+LTX25_MAX_SECONDS = 20.0
+# Obergrenze der API (schemas.GenerateVideoRequest.frames): 20 s bei 24 fps, 16 s bei 30 fps.
+LTX25_MAX_FRAMES = 481
+# Detail-Keyframes im DFR-Weg: einer je 24 Frames (eine Sekunde bei 24 fps), wie in der Vorlage.
+LTX25_KEYFRAME_INTERVAL = 24
 
 
-def _build_ltx25(entry, p, seed, width, height, frames, fps, start_image) -> tuple[Graph, int]:
-    """LTX-2.5 (Lightricks, 22 Mrd.): Video mit Ton in einem Durchgang.
+def ltx_frames_for_seconds(seconds: float, fps: float, at_most: bool = False) -> int:
+    """Frames fuer `seconds` Sekunden auf dem 8n+1-Raster von LTX, 9 bis LTX25_MAX_FRAMES.
 
-    Nachgebaut nach ComfyUIs Vorlagen video_ltx2_5_t2v.json und *_i2v.json: Die erste Stufe
-    rechnet Bild- und Tonlatent gemeinsam auf halber Aufloesung (8 feste Sigmas), dann skaliert
-    LTXVLatentUpsampler das Video auf volle Groesse, und eine zweite Stufe (3 Sigmas) rechnet
-    nach. Mit Startbild setzt LTXVImgToVideoInplace es in beiden Stufen als ersten Frame ein
-    (Staerke 0,7, dann 1,0). Den Prompt-Ausbau der Vorlage (Gemma 4 E2B) laesst NV-AI weg.
-    Ausgabe: MP4 mit Ton (CreateVideo + SaveVideo).
+    Der naechste Wert (5 s bei 24 fps = 121 Frames, wie die Weboberflaeche); mit at_most hoechstens
+    so lang, fuer einen vorgegebenen Ton, ueber den das Video nicht hinauslaufen soll.
     """
-    ids = _Ids(start=40)
-    w = max(256, int(width) // 64 * 64)
-    h = max(256, int(height) // 64 * 64)
-    negative = p.get("negative_prompt") or LTX25_NEGATIVE
-    is23 = entry["workflow"] == "ltx23"
-    graph: Graph = {
-        "5": {"class_type": "LatentUpscaleModelLoader",
-              "inputs": {"model_name": _file_by_target(entry, "latent_upscale_models")}},
-    }
-    if is23:
-        # LTX-2.3 (Vorlage video_ltx2_3_*): ein dev-Checkpoint mit Bild- und Ton-VAE, der
-        # Text-Encoder Gemma 3 12B laedt seine Projektion aus demselben Checkpoint, die
-        # destillierte LoRA mit 0,5 macht daraus die schnelle Fassung.
-        ckpt = _file_by_target(entry, "checkpoints")
-        graph.update({
-            "0": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
-            "1": {"class_type": "LoraLoaderModelOnly", "inputs": {
-                "model": ["0", 0], "lora_name": _file_by_target(entry, "loras"), "strength_model": 0.5}},
-            "2": {"class_type": "LTXAVTextEncoderLoader", "inputs": {
-                "text_encoder": _file_by_target(entry, "text_encoders"), "ckpt_name": ckpt,
-                "device": "default"}},
-            "4": {"class_type": "LTXVAudioVAELoader", "inputs": {"ckpt_name": ckpt}},
-        })
-        vae: Ref = ["0", 2]
-    else:
-        graph.update({
-            "1": {"class_type": "UNETLoader", "inputs": {
-                "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
-            "2": {"class_type": "CLIPLoader", "inputs": {
-                "clip_name": _file_by_target(entry, "text_encoders"), "type": "ltxv"}},
-            "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "video")}},
-            "4": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae", "audio")}},
-        })
-        vae = ["3", 0]
-    graph.update({
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
-        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["2", 0]}},
-        "8": {"class_type": "LTXVConditioning",
-              "inputs": {"positive": ["6", 0], "negative": ["7", 0], "frame_rate": fps}},
-        "9": {"class_type": "EmptyLTXVLatentVideo", "inputs": {
-            "width": w // 2, "height": h // 2, "length": frames, "batch_size": 1}},
-        "10": {"class_type": "LTXVEmptyLatentAudio", "inputs": {
-            "frames_number": frames, "frame_rate": int(fps), "batch_size": 1, "audio_vae": ["4", 0]}},
-    })
-    video: Ref = ["9", 0]
-    image: Ref | None = None
-    if start_image:
-        load, scale, pre, inplace = ids(), ids(), ids(), ids()
-        graph[load] = {"class_type": "LoadImage", "inputs": {"image": start_image}}
-        graph[scale] = {"class_type": "ImageScale", "inputs": {
-            "image": [load, 0], "upscale_method": "lanczos", "width": w, "height": h, "crop": "center"}}
-        graph[pre] = {"class_type": "LTXVPreprocess", "inputs": {"image": [scale, 0], "img_compression": 18}}
-        image = [pre, 0]
-        graph[inplace] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
-            "vae": vae, "image": image, "latent": video, "strength": 0.7, "bypass": False}}
-        video = [inplace, 0]
+    steps = (seconds * fps - 1) / 8
+    n = int(steps) if at_most else int(steps + 0.5)
+    return max(9, min(LTX25_MAX_FRAMES, 1 + n * 8))
 
-    def stage(av: Ref, sigmas: str, noise_seed: int) -> Ref:
-        noise, sel, sig, guide, samp = ids(), ids(), ids(), ids(), ids()
-        graph[noise] = {"class_type": "RandomNoise", "inputs": {"noise_seed": noise_seed}}
-        graph[sel] = {"class_type": "KSamplerSelect", "inputs": {
-            "sampler_name": "euler" if is23 else "euler_ancestral"}}
-        graph[sig] = {"class_type": "ManualSigmas", "inputs": {"sigmas": sigmas}}
-        if is23:
-            graph[guide] = {"class_type": "CFGGuider", "inputs": {
-                "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1], "cfg": 1.0}}
+
+class _LTX:
+    """Graph fuer LTX-2.5 (und LTX-2.3): Bild und Ton in einem Latent, nach ComfyUIs Vorlagen.
+
+    Wege, gewaehlt aus den Parametern (jobs._txt2video legt Bild- und Tondateien in ComfyUIs input/):
+      Standard   Zwei Stufen wie video_ltx2_5_{t2v,i2v}.json: halbe Aufloesung (8 feste Sigmas),
+                 Latent hochskalieren, nachrechnen (3). Mit Startbild setzt LTXVImgToVideoInplace es
+                 in beiden Stufen als ersten Frame ein (Staerke 0,7, dann 1,0).
+      Endbild    end_image, mit oder ohne start_image (Schleife: dasselbe Bild an beiden Enden): eine
+                 Stufe in voller Aufloesung, die Bilder als Fuehrung an Frame 0 und -1 (LTXVAddGuide,
+                 0,7), danach LTXVCropGuides -- wie video_ltx2_5_flf2v.json.
+      DFR        Drei Stufen wie video_ltx2_5_dfr_i2v.json: halbe Aufloesung mit Detail-Keyframes
+                 (einer je Sekunde), doppelte mit dem Detail-IC-LoRA und Stufe 1 als Referenz,
+                 auf Wunsch zeitlich verdoppelt (24 -> 48 fps, Ton bleibt der aus Stufe 2).
+    Fuer alle Wege: auto_duration (LTXVDurationPredictor waehlt die Laenge aus dem Prompt),
+    audio_input (vorgegebener Ton, eingefroren -- das Bild richtet sich danach; ins MP4 kommt das
+    Original) und motion_speed (Zeitlupe: das Modell sieht fps / speed, abgespielt wird mit fps --
+    darauf ist die Slow-Motion-LoRA von Lightricks trainiert).
+    """
+
+    def __init__(self, entry: dict[str, Any], p: dict[str, Any], seed: int, width: int, height: int,
+                 frames: int, fps: float) -> None:
+        self.entry, self.p, self.seed, self.fps = entry, p, seed, float(fps)
+        self.is23 = entry["workflow"] == "ltx23"
+        # Die erste Stufe rechnet auf halber Groesse, und die muss auf dem 32er-Raster liegen.
+        self.w = max(256, int(width) // 64 * 64)
+        self.h = max(256, int(height) // 64 * 64)
+        self.frames = frames
+        speed = float(p.get("motion_speed") or 1.0)
+        self.cond_fps = self.fps / min(max(speed, 0.02), 1.0)
+        self.g: Graph = {}
+        self.ids = _Ids(start=40)
+        self.audio_in: Ref | None = None
+        self.frozen_audio: Ref | None = None
+        self._images: dict[str, Ref] = {}
+
+    def add(self, cls: str, **inputs: Any) -> str:
+        nid = self.ids()
+        self.g[nid] = {"class_type": cls, "inputs": inputs}
+        return nid
+
+    # -- Lader, Text, Laenge, Ton, Bilder ----------------------------------------------------
+    def _common(self) -> None:
+        e = self.entry
+        self.upscaler = self.add("LatentUpscaleModelLoader",
+                                 model_name=_file_by_target(e, "latent_upscale_models", "spatial"))
+        if self.is23:
+            # LTX-2.3 (Vorlage video_ltx2_3_*): dev-Checkpoint mit Bild- und Ton-VAE; die destillierte
+            # LoRA mit 0,5 macht daraus die schnelle Fassung, Gemma 3 laedt seine Projektion aus
+            # demselben Checkpoint.
+            ckpt = _file_by_target(e, "checkpoints")
+            loader = self.add("CheckpointLoaderSimple", ckpt_name=ckpt)
+            self.model: Ref = [self.add("LoraLoaderModelOnly", model=[loader, 0],
+                                        lora_name=_file_by_target(e, "loras"), strength_model=0.5), 0]
+            self.clip: Ref = [self.add("LTXAVTextEncoderLoader",
+                                       text_encoder=_file_by_target(e, "text_encoders"),
+                                       ckpt_name=ckpt, device="default"), 0]
+            self.audio_vae: Ref = [self.add("LTXVAudioVAELoader", ckpt_name=ckpt), 0]
+            self.vae: Ref = [loader, 2]
         else:
-            graph[guide] = {"class_type": "LTXVDualCFGGuider", "inputs": {
-                "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1],
-                "video_cfg": 1.0, "audio_cfg": 1.0}}
-        graph[samp] = {"class_type": "SamplerCustomAdvanced", "inputs": {
-            "noise": [noise, 0], "guider": [guide, 0], "sampler": [sel, 0], "sigmas": [sig, 0],
-            "latent_image": av}}
-        sep = ids()
-        graph[sep] = {"class_type": "LTXVSeparateAVLatent", "inputs": {"av_latent": [samp, 0]}}
-        return sep
+            self.model = [self.add("UNETLoader", unet_name=_file_by_target(e, "diffusion_models"),
+                                   weight_dtype="default"), 0]
+            self.clip = [self.add("CLIPLoader", clip_name=_file_by_target(e, "text_encoders"),
+                                  type="ltxv"), 0]
+            self.vae = [self.add("VAELoader", vae_name=_file_by_target(e, "vae", "video")), 0]
+            self.audio_vae = [self.add("VAELoader", vae_name=_file_by_target(e, "vae", "audio")), 0]
+        self.pos_text = self.add("CLIPTextEncode", text=self.p["prompt"], clip=self.clip)
+        self.neg_text = self.add("CLIPTextEncode", text=self.p.get("negative_prompt") or LTX25_NEGATIVE,
+                                 clip=self.clip)
+        name = self.p.get("audio_input")
+        if name:
+            # Ton vorgegeben: auf die Videolaenge kuerzen (LTXVEmptyLatentAudio rechnet mit
+            # frames / fps), kodieren und einfrieren -- er wird nicht entrauscht, das Bild folgt ihm.
+            load = self.add("LoadAudio", audio=name)
+            trim = self.add("TrimAudioDuration", audio=[load, 0], start_index=0.0,
+                            duration=round(self.frames / self.fps, 3))
+            enc = self.add("LTXVAudioVAEEncode", audio=[trim, 0], audio_vae=self.audio_vae)
+            self.frozen_audio = [self.add("LTXVFreezeLatent", latent=[enc, 0]), 0]
+            self.audio_in = [trim, 0]
 
-    cat1 = ids()
-    graph[cat1] = {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": video, "audio_latent": ["10", 0]}}
-    sep1 = stage([cat1, 0], LTX25_SIGMAS_1, seed)
-    up = ids()
-    graph[up] = {"class_type": "LTXVLatentUpsampler", "inputs": {
-        "samples": [sep1, 0], "upscale_model": ["5", 0], "vae": vae}}
-    video2: Ref = [up, 0]
-    if image is not None:
-        inplace2 = ids()
-        graph[inplace2] = {"class_type": "LTXVImgToVideoInplace", "inputs": {
-            "vae": vae, "image": image, "latent": video2, "strength": 1.0, "bypass": False}}
-        video2 = [inplace2, 0]
-    cat2 = ids()
-    graph[cat2] = {"class_type": "LTXVConcatAVLatent", "inputs": {"video_latent": video2, "audio_latent": [sep1, 1]}}
-    sep2 = stage([cat2, 0], LTX25_SIGMAS_2, seed + 1)
-    dec, aud, vid, save = ids(), ids(), ids(), ids()
-    graph[dec] = {"class_type": "VAEDecodeTiled", "inputs": {
-        "samples": [sep2, 0], "vae": vae, "tile_size": 512, "overlap": 64,
-        "temporal_size": 64, "temporal_overlap": 16}}
-    graph[aud] = {"class_type": "LTXVAudioVAEDecode", "inputs": {"samples": [sep2, 1], "audio_vae": ["4", 0]}}
-    graph[vid] = {"class_type": "CreateVideo", "inputs": {"images": [dec, 0], "fps": fps, "audio": [aud, 0]}}
-    graph[save] = {"class_type": "SaveVideo", "inputs": {
-        "video": [vid, 0], "filename_prefix": "nvai_video", "format": "mp4", "format.codec": "h264"}}
-    return graph, seed
+    def length(self) -> Ref | int:
+        """Frames als Zahl oder, mit auto_duration, vom Laengenkopf aus dem Prompt (8n+1)."""
+        if not self.p.get("auto_duration") or self.audio_in is not None:
+            return self.frames
+        head = self.add("ModelPatchLoader", name=_file_by_target(self.entry, "model_patches"))
+        pred = self.add("LTXVDurationPredictor", model=self.model, positive=[self.pos_text, 0],
+                        duration_head=[head, 0], frame_rate=self.fps, min_seconds=1.0,
+                        max_seconds=min(LTX25_MAX_SECONDS, (LTX25_MAX_FRAMES - 1) / self.fps))
+        return [pred, 0]
+
+    def audio_latent(self, length: Ref | int) -> Ref:
+        if self.frozen_audio is not None:
+            return self.frozen_audio
+        return [self.add("LTXVEmptyLatentAudio", frames_number=length, frame_rate=int(round(self.fps)),
+                         batch_size=1, audio_vae=self.audio_vae), 0]
+
+    def image(self, name: str) -> Ref:
+        """Bild auf Zielgroesse, mit der Kompression, auf die LTX trainiert ist (LTXVPreprocess)."""
+        if name not in self._images:
+            load = self.add("LoadImage", image=name)
+            scale = self.add("ImageScale", image=[load, 0], upscale_method="lanczos",
+                             width=self.w, height=self.h, crop="center")
+            self._images[name] = [self.add("LTXVPreprocess", image=[scale, 0], img_compression=18), 0]
+        return self._images[name]
+
+    def conditioning(self) -> str:
+        return self.add("LTXVConditioning", positive=[self.pos_text, 0], negative=[self.neg_text, 0],
+                        frame_rate=self.cond_fps)
+
+    def sample(self, av: Ref, sigmas: str, guider: str, sampler: str, seed: int) -> str:
+        noise = self.add("RandomNoise", noise_seed=seed)
+        sig = self.add("ManualSigmas", sigmas=sigmas)
+        samp = self.add("SamplerCustomAdvanced", noise=[noise, 0], guider=[guider, 0],
+                        sampler=[sampler, 0], sigmas=[sig, 0], latent_image=av)
+        return self.add("LTXVSeparateAVLatent", av_latent=[samp, 0])
+
+    def finish(self, video: Ref, audio_latent: Ref, fps_out: float, temporal_overlap: int) -> Graph:
+        dec = self.add("VAEDecodeTiled", samples=video, vae=self.vae, tile_size=512, overlap=64,
+                       temporal_size=64, temporal_overlap=temporal_overlap)
+        if self.audio_in is not None:
+            audio = self.audio_in  # vorgegebener Ton: unveraendert ins MP4
+        else:
+            # Wie jede Audioausgabe durch den Limiter: Der Ton von LTX-2.5 erreichte gemessen
+            # bis +1,7 dBTP (24.10., Schmiede-Prompt), das AAC im MP4 uebersteuert dann.
+            raw = self.add("LTXVAudioVAEDecode", samples=audio_latent, audio_vae=self.audio_vae)
+            audio = [self.add("NVAIAudioLimiter", audio=[raw, 0], ceiling_db=VIDEO_AUDIO_CEILING_DB,
+                              lookahead_ms=5.0, release_ms=80.0), 0]
+        vid = self.add("CreateVideo", images=[dec, 0], fps=fps_out, audio=audio)
+        self.add("SaveVideo", video=[vid, 0], filename_prefix="nvai_video", format="mp4",
+                 **{"format.codec": "h264"})
+        return self.g
+
+    # -- die drei Wege -------------------------------------------------------------------------
+    def standard(self, start_image: str | None) -> Graph:
+        self._common()
+        length = self.length()
+        cond = self.conditioning()
+        video: Ref = [self.add("EmptyLTXVLatentVideo", width=self.w // 2, height=self.h // 2,
+                               length=length, batch_size=1), 0]
+        image = self.image(start_image) if start_image else None
+        if image is not None:
+            video = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=image, latent=video,
+                              strength=0.7, bypass=False), 0]
+        if self.is23:
+            sampler = self.add("KSamplerSelect", sampler_name="euler")
+            guider = self.add("CFGGuider", model=self.model, positive=[cond, 0], negative=[cond, 1], cfg=1.0)
+        else:
+            sampler = self.add("KSamplerSelect", sampler_name="euler_ancestral")
+            guider = self.add("LTXVDualCFGGuider", model=self.model, positive=[cond, 0], negative=[cond, 1],
+                              video_cfg=1.0, audio_cfg=1.0)
+        av1 = self.add("LTXVConcatAVLatent", video_latent=video, audio_latent=self.audio_latent(length))
+        sep1 = self.sample([av1, 0], LTX25_SIGMAS_1, guider, sampler, self.seed)
+        up = self.add("LTXVLatentUpsampler", samples=[sep1, 0], upscale_model=[self.upscaler, 0], vae=self.vae)
+        video2: Ref = [up, 0]
+        if image is not None:
+            video2 = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=image, latent=video2,
+                               strength=1.0, bypass=False), 0]
+        av2 = self.add("LTXVConcatAVLatent", video_latent=video2,
+                       audio_latent=self.frozen_audio or [sep1, 1])
+        sep2 = self.sample([av2, 0], LTX25_SIGMAS_2, guider, sampler, self.seed + 1)
+        return self.finish([sep2, 0], [sep2, 1], self.fps, temporal_overlap=16)
+
+    def keyframes(self, start_image: str | None, end_image: str) -> Graph:
+        self._common()
+        length = self.length()
+        cond = self.conditioning()
+        latent = self.add("EmptyLTXVLatentVideo", width=self.w, height=self.h, length=length, batch_size=1)
+        pos, neg, lat = [cond, 0], [cond, 1], [latent, 0]
+        for name, idx in ((start_image, 0), (end_image, -1)):
+            if not name:
+                continue
+            guide = self.add("LTXVAddGuide", positive=pos, negative=neg, vae=self.vae, latent=lat,
+                             image=self.image(name), frame_idx=idx, strength=0.7)
+            pos, neg, lat = [guide, 0], [guide, 1], [guide, 2]
+        av = self.add("LTXVConcatAVLatent", video_latent=lat, audio_latent=self.audio_latent(length))
+        guider = self.add("LTXVDualCFGGuider", model=self.model, positive=pos, negative=neg,
+                          video_cfg=1.0, audio_cfg=1.0)
+        # Wie in der Vorlage: Euler Ancestral ohne Rauschen (eta 0) -- im Ergebnis ein Euler-Schritt.
+        sampler = self.add("SamplerEulerAncestral", eta=0.0, s_noise=1.0)
+        sep = self.sample([av, 0], LTX25_SIGMAS_1, guider, sampler, self.seed)
+        crop = self.add("LTXVCropGuides", positive=pos, negative=neg, latent=[sep, 0])
+        return self.finish([crop, 2], [sep, 1], self.fps, temporal_overlap=16)
+
+    def dfr(self, start_image: str | None) -> Graph:
+        self._common()
+        e = self.entry
+        length = self.length()
+        cond = self.conditioning()
+        detail = self.add("LoraLoaderModelOnly", model=self.model,
+                          lora_name=_file_by_target(e, "loras", "ic-lora"), strength_model=1.0)
+        euler = self.add("KSamplerSelect", sampler_name="euler")
+        # Startbild wie in der Vorlage: in Zielgroesse, dann ein Viertel davon ("area"); Stufe 1
+        # bekommt es vorverarbeitet, Stufe 2 und 3 unverarbeitet -- LTXVImgToVideoInplace skaliert
+        # es selbst auf die jeweilige Latentgroesse.
+        small: Ref | None = None
+        pre: Ref | None = None
+        if start_image:
+            load = self.add("LoadImage", image=start_image)
+            full = self.add("ImageScale", image=[load, 0], upscale_method="lanczos",
+                            width=self.w, height=self.h, crop="center")
+            small = [self.add("ImageScale", image=[full, 0], upscale_method="area",
+                              width=self.w // 4, height=self.h // 4, crop="disabled"), 0]
+            pre = [self.add("LTXVPreprocess", image=small, img_compression=18), 0]
+
+        # Stufe 1: halbe Aufloesung; leere Detail-Keyframes werden mit dem Video entrauscht.
+        lat: Ref = [self.add("EmptyLTXVLatentVideo", width=self.w // 2, height=self.h // 2,
+                             length=length, batch_size=1), 0]
+        if pre is not None:
+            lat = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=pre, latent=lat,
+                            strength=1.0, bypass=False), 0]
+        kf1 = self.add("LTXVAddGeneratedKeyframes", positive=[cond, 0], negative=[cond, 1], vae=self.vae,
+                       latent=lat, interval_frames=LTX25_KEYFRAME_INTERVAL, frame_indices="")
+        av1 = self.add("LTXVConcatAVLatent", video_latent=[kf1, 2], audio_latent=self.audio_latent(length))
+        g1 = self.add("CFGGuider", model=self.model, positive=[kf1, 0], negative=[kf1, 1], cfg=1.0)
+        s1 = self.sample([av1, 0], LTX25_SIGMAS_1, g1, euler, self.seed)
+
+        # Stufe 2: Video und Keyframes getrennt hochskalieren, Keyframes an denselben Stellen
+        # weiterfuehren, die halbe Aufloesung als Referenz fuer das Detail-IC-LoRA.
+        sk1 = self.add("LTXVSeparateGeneratedKeyframes", positive=[kf1, 0], negative=[kf1, 1],
+                       latent=[s1, 0], keyframes_to_batch=False)
+        up = self.add("LTXVLatentUpsampler", samples=[sk1, 2], upscale_model=[self.upscaler, 0], vae=self.vae)
+        lat2: Ref = [up, 0]
+        if small is not None:
+            lat2 = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=small, latent=lat2,
+                             strength=1.0, bypass=False), 0]
+        upk = self.add("LTXVLatentUpsampler", samples=[sk1, 3], upscale_model=[self.upscaler, 0], vae=self.vae)
+        kf2 = self.add("LTXVAddGeneratedKeyframes", positive=[sk1, 0], negative=[sk1, 1], vae=self.vae,
+                       latent=lat2, interval_frames=LTX25_KEYFRAME_INTERVAL, keyframes=[upk, 0],
+                       frame_indices="")
+        ref = self.add("LTXVAddLatentGuide", positive=[kf2, 0], negative=[kf2, 1], vae=self.vae,
+                       latent=[kf2, 2], guiding_latent=[sk1, 2], latent_idx=0, strength=1.0)
+        av2 = self.add("LTXVConcatAVLatent", video_latent=[ref, 2],
+                       audio_latent=self.frozen_audio or [s1, 1])
+        g2 = self.add("CFGGuider", model=[detail, 0], positive=[ref, 0], negative=[ref, 1], cfg=1.0)
+        s2 = self.sample([av2, 0], LTX25_SIGMAS_DFR2, g2, euler, self.seed)
+        sk2 = self.add("LTXVSeparateGeneratedKeyframes", positive=[ref, 0], negative=[ref, 1],
+                       latent=[s2, 0], keyframes_to_batch=False)
+        crop2 = self.add("LTXVCropGuides", positive=[sk2, 0], negative=[sk2, 1], latent=[sk2, 2])
+        video: Ref = [crop2, 2]
+        fps_out = self.fps
+
+        if self.p.get("temporal_upscale"):
+            # Stufe 3: doppelte Bildrate bei gleicher Dauer. Die Keyframes aus Stufe 2 kommen als
+            # Fuehrung (0,95) an dieselben Momente, neue fuellen die Luecken; der Ton dient nur der
+            # Kreuzaufmerksamkeit, ins Video geht der aus Stufe 2.
+            tloader = self.add("LatentUpscaleModelLoader",
+                               model_name=_file_by_target(e, "latent_upscale_models", "temporal"))
+            tup = self.add("LTXVLatentUpsampler", samples=[crop2, 2], upscale_model=[tloader, 0], vae=self.vae)
+            lat3: Ref = [tup, 0]
+            if small is not None:
+                lat3 = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=small, latent=lat3,
+                                 strength=1.0, bypass=False), 0]
+            kfg = self.add("LTXVGeneratedKeyframesToGuides", positive=[crop2, 0], negative=[crop2, 1],
+                           vae=self.vae, latent=lat3, keyframes=[sk2, 3], strength=0.95,
+                           override_frame_indices="")
+            kf3 = self.add("LTXVAddGeneratedKeyframes", positive=[kfg, 0], negative=[kfg, 1], vae=self.vae,
+                           latent=[kfg, 2], interval_frames=LTX25_KEYFRAME_INTERVAL, keyframes=lat3,
+                           frame_indices="")
+            cond3 = self.add("LTXVConditioning", positive=[kf3, 0], negative=[kf3, 1],
+                             frame_rate=2 * self.cond_fps)
+            frozen = self.add("LTXVFreezeLatent", latent=[s2, 1])
+            av3 = self.add("LTXVConcatAVLatent", video_latent=[kf3, 2], audio_latent=[frozen, 0])
+            g3 = self.add("CFGGuider", model=[detail, 0], positive=[cond3, 0], negative=[cond3, 1], cfg=1.0)
+            s3 = self.sample([av3, 0], LTX25_SIGMAS_DFR3, g3, euler, self.seed)
+            sk3 = self.add("LTXVSeparateGeneratedKeyframes", positive=[kf3, 0], negative=[kf3, 1],
+                           latent=[s3, 0], keyframes_to_batch=False)
+            crop3 = self.add("LTXVCropGuides", positive=[sk3, 0], negative=[sk3, 1], latent=[sk3, 2])
+            video = [crop3, 2]
+            fps_out = 2 * self.fps
+        return self.finish(video, [s2, 1], fps_out, temporal_overlap=8)
+
+
+def _build_ltx2(entry, p, seed, width, height, frames, fps, start_image) -> tuple[Graph, int]:
+    """LTX-2.5 (alle Wege, siehe _LTX) und LTX-2.3 (Standardweg). Ausgabe: MP4 mit Ton."""
+    b = _LTX(entry, p, seed, width, height, frames, fps)
+    if entry["workflow"] == "ltx25" and p.get("end_image"):
+        return b.keyframes(start_image, p["end_image"]), seed
+    if entry["workflow"] == "ltx25" and p.get("quality") == "dfr":
+        return b.dfr(start_image), seed
+    return b.standard(start_image), seed
 
 
 def _build_kandinsky5(entry, p, d, sampler, width, height, frames, fps, negative,
@@ -1094,7 +1287,7 @@ def _build_kandinsky5(entry, p, d, sampler, width, height, frames, fps, negative
             "type": "kandinsky5", "device": "default"}},
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
         "4": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
-        # Die Vorlagen lassen den Negativprompt leer; NV-AI nimmt nur einen eigenen.
+        # Die Vorlagen lassen den Negativprompt leer; NVAI-open nimmt nur einen eigenen.
         "5": {"class_type": "CLIPTextEncode", "inputs": {
             "text": p.get("negative_prompt") or "", "clip": ["2", 0]}},
         "6": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["1", 0], "shift": d.get("shift", 5.0)}},
@@ -1197,7 +1390,7 @@ def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
                                 frames, negative, start_image, save)
 
     if wf in ("ltx25", "ltx23"):
-        return _build_ltx25(entry, p, seed, width, height, frames, fps, start_image)
+        return _build_ltx2(entry, p, seed, width, height, frames, fps, start_image)
 
     if wf in ("kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v"):
         return _build_kandinsky5(entry, p, d, sampler, width, height, frames, fps, negative,

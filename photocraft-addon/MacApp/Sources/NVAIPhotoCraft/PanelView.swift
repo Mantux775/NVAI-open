@@ -74,11 +74,11 @@ private struct Header: View {
         @Bindable var model = model
         HStack(spacing: 6) {
             Image(systemName: "sparkles").font(.title3).foregroundStyle(Color.accentColor)
-            Text(verbatim: "NV-AI").font(.headline)
+            Text(verbatim: "NVAI-open").font(.headline)
             Text(t("für PhotoCraft", "for PhotoCraft")).font(.subheadline).foregroundStyle(.secondary)
             Spacer(minLength: 8)
             StatusPill(title: "PhotoCraft", color: pcColor, help: pcHelp) { model.focusPhotoCraft() }
-            StatusPill(title: "NV-AI", color: nvColor, help: nvHelp)
+            StatusPill(title: "NVAI-open", color: nvColor, help: nvHelp)
             Toggle(isOn: $model.form.alwaysOnTop) {
                 Image(systemName: model.form.alwaysOnTop ? "pin.fill" : "pin")
             }
@@ -105,10 +105,10 @@ private struct Header: View {
     private var nvHelp: String {
         let nv = model.nv
         if let problem = nv.problem { return problem }
-        guard nv.connected else { return nv.error ?? t("NV-AI nicht erreichbar", "NV-AI not reachable") }
+        guard nv.connected else { return nv.error ?? t("NVAI-open nicht erreichbar", "NVAI-open not reachable") }
         let names = nv.loaded.joined(separator: ", ")
         let loaded = nv.loaded.isEmpty ? t("Kein Modell im VRAM", "No model in VRAM") : t("Geladen: \(names)", "Loaded: \(names)")
-        return [nv.busy || model.isRunning ? t("NV-AI rechnet gerade", "NV-AI is busy") : t("NV-AI bereit", "NV-AI ready"),
+        return [nv.busy || model.isRunning ? t("NVAI-open rechnet gerade", "NVAI-open is busy") : t("NVAI-open bereit", "NVAI-open ready"),
                 nv.version.map { "Version \($0)" }, loaded, nv.gpu, nv.masks ? nil : t("ohne Masken-Unterstützung", "without mask support")]
             .compactMap { $0 }.joined(separator: " · ")
     }
@@ -151,31 +151,31 @@ private struct Notices: View {
                 if !model.pc.connected { photocraftNotice }
                 if model.pc.outdated, let version = model.pc.version {
                     let tested = PhotoCraftLaunch.testedVersion
-                    NoticeBox(text: t("PhotoCraft \(version) ist älter als \(tested). Mit dieser Version ist NV-AI für PhotoCraft nicht getestet – bitte aktualisieren.",
-                                      "PhotoCraft \(version) is older than \(tested). NV-AI for PhotoCraft is not tested with this version – please update.")) {
+                    NoticeBox(text: t("PhotoCraft \(version) ist älter als \(tested). Mit dieser Version ist NVAI-open für PhotoCraft nicht getestet – bitte aktualisieren.",
+                                      "PhotoCraft \(version) is older than \(tested). NVAI-open for PhotoCraft is not tested with this version – please update.")) {
                         Button(t("PhotoCraft herunterladen", "Download PhotoCraft")) { model.openPhotoCraftDownload() }
                     }
                 }
                 if model.starting == "nvai" && !model.nv.connected {
-                    NoticeBox(text: t("NV-AI startet … Beim ersten Start kann das etwas dauern.", "NV-AI is starting … The first start can take a while."))
+                    NoticeBox(text: t("NVAI-open startet … Beim ersten Start kann das etwas dauern.", "NVAI-open is starting … The first start can take a while."))
                 } else if model.nvaiStartable {
-                    // NV-AI für Mac ist installiert: ein Klick genügt, Adresse und Token braucht es nicht.
-                    NoticeBox(text: t("NV-AI läuft nicht.", "NV-AI is not running.")) {
-                        Button(t("NV-AI starten", "Start NV-AI")) { model.startNVAI() }
+                    // NVAI-open für Mac ist installiert: ein Klick genügt, Adresse und Token braucht es nicht.
+                    NoticeBox(text: t("NVAI-open läuft nicht.", "NVAI-open is not running.")) {
+                        Button(t("NVAI-open starten", "Start NVAI-open")) { model.startNVAI() }
                             .buttonStyle(.borderedProminent)
                             .disabled(!model.starting.isEmpty)
                     }
                 } else if !model.nv.usable {
                     SetupCard()
                 } else if model.noModels {
-                    NoticeBox(text: t("In NV-AI ist noch kein Bildmodell installiert. Bitte dort eines laden – danach geht es hier von selbst weiter.",
-                                      "No image model is installed in NV-AI yet. Please load one there – everything continues here by itself afterwards.")) {
-                        Button(t("NV-AI öffnen", "Open NV-AI")) { model.openNVAI() }
+                    NoticeBox(text: t("In NVAI-open ist noch kein Bildmodell installiert. Bitte dort eines laden – danach geht es hier von selbst weiter.",
+                                      "No image model is installed in NVAI-open yet. Please load one there – everything continues here by itself afterwards.")) {
+                        Button(t("NVAI-open öffnen", "Open NVAI-open")) { model.openNVAI() }
                             .buttonStyle(.borderedProminent)
                     }
                 } else if !model.nv.masks && model.form.mode == .fill {
-                    NoticeBox(text: t("Die laufende NV-AI-Version kennt noch keine Masken. Für „Füllen“ NV-AI bitte neu starten, damit die Erweiterung geladen wird.",
-                                      "The running NV-AI version does not know masks yet. For \"Fill\", please restart NV-AI so the extension gets loaded."))
+                    NoticeBox(text: t("Die laufende NVAI-open-Version kennt noch keine Masken. Für „Füllen“ NVAI-open bitte neu starten, damit die Erweiterung geladen wird.",
+                                      "The running NVAI-open version does not know masks yet. For \"Fill\", please restart NVAI-open so the extension gets loaded."))
                 }
                 if model.pc.connected && model.pc.dialogOpen {
                     NoticeBox(text: t("In PhotoCraft ist ein Dialog offen. Bitte erst schließen.", "A dialog is open in PhotoCraft. Please close it first."))
@@ -185,19 +185,19 @@ private struct Notices: View {
     }
 
     @ViewBuilder private var photocraftNotice: some View {
-        let label = model.starting == "photocraft" ? t("Startet …", "Starting …") : t("PhotoCraft mit NV-AI starten", "Start PhotoCraft with NV-AI")
+        let label = model.starting == "photocraft" ? t("Startet …", "Starting …") : t("PhotoCraft mit NVAI-open starten", "Start PhotoCraft with NVAI-open")
         let tested = PhotoCraftLaunch.testedVersion
         if !model.pc.installed && !model.pc.uncontrolledRunning {
-            NoticeBox(text: t("PhotoCraft ist nicht installiert. NV-AI für PhotoCraft braucht PhotoCraft \(tested) oder neuer.",
-                              "PhotoCraft is not installed. NV-AI for PhotoCraft needs PhotoCraft \(tested) or newer."),
+            NoticeBox(text: t("PhotoCraft ist nicht installiert. NVAI-open für PhotoCraft braucht PhotoCraft \(tested) oder neuer.",
+                              "PhotoCraft is not installed. NVAI-open for PhotoCraft needs PhotoCraft \(tested) or newer."),
                       detail: t("Auf der Download-Seite unter „Assets“ die Datei …-macos-universal.dmg laden und PhotoCraft in den Ordner „Programme“ ziehen. Danach geht es hier von selbst weiter.",
                                 "On the download page, get the file …-macos-universal.dmg under \"Assets\" and drag PhotoCraft into the Applications folder. Everything continues here by itself afterwards.")) {
                 Button(t("PhotoCraft herunterladen", "Download PhotoCraft")) { model.openPhotoCraftDownload() }
                     .buttonStyle(.borderedProminent)
             }
         } else if model.pc.uncontrolledRunning {
-            NoticeBox(text: t("PhotoCraft läuft ohne NV-AI-Anbindung. Bitte dort speichern und schließen – dann hier neu starten.",
-                              "PhotoCraft is running without the NV-AI connection. Please save and close it there – then start it again here.")) {
+            NoticeBox(text: t("PhotoCraft läuft ohne NVAI-open-Anbindung. Bitte dort speichern und schließen – dann hier neu starten.",
+                              "PhotoCraft is running without the NVAI-open connection. Please save and close it there – then start it again here.")) {
                 Button(label) { model.startPhotoCraft(force: false) }
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.starting.isEmpty)
@@ -205,7 +205,7 @@ private struct Notices: View {
                     .disabled(!model.starting.isEmpty)
             }
         } else {
-            NoticeBox(text: t("PhotoCraft ist nicht mit NV-AI verbunden.", "PhotoCraft is not connected to NV-AI.")) {
+            NoticeBox(text: t("PhotoCraft ist nicht mit NVAI-open verbunden.", "PhotoCraft is not connected to NVAI-open.")) {
                 Button(label) { model.startPhotoCraft(force: false) }
                     .buttonStyle(.borderedProminent)
                     .disabled(!model.starting.isEmpty)
@@ -253,7 +253,7 @@ extension NoticeBox where Buttons == EmptyView {
     }
 }
 
-/// Einrichtung, wenn NV-AI nicht erreichbar ist oder den Zugriff ablehnt: Adresse, Token, „Verbindung prüfen“.
+/// Einrichtung, wenn NVAI-open nicht erreichbar ist oder den Zugriff ablehnt: Adresse, Token, „Verbindung prüfen“.
 private struct SetupCard: View {
     @Environment(AppModel.self) private var model
     @State private var draft = AppSettings()
@@ -263,17 +263,17 @@ private struct SetupCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(t("NV-AI verbinden", "Connect NV-AI"), systemImage: "network").font(.headline)
+            Label(t("NVAI-open verbinden", "Connect NVAI-open"), systemImage: "network").font(.headline)
             Text(status).font(.callout).fixedSize(horizontal: false, vertical: true)
-            Text(t("Normalerweise läuft „NV-AI für Mac“ auf diesem Mac unter http://127.0.0.1:8100 – dann genügt es, die App zu öffnen. Sie liegt mit dieser App zusammen in der DMG. Für eine NV-AI auf einem anderen Rechner hier deren Adresse und Token eintragen.",
-                   "Normally \"NV-AI for Mac\" runs on this Mac at http://127.0.0.1:8100 – then it is enough to open that app. It comes in the same DMG as this app. For an NV-AI on another computer, enter its address and token here."))
+            Text(t("Normalerweise läuft „NVAI-open für Mac“ auf diesem Mac unter http://127.0.0.1:8100 – dann genügt es, die App zu öffnen. Sie liegt mit dieser App zusammen in der DMG. Für eine NVAI-open auf einem anderen Rechner hier deren Adresse und Token eintragen.",
+                   "Normally \"NVAI-open for Mac\" runs on this Mac at http://127.0.0.1:8100 – then it is enough to open that app. It comes in the same DMG as this app. For an NVAI-open on another computer, enter its address and token here."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             TextField(t("Adresse", "Address"), text: $draft.nvaiURL, prompt: Text(verbatim: "http://127.0.0.1:8100"))
                 .textFieldStyle(.roundedBorder)
             SecureField("Token", text: $draft.nvaiToken,
-                        prompt: Text(t("nur für NV-AI auf einem anderen Rechner", "only for NV-AI on another computer")))
+                        prompt: Text(t("nur für NVAI-open auf einem anderen Rechner", "only for NVAI-open on another computer")))
                 .textFieldStyle(.roundedBorder)
             HStack(spacing: 8) {
                 Button(checking ? t("Prüft …", "Checking …") : t("Verbindung prüfen", "Check connection")) { Task { await check() } }
@@ -305,11 +305,11 @@ private struct SetupCard: View {
     private var status: String {
         if let problem = model.nv.problem { return problem }
         let url = model.settings.nvaiURL
-        if !model.settings.isLocal { return t("NV-AI unter \(url) ist nicht erreichbar.", "NV-AI at \(url) is not reachable.") }
+        if !model.settings.isLocal { return t("NVAI-open unter \(url) ist nicht erreichbar.", "NVAI-open at \(url) is not reachable.") }
         return model.nvaiApp == nil
-            ? t("NV-AI läuft auf diesem Mac nicht, und „NV-AI für Mac“ ist nicht installiert.",
-                "NV-AI is not running on this Mac, and \"NV-AI for Mac\" is not installed.")
-            : t("NV-AI läuft auf diesem Mac nicht (\(url)).", "NV-AI is not running on this Mac (\(url)).")
+            ? t("NVAI-open läuft auf diesem Mac nicht, und „NVAI-open für Mac“ ist nicht installiert.",
+                "NVAI-open is not running on this Mac, and \"NVAI-open for Mac\" is not installed.")
+            : t("NVAI-open läuft auf diesem Mac nicht (\(url)).", "NVAI-open is not running on this Mac (\(url)).")
     }
 
     private func check() async {
@@ -541,7 +541,7 @@ private struct SmallField: View {
 
 // MARK: - Auftrag
 
-/// Laufende Modell-Downloads von NV-AI, je mit Abbrechen.
+/// Laufende Modell-Downloads von NVAI-open, je mit Abbrechen.
 private struct DownloadsRow: View {
     @Environment(AppModel.self) private var model
 
@@ -550,7 +550,7 @@ private struct DownloadsRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(model.nv.downloads, id: \.job) { d in
                     HStack(spacing: 8) {
-                        Text(t("NV-AI lädt \(d.name)", "NV-AI downloading \(d.name)"))
+                        Text(t("NVAI-open lädt \(d.name)", "NVAI-open downloading \(d.name)"))
                             .lineLimit(1).truncationMode(.middle)
                         ProgressView(value: d.running ? d.progress : 0).frame(minWidth: 40)
                         Text(d.running ? "\(Int((d.progress * 100).rounded())) %" : t("wartet", "queued"))
@@ -569,7 +569,7 @@ private struct DownloadsRow: View {
     }
 }
 
-/// „✨ Prompt ausbauen“ mit Zurücknehmen – nur, wenn NV-AI es kann (ab 0.4).
+/// „✨ Prompt ausbauen“ mit Zurücknehmen – nur, wenn NVAI-open es kann (ab 0.4).
 private struct ExpandRow: View {
     @Environment(AppModel.self) private var model
 
@@ -824,7 +824,7 @@ private struct Footer: View {
             SettingsLink { Text(t("Einstellungen …", "Settings …")) }
                 .buttonStyle(.link)
             Spacer()
-            Text(["App \(model.version)", model.nv.version.map { "NV-AI \($0)" }].compactMap { $0 }.joined(separator: " · "))
+            Text(["App \(model.version)", model.nv.version.map { "NVAI-open \($0)" }].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

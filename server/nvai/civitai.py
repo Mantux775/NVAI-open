@@ -1,10 +1,10 @@
 """LoRAs von Civitai finden und pruefen.
 
 Civitai nennt zu jeder Modellversion ihr Basismodell ("SDXL 1.0", "Wan Video 2.2 I2V-A14B" ...),
-die Trigger-Woerter und die Dateien. Die Suche uebersetzt das Basismodell in NV-AIs
+die Trigger-Woerter und die Dateien. Die Suche uebersetzt das Basismodell in NVAI-opens
 LoRA-Basis (loras.BASES). Herunterladen verlangt bei Civitai fast immer einen API-Schluessel
 des Nutzers; mit Schluessel prueft check() zusaetzlich den safetensors-Kopf wie bei Hugging
-Face, ohne verlaesst sich NV-AI auf Civitais Angabe.
+Face, ohne verlaesst sich NVAI-open auf Civitais Angabe.
 """
 from __future__ import annotations
 

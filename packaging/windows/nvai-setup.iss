@@ -1,4 +1,4 @@
-﻿; NV-AI for Windows - setup for a freshly installed PC.
+﻿; NVAI-open for Windows - setup for a freshly installed PC.
 ; Built by build-setup.ps1, which assembles build\stage and passes AppVersion, StageDir and
 ; WithAddon. Installs per user, without admin rights. English by default, German on German
 ; Windows (Inno picks the language from the Windows UI language).
@@ -25,25 +25,28 @@
 
 [Setup]
 AppId={{8C1F0E4A-5B7D-4E8A-9C2B-6A1D3F5E7B90}
-AppName=NV-AI
+AppName=NVAI-open
 AppVersion={#AppVersion}
-AppVerName=NV-AI {#AppVersion}
+AppVerName=NVAI-open {#AppVersion}
 AppPublisher=NVAI-open
 AppPublisherURL=https://github.com/Mantux775/NVAI-open
 AppSupportURL=https://github.com/Mantux775/NVAI-open/issues
 DefaultDirName={localappdata}\Programs\NV-AI
-DefaultGroupName=NV-AI
+DefaultGroupName=NVAI-open
+; Up to 0.5.7 the app was called NV-AI. Inno keeps the previous Start menu folder on an update
+; by default; take the new one instead, [InstallDelete] removes the old folder.
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19041
 OutputDir=build
-OutputBaseFilename=NV-AI-Setup-{#AppVersion}
+OutputBaseFilename=NVAI-open-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName=NV-AI
+UninstallDisplayName=NVAI-open
 SetupIconFile={#StageDir}\app\nvai.ico
 UninstallDisplayIcon={app}\nvai.ico
 CloseApplications=no
@@ -60,28 +63,28 @@ Name: "de"; MessagesFile: "compiler:Languages\German.isl"; InfoBeforeFile: "ERST
 [CustomMessages]
 en.TypeFull=Full installation
 de.TypeFull=Vollständige Installation
-en.TypeBasic=NV-AI only (images, audio, video)
-de.TypeBasic=Nur NV-AI (Bilder, Audio, Video)
-en.Comp3D=3D: TripoSG - turn images into 3D meshes (the model itself, 7.4 GB, is downloaded in NV-AI)
-de.Comp3D=3D: TripoSG – Bilder zu 3D-Modellen (das Modell selbst, 7,4 GB, lädt NV-AI bei Bedarf)
+en.TypeBasic=NVAI-open only (images, audio, video)
+de.TypeBasic=Nur NVAI-open (Bilder, Audio, Video)
+en.Comp3D=3D: TripoSG - turn images into 3D meshes (the model itself, 7.4 GB, is downloaded in NVAI-open)
+de.Comp3D=3D: TripoSG – Bilder zu 3D-Modellen (das Modell selbst, 7,4 GB, lädt NVAI-open bei Bedarf)
 en.TypeCustom=Custom
 de.TypeCustom=Benutzerdefiniert
-en.CompMain=NV-AI (server, ComfyUI, web interface)
-de.CompMain=NV-AI (Server, ComfyUI, Weboberfläche)
-en.CompAddon=NV-AI for PhotoCraft (add-on, needs PhotoCraft)
-de.CompAddon=NV-AI für PhotoCraft (Add-on, braucht PhotoCraft)
-en.IconStop=Quit NV-AI
-de.IconStop=NV-AI beenden
-en.IconRepair=Repair NV-AI
-de.IconRepair=NV-AI reparieren
+en.CompMain=NVAI-open (server, ComfyUI, web interface)
+de.CompMain=NVAI-open (Server, ComfyUI, Weboberfläche)
+en.CompAddon=NVAI-open for PhotoCraft (add-on, needs PhotoCraft)
+de.CompAddon=NVAI-open für PhotoCraft (Add-on, braucht PhotoCraft)
+en.IconStop=Quit NVAI-open
+de.IconStop=NVAI-open beenden
+en.IconRepair=Repair NVAI-open
+de.IconRepair=NVAI-open reparieren
 en.IconFirstSteps=Getting Started
 de.IconFirstSteps=Erste Schritte
 en.FirstStepsFile=GETTING_STARTED.txt
 de.FirstStepsFile=ERSTE_SCHRITTE.txt
-en.IconAddon=NV-AI for PhotoCraft
-de.IconAddon=NV-AI für PhotoCraft
-en.RunNow=Start NV-AI now
-de.RunNow=NV-AI jetzt starten
+en.IconAddon=NVAI-open for PhotoCraft
+de.IconAddon=NVAI-open für PhotoCraft
+en.RunNow=Start NVAI-open now
+de.RunNow=NVAI-open jetzt starten
 en.DirCaption=Data and models
 de.DirCaption=Daten und Modelle
 en.DirDescription=Where should images and models be stored?
@@ -94,16 +97,16 @@ en.DirModels=Models:
 de.DirModels=Modelle:
 en.DirInside=Data and model folders must not be inside the program folder (%1).%n%nUninstalling removes the program folder; models and images should survive that. Please choose a folder outside.
 de.DirInside=Daten- und Modellordner dürfen nicht im Programmordner liegen (%1).%n%nDie Deinstallation entfernt den Programmordner; Modelle und Bilder sollen dabei erhalten bleiben. Bitte einen Ordner außerhalb wählen.
-en.NoGpu=No NVIDIA graphics card with a driver was found.%n%nNV-AI computes on an NVIDIA card. Without one it installs, but cannot generate anything.%n%nInstall anyway?
-de.NoGpu=Es wurde keine NVIDIA-Grafikkarte mit Treiber gefunden.%n%nNV-AI rechnet auf einer NVIDIA-Karte. Ohne sie lässt es sich installieren, erzeugt aber nichts.%n%nTrotzdem installieren?
-en.OldDriver=Found: %1%n%nThe graphics driver %2 is too old. NV-AI needs at least version %3.%nPlease update first via https://www.nvidia.com/drivers%n%nInstall anyway?
-de.OldDriver=Gefunden: %1%n%nDer Grafiktreiber %2 ist zu alt. NV-AI braucht mindestens Version %3.%nBitte zuerst über https://www.nvidia.com/drivers aktualisieren.%n%nTrotzdem installieren?
+en.NoGpu=No NVIDIA graphics card with a driver was found.%n%nNVAI-open computes on an NVIDIA card. Without one it installs, but cannot generate anything.%n%nInstall anyway?
+de.NoGpu=Es wurde keine NVIDIA-Grafikkarte mit Treiber gefunden.%n%nNVAI-open rechnet auf einer NVIDIA-Karte. Ohne sie lässt es sich installieren, erzeugt aber nichts.%n%nTrotzdem installieren?
+en.OldDriver=Found: %1%n%nThe graphics driver %2 is too old. NVAI-open needs at least version %3.%nPlease update first via https://www.nvidia.com/drivers%n%nInstall anyway?
+de.OldDriver=Gefunden: %1%n%nDer Grafiktreiber %2 ist zu alt. NVAI-open braucht mindestens Version %3.%nBitte zuerst über https://www.nvidia.com/drivers aktualisieren.%n%nTrotzdem installieren?
 en.NoPhotoCraft=The add-on needs PhotoCraft (0.10.0 or newer), which is not installed here yet.%n%nOpen the download page now?
 de.NoPhotoCraft=Das Add-on braucht PhotoCraft (ab 0.10.0), das hier noch nicht installiert ist.%n%nDownload-Seite jetzt öffnen?
 en.RuntimeStatus=Setting up Python, ComfyUI and PyTorch (about 3 GB) ...
 de.RuntimeStatus=Python, ComfyUI und PyTorch werden eingerichtet (rund 3 GB) ...
-en.RuntimeFailed=The setup did not complete.%n%nLog: %1%nTry again later: Start menu → "Repair NV-AI".
-de.RuntimeFailed=Die Einrichtung ist nicht vollständig durchgelaufen.%n%nProtokoll: %1%nSpäter erneut versuchen: Startmenü → „NV-AI reparieren“.
+en.RuntimeFailed=The setup did not complete.%n%nLog: %1%nTry again later: Start menu → "Repair NVAI-open".
+de.RuntimeFailed=Die Einrichtung ist nicht vollständig durchgelaufen.%n%nProtokoll: %1%nSpäter erneut versuchen: Startmenü → „NVAI-open reparieren“.
 en.DeleteData=Delete the data as well?%n%n%1%n%2%n%nThey contain the generated images and the downloaded models. With "No" they are kept for a later installation.
 de.DeleteData=Auch die Daten löschen?%n%n%1%n%2%n%nDarin liegen die erzeugten Bilder und die geladenen Modelle. Bei „Nein“ bleiben sie für eine spätere Installation erhalten.
 
@@ -129,6 +132,12 @@ Source: "{#StageDir}\triposg\*"; DestDir: "{app}\external\triposg"; Flags: ignor
 Source: "{#StageDir}\addon\*"; DestDir: "{app}\addon"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: addon
 #endif
 
+[InstallDelete]
+; Shortcuts from before the rename to NVAI-open (up to 0.5.7: Start menu folder "NV-AI" with all
+; its entries, desktop shortcut "NV-AI"). Registry key, program and data folders keep their names.
+Type: filesandordirs; Name: "{autoprograms}\NV-AI"
+Type: files; Name: "{autodesktop}\NV-AI.lnk"
+
 [Registry]
 ; Connection point for the PhotoCraft bridge and the launcher (nvai\launcher.py).
 Root: HKCU; Subkey: "Software\NV-AI"; Flags: uninsdeletekey
@@ -139,14 +148,14 @@ Root: HKCU; Subkey: "Software\NV-AI"; ValueType: string; ValueName: "ModelDir"; 
 Root: HKCU; Subkey: "Software\NV-AI"; ValueType: dword; ValueName: "Port"; ValueData: "8100"; Flags: createvalueifdoesntexist
 
 [Icons]
-Name: "{group}\NV-AI"; Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --open"; WorkingDir: "{app}\server"; IconFilename: "{app}\nvai.ico"
+Name: "{group}\NVAI-open"; Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --open"; WorkingDir: "{app}\server"; IconFilename: "{app}\nvai.ico"
 Name: "{group}\{cm:IconStop}"; Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --stop"; WorkingDir: "{app}\server"; IconFilename: "{app}\nvai.ico"
 Name: "{group}\{cm:IconRepair}"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-runtime.ps1"" -App ""{app}"" -DataDir ""{code:GetDataDir}"" {code:RuntimeSwitches}"; WorkingDir: "{app}"
 Name: "{group}\{cm:IconFirstSteps}"; Filename: "{app}\{cm:FirstStepsFile}"
 #if WithAddon == "1"
 Name: "{group}\{cm:IconAddon}"; Filename: "{app}\addon\.venv\Scripts\pythonw.exe"; Parameters: "-m bridge --launch"; WorkingDir: "{app}\addon"; IconFilename: "{app}\addon\panel\icon.ico"; AppUserModelID: "NVAI.PhotoCraft"; Components: addon
 #endif
-Name: "{autodesktop}\NV-AI"; Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --open"; WorkingDir: "{app}\server"; IconFilename: "{app}\nvai.ico"; Tasks: desktopicon
+Name: "{autodesktop}\NVAI-open"; Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --open"; WorkingDir: "{app}\server"; IconFilename: "{app}\nvai.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\server\.venv\Scripts\pythonw.exe"; Parameters: "-m nvai.launcher --open"; WorkingDir: "{app}\server"; Description: "{cm:RunNow}"; Flags: postinstall nowait skipifsilent

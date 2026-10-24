@@ -1,7 +1,7 @@
 """Sprache der Antworten: Englisch, Deutsch auf Wunsch.
 
 Die Sprache gilt je Anfrage und kommt aus dem Header Accept-Language: beginnt die erste
-Angabe mit "de", antwortet NV-AI deutsch, sonst englisch. Die Weboberflaeche schickt die
+Angabe mit "de", antwortet NVAI-open deutsch, sonst englisch. Die Weboberflaeche schickt die
 gewaehlte Sprache ausdruecklich mit; URLSession (Mac) schickt die Systemsprache von selbst;
 ohne Header (MCP, curl) gilt Englisch.
 

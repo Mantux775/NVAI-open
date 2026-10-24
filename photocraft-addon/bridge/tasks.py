@@ -1,4 +1,4 @@
-"""Aufträge: Kontext aus PhotoCraft holen, in NV-AI rechnen lassen, Ergebnis zurücklegen.
+"""Aufträge: Kontext aus PhotoCraft holen, in NVAI-open rechnen lassen, Ergebnis zurücklegen.
 
 Ablauf eines Auftrags:
 
@@ -8,7 +8,7 @@ Ablauf eines Auftrags:
    ``mask.png`` in den Austauschordner gespeichert. Das Dokument des Nutzers und sein
    Protokoll bleiben dabei unberührt.
 2. **Rechnen** – ``planning.plan`` legt Modell, Technik, Arbeitsgröße und Request fest.
-   Ausschnitt und Maske gehen in Arbeitsgröße zu NV-AI, gerechnet wird ein Auftrag mit 1–4
+   Ausschnitt und Maske gehen in Arbeitsgröße zu NVAI-open, gerechnet wird ein Auftrag mit 1–4
    Varianten.
 3. **Einfügen** – Die gewählte Variante wird aus dem Austauschordner geöffnet, per
    ``layer.copyToDocument`` an die richtige Stelle des Zieldokuments kopiert und bekommt die
@@ -42,8 +42,8 @@ log = logging.getLogger(__name__)
 
 # Namen der Arbeitskopie und des Kanals, unter dem die Auswahl darin gesichert wird. Absichtlich
 # in jeder Sprache gleich: Die Abläufe finden sie über den Namen.
-WORKING_COPY = "NV-AI working copy"
-MASK_CHANNEL = "NV-AI selection"
+WORKING_COPY = "NVAI-open working copy"
+MASK_CHANNEL = "NVAI-open selection"
 HISTORY_LIMIT = 30
 
 
@@ -183,9 +183,9 @@ class TaskManager:
                     self._order.append(task.id)
 
     def cleanup_uploads(self, min_age_s: float = 3600) -> int:
-        """Ausschnitte und Masken, die ein abgebrochener Auftrag in NV-AI liegen ließ, löschen.
+        """Ausschnitte und Masken, die ein abgebrochener Auftrag in NVAI-open liegen ließ, löschen.
 
-        Normalerweise löscht jeder Auftrag seine Uploads selbst – nicht aber, wenn NV-AI
+        Normalerweise löscht jeder Auftrag seine Uploads selbst – nicht aber, wenn NVAI-open
         währenddessen neu gestartet wurde oder die Brücke abstürzte.
         """
         try:
@@ -203,7 +203,7 @@ class TaskManager:
                 except NVAIError:
                     pass
         if removed:
-            log.info("%d verwaiste Uploads in NV-AI gelöscht", removed)
+            log.info("%d verwaiste Uploads in NVAI-open gelöscht", removed)
         return removed
 
     @staticmethod
@@ -254,9 +254,9 @@ class TaskManager:
         mode = planning.base_mode(t.mode)
         if mode == "fill" and not masks and not (t.mode == "extend" and self.nv.supports_outpaint()):
             raise NVAIError(_t(
-                "Die laufende NV-AI-Version kennt noch keine Masken. NV-AI bitte neu starten, "
+                "Die laufende NVAI-open-Version kennt noch keine Masken. NVAI-open bitte neu starten, "
                 "damit die Inpainting-Erweiterung aktiv wird.",
-                "The running NV-AI version does not know masks yet. Please restart NV-AI so the "
+                "The running NVAI-open version does not know masks yet. Please restart NVAI-open so the "
                 "inpainting extension becomes active.",
             ))
 
@@ -265,7 +265,7 @@ class TaskManager:
         region = Rect.from_list(t.region or [0, 0, *t.doc_size])
 
         active = (self.nv.health().get("active_models") or {}).get("image")
-        # Erweitern über NV-AIs outpaint (ab 0.5.4); ältere Server füllen per Maske wie bisher.
+        # Erweitern über NVAI-opens outpaint (ab 0.5.4); ältere Server füllen per Maske wie bisher.
         outpaint = bool(t.alpha_mask and planning.extend_steps(p.get("extend"))
                         and self.nv.supports_outpaint())
         model, warning = planning.choose_model(mode, p.get("model_id") or None, active,
@@ -286,10 +286,10 @@ class TaskManager:
                 raise ValueError(_t("Kein durchsichtiger Rand zum Füllen gefunden.",
                                     "No transparent border found to fill."))
             if edges is not None:
-                # Arbeitsfläche erweitert und NV-AI kann Outpainting (ab 0.5.4): nur den deckenden
+                # Arbeitsfläche erweitert und NVAI-open kann Outpainting (ab 0.5.4): nur den deckenden
                 # Teil schicken, Rand und weiche Maske legt der Server an. Der eigene Maskenweg
                 # liess an der alten Bildkante eine harte Naht (gemessen 23.10.2026).
-                self._stage(t, 0.06, _t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+                self._stage(t, 0.06, _t("lädt den Ausschnitt zu NVAI-open", "uploading the area to NVAI-open"))
                 box, size, border = edges
                 src = imaging.flatten_for_model(context.crop(box)).resize(size, Image.Resampling.LANCZOS)
                 asset = self.nv.upload(src, f"photocraft-{t.id}-context.png")
@@ -297,7 +297,7 @@ class TaskManager:
                 payload["image_asset_id"] = asset["id"]
                 payload["outpaint"] = border
             elif plan.send_image and context is not None:
-                self._stage(t, 0.06, _t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+                self._stage(t, 0.06, _t("lädt den Ausschnitt zu NVAI-open", "uploading the area to NVAI-open"))
                 src = imaging.flatten_for_model(context).resize((gw, gh), Image.Resampling.LANCZOS)
                 asset = self.nv.upload(src, f"photocraft-{t.id}-context.png")
                 uploads.append(asset["id"])
@@ -313,7 +313,7 @@ class TaskManager:
                     uploads.append(masset["id"])
                     payload["mask_asset_id"] = masset["id"]
 
-            self._stage(t, 0.08, _t("übergibt an NV-AI", "handing over to NV-AI"))
+            self._stage(t, 0.08, _t("übergibt an NVAI-open", "handing over to NVAI-open"))
             job = self.nv.generate_image(payload)
             t.nv_job = job["id"]
             job = self._wait(t, job["id"])
@@ -342,7 +342,7 @@ class TaskManager:
                     pass
 
         if not t.variants:
-            raise NVAIError(_t("NV-AI hat kein Bild zurückgegeben.", "NV-AI did not return an image."))
+            raise NVAIError(_t("NVAI-open hat kein Bild zurückgegeben.", "NVAI-open did not return an image."))
         if p.get("auto_place", True):
             self._stage(t, 0.97, _t("legt das Ergebnis in PhotoCraft ab", "placing the result in PhotoCraft"))
             self.place(t, 0, replace=False)
@@ -354,17 +354,17 @@ class TaskManager:
                 try:
                     self.nv.cancel(job_id)
                 except NVAIError as exc:
-                    log.warning("Abbruch bei NV-AI gescheitert: %s", exc)
+                    log.warning("Abbruch bei NVAI-open gescheitert: %s", exc)
                 raise TaskCancelled()
             try:
                 job = self.nv.job(job_id)
                 unreachable_since = None
             except NVAIUnavailable:
-                # Ein Neustart von NV-AI dauert einige Sekunden – so lange weiter fragen.
+                # Ein Neustart von NVAI-open dauert einige Sekunden – so lange weiter fragen.
                 unreachable_since = unreachable_since or time.monotonic()
                 if time.monotonic() - unreachable_since > 45:
                     raise
-                t.stage = _t("NV-AI antwortet nicht – warte", "NV-AI does not answer – waiting")
+                t.stage = _t("NVAI-open antwortet nicht – warte", "NVAI-open does not answer – waiting")
                 time.sleep(1.0)
                 continue
             status = job.get("status")
@@ -377,15 +377,15 @@ class TaskManager:
             elif status == "done":
                 return job
             elif status == "error":
-                raise NVAIError(job.get("error") or _t("NV-AI meldet einen Fehler.", "NV-AI reports an error."))
+                raise NVAIError(job.get("error") or _t("NVAI-open meldet einen Fehler.", "NVAI-open reports an error."))
             elif status == "cancelled":
                 if t.cancel_event.is_set():
                     raise TaskCancelled()
-                # Nicht von uns abgebrochen: etwa ein Neustart von NV-AI oder ein Stopp in
+                # Nicht von uns abgebrochen: etwa ein Neustart von NVAI-open oder ein Stopp in
                 # dessen Oberfläche.
                 reason = job.get("stage") or _t("ohne Angabe", "no reason given")
-                raise NVAIError(_t(f"NV-AI hat den Auftrag abgebrochen ({reason}). Bitte erneut versuchen.",
-                                   f"NV-AI cancelled the job ({reason}). Please try again."))
+                raise NVAIError(_t(f"NVAI-open hat den Auftrag abgebrochen ({reason}). Bitte erneut versuchen.",
+                                   f"NVAI-open cancelled the job ({reason}). Please try again."))
             time.sleep(0.5)
 
     # ------------------------------------------------------------ Erfassen

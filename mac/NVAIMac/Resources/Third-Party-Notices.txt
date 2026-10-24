@@ -1,13 +1,13 @@
-NV-AI for Mac - Third-Party Notices
-NV-AI für Mac - Hinweise zu Komponenten von Dritten
+NVAI-open for Mac - Third-Party Notices
+NVAI-open für Mac - Hinweise zu Komponenten von Dritten
 ==============================================================================
 
-NV-AI is released under the MIT License. It includes the open-source software listed
-below; their licenses follow in full. AI models are not part of the app: NV-AI downloads
+NVAI-open is released under the MIT License. It includes the open-source software listed
+below; their licenses follow in full. AI models are not part of the app: NVAI-open downloads
 them on request and shows each model's license in its model list.
 
-NV-AI steht unter der MIT-Lizenz. Es enthält die unten aufgeführte Open-Source-Software;
-deren Lizenztexte folgen vollständig. Modelle gehören nicht zur App: NV-AI lädt sie auf
+NVAI-open steht unter der MIT-Lizenz. Es enthält die unten aufgeführte Open-Source-Software;
+deren Lizenztexte folgen vollständig. Modelle gehören nicht zur App: NVAI-open lädt sie auf
 Wunsch herunter und zeigt die Lizenz jedes Modells in der Modellliste.
 
 Components / Komponenten:

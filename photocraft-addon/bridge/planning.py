@@ -1,6 +1,6 @@
 """Reine Entscheidungslogik eines Auftrags – ohne PhotoCraft, ohne Netz, ohne Dateien.
 
-Hier steht alles, was aus Modus, Prompt, Einstellungen und den Modellangaben von NV-AI
+Hier steht alles, was aus Modus, Prompt, Einstellungen und den Modellangaben von NVAI-open
 (``/api/models`` mit ``features``, BILDMODELLE.md Abschnitt 7) folgt: welches Modell, welche
 Technik, welche Arbeitsgröße, welcher Request an ``/api/generate/image``. Der Swift-Port
 (PhotoCraftKit) bildet genau diese Funktionen nach und prüft sich gegen ``golden/planning.json``.
@@ -67,7 +67,7 @@ NATIVE_PIXELS = {
     "qwen_image": 1328 * 1328, "qwen_image_lightning": 1328 * 1328,
     "flux3_klein": 1440 * 1440, "flux3_klein_base": 1440 * 1440,
 }
-# Modelle mit festem Format (``features.fixed_size``, etwa Core ML in NV-AI für Mac) rechnen immer
+# Modelle mit festem Format (``features.fixed_size``, etwa Core ML in NVAI-open für Mac) rechnen immer
 # N×N und strecken das Ergebnis sonst selbst auf die angefragte Größe – verzerrt. Deshalb N×N
 # anfragen: Generieren beschneidet dann mittig, Füllen und Überarbeiten skalieren exakt zurück.
 # Weicht der Ausschnitt um mehr als diesen Faktor vom Quadrat ab, sagt eine Warnung, was passiert.
@@ -109,7 +109,7 @@ def capable(model: dict[str, Any], need: str, masks_supported: bool) -> bool:
     """Kann ``model`` Bild-zu-Bild (``img2img``), Bilder überarbeiten (``refine``: Bild-zu-Bild
     oder Bearbeiten per Referenzbild wie FLUX 3) bzw. Masken (``mask``)?
 
-    Grundlage ist ``features``. Ältere NV-AI-Versionen liefern es nicht – dann gilt
+    Grundlage ist ``features``. Ältere NVAI-open-Versionen liefern es nicht – dann gilt
     Bild-zu-Bild als vorhanden. Masken wirken dort, wo Bild-zu-Bild wirkt, sobald der Server
     ``mask_asset_id`` kennt – es sei denn, das Modell meldet ``mask`` ausdrücklich.
     """
@@ -122,7 +122,7 @@ def capable(model: dict[str, Any], need: str, masks_supported: bool) -> bool:
     if need == "mask":
         return bool(features.get("mask", img2img and masks_supported))
     if need == "outpaint":
-        # NV-AI ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
+        # NVAI-open ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
         if "outpaint" in features:
             return bool(features["outpaint"])
         return capable(model, "mask", masks_supported)
@@ -138,10 +138,10 @@ def choose_model(mode: str, wanted: str | None, active: str | None, models: list
     """Modell für den Auftrag. Passt das aktive nicht zum Modus, wird ein passendes gewählt
     (volle Modelle vor Lightning) und als Warnung vermerkt.
 
-    ``extend``: Arbeitsfläche erweitern über NV-AIs ``outpaint``. Ohne eigene Wahl nimmt das
+    ``extend``: Arbeitsfläche erweitern über NVAI-opens ``outpaint``. Ohne eigene Wahl nimmt das
     ein Bearbeitungsmodell (FLUX 3 & Co.), denn Maskenmodelle hinterließen an der alten
     Bildkante eine harte Naht (gemessen 23.10.2026). Füllen bevorzugt genauso ein Modell, das
-    per Referenz füllt (``features.mask == "reference"``), wenn NV-AI das meldet.
+    per Referenz füllt (``features.mask == "reference"``), wenn NVAI-open das meldet.
     """
     runnable = [m for m in models if m.get("runnable", True)]
     need = "outpaint" if extend and mode == "fill" else need_for(mode)
@@ -150,7 +150,7 @@ def choose_model(mode: str, wanted: str | None, active: str | None, models: list
         if seamless:
             return next((m for m in seamless if m["id"] == active), seamless[0]), None
     if need == "mask" and not wanted:
-        # Füllen: NV-AI ab 0.5.6 füllt auch mit Bearbeitungsmodellen (features.mask "reference", FLUX 3):
+        # Füllen: NVAI-open ab 0.5.6 füllt auch mit Bearbeitungsmodellen (features.mask "reference", FLUX 3):
         # Bereich grau, ausrichten, einsetzen. Gemessen: Kisten entfernt mit durchlaufendem Pflaster;
         # Qwens Maskenweg malte ein Schild frontal statt in der Perspektive der Kiste.
         by_reference = [m for m in runnable if (m.get("features") or {}).get("mask") == "reference"]
@@ -171,18 +171,18 @@ def choose_model(mode: str, wanted: str | None, active: str | None, models: list
         reason = {"mask": t("mit Masken arbeiten.", "work with masks."),
                   "outpaint": t("Bilder erweitern.", "extend images."),
                   "refine": t("Bilder überarbeiten.", "edit images.")}.get(need, t("laufen.", "run."))
-        raise PlanError("no_capable_model", t("Kein installiertes Bildmodell in NV-AI kann ",
-                                              "No image model installed in NV-AI can ") + reason)
-    # Stabil sortiert: Reihenfolge von NV-AI, schwache (Lightning/schnell) nach hinten.
+        raise PlanError("no_capable_model", t("Kein installiertes Bildmodell in NVAI-open kann ",
+                                              "No image model installed in NVAI-open can ") + reason)
+    # Stabil sortiert: Reihenfolge von NVAI-open, schwache (Lightning/schnell) nach hinten.
     pick = sorted(candidates, key=lambda m: m.get("workflow") in WEAK_PROMPT_WORKFLOWS)[0]
     if wanted:
-        code, reason = "model_unavailable", t("Das gewählte Modell ist in NV-AI nicht verfügbar",
-                                              "The chosen model is not available in NV-AI")
+        code, reason = "model_unavailable", t("Das gewählte Modell ist in NVAI-open nicht verfügbar",
+                                              "The chosen model is not available in NVAI-open")
     elif chosen:
-        code, reason = "active_model_incapable", t(f"Das in NV-AI aktive Modell kann {what}",
-                                                   f"The model active in NV-AI does not support {what}")
+        code, reason = "active_model_incapable", t(f"Das in NVAI-open aktive Modell kann {what}",
+                                                   f"The model active in NVAI-open does not support {what}")
     else:
-        code, reason = "no_active_model", t("In NV-AI ist kein Bildmodell aktiv", "No image model is active in NV-AI")
+        code, reason = "no_active_model", t("In NVAI-open ist kein Bildmodell aktiv", "No image model is active in NVAI-open")
     return pick, Warning(code, t(f"{reason} – verwendet wird „{pick['name']}“.", f"{reason} – using \"{pick['name']}\"."))
 
 
@@ -197,7 +197,7 @@ def fixed_size(model: dict[str, Any]) -> int | None:
 
 
 def technique_for(mode: str, model: dict[str, Any], has_mask: bool, masks_supported: bool) -> str:
-    """Wie NV-AI den Auftrag rechnet."""
+    """Wie NVAI-open den Auftrag rechnet."""
     if mode == "generate":
         return "txt2img"
     if mode == "fill":
@@ -205,7 +205,7 @@ def technique_for(mode: str, model: dict[str, Any], has_mask: bool, masks_suppor
     features = model.get("features") or {}
     if not features.get("img2img", True) and int(features.get("references") or 0) > 0:
         return "reference"
-    # Überarbeiten per Bild-zu-Bild: Kennt NV-AI Masken, hält die Maske alles außerhalb der
+    # Überarbeiten per Bild-zu-Bild: Kennt NVAI-open Masken, hält die Maske alles außerhalb der
     # Auswahl fest; sonst begrenzt nur die Ebenenmaske in PhotoCraft das Ergebnis.
     return "inpaint" if has_mask and capable(model, "mask", masks_supported) else "img2img"
 
@@ -263,7 +263,7 @@ def extend_steps(extend: list[int] | None) -> list[dict[str, Any]]:
 
 def outpaint_edges(context: Any, working: tuple[int, int]
                    ) -> tuple[tuple[int, int, int, int], tuple[int, int], list[int]] | None:
-    """Für NV-AIs ``outpaint``: deckender Teil des Ausschnitts und die Ränder drumherum.
+    """Für NVAI-opens ``outpaint``: deckender Teil des Ausschnitts und die Ränder drumherum.
 
     Gibt (Box im Ausschnitt, Größe des hochzuladenden Bildes, [links, oben, rechts, unten])
     zurück, Bild und Ränder schon auf die Arbeitsgröße skaliert; ``None``, wenn nichts
@@ -291,7 +291,7 @@ def plan(mode: str, prompt: str, params: dict[str, Any], model: dict[str, Any] |
          masks_supported: bool, outpaint: bool = False) -> Plan:
     """Den Request an ``/api/generate/image`` planen (ohne Asset-IDs).
 
-    ``outpaint``: Erweitern über NV-AIs ``outpaint``-Feld (Technik „outpaint“); Rand, Maske
+    ``outpaint``: Erweitern über NVAI-opens ``outpaint``-Feld (Technik „outpaint“); Rand, Maske
     und denoise setzt dann der Server.
     """
     model = model or {}
@@ -371,9 +371,9 @@ def plan(mode: str, prompt: str, params: dict[str, Any], model: dict[str, Any] |
 
 
 def layer_name(mode: str, prompt: str, k: int, n_variants: int) -> str:
-    """Name der eingefügten Ebene, etwa „NV-AI Fill: a red barn (2)“ (Deutsch: „NV-AI Füllen: …“)."""
+    """Name der eingefügten Ebene, etwa „NVAI-open Fill: a red barn (2)“ (Deutsch: „NVAI-open Füllen: …“)."""
     text = " ".join((prompt or "").split())
     if len(text) > 48:
         text = text[:47].rstrip() + "…"
-    name = f"NV-AI {mode_label(mode)}" + (f": {text}" if text else "")
+    name = f"NVAI-open {mode_label(mode)}" + (f": {text}" if text else "")
     return name + (f" ({k + 1})" if n_variants > 1 else "")

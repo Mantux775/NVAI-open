@@ -15,7 +15,7 @@ export interface LoraRef {
 /** Die vier Modi, die wirklich etwas erzeugen. */
 export type GenKind = 'image' | 'audio' | 'video' | '3d'
 // Wofür "Prompt ausbauen" schreibt (server/nvai/prompt_targets.py)
-export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d'
+export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_multishot' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d'
 
 export interface Job {
   id: string
@@ -51,6 +51,8 @@ export interface ModelFile {
   installed: boolean
   local_path: string | null
   size_gb: number | null
+  /** Zusatzfunktion, die diese Datei freischaltet (z. B. "dfr"); null = Pflichtdatei */
+  optional?: string | null
 }
 
 export interface ModelInfo {
@@ -191,6 +193,25 @@ export interface ModelFeatures {
   sizes: ModelSize[]
   prompt_hint: string
   placeholder: string
+  // Video, LTX-2.5 (seit 0.5.8). auto_duration, dfr und temporal_upscale sind nur true, wenn die
+  // optionalen Dateien da sind; sonst nennt missing die Seite auf Hugging Face.
+  start_image: 'optional' | boolean
+  end_image: boolean
+  loop: boolean
+  audio_input: boolean
+  auto_duration: boolean
+  dfr: boolean
+  temporal_upscale: boolean
+  motion_speed: boolean
+  multishot: boolean
+  fps: number
+  max_seconds: number
+  missing: Record<string, string>
+  // LoRAs: empfohlene Stärke, wozu sie gehört, für welche Modellfamilien empfohlen, Testergebnis
+  strength: number
+  use: 'start_image' | 'end_image' | 'audio_input' | 'motion_speed'
+  recommended_for: string[]
+  tested: string
 }
 
 export interface Health {
@@ -317,6 +338,14 @@ export interface VideoParams {
   seed?: number | null
   /** Startbild fuer Bild-zu-Video. Bei I2V-Modellen Pflicht. */
   image_asset_id?: string | null
+  // Nur LTX-2.5 (features des Modells)
+  end_image_asset_id?: string | null
+  loop?: boolean
+  quality?: 'standard' | 'dfr'
+  temporal_upscale?: boolean
+  auto_duration?: boolean
+  audio_asset_id?: string | null
+  motion_speed?: number
 }
 
 export interface Mesh3DParams {

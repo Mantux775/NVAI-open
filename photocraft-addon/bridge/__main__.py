@@ -22,7 +22,7 @@ def setup_logging() -> None:
         handlers.append(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO, handlers=handlers,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    # Jede Statusabfrage an NV-AI wäre sonst eine Logzeile.
+    # Jede Statusabfrage an NVAI-open wäre sonst eine Logzeile.
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -60,9 +60,9 @@ def start_server() -> tuple[object, threading.Thread]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="python -m bridge", description="NV-AI as the local AI for PhotoCraft")
+    ap = argparse.ArgumentParser(prog="python -m bridge", description="NVAI-open as the local AI for PhotoCraft")
     ap.add_argument("--launch", action="store_true",
-                    help="start NV-AI and PhotoCraft (with control channel), then open the panel")
+                    help="start NVAI-open and PhotoCraft (with control channel), then open the panel")
     ap.add_argument("--server", action="store_true", help="only start the server, no window")
     ap.add_argument("--browser", action="store_true", help="open the panel in the default browser")
     args = ap.parse_args(argv)
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> None:
     log.info("ArtCraft-LocalAI %s", __version__)
     # Für die Fehlersuche bei Testern: was die Brücke vorgefunden hat.
     install = config.nvai_setup()
-    log.info("NV-AI: %s%s", config.NVAI_URL,
+    log.info("NVAI-open: %s%s", config.NVAI_URL,
              f" – Setup {install.version or '?'} in {install.install_dir}" if install else "")
     found = launcher.photocraft_install()
     log.info("PhotoCraft: %s", f"{found['exe']} ({found['version'] or 'Version unbekannt'})"

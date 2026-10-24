@@ -49,7 +49,7 @@ class Api:
 
 
 def title() -> str:
-    return t("NV-AI für PhotoCraft", "NV-AI for PhotoCraft")
+    return t("NVAI-open für PhotoCraft", "NVAI-open for PhotoCraft")
 
 
 def retitle() -> None:

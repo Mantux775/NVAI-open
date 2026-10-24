@@ -107,7 +107,7 @@ def _nvai_state() -> dict[str, Any]:
                 # Ohne Setup und ohne Entwicklungsordner gibt es nichts zu starten.
                 "startable": local and launcher.nvai_starter() is not None,
                 "starting": local and launcher.nvai_start_pending()}
-    # Versionsangaben gibt es erst ab NV-AI 0.2.0; ältere Server bleiben wie bisher nutzbar.
+    # Versionsangaben gibt es erst ab NVAI-open 0.2.0; ältere Server bleiben wie bisher nutzbar.
     info: dict[str, Any] | None = None
     problem = None
     try:
@@ -183,14 +183,14 @@ def models() -> list[dict[str, Any]]:
                 "img2img": capable(m, "img2img", masks),
                 "refine": capable(m, "refine", masks),
                 "mask": capable(m, "mask", masks),
-                # Füllen: "reference" (FLUX 3, NV-AI ab 0.5.6: grau markiert, ausgerichtet) oder "mask".
+                # Füllen: "reference" (FLUX 3, NVAI-open ab 0.5.6: grau markiert, ausgerichtet) oder "mask".
                 "fill": ("reference" if features.get("mask") == "reference"
                          else "mask" if capable(m, "mask", masks) else None),
-                # Erweitern: nur mit NV-AI ab 0.5.4; "reference" ist nahtlos, "mask" oft mit Kante.
+                # Erweitern: nur mit NVAI-open ab 0.5.4; "reference" ist nahtlos, "mask" oft mit Kante.
                 "outpaint": features.get("outpaint") if nv.supports_outpaint() else None,
                 "reference_edit": capable(m, "refine", masks) and not capable(m, "img2img", masks),
                 "weak_prompt": m.get("workflow") in WEAK_PROMPT_WORKFLOWS,
-                # Bedienhinweise aus NV-AI (BILDMODELLE.md, Abschnitt 7).
+                # Bedienhinweise aus NVAI-open (BILDMODELLE.md, Abschnitt 7).
                 "negative_prompt": bool(features.get("negative_prompt", True)),
                 "hires": bool(features.get("hires", True)),
                 "upsampler": bool(features.get("upsampler", False)),
@@ -249,12 +249,12 @@ class ExpandRequest(BaseModel):
 
 @app.post("/api/expand")
 def expand(req: ExpandRequest) -> dict[str, Any]:
-    """„Prompt ausbauen“: NV-AI macht aus wenigen Worten eine volle Bildbeschreibung."""
+    """„Prompt ausbauen“: NVAI-open macht aus wenigen Worten eine volle Bildbeschreibung."""
     nv.check_compatible()
     if not nv.supports_expand():
         raise HTTPException(409, t(
-            "Diese NV-AI-Version kann Prompts noch nicht ausbauen. Bitte NV-AI aktualisieren.",
-            "This NV-AI version cannot expand prompts yet. Please update NV-AI.",
+            "Diese NVAI-open-Version kann Prompts noch nicht ausbauen. Bitte NVAI-open aktualisieren.",
+            "This NVAI-open version cannot expand prompts yet. Please update NVAI-open.",
         ))
     result = nv.expand_prompt(req.prompt)
     return {"expanded": result["expanded"], "seconds": result.get("seconds")}
@@ -325,7 +325,7 @@ def nvai_start() -> dict[str, Any]:
 
 @app.post("/api/nvai/downloads/{job_id}/cancel")
 def nvai_download_cancel(job_id: str) -> dict[str, Any]:
-    """Einen NV-AI-Download aus dem Panel abbrechen (fertige Teile bleiben zum Fortsetzen)."""
+    """Einen NVAI-open-Download aus dem Panel abbrechen (fertige Teile bleiben zum Fortsetzen)."""
     try:
         nv.cancel_download(job_id)
     except NVAIError as exc:
@@ -336,7 +336,7 @@ def nvai_download_cancel(job_id: str) -> dict[str, Any]:
 
 @app.post("/api/nvai/check")
 def nvai_check() -> dict[str, Any]:
-    """„Erneut prüfen“: Token neu einlesen und NV-AI frisch nach Version und Zugriff fragen."""
+    """„Erneut prüfen“: Token neu einlesen und NVAI-open frisch nach Version und Zugriff fragen."""
     nv.set_token(config.load_nvai_token())
     cache.drop("nv")
     cache.drop("models")
@@ -349,7 +349,7 @@ class LanguageRequest(BaseModel):
 
 @app.post("/api/language")
 def set_language(req: LanguageRequest) -> dict[str, Any]:
-    """Sprache wählen und in settings.json merken. NV-AI liefert seine Modelltexte danach neu."""
+    """Sprache wählen und in settings.json merken. NVAI-open liefert seine Modelltexte danach neu."""
     i18n.set_choice(req.language)
     config.save_settings(language=req.language)
     for key in ("pc", "nv", "models"):

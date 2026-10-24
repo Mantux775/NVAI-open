@@ -36,7 +36,7 @@ public struct Plan: Equatable {
 
 /// Reine Entscheidungslogik eines Auftrags (Referenz: bridge/planning.py).
 ///
-/// Modelle sind die Einträge aus NV-AIs `/api/models` (`id`, `name`, `workflow`, `runnable`,
+/// Modelle sind die Einträge aus NVAI-opens `/api/models` (`id`, `name`, `workflow`, `runnable`,
 /// `features` – siehe BILDMODELLE.md, Abschnitt 7).
 public enum Planning {
     /// Rechenwege (Golden-Daten); „extend“ (Erweitern) rechnet wie Füllen, siehe baseMode.
@@ -73,7 +73,7 @@ public enum Planning {
         "qwen_image": 1328 * 1328, "qwen_image_lightning": 1328 * 1328,
         "flux3_klein": 1440 * 1440, "flux3_klein_base": 1440 * 1440,
     ]
-    /// Modelle mit festem Format (`features.fixed_size`, etwa Core ML in NV-AI für Mac) rechnen immer
+    /// Modelle mit festem Format (`features.fixed_size`, etwa Core ML in NVAI-open für Mac) rechnen immer
     /// N×N und strecken das Ergebnis sonst selbst – deshalb N×N anfragen. Weicht der Ausschnitt um
     /// mehr als diesen Faktor vom Quadrat ab, sagt eine Warnung, was passiert.
     public static let fixedSizeTolerance = 1.1
@@ -99,7 +99,7 @@ public enum Planning {
         case "refine": return img2img || (f["references"]?.intValue ?? 0) > 0
         case "mask": return f["mask"]?.truthy ?? (img2img && masksSupported)
         case "outpaint":
-            // NV-AI ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
+            // NVAI-open ab 0.5.4 meldet "reference" (Bearbeitungsmodell, nahtlos) oder "mask".
             if let v = f["outpaint"] { return v.truthy }
             return capable(model, "mask", masksSupported: masksSupported)
         default: preconditionFailure("unbekannte Fähigkeit: \(need)")
@@ -116,7 +116,7 @@ public enum Planning {
     }
 
     /// Modell für den Auftrag; passt das aktive nicht, ein passendes (volle Modelle vor Lightning).
-    /// `extend`: Arbeitsfläche erweitern über NV-AIs `outpaint`. Ohne eigene Wahl nimmt das ein
+    /// `extend`: Arbeitsfläche erweitern über NVAI-opens `outpaint`. Ohne eigene Wahl nimmt das ein
     /// Bearbeitungsmodell (features.outpaint == "reference"), denn Maskenmodelle ließen an der alten
     /// Bildkante eine harte Naht (gemessen 23.10.2026).
     public static func chooseModel(mode: String, wanted: String?, active: String?, models: [JSONValue],
@@ -151,24 +151,24 @@ public enum Planning {
             let reason = ["mask": t("mit Masken arbeiten.", "work with masks."),
                           "outpaint": t("Bilder erweitern.", "extend images."),
                           "refine": t("Bilder überarbeiten.", "edit images.")][need ?? ""] ?? t("laufen.", "run.")
-            throw PlanError(code: "no_capable_model", message: t("Kein installiertes Bildmodell in NV-AI kann ",
-                                                                 "No image model installed in NV-AI can ") + reason)
+            throw PlanError(code: "no_capable_model", message: t("Kein installiertes Bildmodell in NVAI-open kann ",
+                                                                 "No image model installed in NVAI-open can ") + reason)
         }
-        // Stabil: Reihenfolge von NV-AI, schwache Workflows nach hinten.
+        // Stabil: Reihenfolge von NVAI-open, schwache Workflows nach hinten.
         let pick = candidates.filter { !isWeak($0) }.first ?? candidates[0]
-        var code = "no_active_model", reason = t("In NV-AI ist kein Bildmodell aktiv", "No image model is active in NV-AI")
+        var code = "no_active_model", reason = t("In NVAI-open ist kein Bildmodell aktiv", "No image model is active in NVAI-open")
         if wantedID != nil {
             code = "model_unavailable"
-            reason = t("Das gewählte Modell ist in NV-AI nicht verfügbar", "The chosen model is not available in NV-AI")
+            reason = t("Das gewählte Modell ist in NVAI-open nicht verfügbar", "The chosen model is not available in NVAI-open")
         } else if chosen != nil {
             code = "active_model_incapable"
-            reason = t("Das in NV-AI aktive Modell kann \(what)", "The model active in NV-AI does not support \(what)")
+            reason = t("Das in NVAI-open aktive Modell kann \(what)", "The model active in NVAI-open does not support \(what)")
         }
         let name = pick["name"]?.stringValue ?? ""
         return (pick, PlanWarning(code: code, message: t("\(reason) – verwendet wird „\(name)“.", "\(reason) – using \"\(name)\".")))
     }
 
-    /// Wie NV-AI den Auftrag rechnet.
+    /// Wie NVAI-open den Auftrag rechnet.
     public static func techniqueFor(mode: String, model: JSONValue, hasMask: Bool, masksSupported: Bool) -> String {
         if mode == "generate" { return "txt2img" }
         if mode == "fill" { return "inpaint" }
@@ -218,7 +218,7 @@ public enum Planning {
         return steps
     }
 
-    /// Für NV-AIs `outpaint`: deckender Teil des Ausschnitts (Box im Ausschnitt), Größe des
+    /// Für NVAI-opens `outpaint`: deckender Teil des Ausschnitts (Box im Ausschnitt), Größe des
     /// hochzuladenden Bildes und [links, oben, rechts, unten], schon auf die Arbeitsgröße skaliert.
     public static func outpaintEdges(_ context: RGBAImage, working: (Int, Int)) -> (box: Rect, size: (Int, Int), edges: [Int])? {
         var x0 = context.width, y0 = context.height, x1 = 0, y1 = 0
@@ -250,7 +250,7 @@ public enum Planning {
         let f = features(model)
         let workflow = model["workflow"]?.stringValue
         let prompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        // „outpaint“: Erweitern über NV-AIs outpaint-Feld; Rand, Maske und denoise setzt der Server.
+        // „outpaint“: Erweitern über NVAI-opens outpaint-Feld; Rand, Maske und denoise setzt der Server.
         let technique = outpaint && mode == "fill" ? "outpaint"
             : techniqueFor(mode: mode, model: model, hasMask: hasMask, masksSupported: masksSupported)
         var warnings: [PlanWarning] = []
@@ -336,7 +336,7 @@ public enum Planning {
                     maskBlur: sendMask ? blur : 0.0, warnings: warnings)
     }
 
-    /// Name der eingefügten Ebene, etwa „NV-AI Fill: a red barn (2)“ (Deutsch: „NV-AI Füllen: …“).
+    /// Name der eingefügten Ebene, etwa „NVAI-open Fill: a red barn (2)“ (Deutsch: „NVAI-open Füllen: …“).
     public static func layerName(mode: String, prompt: String, k: Int, n: Int) -> String {
         var text = prompt.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         let scalars = Array(text.unicodeScalars)
@@ -345,7 +345,7 @@ public enum Planning {
             while cut.last?.isWhitespace == true { cut.removeLast() }
             text = cut + "…"
         }
-        var name = "NV-AI \(modeLabel(mode))" + (text.isEmpty ? "" : ": \(text)")
+        var name = "NVAI-open \(modeLabel(mode))" + (text.isEmpty ? "" : ": \(text)")
         if n > 1 { name += " (\(k + 1))" }
         return name
     }

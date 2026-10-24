@@ -9,15 +9,15 @@ public enum NVAIError: Error, LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .unavailable(let url): return t("NV-AI ist nicht erreichbar (\(url)).", "NV-AI is not reachable (\(url)).")
-        case .http(let status, let detail): return t("NV-AI meldet \(status): \(detail)", "NV-AI reports \(status): \(detail)")
-        case .invalidResponse(let m): return t("Unerwartete Antwort von NV-AI: \(m)", "Unexpected answer from NV-AI: \(m)")
+        case .unavailable(let url): return t("NVAI-open ist nicht erreichbar (\(url)).", "NVAI-open is not reachable (\(url)).")
+        case .http(let status, let detail): return t("NVAI-open meldet \(status): \(detail)", "NVAI-open reports \(status): \(detail)")
+        case .invalidResponse(let m): return t("Unerwartete Antwort von NVAI-open: \(m)", "Unexpected answer from NVAI-open: \(m)")
         case .incompatible(let m): return m
         }
     }
 }
 
-/// Antwort von `GET /api/version` (ab NV-AI 0.2.0).
+/// Antwort von `GET /api/version` (ab NVAI-open 0.2.0).
 public struct NVAIVersion: Equatable, Sendable {
     public var version: String
     /// Vertragsversion; steigt nur bei brechenden Änderungen.
@@ -41,7 +41,7 @@ public struct NVAIVersion: Equatable, Sendable {
     }
 }
 
-/// Client für die REST-API von NV-AI (der Vertrag zwischen Windows-Server und Mac-App).
+/// Client für die REST-API von NVAI-open (der Vertrag zwischen Windows-Server und Mac-App).
 ///
 /// Basis-URL und Token sind frei wählbar (etwa über Tailscale); der Token geht als Header
 /// `X-NVAI-Token` mit. Vertrag: contract/nvai-openapi.json; siehe docs/mac-port.md, Abschnitt 7.
@@ -62,7 +62,7 @@ public final class NVAIClient: @unchecked Sendable {
         self.session = session
     }
 
-    /// Läuft NV-AI auf diesem Rechner? Nur dann darf eine App es selbst starten.
+    /// Läuft NVAI-open auf diesem Rechner? Nur dann darf eine App es selbst starten.
     public var isLocal: Bool {
         ["127.0.0.1", "localhost", "::1"].contains((baseURL.host ?? "").lowercased())
     }
@@ -76,7 +76,7 @@ public final class NVAIClient: @unchecked Sendable {
         var req = URLRequest(url: components.url!, timeoutInterval: timeout)
         req.httpMethod = method
         if let token { req.setValue(token, forHTTPHeaderField: "X-NVAI-Token") }
-        // NV-AI liefert Modelltexte und Fehlermeldungen in dieser Sprache (ohne Angabe Englisch).
+        // NVAI-open liefert Modelltexte und Fehlermeldungen in dieser Sprache (ohne Angabe Englisch).
         req.setValue(Localization.language, forHTTPHeaderField: "Accept-Language")
         if let json {
             req.httpBody = try json.serialized()
@@ -134,25 +134,25 @@ public final class NVAIClient: @unchecked Sendable {
     public func checkCompatible() async throws -> NVAIVersion? {
         guard let info = try await version() else { return nil } // vor 0.2.0: wie bisher nutzbar
         guard info.api == Self.apiVersion else {
-            throw NVAIError.incompatible(t("NV-AI \(info.version) spricht API-Version \(info.api), diese App Version "
-                                            + "\(Self.apiVersion). Bitte App oder NV-AI aktualisieren.",
-                                           "NV-AI \(info.version) speaks API version \(info.api), this app version "
-                                            + "\(Self.apiVersion). Please update the app or NV-AI."))
+            throw NVAIError.incompatible(t("NVAI-open \(info.version) spricht API-Version \(info.api), diese App Version "
+                                            + "\(Self.apiVersion). Bitte App oder NVAI-open aktualisieren.",
+                                           "NVAI-open \(info.version) speaks API version \(info.api), this app version "
+                                            + "\(Self.apiVersion). Please update the app or NVAI-open."))
         }
         guard info.authorized else {
-            if info.auth == "local" { // ohne Token bedient NV-AI nur den eigenen Rechner (403)
-                throw NVAIError.incompatible(t("NV-AI nimmt nur Anfragen vom eigenen Rechner an. Für den Zugriff von hier "
-                                                + "NV-AI dort mit „scripts\\start.ps1 -Lan“ starten und dessen Token (data\\api_token) eintragen.",
-                                               "NV-AI only accepts requests from its own computer. To use it from here, start "
-                                                + "NV-AI there with \"scripts\\start.ps1 -Lan\" and enter its token (data\\api_token)."))
+            if info.auth == "local" { // ohne Token bedient NVAI-open nur den eigenen Rechner (403)
+                throw NVAIError.incompatible(t("NVAI-open nimmt nur Anfragen vom eigenen Rechner an. Für den Zugriff von hier "
+                                                + "NVAI-open dort mit „scripts\\start.ps1 -Lan“ starten und dessen Token (data\\api_token) eintragen.",
+                                               "NVAI-open only accepts requests from its own computer. To use it from here, start "
+                                                + "NVAI-open there with \"scripts\\start.ps1 -Lan\" and enter its token (data\\api_token)."))
             }
-            throw NVAIError.incompatible(t("NV-AI lehnt den Zugriff ab: Token fehlt oder ist falsch.",
-                                           "NV-AI refuses access: the token is missing or wrong."))
+            throw NVAIError.incompatible(t("NVAI-open lehnt den Zugriff ab: Token fehlt oder ist falsch.",
+                                           "NVAI-open refuses access: the token is missing or wrong."))
         }
         return info
     }
 
-    /// Gemerkte Versions- und Maskenangaben verwerfen (nach Neustart von NV-AI).
+    /// Gemerkte Versions- und Maskenangaben verwerfen (nach Neustart von NVAI-open).
     public func forget() {
         lock.withLock { versionInfo = nil; maskSupport = nil }
     }
@@ -169,9 +169,9 @@ public final class NVAIClient: @unchecked Sendable {
         return ok
     }
 
-    /// Kennt der Server „Prompt ausbauen“ (`POST /api/prompt/expand`, NV-AI ab 0.4 unter Windows,
-    /// NV-AI für Mac ab 0.4)? Steht in `/api/version` unter `features`.
-    /// Kennt NV-AI `outpaint` (Windows ab 0.5.4, Mac ab 0.4.3)? Dann legt der Server Rand und Maske selbst an.
+    /// Kennt der Server „Prompt ausbauen“ (`POST /api/prompt/expand`, NVAI-open ab 0.4 unter Windows,
+    /// NVAI-open für Mac ab 0.4)? Steht in `/api/version` unter `features`.
+    /// Kennt NVAI-open `outpaint` (Windows ab 0.5.4, Mac ab 0.4.3)? Dann legt der Server Rand und Maske selbst an.
     public func supportsOutpaint() async throws -> Bool {
         try await version()?.features.contains("outpaint") ?? false
     }
@@ -190,7 +190,7 @@ public final class NVAIClient: @unchecked Sendable {
         return (text, r["seconds"]?.doubleValue ?? 0)
     }
 
-    /// Ein laufender oder wartender Modell-Download von NV-AI.
+    /// Ein laufender oder wartender Modell-Download von NVAI-open.
     public struct Download: Equatable, Sendable {
         public var job: String
         public var name: String
@@ -213,8 +213,8 @@ public final class NVAIClient: @unchecked Sendable {
         }
     }
 
-    /// Einen Download abbrechen (ab NV-AI 0.5.2 bzw. Mac 0.4.2: `POST /api/jobs/{id}/cancel`).
-    /// Ältere NV-AI unter Windows kennen nur „alle Downloads abbrechen“.
+    /// Einen Download abbrechen (ab NVAI-open 0.5.2 bzw. Mac 0.4.2: `POST /api/jobs/{id}/cancel`).
+    /// Ältere NVAI-open unter Windows kennen nur „alle Downloads abbrechen“.
     public func cancelDownload(_ jobID: String) async throws {
         if try await version()?.features.contains("cancel_job") == true {
             _ = try await request("POST", "/api/jobs/\(jobID)/cancel")
@@ -264,7 +264,7 @@ public final class NVAIClient: @unchecked Sendable {
 
     public func deleteAsset(_ id: String) async throws { _ = try await request("DELETE", "/api/assets/\(id)") }
 
-    /// Nur den eigenen Auftrag stoppen – NV-AI wird womöglich parallel anderweitig benutzt.
+    /// Nur den eigenen Auftrag stoppen – NVAI-open wird womöglich parallel anderweitig benutzt.
     public func cancel(jobID: String) async throws {
         let job = try await job(jobID)
         switch job["status"]?.stringValue {

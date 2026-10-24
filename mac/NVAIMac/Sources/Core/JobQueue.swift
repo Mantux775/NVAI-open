@@ -1,7 +1,7 @@
 import Foundation
 import CoreGraphics
 
-/// Ein Auftrag – Felder wie `Job` im NV-AI-Vertrag.
+/// Ein Auftrag – Felder wie `Job` im NVAI-open-Vertrag.
 struct JobRecord: Sendable, Identifiable {
     var id: String
     var kind: String                 // txt2img | img2img | download
@@ -50,7 +50,7 @@ struct JobRecord: Sendable, Identifiable {
     }
 }
 
-/// Arbeitet Aufträge nacheinander ab – ein Modell, ein Rechenwerk, wie NV-AI unter Windows.
+/// Arbeitet Aufträge nacheinander ab – ein Modell, ein Rechenwerk, wie NVAI-open unter Windows.
 actor JobQueue {
     static let shared = JobQueue()
 

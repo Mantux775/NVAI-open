@@ -4,7 +4,7 @@ import PhotoCraftKit
 /// Verbindungseinstellungen – wie `settings.json` der Windows-Brücke, hier im Datenordner
 /// `~/Library/Application Support/ArtCraft-LocalAI` (nur für den Nutzer lesbar, enthält den Token).
 struct AppSettings: Codable, Equatable {
-    /// Im Normalbetrieb läuft NV-AI auf demselben Mac (gleicher REST-Vertrag, API 1). Eine NV-AI auf
+    /// Im Normalbetrieb läuft NVAI-open auf demselben Mac (gleicher REST-Vertrag, API 1). Eine NVAI-open auf
     /// einem anderen Rechner geht auch – dann mit deren Adresse und Token.
     var nvaiURL = "http://127.0.0.1:8100"
     var nvaiToken = ""
@@ -50,7 +50,7 @@ struct AppSettings: Codable, Equatable {
 
     var port: UInt16 { UInt16(clamping: photocraftPort) }
 
-    /// NV-AI auf diesem Mac?
+    /// NVAI-open auf diesem Mac?
     var isLocal: Bool { ["127.0.0.1", "localhost", "::1"].contains(baseURL?.host?.lowercased() ?? "") }
 }
 

@@ -1,4 +1,4 @@
-"""Add-on-Ordner für das NV-AI-Setup und das Windows-Symbol."""
+"""Add-on-Ordner für das NVAI-open-Setup und das Windows-Symbol."""
 from __future__ import annotations
 
 import configparser

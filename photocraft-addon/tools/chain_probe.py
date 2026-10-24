@@ -95,17 +95,17 @@ print(json.dumps(results[-1]))
 
 # --- Erfassen
 target = session()["active"]
-dup = ex("image.duplicate mergedOnly", "image.duplicate", {"name": "NV-AI Arbeitskopie", "mergedOnly": True})
+dup = ex("image.duplicate mergedOnly", "image.duplicate", {"name": "NVAI-open Arbeitskopie", "mergedOnly": True})
 results.append({"step": "nach duplicate", "result": session(), "dup_has_selection": doc()["hasSelection"]})
 print(json.dumps(results[-1], ensure_ascii=False))
-ex("select.saveSelection", "select.saveSelection", {"name": "NV-AI Auswahl"})
+ex("select.saveSelection", "select.saveSelection", {"name": "NVAI-open Auswahl"})
 ex("image.crop", "image.crop", {"x": 300, "y": 180, "width": 520, "height": 360})
 d = doc()
 results.append({"step": "nach crop", "size": [d["width"], d["height"]], "hasSelection": d["hasSelection"],
                 "alpha": [c["name"] for c in d["channels"]["alpha"]]})
 print(json.dumps(results[-1], ensure_ascii=False))
 step("app.save context", "app.save", {"path": JOB + "/context.png"})
-mask_doc = ex("channel.duplicate new", "channel.duplicate", {"channel": "NV-AI Auswahl", "document": "new"})
+mask_doc = ex("channel.duplicate new", "channel.duplicate", {"channel": "NVAI-open Auswahl", "document": "new"})
 results.append({"step": "nach channel.duplicate", "result": session()})
 print(json.dumps(results[-1], ensure_ascii=False))
 step("app.save mask", "app.save", {"path": JOB + "/mask.png"})
@@ -137,7 +137,7 @@ def place(variant, old=None):
     temp = session()["active"]
     lid = doc()["layers"][0]["id"]
     copied = ex("layer.copyToDocument", "layer.copyToDocument",
-                {"document": target, "source": temp, "layers": [lid], "offset": [300, 180], "name": "NV-AI " + variant})
+                {"document": target, "source": temp, "layers": [lid], "offset": [300, 180], "name": "NVAI-open " + variant})
     ex("file.close temp", "file.close", {"document": temp})
     if session()["active"] != target:
         call("ui.menu.invoke", {"id": "window.document.%d" % target})

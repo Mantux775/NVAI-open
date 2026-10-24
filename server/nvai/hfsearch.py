@@ -132,12 +132,12 @@ async def search(query: str, limit: int = 20, lora_only: bool = False) -> list[d
             note = (t(f"LoRA, laut Repo für {', '.join(targets)} – vor dem Laden prüfen.",
                       f"LoRA, according to the repo for {', '.join(targets)} – check before loading.")
                     if targets else
-                    t("LoRA – Datei prüfen, dann zeigt NV-AI, zu welchem Modell sie passt.",
-                      "LoRA – check a file and NV-AI shows which model it fits."))
+                    t("LoRA – Datei prüfen, dann zeigt NVAI-open, zu welchem Modell sie passt.",
+                      "LoRA – check a file and NVAI-open shows which model it fits."))
         elif repo_kind == "other":
             if "model_index.json" in names:
-                note = t("Nur im Diffusers-Format – NV-AI lädt Einzeldatei-Checkpoints.",
-                         "Diffusers format only – NV-AI loads single-file checkpoints.")
+                note = t("Nur im Diffusers-Format – NVAI-open lädt Einzeldatei-Checkpoints.",
+                         "Diffusers format only – NVAI-open loads single-file checkpoints.")
             elif any(n.lower().endswith(".gguf") for n in names):
                 note = t("Nur GGUF – das bräuchte eine ComfyUI-Erweiterung.",
                          "GGUF only – that would need a ComfyUI extension.")
@@ -327,9 +327,9 @@ async def inspect(repo: str, file: str) -> dict[str, Any]:
             raw, _ = await _read(c, url, 8, 8 + n - 1)
     except PermissionError:
         return {**base, "verdict": t("Gesperrt (gated): Lizenz auf Hugging Face akzeptieren "
-                                      "und den Token in NV-AI hinterlegen.",
+                                      "und den Token in NVAI-open hinterlegen.",
                                       "Gated: accept the license on Hugging Face "
-                                      "and enter your token in NV-AI.")}
+                                      "and enter your token in NVAI-open.")}
     except (httpx.HTTPError, struct.error) as e:
         return {**base, "verdict": t(f"Prüfung fehlgeschlagen: {e}", f"Check failed: {e}")}
     try:

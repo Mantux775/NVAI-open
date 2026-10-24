@@ -1,6 +1,6 @@
 #!/bin/zsh
-# Builds "NV-AI for PhotoCraft.app" (release, hardened runtime) and installs it – default: Desktop.
-# On German systems the Finder shows "NV-AI für PhotoCraft" (de.lproj/InfoPlist.strings).
+# Builds "NVAI-open for PhotoCraft.app" (release, hardened runtime) and installs it – default: Desktop.
+# On German systems the Finder shows "NVAI-open für PhotoCraft" (de.lproj/InfoPlist.strings).
 #   ./build-app.sh [--sign <identity>] [target folder]
 #   SIGN_IDENTITY=<identity> ./build-app.sh [target folder]
 # Without an identity the app is signed ad hoc (development builds). With an identity such as
@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "${0:A:h}"
 
-APP="NV-AI for PhotoCraft"
+APP="NVAI-open for PhotoCraft"
 IDENTITY="${SIGN_IDENTITY:--}"
 while (( $# )); do
   case "$1" in

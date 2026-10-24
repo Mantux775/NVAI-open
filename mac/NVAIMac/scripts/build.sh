@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds NV-AI.app on the Mac (signed ad hoc, for tests).
+# Builds NVAI-open.app on the Mac (signed ad hoc, for tests).
 #
 #   ssh <mac> 'zsh ~/NVAIMac/scripts/build.sh'
 #
@@ -17,7 +17,7 @@ xcodebuild -project NVAIMac.xcodeproj -scheme NVAIMac -configuration Release \
   CODE_SIGN_IDENTITY=- \
   build > $ROOT/build.log 2>&1 || true
 grep -E "error:|warning: .*NVAIMac/Sources|BUILD (SUCCEEDED|FAILED)" $ROOT/build.log | grep -v "SourcePackages" | tail -60
-app=$ROOT/dd/Build/Products/Release/NV-AI.app
+app=$ROOT/dd/Build/Products/Release/NVAI-open.app
 if [ -d "$app" ] && grep -q "BUILD SUCCEEDED" $ROOT/build.log; then
   # Hand Package.resolved back for the repository.
   cp NVAIMac.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved $ROOT/Package.resolved 2>/dev/null || true

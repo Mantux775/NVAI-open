@@ -1,4 +1,4 @@
-"""Was das Panel über PhotoCraft und NV-AI erfährt: installiert, Version, startbar, startet gerade."""
+"""Was das Panel über PhotoCraft und NVAI-open erfährt: installiert, Version, startbar, startet gerade."""
 from __future__ import annotations
 
 import time
@@ -20,11 +20,11 @@ def _fail(exc):
 
 @pytest.fixture
 def client(monkeypatch):
-    """Weder PhotoCraft noch NV-AI laufen; nichts aus vorherigen Abfragen zwischengespeichert."""
+    """Weder PhotoCraft noch NVAI-open laufen; nichts aus vorherigen Abfragen zwischengespeichert."""
     for key in ("pc", "nv", "pc-install", "pids", "models"):
         server.cache.drop(key)
     monkeypatch.setattr(server.pc, "inspect", _fail(NotConnected("PhotoCraft läuft nicht.")))
-    monkeypatch.setattr(server.nv, "health", _fail(NVAIError("NV-AI ist nicht erreichbar.")))
+    monkeypatch.setattr(server.nv, "health", _fail(NVAIError("NVAI-open ist nicht erreichbar.")))
     monkeypatch.setattr(launcher, "photocraft_pids", lambda: [])
     monkeypatch.setattr(launcher, "nvai_running", lambda: False)
     monkeypatch.setattr(launcher, "_nvai_started_at", None)
@@ -81,4 +81,4 @@ def test_expand_prompt_needs_a_current_nvai(client, monkeypatch):
     monkeypatch.setattr(server.nv, "check_compatible", lambda: {"api": 1})
     monkeypatch.setattr(server.nv, "supports_expand", lambda: False)
     answer = client.post("/api/expand", json={"prompt": "a blacksmith"})
-    assert answer.status_code == 409 and "update NV-AI" in answer.json()["detail"]
+    assert answer.status_code == 409 and "update NVAI-open" in answer.json()["detail"]

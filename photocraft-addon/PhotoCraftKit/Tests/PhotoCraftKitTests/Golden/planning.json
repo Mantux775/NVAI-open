@@ -23282,7 +23282,7 @@
     "n": 1,
     "lang": "en"
    },
-   "out": "NV-AI Fill"
+   "out": "NVAI-open Fill"
   },
   {
    "in": {
@@ -23292,7 +23292,7 @@
     "n": 2,
     "lang": "en"
    },
-   "out": "NV-AI Generate: a a a a a a a a a a a a a a a a a a a a a a a a… (2)"
+   "out": "NVAI-open Generate: a a a a a a a a a a a a a a a a a a a a a a a a… (2)"
   },
   {
    "in": {
@@ -23302,7 +23302,7 @@
     "n": 1,
     "lang": "en"
    },
-   "out": "NV-AI Refine: make it blue"
+   "out": "NVAI-open Refine: make it blue"
   },
   {
    "in": {
@@ -23312,7 +23312,7 @@
     "n": 4,
     "lang": "en"
    },
-   "out": "NV-AI Fill: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (3)"
+   "out": "NVAI-open Fill: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (3)"
   },
   {
    "in": {
@@ -23322,7 +23322,7 @@
     "n": 1,
     "lang": "en"
    },
-   "out": "NV-AI Fill: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
+   "out": "NVAI-open Fill: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
   },
   {
    "in": {
@@ -23332,7 +23332,7 @@
     "n": 1,
     "lang": "de"
    },
-   "out": "NV-AI Füllen"
+   "out": "NVAI-open Füllen"
   },
   {
    "in": {
@@ -23342,7 +23342,7 @@
     "n": 2,
     "lang": "de"
    },
-   "out": "NV-AI Generieren: a a a a a a a a a a a a a a a a a a a a a a a a… (2)"
+   "out": "NVAI-open Generieren: a a a a a a a a a a a a a a a a a a a a a a a a… (2)"
   },
   {
    "in": {
@@ -23352,7 +23352,7 @@
     "n": 1,
     "lang": "de"
    },
-   "out": "NV-AI Überarbeiten: make it blue"
+   "out": "NVAI-open Überarbeiten: make it blue"
   },
   {
    "in": {
@@ -23362,7 +23362,7 @@
     "n": 4,
     "lang": "de"
    },
-   "out": "NV-AI Füllen: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (3)"
+   "out": "NVAI-open Füllen: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (3)"
   },
   {
    "in": {
@@ -23372,7 +23372,7 @@
     "n": 1,
     "lang": "de"
    },
-   "out": "NV-AI Füllen: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
+   "out": "NVAI-open Füllen: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
   }
  ]
 }

@@ -413,7 +413,7 @@ textarea:disabled, input:disabled { opacity: 0.55; cursor: not-allowed; }
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 5px; border: 2px solid var(--bg); }
 
-/* Laufende NV-AI-Downloads mit Abbrechen */
+/* Laufende NVAI-open-Downloads mit Abbrechen */
 .nv-downloads { display: flex; flex-direction: column; gap: 4px; }
 .nv-downloads .dl-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .nv-downloads .dl-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }

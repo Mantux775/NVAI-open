@@ -159,8 +159,8 @@ def detect(header: dict[str, Any]) -> tuple[str | None, str]:
         dim = _in_dim(header, r"transformer_blocks_\d+_attn_")
         if dim in (3072, None) and not has(r"single_transformer_blocks"):
             return "qwenimage", t("Qwen-Image-LoRA", "Qwen-Image LoRA")
-    return None, t("LoRA für eine Architektur, die NV-AI nicht kennt.",
-                   "LoRA for an architecture NV-AI does not know.")
+    return None, t("LoRA für eine Architektur, die NVAI-open nicht kennt.",
+                   "LoRA for an architecture NVAI-open does not know.")
 
 
 def trigger_from_metadata(header: dict[str, Any]) -> str:

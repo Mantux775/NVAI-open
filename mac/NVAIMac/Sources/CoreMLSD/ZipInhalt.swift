@@ -1,4 +1,4 @@
-// Kopiert aus ios/NVAILocal (unverändert), für NV-AI für Mac.
+// Kopiert aus ios/NVAILocal (unverändert), für NVAI-open für Mac.
 import Foundation
 
 /// Liest das Inhaltsverzeichnis eines ZIP-Archivs auf dem Server, ohne es zu laden.

@@ -23,9 +23,9 @@ struct ModelsView: View {
                 }
                 .padding(.top, 10)
                 Text(t("Kleinere Modelle mit festem Format, laufen auch auf 8 GB. Weitere fertig konvertierte "
-                       + "Pipelines findet die Suche auf Hugging Face; NV-AI prüft sie vor dem Laden.",
+                       + "Pipelines findet die Suche auf Hugging Face; NVAI-open prüft sie vor dem Laden.",
                        "Smaller models with a fixed size that also run on 8 GB. The search finds more converted "
-                       + "pipelines on Hugging Face; NV-AI checks them before downloading."))
+                       + "pipelines on Hugging Face; NVAI-open checks them before downloading."))
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(coremlRows) { row in ModelCard(row: row) }
             }

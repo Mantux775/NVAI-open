@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds the tester DMG: NV-AI.app (+ the optional PhotoCraft add-on app), Getting Started,
+# Builds the tester DMG: NVAI-open.app (+ the optional PhotoCraft add-on app), Getting Started,
 # Erste Schritte and the Third-Party Notices.
 #
 #   zsh scripts/release.sh                                   # without certificate: ad hoc
@@ -59,7 +59,7 @@ else
   echo "         and not notarized: for internal tests only, not for testers."
 fi
 
-# 1) NV-AI.app
+# 1) NVAI-open.app
 cd $ROOT
 SIGN=${IDENTITY:--}
 # A timestamp needs a real identity; ad hoc has none.
@@ -79,10 +79,10 @@ xcodebuild -project NVAIMac.xcodeproj -scheme NVAIMac -configuration Release \
 # "|| true": under set -e and pipefail a grep without matches ended the script silently,
 # before the message; that is how an errSecInternalComponent went unnoticed on 2026-10-19.
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
-  $ROOT/dd/Build/Products/Release/NV-AI.app/Contents/Info.plist)
+  $ROOT/dd/Build/Products/Release/NVAI-open.app/Contents/Info.plist)
 
 rm -rf $OUT && mkdir -p $OUT/dmg
-ditto $ROOT/dd/Build/Products/Release/NV-AI.app "$OUT/dmg/NV-AI.app"
+ditto $ROOT/dd/Build/Products/Release/NVAI-open.app "$OUT/dmg/NVAI-open.app"
 
 # 2) Optional: the PhotoCraft add-on app (its own build script, same identity)
 if [[ -n "$ADDON_DIR" && -x "$ADDON_DIR/build-app.sh" ]]; then
@@ -133,10 +133,10 @@ fi
 
 # 4) Texts: Getting Started (English), Erste Schritte (German), Third-Party Notices
 cat > "$OUT/dmg/Getting Started.txt" <<'TXT'
-NV-AI for Mac: Getting Started
+NVAI-open for Mac: Getting Started
 
-1. Drag "NV-AI" (and the PhotoCraft add-on app, if included) into the Applications folder.
-2. Open NV-AI. Under "Models", download FLUX.2 Klein (about 9 to 11 GB, once).
+1. Drag "NVAI-open" (and the PhotoCraft add-on app, if included) into the Applications folder.
+2. Open NVAI-open. Under "Models", download FLUX.2 Klein (about 9 to 11 GB, once).
    With 24 GB of memory or more pick the 8-bit version, otherwise the 4-bit version.
 3. Under "Generate", enter a prompt. The first image takes longer because the model loads.
 4. Only a few words? Click "✨ Expand prompt": the text encoder of FLUX.2 Klein writes a full
@@ -147,21 +147,21 @@ Language: follows the system; switch under Settings > Language (the menu bar fol
 PhotoCraft add-on
 - Needs PhotoCraft 0.10.0 or later:
   https://github.com/storytold/photocraft/releases/latest
-- The add-on starts NV-AI when needed; both run locally only.
+- The add-on starts NVAI-open when needed; both run locally only.
 
 Feedback
-- In NV-AI under Settings > "Report a problem", describe what happened and click
-  "Report on GitHub". NV-AI saves an anonymized report (no names, no prompts, no images)
+- In NVAI-open under Settings > "Report a problem", describe what happened and click
+  "Report on GitHub". NVAI-open saves an anonymized report (no names, no prompts, no images)
   and opens a prefilled issue; drag the saved file into it.
 
-Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NV-AI itself: MIT License.
-Third-party components: see "Third-Party Notices.txt" or NV-AI > Licenses.
+Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NVAI-open itself: MIT License.
+Third-party components: see "Third-Party Notices.txt" or NVAI-open > Licenses.
 TXT
 cat > "$OUT/dmg/Erste Schritte.txt" <<'TXT'
-NV-AI für Mac: Erste Schritte
+NVAI-open für Mac: Erste Schritte
 
-1. „NV-AI“ (und, falls enthalten, „NV-AI für PhotoCraft“) in den Ordner „Programme“ ziehen.
-2. NV-AI öffnen. Unter „Modelle“ FLUX.2 Klein laden (rund 9 bis 11 GB, einmalig).
+1. „NVAI-open“ (und, falls enthalten, „NVAI-open für PhotoCraft“) in den Ordner „Programme“ ziehen.
+2. NVAI-open öffnen. Unter „Modelle“ FLUX.2 Klein laden (rund 9 bis 11 GB, einmalig).
    Ab 24 GB Arbeitsspeicher die 8-Bit-Fassung wählen, darunter die 4-Bit-Fassung.
 3. Unter „Generieren“ einen Prompt eingeben. Das erste Bild dauert länger, weil das
    Modell geladen wird.
@@ -174,20 +174,20 @@ Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menülei
 PhotoCraft-Add-on
 - Braucht PhotoCraft ab Version 0.10.0:
   https://github.com/storytold/photocraft/releases/latest
-- „NV-AI für PhotoCraft“ startet NV-AI bei Bedarf selbst; beide laufen nur lokal.
+- „NVAI-open für PhotoCraft“ startet NVAI-open bei Bedarf selbst; beide laufen nur lokal.
 
 Rückmeldung
-- In NV-AI unter „Einstellungen“ → „Problem melden“ beschreiben, was passiert ist, und
-  „Auf GitHub melden“ klicken. NV-AI speichert einen anonymisierten Bericht (keine Namen,
+- In NVAI-open unter „Einstellungen“ → „Problem melden“ beschreiben, was passiert ist, und
+  „Auf GitHub melden“ klicken. NVAI-open speichert einen anonymisierten Bericht (keine Namen,
   keine Prompts, keine Bilder) und öffnet ein vorausgefülltes Issue; die Datei dort hineinziehen.
 
-Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NV-AI selbst: MIT-Lizenz.
-Komponenten von Dritten: siehe „Third-Party Notices.txt“ oder NV-AI > Lizenzen.
+Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NVAI-open selbst: MIT-Lizenz.
+Komponenten von Dritten: siehe „Third-Party Notices.txt“ oder NVAI-open > Lizenzen.
 TXT
 cp "$ROOT/Resources/Third-Party-Notices.txt" "$OUT/dmg/Third-Party Notices.txt"
 ln -s /Applications "$OUT/dmg/Applications"
-DMG="$OUT/NV-AI-$VERSION.dmg"
-hdiutil create -volname "NV-AI $VERSION" -srcfolder "$OUT/dmg" -ov -format UDZO "$DMG" >/dev/null
+DMG="$OUT/NVAI-open-$VERSION.dmg"
+hdiutil create -volname "NVAI-open $VERSION" -srcfolder "$OUT/dmg" -ov -format UDZO "$DMG" >/dev/null
 if [[ -n "$IDENTITY" ]]; then
   codesign --sign "$IDENTITY" --timestamp "$DMG"
   echo "Notarizing DMG …"

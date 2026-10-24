@@ -11,7 +11,7 @@ interface Props {
 
 /**
  * LoRAs von Civitai. Civitai nennt zu jeder Version das Basismodell; daraus wird die
- * LoRA-Basis (server: civitai.BASE_MODELS). Mit eigenem API-Schlüssel prüft NV-AI vor dem
+ * LoRA-Basis (server: civitai.BASE_MODELS). Mit eigenem API-Schlüssel prüft NVAI-open vor dem
  * Laden zusätzlich den Dateikopf wie bei Hugging Face — ohne Schlüssel lässt Civitai die
  * meisten Dateien gar nicht laden.
  */
@@ -137,7 +137,7 @@ export function CivitaiSearch({ catalog, onQueued }: Props) {
               <span className="muted small">{r.size_gb} GB</span>
               {!r.lora_base && (
                 <span className="warn-text small">
-                  {t('Für dieses Basismodell gibt es in NV-AI kein Modell.', 'NV-AI has no model for this base model.')}
+                  {t('Für dieses Basismodell gibt es in NVAI-open kein Modell.', 'NVAI-open has no model for this base model.')}
                 </span>
               )}
               {r.lora_base && c === undefined && (

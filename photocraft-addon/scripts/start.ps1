@@ -1,6 +1,6 @@
 ﻿<#
-  Starts NV-AI (if needed), PhotoCraft with its control channel, and the panel -
-  the same as the shortcut "NV-AI for PhotoCraft".
+  Starts NVAI-open (if needed), PhotoCraft with its control channel, and the panel -
+  the same as the shortcut "NVAI-open for PhotoCraft".
 
   -Server   start only the bridge (panel at http://127.0.0.1:8120 in the browser)
 #>

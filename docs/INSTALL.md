@@ -1,8 +1,8 @@
-# Installing NV-AI
+# Installing NVAI-open
 
 *Deutsch: [de/INSTALL.md](de/INSTALL.md)*
 
-NV-AI generates media locally on your own hardware:
+NVAI-open generates media locally on your own hardware:
 
 - **Windows:** images, audio, video and 3D meshes on your graphics card, with a web UI
   and an MCP server for Claude Code.
@@ -19,7 +19,7 @@ Both offer the same REST API on `http://127.0.0.1:8100`.
 
 ## Windows: install with the setup
 
-`NV-AI-Setup-<version>.exe` needs neither Python nor git. It brings its own copy of uv and uses
+`NVAI-open-Setup-<version>.exe` needs neither Python nor git. It brings its own copy of uv and uses
 it to install Python, ComfyUI and PyTorch in the tested package versions. It installs for the
 current user only and needs no administrator rights.
 
@@ -34,18 +34,18 @@ current user only and needs no administrator rights.
 | **Disk** | about 10 GB for the program, plus room for the models |
 
 The setup checks the graphics card and driver and warns if no NVIDIA card is found or the
-driver is too old. Without an NVIDIA card NV-AI can be installed, but it cannot generate
+driver is too old. Without an NVIDIA card NVAI-open can be installed, but it cannot generate
 anything.
 
 ### Experimental (since 0.5): AMD Radeon and several graphics cards
 
 - **AMD Radeon:** the setup detects a Radeon (and no NVIDIA card) and installs PyTorch with
   ROCm 7.2.1 from AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, both with
-  hashes). Needs AMD driver 26.2.2 or newer. 3D is skipped on AMD. "Repair NV-AI" runs the same
+  hashes). Needs AMD driver 26.2.2 or newer. 3D is skipped on AMD. "Repair NVAI-open" runs the same
   detection again; `install-runtime.ps1 -Gpu amd|nvidia` forces one side.
 - **Several NVIDIA cards:** under "Models" → "Graphics cards", choose a card for image models,
   language models and 3D. Since 0.5.1 also directly in the header: click a card and tick what it
-  should do. If the language models get their own card, NV-AI starts a second
+  should do. If the language models get their own card, NVAI-open starts a second
   ComfyUI for them (port 8189, logs in `comfyui-text.log`). The choice is stored in
   `gpus.json` in the data folder. Without a choice, or after "Distribute automatically",
   everything runs on the strongest card (since 0.5.6). Measurements with two cards are in
@@ -61,16 +61,16 @@ The setup is not code-signed, so Windows may show **"Windows protected your PC"*
 
 ### Installing
 
-1. Run `NV-AI-Setup-<version>.exe`.
+1. Run `NVAI-open-Setup-<version>.exe`.
 2. Choose the program folder (default `%LOCALAPPDATA%\Programs\NV-AI`).
 3. Choose the folders for data (images, settings, logs; default `%LOCALAPPDATA%\NV-AI`) and
-   for models (default `%LOCALAPPDATA%\NV-AI\models`). Each model is 5 to 30 GB, so a folder
+   for models (default `%LOCALAPPDATA%\NV-AI\models`). Each model is 5 to 40 GB, so a folder
    on a large drive makes sense. Both folders must be outside the program folder: uninstalling
    removes the program folder, and your models and images should survive that.
 4. Choose the installation type. **Full installation** adds the 3D component (TripoSG, which
-   turns images into 3D meshes; the model itself, 7.4 GB, is downloaded later in NV-AI) and,
+   turns images into 3D meshes; the model itself, 7.4 GB, is downloaded later in NVAI-open) and,
    if the setup includes it, the PhotoCraft add-on (see
-   [Optional: PhotoCraft add-on](#optional-photocraft-add-on)). **NV-AI only** covers images,
+   [Optional: PhotoCraft add-on](#optional-photocraft-add-on)). **NVAI-open only** covers images,
    audio and video. **Custom** lets you pick the components.
 5. After copying its files, the setup installs Python, ComfyUI and PyTorch (about 3 GB); with
    the 3D component it also sets up TripoSG's environment, which reuses the same PyTorch. A
@@ -78,22 +78,22 @@ The setup is not code-signed, so Windows may show **"Windows protected your PC"*
    to 20 minutes.
 
 If this last step fails, the setup shows the path of `install.log`. You can retry later with
-**Repair NV-AI** in the Start menu.
+**Repair NVAI-open** in the Start menu.
 
 ### First steps
 
-1. Open **NV-AI** from the Start menu. Your browser shows the web UI at
+1. Open **NVAI-open** from the Start menu. Your browser shows the web UI at
    `http://127.0.0.1:8100`.
-2. Under **Models**, download an image model. NV-AI marks models that suit your graphics card
+2. Under **Models**, download an image model. NVAI-open marks models that suit your graphics card
    as *recommended* (see [Models](#models)).
 3. Under **Generate**, enter a prompt. The first job after a start takes an extra 30 to 60
    seconds because the model is being loaded.
 
-**Quit NV-AI** in the Start menu shuts everything down and frees the graphics card. The Start
-menu also has **Repair NV-AI**, **Getting Started** and, with the add-on, **NV-AI for
+**Quit NVAI-open** in the Start menu shuts everything down and frees the graphics card. The Start
+menu also has **Repair NVAI-open**, **Getting Started** and, with the add-on, **NVAI-open for
 PhotoCraft**.
 
-To use NV-AI from Claude Code, see [CLAUDE_CODE.md](CLAUDE_CODE.md).
+To use NVAI-open from Claude Code, see [CLAUDE_CODE.md](CLAUDE_CODE.md).
 
 ### FLUX 3 Image Klein (Hugging Face access)
 
@@ -102,7 +102,7 @@ https://huggingface.co:
 
 1. Accept the license at https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy.
 2. Create a token with read access at https://huggingface.co/settings/tokens.
-3. Enter the token in NV-AI under **Models**.
+3. Enter the token in NVAI-open under **Models**.
 
 License: commercial use only below US$5 million annual revenue, and every image must be
 reviewed before it is published. Details in [MODELS.md](MODELS.md).
@@ -113,13 +113,13 @@ reviewed before it is published. Details in [MODELS.md](MODELS.md).
 in the web UI under **Models**, where each model is described with its size, VRAM requirement
 and license.
 
-- NV-AI detects the graphics card and marks suitable models as *recommended*: on RTX 50 cards
+- NVAI-open detects the graphics card and marks suitable models as *recommended*: on RTX 50 cards
   Qwen-Image-2512 and FLUX 3 Image Klein in NVFP4, on RTX 20/30/40 cards FLUX 3 Image Klein
   INT8 and Z-Image INT8.
 - Models that don't fit into the card's video memory are marked explicitly (*tight for this
   GPU* or *too large for this GPU*). A model that doesn't fit still runs, but has to be
   reloaded at every step and is therefore many times slower.
-- **Search Hugging Face** on the same page finds further models. NV-AI checks each file before
+- **Search Hugging Face** on the same page finds further models. NVAI-open checks each file before
   downloading it; SDXL and SD 1.5 checkpoints can be downloaded.
 - Each image and video model is labelled *uncensored*, *partly censored*, *censored* or
   *filtering unknown*, with the source in the tooltip (see [MODELS.md](MODELS.md)).
@@ -142,7 +142,7 @@ detail in [MODELS.md](MODELS.md).
 ### LoRAs (Hugging Face and Civitai)
 
 Since 0.5.3, "Models" → "Search models and LoRAs" also finds LoRAs: on Hugging Face with the
-"LoRAs" switch, on Civitai in its own box below. Before anything is downloaded, NV-AI reads only
+"LoRAs" switch, on Civitai in its own box below. Before anything is downloaded, NVAI-open reads only
 the file header and recognizes which model the LoRA fits: SDXL (Pony, Illustrious, NoobAI …),
 SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan (1.3B, 5B, 14B) and LTX-2/2.3. Tested on 79
 LoRAs from Hugging Face, all recognized correctly. LoRAs land in `loras` in the models folder.
@@ -150,10 +150,10 @@ LoRAs from Hugging Face, all recognized correctly. LoRAs land in `loras` in the 
 On the Generate page each matching LoRA appears under the selected image or video model: tick
 it, set the strength (0.6–1.0 is usual) and add its trigger words to the prompt with
 "+ trigger". Wan 2.2 A14B LoRAs usually come as a high-noise and a low-noise file: download both,
-NV-AI applies each one to its own expert. REST and MCP: `loras=[{"model_id": "…", "strength": 0.8}]`.
+NVAI-open applies each one to its own expert. REST and MCP: `loras=[{"model_id": "…", "strength": 0.8}]`.
 
 Civitai needs your own API key for almost every download (civitai.com → Settings → API Keys);
-it is stored in the data folder. Without a key the search works and NV-AI relies on Civitai's
+it is stored in the data folder. Without a key the search works and NVAI-open relies on Civitai's
 base-model label; with a key it checks the file header as on Hugging Face. Licenses and content
 of LoRAs are only stated on their pages — check them there before publishing anything.
 
@@ -174,13 +174,30 @@ on Wan 2.2 I2V A14B with steps 4 and cfg 1 took 90 s instead of 585 s (640 × 64
 comparable quality; only the camera push-in came out weaker. **LTX-2.3 Crisp Enhance** drew flame
 and stone sharper but changed the layout of the shot, and its page states no license.
 
+**Recommended LoRAs for LTX-2.5 (since 0.5.8).** On the Generate page, "Recommended LoRAs" under the
+video model lists them with buttons to download and activate, the suggested strength, the trigger
+and what each one is for. Tested on LTX-2.5 with the same prompt and seed (1280 × 704, 4 s; a LoRA
+added 3 to 15 s to the 77 s):
+
+| LoRA | Result on LTX-2.5 |
+|---|---|
+| Fantasy Anime, Fantasy Painterly | A clear anime or painted look. Recommended |
+| Paper Cut-Out | Hardly visible at strength 1.0, a flat paper cut-out look at 1.5 (now the suggested strength) |
+| Claymation | Only hinted at (a felt and miniature look), also at 1.4 |
+| Transition | Day to night between a start and an end image: hardly any difference from no LoRA |
+| Audio Reactive | LTX-2.5 alone already pulsed to the given sound; with the LoRA the brightness followed the loudness a little more closely and the picture got softer |
+| Cinemagraph, Slow Motion Control | Official LoRAs from Lightricks, not tested yet: their license has to be accepted on Hugging Face first |
+
+Most of these were trained for LTX-2.3; the style LoRAs by vrgamedevgirl84 (Crisp Enhance, Fantasy,
+Claymation, Paper Cut-Out, Cyberpunk) state no license.
+
 ### Storage locations
 
 "Models" → "Storage locations" (since 0.5.2) shows the data folder (history, images, logs) and
 the models folder (the large model files) with the free space. "Browse …" opens the Windows
-folder dialog; NV-AI checks that it can write there and saves the choice in
-`HKCU\Software\NV-AI`. "Restart NV-AI now" applies it. Existing files stay in the old folder: to
-take them along, quit NV-AI, move the contents into the new folder and start it again.
+folder dialog; NVAI-open checks that it can write there and saves the choice in
+`HKCU\Software\NV-AI`. "Restart NVAI-open now" applies it. Existing files stay in the old folder: to
+take them along, quit NVAI-open, move the contents into the new folder and start it again.
 
 ### Cancelling
 
@@ -192,7 +209,7 @@ including queued ones, or with "Stop" in the header. REST: `POST /api/jobs/{id}/
 ### Reporting a problem
 
 "Report a problem" at the top right of the web interface (since 0.5.1): describe in a sentence
-or two what happened, and NV-AI creates a report with a timestamp, system details (version,
+or two what happened, and NVAI-open creates a report with a timestamp, system details (version,
 Windows, graphics card and driver, installed models), the recent jobs and the ends of the logs.
 You see it before passing it on. It is anonymized: user and computer name, folder paths, e-mail,
 IP and MAC addresses and tokens are replaced; prompts and images are not included. "Download
@@ -210,7 +227,7 @@ If something goes wrong, these files help. They are in the data folder (default
 | `nvai-server.log` | server |
 | `comfyui.log` | generation (ComfyUI) |
 
-**Repair NV-AI** in the Start menu runs the installation of Python, ComfyUI and PyTorch again.
+**Repair NVAI-open** in the Start menu runs the installation of Python, ComfyUI and PyTorch again.
 
 The setup stores its settings in the registry under `HKCU\Software\NV-AI`: program, data and
 model folders and the port (8100). If another program uses port 8100, enter a different `Port`
@@ -218,9 +235,12 @@ there.
 
 ### Updating and uninstalling
 
-- **Update:** run the newer setup. It first stops an NV-AI that is still running from the old
+- **Update:** run the newer setup. It first stops an NVAI-open that is still running from the old
   installation and suggests your previous data and model folders.
-- **Uninstall:** via **Settings → Apps → NV-AI**. The uninstaller removes the program folder
+- **New name from 0.5.8:** up to 0.5.7 the app was called NV-AI. The update renames the Start menu
+  folder, the shortcuts and the entry under "Apps" to NVAI-open. Program folder, data folder and
+  settings keep their names; models and images stay where they are.
+- **Uninstall:** via **Settings → Apps → NVAI-open**. The uninstaller removes the program folder
   and then asks whether to delete the data and models as well. Answer **No** to keep them for a
   later installation.
 
@@ -228,8 +248,8 @@ there.
 
 ## macOS: install from the DMG
 
-NV-AI for Mac is a native app (SwiftUI) that generates images locally. It offers the same REST
-API as NV-AI on Windows, so the PhotoCraft add-on works with it unchanged.
+NVAI-open for Mac is a native app (SwiftUI) that generates images locally. It offers the same REST
+API as NVAI-open on Windows, so the PhotoCraft add-on works with it unchanged.
 
 ### Requirements
 
@@ -244,15 +264,15 @@ API as NV-AI on Windows, so the PhotoCraft add-on works with it unchanged.
 
 The DMG is signed and notarized by Apple.
 
-1. Open `NV-AI-<version>.dmg` and drag **NV-AI** into your Applications folder. If you use
-   PhotoCraft, drag the add-on app **NV-AI für PhotoCraft** there as well.
-2. Open NV-AI. Under **Models**, download FLUX.2 Klein (about 9 to 11 GB, once). With 24 GB of
+1. Open `NVAI-open-<version>.dmg` and drag **NVAI-open** into your Applications folder. If you use
+   PhotoCraft, drag the add-on app **NVAI-open für PhotoCraft** there as well.
+2. Open NVAI-open. Under **Models**, download FLUX.2 Klein (about 9 to 11 GB, once). With 24 GB of
    memory or more, choose the 8-bit version; below that, the 4-bit version.
 3. Under **Generate**, enter a prompt. The first image takes longer because the model is being
    loaded.
 
-NV-AI for Mac starts its server as soon as the app launches, independently of the window. It
-listens on `127.0.0.1:8100` only; the PhotoCraft add-on and your own scripts reach NV-AI at
+NVAI-open for Mac starts its server as soon as the app launches, independently of the window. It
+listens on `127.0.0.1:8100` only; the PhotoCraft add-on and your own scripts reach NVAI-open at
 `http://127.0.0.1:8100`.
 
 ### What runs on the Mac
@@ -321,7 +341,7 @@ is available, detects the graphics card and finally lists the models that fit th
 
 ```powershell
 scripts\start.ps1     # then open http://127.0.0.1:8100
-scripts\stop.ps1      # stops NV-AI and ComfyUI specifically
+scripts\stop.ps1      # stops NVAI-open and ComfyUI specifically
 ```
 
 ComfyUI starts automatically with the first job (about 30 s, once). If port 8100 is already in
@@ -370,7 +390,7 @@ frontend/           web UI (React/Vite), built into frontend/dist/
 scripts/            setup, start, stop
 packaging/windows/  Windows setup (Inno Setup)
 packaging/tools/    release helpers
-mac/NVAIMac/        NV-AI for Mac (SwiftUI)
+mac/NVAIMac/        NVAI-open for Mac (SwiftUI)
 photocraft-addon/   PhotoCraft add-on
 docs/               documentation
 data/               created on first start: models, assets, database
@@ -399,7 +419,7 @@ license files, the locked package lists from `packaging\windows\locks`, the lice
 generated third-party notices. ComfyUI and TripoSG are exported with `git archive` from local
 clones in `external\` if present (no models, no venv, no outputs), otherwise downloaded from
 GitHub. Then the script runs Inno Setup. The result is
-`packaging\windows\build\NV-AI-Setup-<version>.exe`; the version comes from
+`packaging\windows\build\NVAI-open-Setup-<version>.exe`; the version comes from
 `server\nvai\__init__.py`.
 
 - The PhotoCraft add-on becomes an optional component if a built add-on folder (with
@@ -426,7 +446,7 @@ The scripts in `mac/NVAIMac/scripts` expect the project in `~/NVAIMac` on the Ma
 | Script | What it does |
 |---|---|
 | `sync.sh` | For developing on Windows, run from Git Bash: copies `project.yml`, `Sources`, `Resources`, `scripts` and `Package.resolved` over SSH to `~/NVAIMac` on a Mac reachable as `macmini` and runs `xcodegen generate` there (XcodeGen expected at `~/tools/xcodegen/bin/xcodegen`). `~/NVAIMac` is only a mirror: `Sources` is replaced on every sync |
-| `build.sh` | builds `~/NVAIMac/dd/Build/Products/Release/NV-AI.app` (Release, arm64, ad-hoc signed); log in `~/NVAIMac/build.log` |
+| `build.sh` | builds `~/NVAIMac/dd/Build/Products/Release/NVAI-open.app` (Release, arm64, ad-hoc signed); log in `~/NVAIMac/build.log` |
 | `release.sh` | builds the DMG (see below) |
 
 Working directly on a Mac: copy `mac/NVAIMac` to `~/NVAIMac`, run `xcodegen generate` there and
@@ -441,12 +461,12 @@ Test run with settings overridden at launch (`-serverPort`, `-modelsDirectory`,
 `-activeModelID`):
 
 ```sh
-open -n ~/NVAIMac/dd/Build/Products/Release/NV-AI.app --args -serverPort 8110 -modelsDirectory <models folder>
+open -n ~/NVAIMac/dd/Build/Products/Release/NVAI-open.app --args -serverPort 8110 -modelsDirectory <models folder>
 curl -s http://127.0.0.1:8110/api/version
 ```
 
 - If the port is in use, the server retries every 2 s.
-- Checking without a display: `NV-AI --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] --quit`
+- Checking without a display: `NVAI-open --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] --quit`
   captures the app's own window and needs no screen recording permission; `--report` also
   writes the test report.
 
@@ -456,7 +476,7 @@ curl -s http://127.0.0.1:8110/api/version
 zsh ~/NVAIMac/scripts/release.sh
 ```
 
-The result is `~/NVAIMac/release/NV-AI-<version>.dmg` with NV-AI.app, the PhotoCraft add-on app
+The result is `~/NVAIMac/release/NVAI-open-<version>.dmg` with NVAI-open.app, the PhotoCraft add-on app
 and a getting-started text. The add-on is built with its own `build-app.sh` from the folder set
 in `ADDON_SRC` at the top of the script; if it is missing there, the DMG is built without the
 add-on.
@@ -475,17 +495,17 @@ add-on.
 
 ## Optional: PhotoCraft add-on
 
-**NV-AI for PhotoCraft** connects PhotoCraft to a local NV-AI. It needs PhotoCraft 0.10.0 or
+**NVAI-open for PhotoCraft** connects PhotoCraft to a local NVAI-open. It needs PhotoCraft 0.10.0 or
 newer: https://github.com/storytold/photocraft/releases/latest
 
 - **Windows:** an optional component of the setup, included in the full installation (if the
   setup was built with the add-on). If PhotoCraft is not installed yet, the setup offers to open its download page; it
   also installs the Microsoft WebView2 runtime if it is missing. Start the add-on from the Start
-  menu entry **NV-AI for PhotoCraft**. It finds NV-AI through `HKCU\Software\NV-AI` and starts
+  menu entry **NVAI-open for PhotoCraft**. It finds NVAI-open through `HKCU\Software\NV-AI` and starts
   it when needed.
-- **macOS:** included in the DMG as **NV-AI für PhotoCraft**. It starts NV-AI by itself when
+- **macOS:** included in the DMG as **NVAI-open für PhotoCraft**. It starts NVAI-open by itself when
   needed; both run locally only.
 
-The add-on talks to NV-AI through its REST API on `http://127.0.0.1:8100`, so it works the same
-with NV-AI on Windows and with NV-AI for Mac. Its source code is in
+The add-on talks to NVAI-open through its REST API on `http://127.0.0.1:8100`, so it works the same
+with NVAI-open on Windows and with NVAI-open for Mac. Its source code is in
 [`photocraft-addon/`](../photocraft-addon/).

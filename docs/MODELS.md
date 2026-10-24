@@ -1,10 +1,10 @@
-# Image models in NV-AI: Qwen-Image-2512 and FLUX 3 Image Klein
+# Image models in NVAI-open: Qwen-Image-2512 and FLUX 3 Image Klein
 
 *Deutsch: [de/MODELLE.md](de/MODELLE.md)*
 
-A reference for projects that generate images through NV-AI. It applies to Claude Code with
+A reference for projects that generate images through NVAI-open. It applies to Claude Code with
 the `nvai` MCP server as well as to your own programs using the REST API. It describes the two
-image models NV-AI recommends: what they can do, how to address them, how long they take and
+image models NVAI-open recommends: what they can do, how to address them, how long they take and
 where they fail.
 
 As of October 18, 2026. Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
@@ -46,23 +46,46 @@ such ("according to BFL").
 | Only a few words of prompt, model without its own upsampler | first **✨ Expand prompt** (`expand_prompt`), see section 5 |
 | Trying out Qwen-Image 2.1 (`qwen-image-2.1-int8`) | **non-commercial only** (Qwen Research License); editing looked overprocessed in the test |
 
-Without a `model_id`, NV-AI uses the active image model.
+Without a `model_id`, NVAI-open uses the active image model.
+
+### New in 0.5.8
+
+LTX-2.5 (`ltx25-distilled-nvfp4`) is now the recommended video model, with all of its ways. Measured
+on an RTX 5060 Ti at 24 fps with sound; graphics memory is almost full and ComfyUI offloads.
+
+| Way | Parameter | Measured |
+|---|---|---|
+| Text to video | — | 5 s at 1280 × 704 in 93 s (first run with loading 122 s); 1920 × 1088 in 251 s |
+| Start image | `image_asset_id` | 5 s at 1280 × 704 in 109 s |
+| Start and end image | `end_image_asset_id` | 5 s in 154 s; first and last frame match the two images |
+| Loop | `loop=True` | 4 s in 125 s; first and last frame differ by 3.6/255 on average (12–44 without a loop). Only with a still camera: with a camera move the last frames fell apart |
+| Automatic length | `auto_duration=True` | a door that opens slowly: 3 s, in 72 s |
+| Given sound | `audio_asset_id` | 20 s of brass band → a 19.7 s clip at 1024 × 576 in 302 s, the sound unchanged |
+| Several shots | `expand_prompt(target="video_multishot")` | 8 s in 170 s: two shots with a clean cut, the same lighthouse keeper in both |
+| DFR, slow motion | `quality="dfr"`, `motion_speed` | not tested yet: they need LoRAs from Lightricks whose license has to be accepted on Hugging Face |
+
+Describe sounds as loud as they should be: speech and a forge came out at −14 to −18 LUFS, a campfire
+that "crackles softly" and a quiet village square at −41 to −52 LUFS, with or without a loop. The
+generated sound now goes through the same limiter as all audio, for video at −2.5 dBFS because AAC
+overshoots dense sound by up to 1.9 dB; it peaked at up to +1.7 dBTP before. New in the video tab:
+"Person from a photo" lets FLUX 3 keep the face from a photo and create four start images in a role
+you describe (95–98 s at 1280 × 704), which LTX-2.5 then brings to life; step by step in [PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md). Recommended LoRAs for LTX-2.5 and how they did: [INSTALL.md](INSTALL.md#loras-hugging-face-and-civitai).
 
 ### New in 0.5.7
 
 | Model | Use for | Measured (RTX 5060 Ti) | License |
 |---|---|---|---|
-| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumental music, no vocals (a choir only without words); in NV-AI up to 5 minutes | 60 s in 9–12 s (up to 9.7 GB graphics memory), 300 s in 64 s (16 GB card almost full) | Stability AI Community (below US$1M revenue) |
+| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumental music, no vocals (a choir only without words); in NVAI-open up to 5 minutes | 60 s in 9–12 s (up to 9.7 GB graphics memory), 300 s in 64 s (16 GB card almost full) | Stability AI Community (below US$1M revenue) |
 
 Write the prompt for Stable Audio 3 as one sentence: genre with the main instruments, layers and
-percussion, the mood, then "BPM: 100.". NV-AI appends "Length: N seconds" to match the duration.
+percussion, the mood, then "BPM: 100.". NVAI-open appends "Length: N seconds" to match the duration.
 "✨ Expand prompt" writes this form (`target="music_sa3"`).
 
-ACE-Step 1.5 Turbo now runs like ComfyUI's template (8 steps, CFG 1, shift 3). Before, NV-AI used
+ACE-Step 1.5 Turbo now runs like ComfyUI's template (8 steps, CFG 1, shift 3). Before, NVAI-open used
 12 steps and CFG 2 without shift, which sounded harsh and compressed. Its license is MIT (the
 catalog said Apache-2.0).
 
-Every audio output now goes through NV-AI's own limiter before it is saved (ceiling −1 dBFS, 5 ms
+Every audio output now goes through NVAI-open's own limiter before it is saved (ceiling −1 dBFS, 5 ms
 look-ahead, 80 ms release); ACE-Step is lowered by 3 dB first. Its raw output peaks up to +5.7
 dBFS, and the MP3 encoder cut everything above 0 dB off hard. Measured with the same seed, true
 peak of the MP3: industrial piece +2.3 → 0.0 dBTP, brass band +2.0 → +0.2 dBTP (with only the
@@ -97,7 +120,7 @@ LoRA pair on Wan 2.2 I2V A14B turned a slight turn into a full camera orbit.
 
 Every image and video model in the list carries a label: *uncensored*, *partly censored*,
 *censored* or *filtering unknown*. The tooltip names the evidence and the source (model card,
-technical report). NV-AI itself filters nothing. The same information is in `GET /api/models`
+technical report). NVAI-open itself filters nothing. The same information is in `GET /api/models`
 (`content`, `content_note`, `content_source`).
 
 | Label | Models (as of October 2026) |
@@ -114,8 +137,8 @@ Chroma v37 (use Chroma1-HD), HunyuanVideo 1.5 (license excludes the EU; use Wan 
 
 ### Prerequisite
 
-The NV-AI server must be running. It listens on `http://127.0.0.1:8100`. With the Windows setup,
-start it from the Start menu (**NV-AI**); in a source checkout:
+The NVAI-open server must be running. It listens on `http://127.0.0.1:8100`. With the Windows setup,
+start it from the Start menu (**NVAI-open**); in a source checkout:
 
 ```powershell
 scripts\start.ps1     # reports if it is already running
@@ -146,7 +169,7 @@ The most important tools:
 | `list_assets(kind="image")` | latest images with asset ID and path |
 | `copy_asset(asset_id, destination)` | copy an image into your own project |
 
-After an NV-AI update, a running session only sees the new tool descriptions after `/mcp` and
+After an NVAI-open update, a running session only sees the new tool descriptions after `/mcp` and
 reconnecting.
 
 ### Via REST
@@ -219,7 +242,7 @@ running.
   holes and under the battens. With the same seed, the distilled Lightning version laid them on
   the wood without any attachment.
 - **Long prompts.** The encoder is a language model; there is no 77-token limit as with CLIP.
-- **The negative prompt works** (CFG 4). If it is left empty, NV-AI inserts the one from Qwen's
+- **The negative prompt works** (CFG 4). If it is left empty, NVAI-open inserts the one from Qwen's
   model card:
   `低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。`
   It stands for low resolution, deformed limbs and fingers, oversaturation, a waxy look, an AI
@@ -231,7 +254,7 @@ running.
   crate's lettering "MUNITION 7,92" became "FLAK 88" in the same stencil font. Outside the mask
   the image deviated by 0.6 out of 255 on average, i.e. only by the noise of the VAE round trip.
   With 28 steps this took 82 s including a cold start. Since 0.5.6 **FLUX 3** fills too
-  (`features.mask` = `"reference"`): NV-AI cuts out the area with 35 % surroundings, greys it, lets
+  (`features.mask` = `"reference"`): NVAI-open cuts out the area with 35 % surroundings, greys it, lets
   FLUX 3 paint it from the prompt, measures the offset and puts back only the area, outside pixel for
   pixel. Measured on a fish market: crates removed with the cobblestones running on, a seagull added,
   about 60–70 s each. To rewrite something already there (lettering on a sign), edit with a reference
@@ -241,9 +264,9 @@ running.
   something out.
 - **Outpainting** (since 0.5.4, `image_asset_id` + `outpaint=[left, top, right, bottom]` in pixels):
   the image is extended beyond its edges; the size is image plus border. **Use FLUX 3:** it gets the
-  image on a grey border as a reference and continues the scene, then NV-AI puts the original back.
+  image on a grey border as a reference and continues the scene, then NVAI-open puts the original back.
   FLUX 3 never returns the picture exactly in place (per axis 0.97–1.055 scale and up to 43 px offset,
-  with a border on all sides it zoomed in by 25–42 %), so NV-AI extends one axis at a time, measures
+  with a border on all sides it zoomed in by 25–42 %), so NVAI-open extends one axis at a time, measures
   the offset after each pass, moves the result back and only then puts the original in. Measured on a
   lion scene extended on all sides: two variants in 147 s, clean seams at full resolution. Qwen-Image-2512 extends via a mask, but in testing it painted the border
   as a separate scene with a hard edge (also with a 128/256 px transition and 50 steps).
@@ -314,7 +337,7 @@ Plain light grey background, soft even light.
 ### The prompt upsampler
 
 FLUX 3 is trained on long image descriptions written by its own upsampler. BFL advises never to
-use the model without it. In NV-AI it therefore runs automatically before every image:
+use the model without it. In NVAI-open it therefore runs automatically before every image:
 
 1. From the request, the upsampler writes a description of 100 to 350 words. For non-square
    sizes it is told the aspect ratio and composes for it.
@@ -322,7 +345,7 @@ use the model without it. In NV-AI it therefore runs automatically before every 
 3. The description is returned as **`caption`**: directly in the return value via MCP, and in
    the asset's `meta.caption` via REST.
 
-It decodes deterministically: the same prompt always yields the same description. NV-AI caches
+It decodes deterministically: the same prompt always yields the same description. NVAI-open caches
 it, so a new seed with the same prompt only costs the image time. The cache lives in the server
 process and is empty after a restart.
 
@@ -347,7 +370,7 @@ prompt field; you read it, remove what is wrong, and generate with any model. Vi
 `expand_prompt(prompt, width, height)`, via REST `POST /api/prompt/expand`. It needs a FLUX 3
 model to be downloaded. Measured: 13–16 s, about 36 s right after a start.
 
-NV-AI for Mac (since 0.4) and the Mac PhotoCraft add-on have the same button and the same REST
+NVAI-open for Mac (since 0.4) and the Mac PhotoCraft add-on have the same button and the same REST
 route. There the Qwen3-4B text encoder of FLUX.2 Klein writes the description, with Black Forest
 Labs' instructions for text-to-image prompts; no extra download. Measured on a Mac mini M1 with
 8 GB: 22–25 s, 35 s the first time after starting the app.
@@ -357,7 +380,7 @@ with the expanded text it painted a working forge with hearth, anvil, tongs and 
 upsampler fills every gap, though: it also gave the smith an iron helmet. Read the text first.
 
 Since 0.5.3 the button is also on the **Video**, **Audio** and **3D** tabs (Windows). The same
-upsampler then follows NV-AI's own instructions (`target` in the API): for video it adds motion,
+upsampler then follows NVAI-open's own instructions (`target` in the API): for video it adds motion,
 one camera move, setting and light; with LTX-2.5 also what can be heard; with a start image only
 the motion. For Stable Audio it writes sound tags (source, material, room, microphone), for
 ACE-Step genre, instrument and mood tags. On the 3D tab, "Object from text" first creates a
@@ -426,7 +449,7 @@ arrangement, which diffusion models do not reliably achieve from text alone.
 ### Sizes
 
 Sides must be multiples of 16. The general 1 MP sizes work. According to BFL, the model works
-natively up to 4K; the NV-AI API allows up to 2048 × 2048. In measurements, 1440² brought more
+natively up to 4K; the NVAI-open API allows up to 2048 × 2048. In measurements, 1440² brought more
 detail, for example a rope running through an eyelet with a metal ring, at 26 instead of 13 s.
 FLUX 3 has no second pass (`hires`). If you want more detail, choose a larger size directly.
 
@@ -472,7 +495,7 @@ RTX 20 series on. As in BFL's own INT8 template, it comes with the smaller upsam
 RTX 4070 in under 9 s per image (16 steps, 1 MP). We have not measured this yet. Prompts,
 reference images, boxes and the upsampler work as with NVFP4.
 
-NV-AI detects the card (`compute_cap` via nvidia-smi) and marks suitable models in
+NVAI-open detects the card (`compute_cap` via nvidia-smi) and marks suitable models in
 `list_models` with `recommended`: on RTX 50 Qwen and FLUX 3 in NVFP4, on older cards FLUX 3 INT8
 and Z-Image INT8. A format that the detected card does not compute in hardware gets a note in
 `gpu_note`.
@@ -522,7 +545,7 @@ Size by silhouette: standing figure 832 × 1216 (Qwen native 1056 × 1584), vehi
 ## 7. The `features` field
 
 `GET /api/models` and `list_models(detailed=True)` return a `features` field for each image
-model. Other programs can adapt their controls to it, as the NV-AI web UI does.
+model. Other programs can adapt their controls to it, as the NVAI-open web UI does.
 
 | Key | Meaning | Qwen-50 | FLUX 3 |
 |---|---|---|---|

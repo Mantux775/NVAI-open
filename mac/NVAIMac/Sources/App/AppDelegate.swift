@@ -2,11 +2,11 @@ import AppKit
 import SwiftUI
 
 /// Startet Server und Dienste beim Programmstart – unabhängig davon, ob ein Fenster erscheint.
-/// Die PhotoCraft-App öffnet NV-AI im Hintergrund (activates=false) und wartet auf /api/version.
+/// Die PhotoCraft-App öffnet NVAI-open im Hintergrund (activates=false) und wartet auf /api/version.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppLog.info("Start NV-AI \(SystemInfo.appVersion) (\(SystemInfo.build)), \(SystemInfo.chip), "
+        AppLog.info("Start NVAI-open \(SystemInfo.appVersion) (\(SystemInfo.build)), \(SystemInfo.chip), "
             + "\(SystemInfo.memoryGB) GB, macOS \(SystemInfo.macOS), port \(Settings.serverPort), "
             + "models \(Settings.modelsDirectory.path), language \(Lang.ui.rawValue)")
         Lang.applyToMenus()   // Einstellungen aus 0.3 übernehmen; wirkt ab dem nächsten Start
@@ -21,13 +21,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ notification: Notification) {
-        AppLog.info("Quit NV-AI")
+        AppLog.info("Quit NVAI-open")
     }
 }
 
 /// Startoptionen für Tests ohne Bildschirm (wie bei der PhotoCraft-App):
 ///
-///     NV-AI --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] [--quit]
+///     NVAI-open --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] [--quit]
 ///
 /// `--snapshot` fotografiert das eigene Fenster (cacheDisplay, keine Bildschirmfreigabe nötig),
 /// `--tab search` öffnet dazu die Modellsuche; `--report` schreibt den Messbericht.

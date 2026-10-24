@@ -10,9 +10,9 @@
 		<string>de</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>NV-AI for PhotoCraft</string>
+	<string>NVAI-open for PhotoCraft</string>
 	<key>CFBundleName</key>
-	<string>NV-AI for PhotoCraft</string>
+	<string>NVAI-open for PhotoCraft</string>
 	<key>LSHasLocalizedDisplayName</key>
 	<true/>
 	<key>CFBundleExecutable</key>
@@ -26,9 +26,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.4.3</string>
+	<string>0.4.4</string>
 	<key>CFBundleVersion</key>
-	<string>7</string>
+	<string>8</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSApplicationCategoryType</key>
@@ -38,7 +38,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>NV-AI for PhotoCraft connects to NV-AI when it runs on another computer on the network.</string>
+	<string>NVAI-open for PhotoCraft connects to NVAI-open when it runs on another computer on the network.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

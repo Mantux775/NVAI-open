@@ -1,11 +1,11 @@
-"""Vertrag mit NV-AI: nutzt die Brücke nur Endpunkte und Felder, die NV-AI zusagt?
+"""Vertrag mit NVAI-open: nutzt die Brücke nur Endpunkte und Felder, die NVAI-open zusagt?
 
 Grundlage ist ``contract/nvai-openapi.json``, eine Kopie von ``NV-AI/server/openapi.json``
-(``info.x-api-version``). Liegt NV-AI daneben, wird zusätzlich gegen dessen aktuellen Stand
+(``info.x-api-version``). Liegt NVAI-open daneben, wird zusätzlich gegen dessen aktuellen Stand
 geprüft – eine brechende Änderung fällt so auf, bevor die Kopie erneuert wird
 (``python tools/export_golden.py --refresh-contract``).
 
-NV-AI ignoriert unbekannte Felder im Request still. Ein Tippfehler oder ein Feld, das es dort
+NVAI-open ignoriert unbekannte Felder im Request still. Ein Tippfehler oder ein Feld, das es dort
 (noch) nicht gibt, würde also nicht auffallen – deshalb zählt hier jedes Feld.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ VERSION = {"name": "NV-AI", "version": "0.2.0", "api": 1, "auth": "token", "auth
            "features": ["model_features", "mask", "references", "upsampler", "upload", "expand_prompt",
                         "cancel_job"]}
 
-# Alles, was bridge/nvai.py bei NV-AI aufruft – der Test unten muss jede Zeile auslösen.
+# Alles, was bridge/nvai.py bei NVAI-open aufruft – der Test unten muss jede Zeile auslösen.
 USED = {
     ("get", "/api/version"), ("get", "/api/health"), ("get", "/api/models"), ("get", "/api/assets"),
     ("get", "/api/assets/{asset_id}"), ("delete", "/api/assets/{asset_id}"), ("post", "/api/upload"),
@@ -54,7 +54,7 @@ READ_FIELDS = {
 
 @pytest.fixture(params=[
     pytest.param(SNAPSHOT, id="kopie"),
-    pytest.param(LIVE, id="nvai", marks=pytest.mark.skipif(not LIVE.exists(), reason="NV-AI liegt nicht daneben")),
+    pytest.param(LIVE, id="nvai", marks=pytest.mark.skipif(not LIVE.exists(), reason="NVAI-open liegt nicht daneben")),
 ])
 def spec(request: pytest.FixtureRequest) -> dict[str, Any]:
     return json.loads(Path(request.param).read_text(encoding="utf-8"))
@@ -80,7 +80,7 @@ def _type_ok(value: Any, t: str | None) -> bool:
 
 
 def violations(spec: dict[str, Any], value: Any, schema: dict[str, Any], where: str = "") -> list[str]:
-    """Die Teile von JSON Schema, die FastAPI für NV-AI erzeugt – plus: keine unbekannten Felder."""
+    """Die Teile von JSON Schema, die FastAPI für NVAI-open erzeugt – plus: keine unbekannten Felder."""
     schema = resolve(spec, schema)
     if "anyOf" in schema:
         options = [violations(spec, value, s, where) for s in schema["anyOf"]]
@@ -168,7 +168,7 @@ def response_problems(spec: dict[str, Any], request: httpx.Request, response: ht
     return violations(spec, response.json(), schema, where) if schema and ctype.startswith("application/json") else []
 
 
-# ----------------------------------------------------------- NV-AI-Attrappe
+# ----------------------------------------------------------- NVAI-open-Attrappe
 
 def _golden_payloads() -> list[dict[str, Any]]:
     """Alle Requests, die die Planung erzeugt – samt Upload-ids, wie tasks.py sie ergänzt."""
@@ -191,7 +191,7 @@ def _golden_payloads() -> list[dict[str, Any]]:
 
 
 class FakeNVAI:
-    """Antwortet wie NV-AI 0.2.0 laut Vertrag und merkt sich jede Anfrage."""
+    """Antwortet wie NVAI-open 0.2.0 laut Vertrag und merkt sich jede Anfrage."""
 
     def __init__(self, spec: dict[str, Any], version: dict[str, Any] | None = VERSION) -> None:
         self.spec = spec

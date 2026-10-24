@@ -68,8 +68,8 @@ public final class GenerationTask: @unchecked Sendable {
 public final class Workflow {
     /// Namen der Arbeitskopie und des Kanals mit der gesicherten Auswahl – absichtlich in jeder
     /// Sprache gleich, die Abläufe finden sie über den Namen (wie `bridge/tasks.py`).
-    public static let workingCopy = "NV-AI working copy"
-    public static let maskChannel = "NV-AI selection"
+    public static let workingCopy = "NVAI-open working copy"
+    public static let maskChannel = "NVAI-open selection"
 
     public let pc: PhotoCraftControlling
     /// Austauschordner = `--automation-read-root` und `--automation-write-root`.
@@ -200,7 +200,7 @@ public final class Workflow {
 
     // MARK: Rechnen
 
-    /// Kompletter Auftrag mit NV-AI: planen, hochladen, rechnen, Ergebnisse speichern, erste Variante einfügen.
+    /// Kompletter Auftrag mit NVAI-open: planen, hochladen, rechnen, Ergebnisse speichern, erste Variante einfügen.
     public func run(_ task: GenerationTask, nvai: NVAIClient, progress: @escaping (Double, String) -> Void = { _, _ in }) async throws {
         try await nvai.checkCompatible()
         let masks = try await nvai.supportsMasks()
@@ -211,15 +211,15 @@ public final class Workflow {
         }
         let outpaintServer = try await nvai.supportsOutpaint()
         if mode == "fill" && !masks && !(task.mode == "extend" && outpaintServer) {
-            throw WorkflowError.message(t("Die laufende NV-AI-Version kennt noch keine Masken.",
-                                          "The running NV-AI version does not know masks yet."))
+            throw WorkflowError.message(t("Die laufende NVAI-open-Version kennt noch keine Masken.",
+                                          "The running NVAI-open version does not know masks yet."))
         }
         progress(0.02, t("liest das Dokument", "reading the document"))
         let (context, mask) = try await capture(task)
         let region = task.region ?? Rect(0, 0, task.docSize.0, task.docSize.1)
         let active = try await nvai.health()["active_models"]?["image"]?.stringValue
         let models = try await nvai.imageModels()
-        // Erweitern über NV-AIs outpaint; ältere Server füllen per Maske wie bisher.
+        // Erweitern über NVAI-opens outpaint; ältere Server füllen per Maske wie bisher.
         let outpaint = task.alphaMask && !Planning.extendSteps(task.params["extend"]).isEmpty && outpaintServer
         let (model, warning) = try Planning.chooseModel(mode: mode, wanted: task.params["model_id"]?.stringValue,
                                                         active: active, models: models, masksSupported: masks,
@@ -239,11 +239,11 @@ public final class Workflow {
             Task { for id in ids { try? await nvai.deleteAsset(id) } }
         }
         if plan.technique == "outpaint" {
-            // Nur den deckenden Teil schicken; Rand und weiche Übergänge legt NV-AI an.
+            // Nur den deckenden Teil schicken; Rand und weiche Übergänge legt NVAI-open an.
             guard let context, let cut = Planning.outpaintEdges(context, working: (gw, gh)) else {
                 throw WorkflowError.message(t("Kein durchsichtiger Rand zum Füllen gefunden.", "No transparent border found to fill."))
             }
-            progress(0.06, t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+            progress(0.06, t("lädt den Ausschnitt zu NVAI-open", "uploading the area to NVAI-open"))
             let src = Imaging.resize(Imaging.flattenForModel(crop(context, cut.box)), to: cut.size)
             let asset = try await nvai.upload(png: try Imaging.pngData(src), filename: "photocraft-\(task.id)-context.png")
             guard let id = asset["id"]?.stringValue else { throw NVAIError.invalidResponse(t("Upload ohne id", "upload without id")) }
@@ -251,7 +251,7 @@ public final class Workflow {
             payload["image_asset_id"] = .string(id)
             payload["outpaint"] = .array(cut.edges.map { .int($0) })
         } else if plan.sendImage, let context {
-            progress(0.06, t("lädt den Ausschnitt zu NV-AI", "uploading the area to NV-AI"))
+            progress(0.06, t("lädt den Ausschnitt zu NVAI-open", "uploading the area to NVAI-open"))
             let src = Imaging.resize(Imaging.flattenForModel(context), to: (gw, gh))
             let asset = try await nvai.upload(png: try Imaging.pngData(src), filename: "photocraft-\(task.id)-context.png")
             guard let id = asset["id"]?.stringValue else { throw NVAIError.invalidResponse(t("Upload ohne id", "upload without id")) }
@@ -265,7 +265,7 @@ public final class Workflow {
                 payload["mask_asset_id"] = .string(mid)
             }
         }
-        progress(0.08, t("übergibt an NV-AI", "handing over to NV-AI"))
+        progress(0.08, t("übergibt an NVAI-open", "handing over to NVAI-open"))
         guard let jobID = try await nvai.generateImage(.object(payload))["id"]?.stringValue else {
             throw NVAIError.invalidResponse(t("Job ohne id", "job without id"))
         }
@@ -309,7 +309,7 @@ public final class Workflow {
             } catch NVAIError.unavailable(let u) {
                 unreachableSince = unreachableSince ?? Date()
                 if Date().timeIntervalSince(unreachableSince!) > 45 { throw NVAIError.unavailable(u) }
-                progress(0.1, t("NV-AI antwortet nicht – warte", "NV-AI does not answer – waiting"))
+                progress(0.1, t("NVAI-open antwortet nicht – warte", "NVAI-open does not answer – waiting"))
                 try await Task.sleep(nanoseconds: 1_000_000_000)
                 continue
             }
@@ -317,12 +317,12 @@ public final class Workflow {
             case "queued": progress(0.09, t("wartet auf die GPU", "waiting for the GPU"))
             case "running": progress(0.1 + 0.8 * (job["progress"]?.doubleValue ?? 0), job["stage"]?.stringValue ?? t("generiert", "generating"))
             case "done": return job
-            case "error": throw WorkflowError.message(job["error"]?.stringValue ?? t("NV-AI meldet einen Fehler.", "NV-AI reports an error."))
+            case "error": throw WorkflowError.message(job["error"]?.stringValue ?? t("NVAI-open meldet einen Fehler.", "NVAI-open reports an error."))
             case "cancelled":
                 if task.isCancelled { throw WorkflowError.cancelled }
                 let reason = job["stage"]?.stringValue ?? t("ohne Angabe", "no reason given")
-                throw WorkflowError.message(t("NV-AI hat den Auftrag abgebrochen (\(reason)). Bitte erneut versuchen.",
-                                              "NV-AI cancelled the job (\(reason)). Please try again."))
+                throw WorkflowError.message(t("NVAI-open hat den Auftrag abgebrochen (\(reason)). Bitte erneut versuchen.",
+                                              "NVAI-open cancelled the job (\(reason)). Please try again."))
             default: break
             }
             try await Task.sleep(nanoseconds: 500_000_000)

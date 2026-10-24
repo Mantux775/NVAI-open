@@ -1,6 +1,6 @@
 import Foundation
 
-/// Ein JSON-Wert, wie ihn der NV-AI-Vertrag (server/openapi.json) überträgt.
+/// Ein JSON-Wert, wie ihn der NVAI-open-Vertrag (server/openapi.json) überträgt.
 ///
 /// Felder wie `meta` oder `params` sind im Vertrag freie Objekte mit gemischten Typen
 /// (Seed als Zahl, Prompt als Text). Codable-Structs reichen dafür nicht, und nil muss

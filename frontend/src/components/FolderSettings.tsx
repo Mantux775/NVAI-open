@@ -4,7 +4,7 @@ import { t } from '../i18n'
 
 /**
  * „Speicherorte“ auf der Modellseite: Daten- und Modellordner wählen. Gilt nach einem Neustart;
- * vorhandene Dateien verschiebt NV-AI nicht selbst (siehe server/nvai/folders.py).
+ * vorhandene Dateien verschiebt NVAI-open nicht selbst (siehe server/nvai/folders.py).
  */
 export function FolderSettings() {
   const [cur, setCur] = useState<Folders | null>(null)
@@ -44,10 +44,10 @@ export function FolderSettings() {
       })
       setSaved(true)
       setMsg(t(
-        'Gespeichert. Die neuen Ordner gelten nach einem Neustart von NV-AI. Vorhandene Dateien bleiben im alten Ordner: '
-          + 'Wer sie mitnehmen will, beendet NV-AI, verschiebt den Inhalt des alten Ordners in den neuen und startet neu.',
-        'Saved. The new folders apply after NV-AI restarts. Existing files stay in the old folder: to take them along, '
-          + 'quit NV-AI, move the contents of the old folder into the new one and start it again.',
+        'Gespeichert. Die neuen Ordner gelten nach einem Neustart von NVAI-open. Vorhandene Dateien bleiben im alten Ordner: '
+          + 'Wer sie mitnehmen will, beendet NVAI-open, verschiebt den Inhalt des alten Ordners in den neuen und startet neu.',
+        'Saved. The new folders apply after NVAI-open restarts. Existing files stay in the old folder: to take them along, '
+          + 'quit NVAI-open, move the contents of the old folder into the new one and start it again.',
       ))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -61,8 +61,8 @@ export function FolderSettings() {
     setError(null)
     try {
       await api.restart()
-      setMsg(t('NV-AI startet neu … die Seite lädt in einigen Sekunden neu.',
-        'NV-AI is restarting … the page reloads in a few seconds.'))
+      setMsg(t('NVAI-open startet neu … die Seite lädt in einigen Sekunden neu.',
+        'NVAI-open is restarting … the page reloads in a few seconds.'))
       // Warten, bis der neue Server antwortet, dann neu laden.
       const until = Date.now() + 120_000
       await new Promise((r) => setTimeout(r, 4000))
@@ -75,8 +75,8 @@ export function FolderSettings() {
           await new Promise((r) => setTimeout(r, 1500))
         }
       }
-      setError(t('NV-AI meldet sich nicht zurück. Bitte über das Startmenü starten.',
-        'NV-AI does not come back. Please start it from the Start menu.'))
+      setError(t('NVAI-open meldet sich nicht zurück. Bitte über das Startmenü starten.',
+        'NVAI-open does not come back. Please start it from the Start menu.'))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -100,9 +100,9 @@ export function FolderSettings() {
         <div className="folder-body">
           {!cur.managed && (
             <p className="hint small">
-              {t('Diese NV-AI läuft aus dem Quelltext. Die Ordner dort über NVAI_DATA_DIR und NVAI_MODEL_DIR setzen '
+              {t('Dieses NVAI-open läuft aus dem Quelltext. Die Ordner dort über NVAI_DATA_DIR und NVAI_MODEL_DIR setzen '
                 + '(siehe docs/INSTALL.md).',
-              'This NV-AI runs from source. Set the folders there with NVAI_DATA_DIR and NVAI_MODEL_DIR '
+              'This NVAI-open runs from source. Set the folders there with NVAI_DATA_DIR and NVAI_MODEL_DIR '
                 + '(see docs/INSTALL.md).')}
             </p>
           )}
@@ -142,7 +142,7 @@ export function FolderSettings() {
             </button>
             {saved && cur.can_restart && (
               <button className="btn small" onClick={restart} disabled={busy}>
-                {t('NV-AI jetzt neu starten', 'Restart NV-AI now')}
+                {t('NVAI-open jetzt neu starten', 'Restart NVAI-open now')}
               </button>
             )}
           </div>

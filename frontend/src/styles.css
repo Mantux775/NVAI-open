@@ -439,7 +439,7 @@ kbd {
 .check input { width: auto; flex-shrink: 0; }
 /* Mehrzeilige Beschriftung mit Erklaerung dahinter darf umbrechen. */
 .check { align-items: flex-start; line-height: 1.45; }
-.check input[type='checkbox'] { margin-top: 2px; }
+.check input[type='checkbox'], .check input[type='radio'] { margin-top: 2px; }
 
 /* Abgesetzter Block fuer selten gebrauchte Regler. */
 .advanced {
@@ -770,6 +770,13 @@ kbd {
 .lora-row label input[type="checkbox"] { width: auto; }
 .lora-row .lora-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lora-row input[type="range"] { flex: 1 1 100px; max-width: 160px; }
+/* Empfohlene LoRAs (LTX-2.5): je Eintrag Name, Zweck, Laden oder Aktivieren */
+.rec-lora { border-top: 1px solid var(--line); padding: 8px 0; }
+.rec-lora .lora-name { font-weight: 600; }
+.rec-lora .hint { margin: 2px 0 4px; }
+.rec-lora .row { align-items: center; gap: 10px; }
+.rec-lora a { color: var(--accent); }
+.rec-lora .tested { color: var(--text); }
 
 /* Kurze Erklaerung "Wozu sind LoRAs gut?" in der Modell-Liste */
 .lora-intro {

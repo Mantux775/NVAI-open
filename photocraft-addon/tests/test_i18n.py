@@ -1,4 +1,4 @@
-"""Sprache: Englisch als Standard, Deutsch als Option – für Texte, Ebenennamen und NV-AI."""
+"""Sprache: Englisch als Standard, Deutsch als Option – für Texte, Ebenennamen und NVAI-open."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ def test_t_follows_the_choice(monkeypatch):
     assert i18n.t("Füllen", "Fill") == "Fill"
     i18n.set_choice("de")
     assert i18n.t("Füllen", "Fill") == "Füllen"
-    assert planning.layer_name("refine", "make it blue", 1, 2) == "NV-AI Überarbeiten: make it blue (2)"
+    assert planning.layer_name("refine", "make it blue", 1, 2) == "NVAI-open Überarbeiten: make it blue (2)"
     i18n.set_choice("unbekannt")  # gilt als „auto“
     assert i18n.choice() == "auto"
     monkeypatch.setattr(i18n, "system_language", lambda: "de")

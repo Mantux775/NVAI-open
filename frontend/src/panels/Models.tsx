@@ -310,11 +310,11 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
         </p>
         <p>
           {t(
-            'So geht es: Über „Modelle und LoRAs suchen“ eine LoRA laden, NV-AI prüft vorher, zu welchem '
+            'So geht es: Über „Modelle und LoRAs suchen“ eine LoRA laden, NVAI-open prüft vorher, zu welchem '
               + 'Modell sie passt. Beim Generieren erscheint sie unter dem gewählten Modell: anhaken, Stärke '
               + 'meist 0,6 bis 1,0, und die Trigger-Wörter in den Prompt. Eine LoRA kostet etwas Rechenzeit. '
               + 'Ob Ergebnisse verkauft werden dürfen, steht bei jeder LoRA unter Lizenz.',
-            'How to use: load a LoRA via “Search models and LoRAs”; NV-AI checks first which model it fits. '
+            'How to use: load a LoRA via “Search models and LoRAs”; NVAI-open checks first which model it fits. '
               + 'When generating it appears below the selected model: tick it, strength usually 0.6 to 1.0, '
               + 'and put the trigger words into the prompt. A LoRA costs some extra time. Whether results '
               + 'may be sold is shown under license for each LoRA.',

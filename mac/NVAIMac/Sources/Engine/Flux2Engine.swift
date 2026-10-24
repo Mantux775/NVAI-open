@@ -9,7 +9,7 @@ enum EngineMode: Sendable {
     case text
     /// Referenzbilder als Bedingung (FLUX.2: 1 bis 3); das Bild entsteht neu.
     case references([CGImage])
-    /// Klassisches Bild-zu-Bild: startet beim Ausgangsbild, `strength` wie NV-AIs `denoise`.
+    /// Klassisches Bild-zu-Bild: startet beim Ausgangsbild, `strength` wie NVAI-opens `denoise`.
     case imageToImage(CGImage, strength: Float, references: [CGImage])
     /// Füllen: weiß in der Maske wird neu gerechnet, schwarz bleibt bitgleich.
     case inpaint(CGImage, mask: CGImage, references: [CGImage])

@@ -142,8 +142,8 @@ def build(description: str) -> dict[str, Any]:
     last_error = next((j.error for j in jobs if j.status == "error" and j.error), None)
 
     out: list[str] = [
-        "NV-AI problem report",
-        "====================",
+        "NVAI-open problem report",
+        "========================",
         f"Created:      {local} (UTC{offset[:3]}:{offset[3:]}) / {utc}",
         "",
         "Description",
@@ -152,7 +152,7 @@ def build(description: str) -> dict[str, Any]:
         "",
         "System",
         "------",
-        f"NV-AI:        {__version__} ({'setup' if 'Programs' in str(config.ROOT) else 'source'})",
+        f"NVAI-open:    {__version__} ({'setup' if 'Programs' in str(config.ROOT) else 'source'})",
         f"ComfyUI:      {comfy.installed_version() or '?'}",
         f"OS:           {platform.platform()}",
         f"Python:       {platform.python_version()}",

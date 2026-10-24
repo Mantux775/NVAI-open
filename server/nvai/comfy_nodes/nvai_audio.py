@@ -1,4 +1,4 @@
-"""NV-AIs eigene ComfyUI-Knoten fuer Audio. NV-AI kopiert diese Datei beim Start von ComfyUI nach
+"""NVAI-opens eigene ComfyUI-Knoten fuer Audio. NVAI-open kopiert diese Datei beim Start von ComfyUI nach
 custom_nodes/ (comfy._install_nodes); ComfyUI laedt sie wie jede andere Erweiterung.
 
 NVAIAudioLimiter: Spitzenbegrenzer vor dem Speichern. ACE-Step 1.5 liefert ungemasterten Klang mit
@@ -84,8 +84,8 @@ class NVAIAudioLimiter:
 
     RETURN_TYPES = ("AUDIO",)
     FUNCTION = "run"
-    CATEGORY = "audio/NV-AI"
-    DESCRIPTION = "Begrenzt Spitzen auf ceiling_db, bevor gespeichert wird (NV-AI)."
+    CATEGORY = "audio/NVAI-open"
+    DESCRIPTION = "Begrenzt Spitzen auf ceiling_db, bevor gespeichert wird (NVAI-open)."
 
     def run(self, audio, ceiling_db, lookahead_ms, release_ms):
         wave = audio["waveform"]
@@ -98,4 +98,4 @@ class NVAIAudioLimiter:
 
 
 NODE_CLASS_MAPPINGS = {"NVAIAudioLimiter": NVAIAudioLimiter}
-NODE_DISPLAY_NAME_MAPPINGS = {"NVAIAudioLimiter": "NV-AI Audio Limiter"}
+NODE_DISPLAY_NAME_MAPPINGS = {"NVAIAudioLimiter": "NVAI-open Audio Limiter"}

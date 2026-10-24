@@ -1,8 +1,8 @@
-"""NV-AI -- lokale Asset-Generierung auf eigener GPU, mit MCP-Bruecke zu Claude Code."""
+"""NVAI-open -- lokale Asset-Generierung auf eigener GPU, mit MCP-Bruecke zu Claude Code."""
 
 import os
 
-__version__ = "0.5.7"
+__version__ = "0.5.8"
 
 # Downloads ueber klassisches HTTP statt Xet (huggingface_hub >= 1.0): Xet laedt in Rust und
 # meldet erst nach ~1 Minute und dann in 134-MB-Spruengen Fortschritt -- Fortschrittsbalken

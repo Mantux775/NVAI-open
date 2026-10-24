@@ -1,4 +1,4 @@
-# XcodeGen-Spezifikation für „NV-AI für Mac“.
+# XcodeGen-Spezifikation für „NVAI-open für Mac“.
 # Auf dem Mac:  ~/tools/xcodegen/bin/xcodegen generate   (siehe scripts/build.sh)
 # Gebaut wird mit xcodebuild, nicht mit swift build: MLX braucht seine Metal-Shader,
 # und die übersetzt nur Xcode (dazu die Metal Toolchain: xcodebuild -downloadComponent MetalToolchain).
@@ -42,11 +42,11 @@ targets:
         product: ZIPFoundation
     settings:
       base:
-        PRODUCT_NAME: NV-AI
+        PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
-        MARKETING_VERSION: "0.4.4"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "0.4.5"
+        CURRENT_PROJECT_VERSION: "9"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

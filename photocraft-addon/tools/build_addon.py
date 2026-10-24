@@ -1,4 +1,4 @@
-"""Stellt den Ordner ``addon\\`` für das NV-AI-Setup zusammen (docs/windows-installer.md).
+"""Stellt den Ordner ``addon\\`` für das NVAI-open-Setup zusammen (docs/windows-installer.md).
 
     python tools/build_addon.py [Ziel] [--check]        Standard-Ziel: dist/addon
 
@@ -33,7 +33,7 @@ ICON = Path("panel") / "icon.ico"
 
 # Nur ASCII in den Werten: Inno Setup liest die Datei mit ReadIni in der ANSI-Codepage.
 INI = """\
-; Erzeugt von tools/build_addon.py. Angaben für das NV-AI-Setup, siehe docs/windows-installer.md.
+; Erzeugt von tools/build_addon.py. Angaben für das NVAI-open-Setup, siehe docs/windows-installer.md.
 ; Pfade relativ zum Add-on-Ordner. Installieren:
 ;   uv venv --python {python} .venv
 ;   uv pip sync --python .venv\\Scripts\\python.exe --require-hashes {requirements}

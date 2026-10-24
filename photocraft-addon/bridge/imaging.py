@@ -1,4 +1,4 @@
-"""Bildgeometrie und -aufbereitung zwischen PhotoCraft-Dokument und NV-AI.
+"""Bildgeometrie und -aufbereitung zwischen PhotoCraft-Dokument und NVAI-open.
 
 Bewusst ohne PhotoCraft- oder Netzwerkbezug, damit alles hier ohne laufende Programme
 testbar bleibt (tests/test_imaging.py).
@@ -15,7 +15,7 @@ from PIL import Image, ImageFilter, ImageOps, ImageStat
 # Deutlich größer wird das Bild unruhig, deutlich kleiner verschenkt Detail.
 TARGET_PIXELS = 1024 * 1024
 MIN_SIDE, MAX_SIDE = 256, 2048
-# VAE (8×) mal Patch-Größe (2×) – Vielfache von 16 passen für alle Bildmodelle in NV-AI.
+# VAE (8×) mal Patch-Größe (2×) – Vielfache von 16 passen für alle Bildmodelle in NVAI-open.
 MULTIPLE = 16
 
 

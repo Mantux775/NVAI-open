@@ -2,10 +2,10 @@ import Foundation
 import XCTest
 @testable import PhotoCraftKit
 
-/// Der API-Vertrag von NV-AI (Golden/nvai-openapi.json, Kopie von NV-AI/server/openapi.json).
+/// Der API-Vertrag von NVAI-open (Golden/nvai-openapi.json, Kopie von NV-AI/server/openapi.json).
 ///
 /// Geprüft werden die Teile von JSON Schema, die FastAPI erzeugt – plus: keine unbekannten Felder.
-/// NV-AI ignoriert die nämlich still, ein Tippfehler im Request fiele sonst nie auf.
+/// NVAI-open ignoriert die nämlich still, ein Tippfehler im Request fiele sonst nie auf.
 struct NVAIContract {
     let spec: JSONValue
 
@@ -132,7 +132,7 @@ struct NVAIContract {
     }
 }
 
-// MARK: - NV-AI-Attrappe über URLProtocol
+// MARK: - NVAI-open-Attrappe über URLProtocol
 
 struct StubRequest: Sendable {
     let method: String
@@ -155,8 +155,8 @@ struct StubResponse: Sendable {
     }
 }
 
-/// Antwortet wie NV-AI 0.2.0 laut Vertrag und merkt sich jede Anfrage. Jede Attrappe hat ihren
-/// eigenen Hostnamen; ohne Attrappe für den Host gilt NV-AI als nicht erreichbar.
+/// Antwortet wie NVAI-open 0.2.0 laut Vertrag und merkt sich jede Anfrage. Jede Attrappe hat ihren
+/// eigenen Hostnamen; ohne Attrappe für den Host gilt NVAI-open als nicht erreichbar.
 final class StubNVAI: @unchecked Sendable {
     final class Registry: @unchecked Sendable {
         private let lock = NSLock()
@@ -169,7 +169,7 @@ final class StubNVAI: @unchecked Sendable {
 
     static func version(api: Int = 1, authorized: Bool = true,
                         features: [String] = ["model_features", "mask", "references", "upsampler", "upload", "cancel_job"]) -> JSONValue {
-        ["name": "NV-AI", "version": "0.2.0", "api": .int(api), "auth": "token", "authorized": .bool(authorized),
+        ["name": "NVAI-open", "version": "0.2.0", "api": .int(api), "auth": "token", "authorized": .bool(authorized),
          "features": .array(features.map { .string($0) })]
     }
 
@@ -301,7 +301,7 @@ final class StubURLProtocol: URLProtocol {
 final class NVAIContractTests: XCTestCase {
     var contract: NVAIContract!
 
-    /// Alles, was NVAIClient bei NV-AI aufruft – `testClientRequestsFollowContract` muss jede Zeile auslösen.
+    /// Alles, was NVAIClient bei NVAI-open aufruft – `testClientRequestsFollowContract` muss jede Zeile auslösen.
     static let used: Set<String> = [
         "GET /api/version", "GET /api/health", "GET /api/models", "GET /api/assets", "GET /api/assets/{asset_id}",
         "DELETE /api/assets/{asset_id}", "POST /api/upload", "POST /api/generate/image", "GET /api/jobs/{job_id}",
@@ -314,7 +314,7 @@ final class NVAIContractTests: XCTestCase {
         contract = try NVAIContract.load()
     }
 
-    /// NV-AI liefert Modelltexte und Fehler in der Sprache aus `Accept-Language` – der Client sendet die gewählte.
+    /// NVAI-open liefert Modelltexte und Fehler in der Sprache aus `Accept-Language` – der Client sendet die gewählte.
     func testAcceptLanguageFollowsChoice() async throws {
         let nv = StubNVAI(spec: contract.spec, version: StubNVAI.version())
         let client = nv.client()

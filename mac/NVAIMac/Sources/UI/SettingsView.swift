@@ -21,9 +21,9 @@ struct SettingsView: View {
                     Text("English").tag("en")
                     Text("Deutsch").tag("de")
                 }
-                Text(t("Die Menüleiste wechselt beim nächsten Start von NV-AI. Die Schnittstelle antwortet "
+                Text(t("Die Menüleiste wechselt beim nächsten Start von NVAI-open. Die Schnittstelle antwortet "
                        + "in der Sprache, die der Client schickt (Accept-Language).",
-                       "The menu bar switches the next time NV-AI starts. The API answers in the language "
+                       "The menu bar switches the next time NVAI-open starts. The API answers in the language "
                        + "the client asks for (Accept-Language)."))
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -35,10 +35,10 @@ struct SettingsView: View {
                         if let p = UInt16(portText), p >= 1024 { state.changePort(p) }
                     }
                 }
-                Text(t("Die PhotoCraft-App und eigene Skripte sprechen NV-AI über diese Adresse an. "
-                       + "Erreichbar nur von diesem Mac. Standard ist 8100, wie NV-AI unter Windows.",
-                       "The PhotoCraft app and your own scripts talk to NV-AI at this address. "
-                       + "Reachable from this Mac only. The default is 8100, as in NV-AI for Windows."))
+                Text(t("Die PhotoCraft-App und eigene Skripte sprechen NVAI-open über diese Adresse an. "
+                       + "Erreichbar nur von diesem Mac. Standard ist 8100, wie NVAI-open unter Windows.",
+                       "The PhotoCraft app and your own scripts talk to NVAI-open at this address. "
+                       + "Reachable from this Mac only. The default is 8100, as in NVAI-open for Windows."))
                     .font(.caption).foregroundStyle(.secondary)
                 Text(t("Protokoll: ", "Log: ") + AppLog.file.path).font(.caption).foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -96,7 +96,7 @@ struct SettingsView: View {
             Section(t("Dieser Mac", "This Mac")) {
                 Text(t("\(SystemInfo.chip), \(SystemInfo.memoryGB) GB Arbeitsspeicher", "\(SystemInfo.chip), \(SystemInfo.memoryGB) GB memory"))
                 Text("macOS \(SystemInfo.macOS)")
-                Text("NV-AI \(SystemInfo.appVersion) (\(SystemInfo.build))")
+                Text("NVAI-open \(SystemInfo.appVersion) (\(SystemInfo.build))")
             }
         }
         .formStyle(.grouped)
@@ -133,7 +133,7 @@ struct SettingsView: View {
     private func saveReport() {
         let panel = NSSavePanel()
         panel.title = t("Messbericht speichern", "Save test report")
-        panel.nameFieldStringValue = t("NV-AI-Messbericht", "NV-AI-Test-Report") + "-\(Date().formatted(.iso8601.year().month().day())).md"
+        panel.nameFieldStringValue = t("NVAI-open-Messbericht", "NVAI-open-Test-Report") + "-\(Date().formatted(.iso8601.year().month().day())).md"
         panel.allowedContentTypes = [.plainText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let text = Report.markdown(images: state.images, jobs: state.jobs)
@@ -150,7 +150,7 @@ struct SettingsView: View {
 enum Report {
     static func markdown(images: [AssetRecord], jobs: [JobRecord]) -> String {
         var lines: [String] = [
-            t("# NV-AI für Mac: Messbericht", "# NV-AI for Mac: test report"),
+            t("# NVAI-open für Mac: Messbericht", "# NVAI-open for Mac: test report"),
             "",
             "- App: \(SystemInfo.appVersion) (\(SystemInfo.build))",
             t("- Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB Arbeitsspeicher", "- Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB memory"),

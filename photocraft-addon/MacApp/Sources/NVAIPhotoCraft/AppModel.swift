@@ -7,7 +7,7 @@ import PhotoCraftKit
 @Observable
 final class AppModel {
     static let historyLimit = 20
-    /// „NV-AI für Mac“: startet beim Öffnen seinen Server auf 127.0.0.1:8100.
+    /// „NVAI-open für Mac“: startet beim Öffnen seinen Server auf 127.0.0.1:8100.
     nonisolated static let nvaiMacBundleID = "com.noerr.nvai.mac"
     /// Für die Fehlersuche (`--snapshot … --run`) aus dem App-Delegate erreichbar.
     static weak var shared: AppModel?
@@ -33,13 +33,13 @@ final class AppModel {
     var starting = ""
     var placing = false
     var message: String? = nil
-    /// NV-AI für Mac, falls installiert.
+    /// NVAI-open für Mac, falls installiert.
     var nvaiApp: URL? = nil
     /// Installiertes PhotoCraft und seine Version. Wie `nvaiApp` alle 5 s neu nachgesehen, damit
     /// eine Installation bei laufender App ohne Neustart greift.
     @ObservationIgnored private var install: (checked: Date, app: URL?, version: String?) = (.distantPast, nil, nil)
 
-    /// NV-AI läuft nicht, soll aber auf diesem Mac laufen, und NV-AI für Mac ist da.
+    /// NVAI-open läuft nicht, soll aber auf diesem Mac laufen, und NVAI-open für Mac ist da.
     var nvaiStartable: Bool { !nv.connected && settings.isLocal && nvaiApp != nil }
 
     init() {
@@ -53,13 +53,13 @@ final class AppModel {
         workflow = Workflow(pc: control, exchange: launch.exchange)
         nvai = settings.baseURL.map { NVAIClient(baseURL: $0, token: settings.token) }
         form = FormState.load()
-        Log.write("App gestartet – NV-AI \(settings.nvaiURL), PhotoCraft-Port \(settings.port)")
+        Log.write("App gestartet – NVAI-open \(settings.nvaiURL), PhotoCraft-Port \(settings.port)")
         cleanupOldJobs()
         Self.shared = self
         Task { await poll() }
     }
 
-    /// Fehlersuche: wartet auf PhotoCraft mit Dokument und auf NV-AI, rechnet „Generieren“ mit einer
+    /// Fehlersuche: wartet auf PhotoCraft mit Dokument und auf NVAI-open, rechnet „Generieren“ mit einer
     /// Variante (schnellstes passendes Modell) und stellt danach die Eingaben des Nutzers wieder her.
     func diagnosticRun(prompt: String) async {
         for _ in 0..<120 where !(pc.document != nil && nv.usable && modelsLoaded) {
@@ -78,21 +78,21 @@ final class AppModel {
         form = saved
     }
 
-    /// Fehlersuche: nach dem ersten Abgleich „NV-AI starten“ drücken und abwarten, wie der Start ausgeht.
+    /// Fehlersuche: nach dem ersten Abgleich „NVAI-open starten“ drücken und abwarten, wie der Start ausgeht.
     func diagnosticStartNVAI() async {
         for _ in 0..<40 where !checked {
             try? await Task.sleep(nanoseconds: 250_000_000)
         }
         guard nvaiStartable else {
-            Log.write("Diagnose „NV-AI starten“: nicht möglich – verbunden \(nv.connected), lokal \(settings.isLocal), App \(nvaiApp?.path ?? "fehlt")")
+            Log.write("Diagnose „NVAI-open starten“: nicht möglich – verbunden \(nv.connected), lokal \(settings.isLocal), App \(nvaiApp?.path ?? "fehlt")")
             return
         }
-        Log.write("Diagnose „NV-AI starten“: Knopf gedrückt")
+        Log.write("Diagnose „NVAI-open starten“: Knopf gedrückt")
         let pressed = Date()
         startNVAI()
         while starting == "nvai" { try? await Task.sleep(nanoseconds: 250_000_000) }
         let seconds = String(format: "%.1f", Date().timeIntervalSince(pressed))
-        Log.write("Diagnose „NV-AI starten“: \(nv.connected ? "verbunden nach \(seconds) s, NV-AI \(nv.version ?? "?")" : message ?? "nicht verbunden")")
+        Log.write("Diagnose „NVAI-open starten“: \(nv.connected ? "verbunden nach \(seconds) s, NVAI-open \(nv.version ?? "?")" : message ?? "nicht verbunden")")
     }
 
     var isRunning: Bool { current?.status == .running }
@@ -150,8 +150,8 @@ final class AppModel {
 
     func refreshNVAI() async {
         guard let nvai else {
-            nv = NVAIState(connected: false, error: t("Die NV-AI-Adresse „\(settings.nvaiURL)“ ist ungültig.",
-                                                     "The NV-AI address \"\(settings.nvaiURL)\" is invalid."))
+            nv = NVAIState(connected: false, error: t("Die NVAI-open-Adresse „\(settings.nvaiURL)“ ist ungültig.",
+                                                     "The NVAI-open address \"\(settings.nvaiURL)\" is invalid."))
             return
         }
         var s = NVAIState()
@@ -180,7 +180,7 @@ final class AppModel {
             s = NVAIState(connected: false, error: error.localizedDescription)
         }
         if nv != s { nv = s }
-        // Ohne Bildmodell (frisch installiertes NV-AI) bei jedem Abgleich nachsehen, ob eins dazukam.
+        // Ohne Bildmodell (frisch installiertes NVAI-open) bei jedem Abgleich nachsehen, ob eins dazukam.
         if nv.usable && (!modelsLoaded || models.isEmpty) { await loadModels() }
         if !nv.usable { modelsLoaded = false }
     }
@@ -202,7 +202,7 @@ final class AppModel {
         }
     }
 
-    /// „Erneut prüfen“: gemerkte Versionsangaben verwerfen und NV-AI frisch fragen.
+    /// „Erneut prüfen“: gemerkte Versionsangaben verwerfen und NVAI-open frisch fragen.
     func recheck() {
         nvai?.forget()
         modelsLoaded = false
@@ -217,7 +217,7 @@ final class AppModel {
     /// stehen sie wieder auf 0, damit ein zweiter Klick die Arbeitsfläche nicht noch einmal erweitert.
     var extend = [0, 0, 0, 0]
     var extending: Bool { form.mode == .extend && extend.contains { $0 > 0 } }
-    /// Im Modus Erweitern gehen mit NV-AIs outpaint auch Bearbeitungsmodelle (FLUX 3, FLUX.2 Klein).
+    /// Im Modus Erweitern gehen mit NVAI-opens outpaint auch Bearbeitungsmodelle (FLUX 3, FLUX.2 Klein).
     private var extendByOutpaint: Bool { form.mode == .extend && nv.outpaint }
 
     var suitableModels: [ModelOption] {
@@ -261,13 +261,13 @@ final class AppModel {
 
     var currentModel: ModelOption? { suitableModels.first { $0.id == selectedModelID } ?? fallbackModel }
 
-    /// NV-AI antwortet, hat aber noch kein Bildmodell installiert.
+    /// NVAI-open antwortet, hat aber noch kein Bildmodell installiert.
     var noModels: Bool { nv.usable && modelsLoaded && models.isEmpty }
 
     var automaticTitle: String {
         if models.isEmpty { return noModels ? t("Kein Bildmodell installiert", "No image model installed") : t("Aktives Modell", "Active model") }
         guard let fallback = fallbackModel else {
-            return form.mode == .fill && nv.usable && !nv.masks ? t("Füllen braucht Masken-Unterstützung in NV-AI", "Fill needs mask support in NV-AI")
+            return form.mode == .fill && nv.usable && !nv.masks ? t("Füllen braucht Masken-Unterstützung in NVAI-open", "Fill needs mask support in NVAI-open")
                 : t("Kein passendes Modell installiert", "No suitable model installed")
         }
         return fallback.id == nv.activeModel ? t("Aktives Modell (\(fallback.name))", "Active model (\(fallback.name))")
@@ -307,13 +307,13 @@ final class AppModel {
                 : t("PhotoCraft ist nicht installiert", "PhotoCraft is not installed")
         }
         if pc.document == nil { return t("In PhotoCraft ist kein Dokument geöffnet", "No document is open in PhotoCraft") }
-        if !nv.connected { return t("NV-AI ist nicht erreichbar", "NV-AI is not reachable") }
+        if !nv.connected { return t("NVAI-open ist nicht erreichbar", "NVAI-open is not reachable") }
         if nv.problem != nil {
-            return nv.authorized ? t("NV-AI-Version passt nicht zur App", "NV-AI version does not match the app")
-                : t("NV-AI verlangt einen gültigen Token", "NV-AI requires a valid token")
+            return nv.authorized ? t("NVAI-open-Version passt nicht zur App", "NVAI-open version does not match the app")
+                : t("NVAI-open verlangt einen gültigen Token", "NVAI-open requires a valid token")
         }
-        if noModels { return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI") }
-        if form.mode == .fill && !nv.masks { return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet") }
+        if noModels { return t("In NVAI-open ist kein Bildmodell installiert", "No image model is installed in NVAI-open") }
+        if form.mode == .fill && !nv.masks { return t("NVAI-open kennt noch keine Masken", "NVAI-open does not know masks yet") }
         if form.mode == .extend && !extending {
             return t("Bitte angeben, wie viele Pixel dazukommen", "Please enter how many pixels to add")
         }
@@ -405,7 +405,7 @@ final class AppModel {
 
     var canExpand: Bool { nv.usable && nv.expand && !expanding && !form.prompt.trimmed.isEmpty }
 
-    /// Ein paar Worte zur vollen Bildbeschreibung ausbauen (NV-AI: unter Windows der Upsampler von
+    /// Ein paar Worte zur vollen Bildbeschreibung ausbauen (NVAI-open: unter Windows der Upsampler von
     /// FLUX 3, auf dem Mac der Text-Encoder von FLUX.2 Klein). Ersetzt den Prompt, mit Zurücknehmen.
     func expandPrompt() {
         guard canExpand, let nvai else { return }
@@ -430,7 +430,7 @@ final class AppModel {
         }
     }
 
-    /// Einen NV-AI-Download abbrechen; fertige Teile bleiben dort zum Fortsetzen.
+    /// Einen NVAI-open-Download abbrechen; fertige Teile bleiben dort zum Fortsetzen.
     func cancelDownload(_ job: String) {
         guard let nvai else { return }
         Task {
@@ -482,8 +482,8 @@ final class AppModel {
         guard starting.isEmpty else { return }
         message = nil
         if pc.uncontrolledRunning && !force {
-            message = t("PhotoCraft läuft bereits ohne NV-AI-Anbindung. Bitte dort speichern und schließen – oder „Zusätzlich starten“.",
-                        "PhotoCraft is already running without the NV-AI connection. Please save and close it there – or use \"Start another one\".")
+            message = t("PhotoCraft läuft bereits ohne NVAI-open-Anbindung. Bitte dort speichern und schließen – oder „Zusätzlich starten“.",
+                        "PhotoCraft is already running without the NVAI-open connection. Please save and close it there – or use \"Start another one\".")
             return
         }
         guard let app = PhotoCraftLaunch.installedApp() else {
@@ -525,7 +525,7 @@ final class AppModel {
         NSWorkspace.shared.open(PhotoCraftLaunch.downloadURL)
     }
 
-    /// NV-AI zeigen, etwa um ein Modell zu laden: NV-AI für Mac nach vorn holen, bei einer NV-AI auf
+    /// NVAI-open zeigen, etwa um ein Modell zu laden: NVAI-open für Mac nach vorn holen, bei einer NVAI-open auf
     /// einem anderen Rechner deren Oberfläche im Browser öffnen.
     func openNVAI() {
         if settings.isLocal, let app = nvaiApp {
@@ -535,8 +535,8 @@ final class AppModel {
         }
     }
 
-    /// NV-AI für Mac öffnen, ohne es nach vorn zu holen. Es startet seinen Server selbst; bereit ist
-    /// NV-AI, sobald `/api/version` antwortet – so lange zeigt das Panel „NV-AI startet …“.
+    /// NVAI-open für Mac öffnen, ohne es nach vorn zu holen. Es startet seinen Server selbst; bereit ist
+    /// NVAI-open, sobald `/api/version` antwortet – so lange zeigt das Panel „NVAI-open startet …“.
     func startNVAI() {
         guard starting.isEmpty, let app = nvaiApp else { return }
         message = nil
@@ -546,19 +546,19 @@ final class AppModel {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = false
                 _ = try await NSWorkspace.shared.openApplication(at: app, configuration: config)
-                Log.write("NV-AI für Mac geöffnet: \(app.path)")
+                Log.write("NVAI-open für Mac geöffnet: \(app.path)")
                 for _ in 0..<120 where !nv.connected {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                     await refreshNVAI()
                 }
                 if !nv.connected {
-                    message = t("NV-AI für Mac ist geöffnet, antwortet aber noch nicht unter \(settings.nvaiURL).",
-                                "NV-AI for Mac is open but does not answer at \(settings.nvaiURL) yet.")
+                    message = t("NVAI-open für Mac ist geöffnet, antwortet aber noch nicht unter \(settings.nvaiURL).",
+                                "NVAI-open for Mac is open but does not answer at \(settings.nvaiURL) yet.")
                 }
             } catch {
-                message = t("NV-AI für Mac ließ sich nicht starten: \(error.localizedDescription)",
-                            "NV-AI for Mac could not be started: \(error.localizedDescription)")
-                Log.write("Start von NV-AI für Mac gescheitert: \(error.localizedDescription)")
+                message = t("NVAI-open für Mac ließ sich nicht starten: \(error.localizedDescription)",
+                            "NVAI-open for Mac could not be started: \(error.localizedDescription)")
+                Log.write("Start von NVAI-open für Mac gescheitert: \(error.localizedDescription)")
             }
             starting = ""
         }
@@ -585,7 +585,7 @@ final class AppModel {
         nvai = new.baseURL.map { NVAIClient(baseURL: $0, token: new.token) }
         models = []
         modelsLoaded = false
-        Log.write("Einstellungen geändert – NV-AI \(new.nvaiURL), Token \(new.token == nil ? "keiner" : "gesetzt")")
+        Log.write("Einstellungen geändert – NVAI-open \(new.nvaiURL), Token \(new.token == nil ? "keiner" : "gesetzt")")
         Task {
             await refreshNVAI()
             await refreshPhotoCraft()
@@ -609,23 +609,23 @@ final class AppModel {
         do {
             guard let info = try await client.version() else {
                 _ = try await client.health()
-                return ProbeResult(ok: true, message: t("NV-AI antwortet (Version vor 0.2.0, ohne Versionsangabe).",
-                                                        "NV-AI answers (version before 0.2.0, without version info)."))
+                return ProbeResult(ok: true, message: t("NVAI-open antwortet (Version vor 0.2.0, ohne Versionsangabe).",
+                                                        "NVAI-open answers (version before 0.2.0, without version info)."))
             }
             do {
                 try await client.checkCompatible()
                 let message = info.auth == "local"
-                    ? t("Verbunden: NV-AI \(info.version), Zugriff vom eigenen Rechner erlaubt.",
-                        "Connected: NV-AI \(info.version), access from this computer allowed.")
-                    : t("Verbunden: NV-AI \(info.version), Zugriff mit Token erlaubt.",
-                        "Connected: NV-AI \(info.version), access with token allowed.")
+                    ? t("Verbunden: NVAI-open \(info.version), Zugriff vom eigenen Rechner erlaubt.",
+                        "Connected: NVAI-open \(info.version), access from this computer allowed.")
+                    : t("Verbunden: NVAI-open \(info.version), Zugriff mit Token erlaubt.",
+                        "Connected: NVAI-open \(info.version), access with token allowed.")
                 return ProbeResult(ok: true, message: message)
             } catch {
                 return ProbeResult(ok: false, message: error.localizedDescription)
             }
         } catch {
-            let hint = settings.isLocal ? t("Läuft NV-AI auf diesem Mac?", "Is NV-AI running on this Mac?")
-                : t("Läuft NV-AI dort, und ist es im Netz erreichbar?", "Is NV-AI running there, and is it reachable on the network?")
+            let hint = settings.isLocal ? t("Läuft NVAI-open auf diesem Mac?", "Is NVAI-open running on this Mac?")
+                : t("Läuft NVAI-open dort, und ist es im Netz erreichbar?", "Is NVAI-open running there, and is it reachable on the network?")
             return ProbeResult(ok: false, message: "\(error.localizedDescription) \(hint)")
         }
     }

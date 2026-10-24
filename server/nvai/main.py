@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     mesh_workers.stop_all()
 
 
-app = FastAPI(title="NV-AI", version=__version__, lifespan=lifespan)
+app = FastAPI(title="NVAI-open", version=__version__, lifespan=lifespan)
 
 # Vertragsversion der REST-API (GET /api/version). Steigt nur, wenn bestehende
 # Clients brechen: ein Endpunkt oder Feld faellt weg oder bedeutet etwas anderes.
@@ -78,6 +78,10 @@ API_FEATURES = [
     "folders",         # GET/PUT /api/settings/folders, POST /api/restart: Daten- und Modellordner
     "loras",           # LoRAs: Suche (kind=lora), Laden, loras=[{model_id, strength}] beim Generieren
     "civitai",         # GET /api/civitai/search, PUT /api/settings/civitai: LoRAs von Civitai
+    "ltx25_full",      # generate/video mit LTX-2.5: end_image_asset_id, loop, quality=dfr,
+                       # temporal_upscale, auto_duration, audio_asset_id, motion_speed (features des
+                       # Modells sagen, was installiert ist); expand target video_multishot
+    "recommended_loras",  # GET /api/models: LoRAs mit features.recommended_for (Empfehlungen je Familie)
 ]
 
 
@@ -147,9 +151,9 @@ async def _require_token(request, call_next):
             return JSONResponse({"detail": t("Zugriff verweigert: Token fehlt oder falsch.", "Access denied: token missing or wrong.")},
                                 status_code=401)
         return JSONResponse(
-            {"detail": t("NV-AI bedient ohne Token nur den eigenen Rechner. "
+            {"detail": t("NVAI-open bedient ohne Token nur den eigenen Rechner. "
                          "Für andere Geräte mit scripts\\start.ps1 -Lan starten.",
-                         "Without a token NV-AI only serves this computer. "
+                         "Without a token NVAI-open only serves this computer. "
                          "Start it with scripts\\start.ps1 -Lan for other devices.")},
             status_code=403)
     return await call_next(request)
@@ -226,7 +230,7 @@ async def version(request: Request) -> VersionInfo:
 
 @app.post("/api/shutdown")
 async def shutdown(request: Request) -> dict[str, Any]:
-    """Beendet NV-AI samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.
+    """Beendet NVAI-open samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.
     Nur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen."""
     if not _is_local(request.headers, request.client):
         raise HTTPException(403, t("Beenden geht nur vom eigenen Rechner aus.", "Shutdown is only allowed from this computer."))
@@ -695,7 +699,7 @@ async def generate_3d(req: Generate3DRequest) -> Job:
 
 @app.get("/api/settings/folders")
 async def get_folders() -> dict[str, Any]:
-    """Daten- und Modellordner, freier Platz, und ob NV-AI sie selbst setzen kann (Setup)."""
+    """Daten- und Modellordner, freier Platz, und ob NVAI-open sie selbst setzen kann (Setup)."""
     return await asyncio.to_thread(folders.current)
 
 
@@ -728,8 +732,8 @@ async def put_folders(body: dict[str, str]) -> dict[str, Any]:
 async def restart() -> dict[str, Any]:
     """Setup-Fassung neu starten (ueber den Starter). Laeuft ein Job, erst danach."""
     if not folders.managed():
-        raise HTTPException(409, t("Neustart geht nur bei der installierten Fassung. Bitte NV-AI selbst neu starten.",
-                                   "Restart only works for the installed version. Please restart NV-AI yourself."))
+        raise HTTPException(409, t("Neustart geht nur bei der installierten Fassung. Bitte NVAI-open selbst neu starten.",
+                                   "Restart only works for the installed version. Please restart NVAI-open yourself."))
     if jobs.current_job_id():
         raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
                                    "A job is running. Please try again afterwards."))

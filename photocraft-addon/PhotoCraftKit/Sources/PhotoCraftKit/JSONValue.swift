@@ -1,6 +1,6 @@
 import Foundation
 
-/// Dynamischer JSON-Wert für Steuerbefehle, NV-AI-Antworten und Golden-Daten.
+/// Dynamischer JSON-Wert für Steuerbefehle, NVAI-open-Antworten und Golden-Daten.
 ///
 /// Zahlen werden wie in JSON verglichen: `.int(28) == .double(28.0)`. So bleiben Vergleiche mit
 /// den Golden-Daten (von Python erzeugt) unabhängig davon, ob ein Decoder 1.0 als Int liest.

@@ -1,8 +1,8 @@
-# Using NV-AI from Claude Code
+# Using NVAI-open from Claude Code
 
-NV-AI includes an MCP server, `nvai`, that makes local media generation on your own NVIDIA GPU
+NVAI-open includes an MCP server, `nvai`, that makes local media generation on your own NVIDIA GPU
 available to Claude Code: images, audio, video and 3D meshes for game assets, as a replacement
-for paid cloud generation. The MCP server is a thin client of the NV-AI REST server, so the web
+for paid cloud generation. The MCP server is a thin client of the NVAI-open REST server, so the web
 UI and Claude Code behave identically and share the same job queue.
 
 This guide covers setup, the tools, and practical advice on model choice, prompts, sizes and
@@ -15,12 +15,12 @@ also paste the parts you need into a project's `CLAUDE.md`.
 
 All tools talk to `http://127.0.0.1:8100`. If the server is not running, every tool fails.
 
-- **Windows setup:** Start menu → **NV-AI** starts it, **Quit NV-AI** shuts it down.
+- **Windows setup:** Start menu → **NVAI-open** starts it, **Quit NVAI-open** shuts it down.
 - **Source checkout:**
 
 ```powershell
 scripts\start.ps1        # reports if one is already running
-scripts\stop.ps1         # stops NV-AI and ComfyUI specifically
+scripts\stop.ps1         # stops NVAI-open and ComfyUI specifically
 ```
 
 **Always call `health` first.** It shows in one go whether the GPU backend is running, which
@@ -48,10 +48,10 @@ where the setup keeps its data (default `%LOCALAPPDATA%\NV-AI`):
 claude mcp add --scope user nvai -e "NVAI_DATA_DIR=<data folder>" -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
 ```
 
-If NV-AI listens on a port other than 8100, pass its address the same way, for example
+If NVAI-open listens on a port other than 8100, pass its address the same way, for example
 `-e "NVAI_API_URL=http://127.0.0.1:8101"`.
 
-After an NV-AI update, a running Claude Code session only sees the new tool descriptions after
+After an NVAI-open update, a running Claude Code session only sees the new tool descriptions after
 `/mcp` and reconnecting.
 
 ## Tools
@@ -102,7 +102,10 @@ license. Downloads are several GB; ask the user first.
 | Image 1728 × 2304 (4 MP) | HiDream-O1 Dev fp8 | ~41 s, first run ~87 s |
 | Image 832 × 1216, 4 steps | Boogu-Image Turbo NVFP4 | ~10 s, first run ~17 s |
 | Edit 832 × 1216 | Boogu-Image Edit NVFP4 | ~147 s |
-| Video with sound 1280 × 704, 4 s | LTX-2.5 NVFP4 | ~72 s; image to video 448 × 832 ~45 s |
+| Video with sound 1280 × 704, 5 s | LTX-2.5 NVFP4 (graph since 0.5.8) | ~93 s, first run with loading ~122 s; with a start image ~109 s |
+| Start and end image 5 s / loop 4 s, 1280 × 704 | LTX-2.5 NVFP4 | ~154 s / ~125 s |
+| Video with sound 1920 × 1088, 5 s / multishot 1280 × 704, 8 s | LTX-2.5 NVFP4 | ~251 s / ~170 s |
+| Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
 | Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
 | Video 848 × 480, 49 frames | Mochi 1 preview fp8 | ~351 s with loading |
 | Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
@@ -389,13 +392,13 @@ lyrics: ""            # empty = instrumental
 
 **ACE-Step 1.5** takes tempo, time signature and key directly: `bpm`, `time_signature` ("2" =
 2/4, "3", "4", "6" = 6/8) and `key_scale` ("Bb major", "A minor"). Without them 120 BPM, 4/4 and
-C major apply. A march: 120 BPM, "2", "Bb major". Since 0.5.7 NV-AI runs it like ComfyUI's
+C major apply. A march: 120 BPM, "2", "Bb major". Since 0.5.7 NVAI-open runs it like ComfyUI's
 template (8 steps, CFG 1, shift 3); before it used 12 steps and CFG 2 without shift, which
 sounded harsh and compressed.
 
 **Stable Audio 3 Medium** (since 0.5.7) → instrumental music up to 5 minutes, no vocals (a choir
 only without words). Write the prompt as **one sentence**: genre with the main instruments,
-layers and percussion, the mood, then "BPM: 100.". NV-AI appends "Length: N seconds" to match
+layers and percussion, the mood, then "BPM: 100.". NVAI-open appends "Length: N seconds" to match
 `seconds`. `expand_prompt` with `target="music_sa3"` writes exactly this form.
 
 ```
@@ -405,7 +408,7 @@ prompt: "A dark orchestral war theme with low brass, taiko drums and a wordless 
 
 Measured: 300 s in 64 s, but the 16 GB card was almost full (60 s: 9.7 GB).
 
-**Levels:** since 0.5.7 every audio output goes through NV-AI's own limiter before it is saved
+**Levels:** since 0.5.7 every audio output goes through NVAI-open's own limiter before it is saved
 (ceiling −1 dBFS). ACE-Step is lowered by 3 dB first: its raw output peaks up to +5.7 dBFS, and
 the MP3 encoder used to cut everything above 0 dB off hard. Measured with the limiter: ACE-Step
 −14 to −17 LUFS, Stable Audio 3 −12 to −15 LUFS, true peak at most +0.2 dBTP (MP3 overshoot).
@@ -414,6 +417,72 @@ Normalize before putting a track into a video (ffmpeg `loudnorm`, −14 LUFS).
 `seconds` controls the length (up to 300). Short SFX: 3–8 s. Music: 30–120 s.
 
 ## Video
+
+### First choice: LTX-2.5 (fully built out since 0.5.8, the recommended video model)
+
+`ltx25-distilled-nvfp4` (RTX 50) or `ltx25-distilled-int8` (RTX 20/30/40, not measured yet): picture
+and sound in one pass, MP4. Lightricks, LTX-2 Community License (free below US$10 million revenue).
+Write the prompt as Lightricks recommends: one paragraph in the present tense, 4 to 8 sentences in the
+order shot → setting and light → the action with verbs → people (physical cues instead of emotion
+words) → camera movement → sound; spoken lines in quotation marks; write pacing and pauses out.
+Use `fps=24`, sizes from `features.sizes` (multiples of 64; 1280 × 704 is 720p), frames 8n+1
+(97 = 4 s, 121 = 5 s, 481 = 20 s).
+
+`generate_video` options for LTX-2.5:
+- `image_asset_id`: start image (image to video).
+- `end_image_asset_id`: last frame; with a start image the clip is a transition. `loop=True` uses the
+  start image as the end image too, for a seamless loop.
+- `quality="dfr"`: Diffusion Fidelity Rendering — detail keyframes plus a detail IC-LoRA, sharper and
+  slower; `temporal_upscale=True` doubles the frame rate (48 fps). Not together with an end image.
+- `auto_duration=True`: the model picks the length (1–20 s) from the described action.
+- `audio_asset_id`: a given sound (e.g. music from `generate_audio`); the picture follows it, the
+  original sound ends up in the MP4, the clip takes its length (at most 20 s).
+- `motion_speed` below 1: slow motion (0.5 = 2×, 0.2 = 5×, 0.1 = 10×), reliable with the Slow Motion
+  Control LoRA and a start image.
+- Several shots in one clip: no parameter — write every cut out in prose ("A hard cut transitions to a
+  close-up of …"), 2–4 shots; `expand_prompt(target="video_multishot")` writes that form.
+
+DFR, automatic length and 48 fps need small optional files; the detail IC-LoRA for DFR sits in its own
+gated repo. If something is missing, `features.missing` names the Hugging Face page.
+
+Measured on an RTX 5060 Ti (24 fps, with sound, graphics memory almost full): see the table above.
+A loop's first and last frame differ by 3.6/255 on average (12–44 without a loop), but only with a
+still camera: with "the camera pushes in" the last frames of a loop fell apart. Automatic length
+gave 3 s for a door that opens slowly; 20 s of a given sound became a 19.7 s clip. Sounds described
+as quiet ("crackles softly") come out at −41 to −52 LUFS, speech and a forge at −14 to −18 LUFS:
+name loud sources explicitly. Generated sound goes through the audio limiter (−2.5 dB, because AAC
+overshoots dense sound by up to 1.9 dB) since 0.5.8; a
+given sound stays unchanged. DFR and the two Lightricks LoRAs are not tested yet (gated repos).
+
+**Recommended LoRAs** (`list_models(kind="lora")`, `features.recommended_for` contains `ltx25`,
+`features.strength` is the suggested strength): Cinemagraph and Slow Motion Control (official, gated),
+Transition (Apache-2.0), Crisp Enhance, Fantasy Anime, Fantasy Painterly, Claymation, Paper Cut-Out,
+Sci-fi Cyberpunk (no license stated), Audio Reactive. Lightricks' IC-LoRAs (Restore, Relight,
+Day-To-Night, Alpha-Gen …) need a source video; NVAI-open has no video to video yet. Tested on
+LTX-2.5: Fantasy Anime and Fantasy Painterly show clearly; Paper Cut-Out only at strength 1.5 (now its
+`features.strength`); Claymation is only hinted at; Transition hardly changed a day-to-night
+transition; with Audio Reactive the brightness followed the music a little more closely, but LTX-2.5
+already pulses to a given sound without it.
+
+### Person from a photo (since 0.5.8)
+
+Turn a portrait into a video: the face from the photo in a role, saying a line. Two steps (web
+interface: Video tab → "Person from a photo"; by hand over MCP/REST the same way):
+1. **Start image with FLUX 3:** the photo as a reference (`reference_asset_ids=[photo]`), prompt
+   "Cinematic film still. The person from the first image, with exactly the same face, eyes, nose,
+   mouth and hair color: <role>. Medium shot from the waist up, the face clearly visible, free space
+   above the head." in the video size with `batch_size=4` (1280 × 704: 95–98 s). Crop the photo to head
+   and shoulders and name the clothing explicitly. FLUX makes faces a little slimmer and younger, so
+   compare the four variants with the photo at full resolution.
+2. **Video with LTX-2.5** from the chosen image: motion only, the spoken line in quotation marks with
+   the voice ("says in a rough, deep, gravelly voice: "…""), then the sounds. 5 s at 1280 × 704 in 82–128 s.
+
+Measured with two portraits: "pulls back a little" became a wide shot, "holds a steady medium shot" kept
+the framing longer. If the person turns away, LTX redraws the face afterwards and it looks less alike;
+"keeps facing the camera" keeps it in view, but on a push-in LTX still smooths it toward an average
+face. The voice is generated by LTX, never the person's real one.
+
+### Other video models
 
 ```
 prompt: "a burning torch mounted on a dark stone wall, flame flickering,
@@ -424,10 +493,11 @@ prompt: "a burning torch mounted on a dark stone wall, flame flickering,
 - Leave `negative_prompt` empty; the default is already sensible.
 - **832×480 is the cheapest Wan default.** 720p costs many times as much.
 - `frames` is rounded to **4n+1** (Wan) or 8n+1 (LTX). 49 frames at 16 fps ≈ 3 s.
-- Output is **WEBM/VP9** — plays in the browser; convert it for Unity if needed.
+- Output is **WEBM/VP9** (Wan, Mochi; LTX and Kandinsky give MP4) — plays in the browser; convert it
+  for Unity if needed.
 
-Model choice for text-to-video: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for
-quality (13 GB VRAM — don't keep anything else loaded), **LTX-Video** when speed matters.
+Without LTX-2.5: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for quality (13 GB
+VRAM — don't keep anything else loaded).
 
 ### Image to video
 
@@ -559,7 +629,7 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
 - Unproblematic: SDXL, FLUX schnell, ACE-Step (1.5: MIT, v1: Apache-2.0), Wan (all variants), Chroma, TripoSG, TRELLIS.2.
 
 `list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)
-with `content_note` and `content_source`. NV-AI itself has no content filter.
+with `content_note` and `content_source`. NVAI-open itself has no content filter.
 
 When in doubt, point the user to the license instead of generating silently. This is not legal
 advice; the original license text is authoritative.

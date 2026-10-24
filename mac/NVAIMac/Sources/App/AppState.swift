@@ -33,7 +33,7 @@ final class AppState: ObservableObject {
     private var refreshScheduled = false
 
     /// Startet alles, was ohne Fenster laufen muss – aufgerufen vom AppDelegate beim Programmstart,
-    /// nicht erst vom Fenster: Die PhotoCraft-App öffnet NV-AI im Hintergrund.
+    /// nicht erst vom Fenster: Die PhotoCraft-App öffnet NVAI-open im Hintergrund.
     func start() async {
         // Fenster (.task) und AppDelegate rufen beide; der zweite wartet auf den ersten,
         // damit z. B. --report erst nach dem Laden der Bilder schreibt.

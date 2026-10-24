@@ -52,7 +52,7 @@ function modeTexts(mode) {
 /** Statische Texte aus index.html: Englisch steht im HTML, Deutsch in data-de bzw. data-de-<attr>. */
 function translateStatic() {
   document.documentElement.lang = lang;
-  document.title = t("NV-AI für PhotoCraft", "NV-AI for PhotoCraft");
+  document.title = t("NVAI-open für PhotoCraft", "NVAI-open for PhotoCraft");
   for (const node of $$("[data-de]")) {
     if (node.dataset.en === undefined) node.dataset.en = node.textContent;
     node.textContent = t(node.dataset.de, node.dataset.en);
@@ -71,7 +71,7 @@ const DEFAULTS = {
   advanced: false,
 };
 // Was ein Modell für den jeweiligen Modus können muss (Generieren können alle).
-// Erweitern: mit NV-AI ab 0.5.4 (Mac 0.4.3) jedes Modell mit features.outpaint, sonst Masken.
+// Erweitern: mit NVAI-open ab 0.5.4 (Mac 0.4.3) jedes Modell mit features.outpaint, sonst Masken.
 const MODE_NEEDS = { fill: "mask", refine: "refine", generate: null, extend: "mask" };
 const defaultTip = () => t("Englische Prompts treffen meist genauer.", "Detailed English prompts work best.");
 const STORE_KEY = "nvai-photocraft-panel";
@@ -180,11 +180,11 @@ function renderStatus() {
     const gpu = nv.gpu ? `${nv.gpu.name?.replace(/^cuda:\d+\s*/, "").replace(/\s*:.*$/, "")}` : "";
     const loaded = nv.loaded?.length ? t(`Geladen: ${nv.loaded.join(", ")}`, `Loaded: ${nv.loaded.join(", ")}`)
       : t("Kein Modell im VRAM", "No model in VRAM");
-    nvPill.title = [busy ? t("NV-AI rechnet gerade", "NV-AI is busy") : t("NV-AI bereit", "NV-AI ready"),
+    nvPill.title = [busy ? t("NVAI-open rechnet gerade", "NVAI-open is busy") : t("NVAI-open bereit", "NVAI-open ready"),
       nv.version ? `Version ${nv.version}` : "", loaded, gpu, nv.masks ? "" : t("ohne Masken-Unterstützung", "without mask support")]
       .filter(Boolean).join(" · ");
   } else {
-    nvPill.title = nv.error || t("NV-AI nicht erreichbar", "NV-AI not reachable");
+    nvPill.title = nv.error || t("NVAI-open nicht erreichbar", "NVAI-open not reachable");
   }
 }
 
@@ -217,24 +217,24 @@ function renderNotice() {
     if (!pc.connected && pc.installed === false && !pc.uncontrolled_running) {
       key += "pc-missing|";
       blocks.push(noticeBlock(
-        t(`PhotoCraft ist nicht installiert. NV-AI für PhotoCraft braucht PhotoCraft ${pc.tested_version} oder neuer.`,
-          `PhotoCraft is not installed. NV-AI for PhotoCraft needs PhotoCraft ${pc.tested_version} or newer.`),
+        t(`PhotoCraft ist nicht installiert. NVAI-open für PhotoCraft braucht PhotoCraft ${pc.tested_version} oder neuer.`,
+          `PhotoCraft is not installed. NVAI-open for PhotoCraft needs PhotoCraft ${pc.tested_version} or newer.`),
         [downloadButton(true)],
         t("Auf der Download-Seite unter „Assets“ die Datei …-windows-x64.msi laden und installieren. Danach geht es hier von selbst weiter.",
           "On the download page, get the file …-windows-x64.msi under \"Assets\" and install it. Everything continues here by itself afterwards."),
       ));
     } else if (!pc.connected) {
       key += pc.uncontrolled_running ? "pc-other|" : "pc-off|";
-      const label = starting === "photocraft" ? t("Startet …", "Starting …") : t("PhotoCraft mit NV-AI starten", "Start PhotoCraft with NV-AI");
+      const label = starting === "photocraft" ? t("Startet …", "Starting …") : t("PhotoCraft mit NVAI-open starten", "Start PhotoCraft with NVAI-open");
       if (pc.uncontrolled_running) {
         blocks.push(noticeBlock(
-          t("PhotoCraft läuft ohne NV-AI-Anbindung. Bitte dort speichern und schließen – dann hier neu starten.",
-            "PhotoCraft is running without the NV-AI connection. Please save and close it there – then start it again here."),
+          t("PhotoCraft läuft ohne NVAI-open-Anbindung. Bitte dort speichern und schließen – dann hier neu starten.",
+            "PhotoCraft is running without the NVAI-open connection. Please save and close it there – then start it again here."),
           [noticeButton(label, () => startPhotoCraft(false), true),
             noticeButton(t("Zusätzlich starten", "Start another one"), () => startPhotoCraft(true))],
         ));
       } else {
-        blocks.push(noticeBlock(t("PhotoCraft ist nicht mit NV-AI verbunden.", "PhotoCraft is not connected to NV-AI."),
+        blocks.push(noticeBlock(t("PhotoCraft ist nicht mit NVAI-open verbunden.", "PhotoCraft is not connected to NVAI-open."),
           [noticeButton(label, () => startPhotoCraft(false), true)]));
       }
       key += starting;
@@ -242,27 +242,27 @@ function renderNotice() {
     if (pc.installed && pc.outdated) {
       key += "pc-old|";
       blocks.push(noticeBlock(
-        t(`PhotoCraft ${pc.version} ist älter als ${pc.tested_version}. Mit dieser Version ist NV-AI für PhotoCraft nicht getestet – bitte aktualisieren.`,
-          `PhotoCraft ${pc.version} is older than ${pc.tested_version}. NV-AI for PhotoCraft is not tested with this version – please update.`),
+        t(`PhotoCraft ${pc.version} ist älter als ${pc.tested_version}. Mit dieser Version ist NVAI-open für PhotoCraft nicht getestet – bitte aktualisieren.`,
+          `PhotoCraft ${pc.version} is older than ${pc.tested_version}. NVAI-open for PhotoCraft is not tested with this version – please update.`),
         [downloadButton()],
       ));
     }
     if (!nv.connected && nv.local === false) {
-      // Entferntes NV-AI (etwa über Tailscale): starten lässt es sich nur dort.
+      // Entferntes NVAI-open (etwa über Tailscale): starten lässt es sich nur dort.
       key += "nv-remote-off|";
-      blocks.push(noticeBlock(t(`NV-AI unter ${nv.url} ist nicht erreichbar. Bitte dort starten oder die Verbindung prüfen.`,
-        `NV-AI at ${nv.url} is not reachable. Please start it there or check the connection.`)));
+      blocks.push(noticeBlock(t(`NVAI-open unter ${nv.url} ist nicht erreichbar. Bitte dort starten oder die Verbindung prüfen.`,
+        `NVAI-open at ${nv.url} is not reachable. Please start it there or check the connection.`)));
     } else if (!nv.connected && nv.starting) {
       key += "nv-starting|";
-      blocks.push(noticeBlock(t("NV-AI startet … Beim ersten Start kann das etwas dauern.", "NV-AI is starting … The first start can take a while.")));
+      blocks.push(noticeBlock(t("NVAI-open startet … Beim ersten Start kann das etwas dauern.", "NVAI-open is starting … The first start can take a while.")));
     } else if (!nv.connected && nv.startable === false) {
       key += "nv-missing|";
-      blocks.push(noticeBlock(t("NV-AI ist auf diesem PC nicht installiert. Bitte zuerst das NV-AI-Setup ausführen.",
-        "NV-AI is not installed on this PC. Please run the NV-AI setup first.")));
+      blocks.push(noticeBlock(t("NVAI-open ist auf diesem PC nicht installiert. Bitte zuerst das NVAI-open-Setup ausführen.",
+        "NVAI-open is not installed on this PC. Please run the NVAI-open setup first.")));
     } else if (!nv.connected) {
       key += `nv-off|${starting}`;
-      blocks.push(noticeBlock(t("NV-AI läuft nicht.", "NV-AI is not running."),
-        [noticeButton(starting === "nvai" ? t("Startet …", "Starting …") : t("NV-AI starten", "Start NV-AI"), startNvai, true)]));
+      blocks.push(noticeBlock(t("NVAI-open läuft nicht.", "NVAI-open is not running."),
+        [noticeButton(starting === "nvai" ? t("Startet …", "Starting …") : t("NVAI-open starten", "Start NVAI-open"), startNvai, true)]));
     } else if (nv.problem) {
       // Falsche Vertragsversion oder fehlender Token – nach dem Beheben ohne Neustart prüfbar.
       key += `nv-problem|${nv.problem}|${starting}`;
@@ -271,13 +271,13 @@ function renderNotice() {
       blocks.push(block);
     } else if (noModels()) {
       key += "nv-nomodels|";
-      blocks.push(noticeBlock(t("In NV-AI ist noch kein Bildmodell installiert. Bitte dort eines laden – danach geht es hier von selbst weiter.",
-        "No image model is installed in NV-AI yet. Please load one there – everything continues here by itself afterwards."),
-        [noticeButton(t("NV-AI öffnen", "Open NV-AI"), openNvai, true)]));
+      blocks.push(noticeBlock(t("In NVAI-open ist noch kein Bildmodell installiert. Bitte dort eines laden – danach geht es hier von selbst weiter.",
+        "No image model is installed in NVAI-open yet. Please load one there – everything continues here by itself afterwards."),
+        [noticeButton(t("NVAI-open öffnen", "Open NVAI-open"), openNvai, true)]));
     } else if (!nv.masks && settings.mode === "fill") {
       key += "nv-nomask|";
-      blocks.push(noticeBlock(t("Die laufende NV-AI-Version kennt noch keine Masken. Für „Füllen“ NV-AI bitte neu starten, damit die Erweiterung geladen wird.",
-        "The running NV-AI version does not know masks yet. For \"Fill\", please restart NV-AI so the extension gets loaded.")));
+      blocks.push(noticeBlock(t("Die laufende NVAI-open-Version kennt noch keine Masken. Für „Füllen“ NVAI-open bitte neu starten, damit die Erweiterung geladen wird.",
+        "The running NVAI-open version does not know masks yet. For \"Fill\", please restart NVAI-open so the extension gets loaded.")));
     }
     if (pc.connected && pc.dialog_open) {
       key += "dialog|";
@@ -325,7 +325,7 @@ function renderMode() {
   renderGo();
 }
 
-// Erweitern kennt NV-AI ab 0.5.4 (m.outpaint); dann gehen auch Bearbeitungsmodelle wie FLUX 3.
+// Erweitern kennt NVAI-open ab 0.5.4 (m.outpaint); dann gehen auch Bearbeitungsmodelle wie FLUX 3.
 const outpaintKnown = () => models.some((m) => m.outpaint);
 
 function suitable(m) {
@@ -345,7 +345,7 @@ function renderModels() {
     : active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
   const waitingForMasks = MODE_NEEDS[settings.mode] === "mask" && state?.nvai?.connected && !state.nvai.masks;
   const first = !models.length ? (modelsFetched ? t("Kein Bildmodell installiert", "No image model installed") : t("Aktives Modell", "Active model"))
-    : !fallback ? (waitingForMasks ? t("Füllen braucht Masken-Unterstützung in NV-AI", "Fill needs mask support in NV-AI")
+    : !fallback ? (waitingForMasks ? t("Füllen braucht Masken-Unterstützung in NVAI-open", "Fill needs mask support in NVAI-open")
       : t("Kein passendes Modell installiert", "No suitable model installed"))
     : active && fallback === active ? t(`Aktives Modell (${active.name})`, `Active model (${active.name})`)
     : t(`Automatisch (${fallback.name})`, `Automatic (${fallback.name})`);
@@ -363,7 +363,7 @@ function renderModels() {
   renderModelHints();
 }
 
-/** Bedienung nach dem Modell ausrichten, mit dem gerechnet würde (features aus NV-AI). */
+/** Bedienung nach dem Modell ausrichten, mit dem gerechnet würde (features aus NVAI-open). */
 function renderModelHints() {
   const m = currentModel;
   const mode = modeTexts(settings.mode);
@@ -427,13 +427,13 @@ function blocker() {
       : t("PhotoCraft ist nicht verbunden", "PhotoCraft is not connected");
   }
   if (!pc.document) return t("In PhotoCraft ist kein Dokument geöffnet", "No document is open in PhotoCraft");
-  if (!nv.connected) return t("NV-AI läuft nicht", "NV-AI is not running");
+  if (!nv.connected) return t("NVAI-open läuft nicht", "NVAI-open is not running");
   if (nv.problem) {
-    return nv.authorized === false ? t("NV-AI verlangt einen gültigen Token", "NV-AI requires a valid token")
-      : t("NV-AI-Version passt nicht zur Brücke", "NV-AI version does not match the bridge");
+    return nv.authorized === false ? t("NVAI-open verlangt einen gültigen Token", "NVAI-open requires a valid token")
+      : t("NVAI-open-Version passt nicht zur Brücke", "NVAI-open version does not match the bridge");
   }
-  if (noModels()) return t("In NV-AI ist kein Bildmodell installiert", "No image model is installed in NV-AI");
-  if (settings.mode === "fill" && !nv.masks) return t("NV-AI kennt noch keine Masken", "NV-AI does not know masks yet");
+  if (noModels()) return t("In NVAI-open ist kein Bildmodell installiert", "No image model is installed in NVAI-open");
+  if (settings.mode === "fill" && !nv.masks) return t("NVAI-open kennt noch keine Masken", "NVAI-open does not know masks yet");
   if (settings.mode === "extend" && !extending()) {
     return t("Bitte angeben, wie viele Pixel dazukommen", "Please enter how many pixels to add");
   }
@@ -475,8 +475,8 @@ function renderExtend() {
 
 function expandBlocker() {
   const nv = state?.nvai;
-  if (!nv?.connected || nv.problem) return t("NV-AI läuft nicht", "NV-AI is not running");
-  if (!nv.expand) return t("Diese NV-AI-Version kann Prompts noch nicht ausbauen", "This NV-AI version cannot expand prompts yet");
+  if (!nv?.connected || nv.problem) return t("NVAI-open läuft nicht", "NVAI-open is not running");
+  if (!nv.expand) return t("Diese NVAI-open-Version kann Prompts noch nicht ausbauen", "This NVAI-open version cannot expand prompts yet");
   if (state?.task?.status === "running") return t("Es läuft bereits ein Auftrag", "A job is already running");
   if (!settings.prompt.trim()) return t("Erst ein paar Worte eingeben", "Type a few words first");
   return null;
@@ -660,7 +660,7 @@ function renderHistory() {
   );
 }
 
-// Laufende Modell-Downloads von NV-AI, je mit Abbrechen (fertige Teile bleiben zum Fortsetzen).
+// Laufende Modell-Downloads von NVAI-open, je mit Abbrechen (fertige Teile bleiben zum Fortsetzen).
 function renderDownloads() {
   const box = $("#nv-downloads");
   const list = (state?.nvai?.connected && state.nvai.downloads) || [];
@@ -682,7 +682,7 @@ function renderDownloads() {
       poll(300);
     });
     return el("div", { class: "dl-item", title: d.stage || "" },
-      el("span", { class: "dl-name", text: t(`NV-AI lädt ${d.name}`, `NV-AI downloading ${d.name}`) }),
+      el("span", { class: "dl-name", text: t(`NVAI-open lädt ${d.name}`, `NVAI-open downloading ${d.name}`) }),
       el("span", { class: "dl-track" }, el("span", { class: "dl-fill", style: `width:${d.status === "queued" ? 0 : pct}%` })),
       el("span", { class: "dl-pct", text: label }),
       cancelBtn);
@@ -785,7 +785,7 @@ async function startNvai() {
   errorText = "";
   renderNotice();
   try {
-    // Bis NV-AI antwortet, meldet die Brücke „starting“ – der Hinweis wechselt dann von selbst.
+    // Bis NVAI-open antwortet, meldet die Brücke „starting“ – der Hinweis wechselt dann von selbst.
     await api("/api/nvai/start", { method: "POST" });
   } catch (e) {
     errorText = e.message;
@@ -832,7 +832,7 @@ async function loadModels() {
   }
 }
 
-// Frisch installiertes NV-AI ohne Bildmodell: Der Hinweis schickt den Nutzer dorthin.
+// Frisch installiertes NVAI-open ohne Bildmodell: Der Hinweis schickt den Nutzer dorthin.
 const noModels = () => modelsFetched && !models.length;
 
 function openNvai() {
@@ -875,7 +875,7 @@ async function tick() {
   if (state && !usable) modelsLoaded = modelsFetched = false;
   if (state) {
     const label = [t(`Brücke ${state.bridge.version}`, `Bridge ${state.bridge.version}`),
-      state.nvai.version && `NV-AI ${state.nvai.version}`].filter(Boolean).join(" · ");
+      state.nvai.version && `NVAI-open ${state.nvai.version}`].filter(Boolean).join(" · ");
     if ($("#version").textContent !== label) $("#version").textContent = label;
   }
   renderAll();
@@ -883,7 +883,7 @@ async function tick() {
   poll(document.visibilityState === "hidden" ? 4000 : fast ? 500 : 1500);
 }
 
-/** Nach einem Sprachwechsel alles neu beschriften; NV-AI liefert seine Modelltexte neu. */
+/** Nach einem Sprachwechsel alles neu beschriften; NVAI-open liefert seine Modelltexte neu. */
 function applyLanguage() {
   translateStatic();
   modelsLoaded = false;

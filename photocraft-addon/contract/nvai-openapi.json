@@ -1,8 +1,8 @@
 {
  "openapi": "3.1.0",
  "info": {
-  "title": "NV-AI",
-  "version": "0.5.7",
+  "title": "NVAI-open",
+  "version": "0.5.8",
   "x-api-version": 1
  },
  "paths": {
@@ -28,7 +28,7 @@
   "/api/shutdown": {
    "post": {
     "summary": "Shutdown",
-    "description": "Beendet NV-AI samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
+    "description": "Beendet NVAI-open samt ComfyUI -- fuer den Beenden-Eintrag im Startmenue.\nNur vom eigenen Rechner, auch mit gueltigem Token nicht von aussen.",
     "operationId": "shutdown_api_shutdown_post",
     "responses": {
      "200": {
@@ -1160,7 +1160,7 @@
   "/api/settings/folders": {
    "get": {
     "summary": "Get Folders",
-    "description": "Daten- und Modellordner, freier Platz, und ob NV-AI sie selbst setzen kann (Setup).",
+    "description": "Daten- und Modellordner, freier Platz, und ob NVAI-open sie selbst setzen kann (Setup).",
     "operationId": "get_folders_api_settings_folders_get",
     "responses": {
      "200": {
@@ -3455,7 +3455,7 @@
      "instance": {
       "type": "string",
       "title": "Instance",
-      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NV-AI auf dem Port sein eigenes ist.",
+      "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NVAI-open auf dem Port sein eigenes ist.",
       "default": ""
      }
     },

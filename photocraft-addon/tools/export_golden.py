@@ -2,7 +2,7 @@
 
     python tools/export_golden.py          # schreibt golden/*.json
     python tools/export_golden.py --check  # vergleicht nur (Exit 1 bei Abweichung)
-    python tools/export_golden.py --refresh-contract  # zuerst den NV-AI-Vertrag neu übernehmen
+    python tools/export_golden.py --refresh-contract  # zuerst den NVAI-open-Vertrag neu übernehmen
 
 - golden/imaging.json   – Geometrie exakt, Bildoperationen mit Toleranzen (Core Image rechnet
                           Weichzeichner und Skalierung nicht bitgleich zu Pillow)
@@ -140,7 +140,7 @@ MODELS = {
     "flux3": {"id": "flux3-klein-nvfp4", "name": "FLUX 3 Image Klein", "workflow": "flux3_klein", "runnable": True,
               "features": {"steps": 16, "cfg": 1.0, "negative_prompt": False, "upsampler": True, "references": 10,
                            "img2img": False, "mask": False, "hires": False}},
-    # NV-AI für Mac: FLUX.2 Klein über MLX und ein Core-ML-Modell mit festem Format.
+    # NVAI-open für Mac: FLUX.2 Klein über MLX und ein Core-ML-Modell mit festem Format.
     "flux2": {"id": "flux2-klein-4b", "name": "FLUX.2 Klein 4B", "workflow": "flux2_klein", "runnable": True,
               "features": {"steps": 4, "cfg": 1.0, "negative_prompt": False, "references": 3, "img2img": True,
                            "mask": True, "hires": False}},
@@ -324,7 +324,7 @@ def _run_scenarios(out: dict[str, Any], exchange: Path) -> None:
 
 
 SWIFT_GOLDEN = ROOT / "PhotoCraftKit" / "Tests" / "PhotoCraftKitTests" / "Golden"
-# API-Vertrag von NV-AI (Kopie von NV-AI/server/openapi.json, gepflegt von NV-AI).
+# API-Vertrag von NVAI-open (Kopie von NV-AI/server/openapi.json, gepflegt von NVAI-open).
 CONTRACT = ROOT / "contract" / "nvai-openapi.json"
 
 
@@ -334,7 +334,7 @@ def refresh_contract() -> None:
     shutil.copyfile(source, CONTRACT)
     info = json.loads(CONTRACT.read_text(encoding="utf-8"))["info"]
     # Nur ASCII: die Windows-Konsole (cp1252) kennt keine Pfeile.
-    print(f"{CONTRACT.relative_to(ROOT)}: aus {source} (NV-AI {info['version']}, API {info['x-api-version']})")
+    print(f"{CONTRACT.relative_to(ROOT)}: aus {source} (NVAI-open {info['version']}, API {info['x-api-version']})")
 
 
 def main() -> int:
@@ -347,7 +347,7 @@ def main() -> int:
     for folder in (GOLDEN, SWIFT_GOLDEN):  # Repo-Referenz und Kopie für die Swift-Tests
         for name, content in data.items():
             outputs[folder / name] = json.dumps(content, ensure_ascii=False, indent=1) + "\n"
-    # Der Vertrag geht unverändert mit, damit die Swift-Tests ihn ohne NV-AI prüfen können.
+    # Der Vertrag geht unverändert mit, damit die Swift-Tests ihn ohne NVAI-open prüfen können.
     outputs[SWIFT_GOLDEN / CONTRACT.name] = CONTRACT.read_text(encoding="utf-8")
     differs = []
     for path, text in outputs.items():

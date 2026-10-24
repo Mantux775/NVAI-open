@@ -1,4 +1,4 @@
-﻿"""MCP-Bruecke: macht NV-AI in Claude Code als Werkzeug verfuegbar.
+﻿"""MCP-Bruecke: macht NVAI-open in Claude Code als Werkzeug verfuegbar.
 
 Bewusst ein duenner Client des REST-Servers -- keine eigene GPU-Logik. Damit
 verhalten sich Frontend und Claude Code identisch und teilen dieselbe Queue.
@@ -56,6 +56,25 @@ server = MCPServer(
         "with the expanded text a whole forge with hearth, anvil, tongs and sparks. Read "
         "the result and remove invented details before generating (it gave the smith a "
         "helmet). Not needed for flux3-klein-*: they expand internally.\n\n"
+        "VIDEO -- the recommended model is LTX-2.5 (ltx25-distilled-nvfp4 on RTX 50, "
+        "ltx25-distilled-int8 on older cards): picture and sound in one pass, 5 s at 1280x704 "
+        "in ~93 s on an RTX 5060 Ti. Prompt as one present-tense paragraph: shot, setting and "
+        "light, the action with verbs, camera movement, then the sound; spoken lines in "
+        "quotation marks; name loud sound sources explicitly (sounds described as soft came out "
+        "very quiet). generate_video takes, for LTX-2.5 only: a start image, end_image_asset_id "
+        "or loop=True (seamless loop; keep the camera still), quality='dfr' (more detail, "
+        "slower; temporal_upscale for 48 fps), auto_duration, audio_asset_id (the picture "
+        "follows a given sound, e.g. "
+        "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA). "
+        "Several shots in one clip: write the cuts out in prose (expand_prompt "
+        "target='video_multishot'). list_models(kind='lora') marks LoRAs recommended for "
+        "LTX-2.5 in features.recommended_for. A person from a photo in a video: first "
+        "generate_image with flux3-klein-*, the photo (cropped to head and shoulders) in "
+        "reference_asset_ids, batch_size=4, in the video size, prompt 'Cinematic film still. The "
+        "person from the first image, with exactly the same face, eyes, nose, mouth and hair "
+        "color: <role>. Medium shot from the waist up, the face clearly visible.'; pick the most "
+        "similar face at full resolution, then generate_video with image_asset_id. Keep the "
+        "person facing the camera; turned away, the face is redrawn and looks less alike.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -126,7 +145,7 @@ async def _generate(path: str, payload: dict[str, Any], ctx: Context) -> dict[st
 
 @server.tool()
 async def health() -> dict[str, Any]:
-    """NV-AI status: is the GPU backend running, which model is active, how full is the queue."""
+    """NVAI-open status: is the GPU backend running, which model is active, how full is the queue."""
     async with await _client() as c:
         return (await c.get("/api/health")).json()
 
@@ -369,7 +388,8 @@ async def expand_prompt(
         reference_asset_ids: Optional images the upsampler looks at (FLUX 3 editing,
             or the start image with target 'video_start').
         target: 'image' (default), 'video' (Wan, LTX-Video: motion and camera),
-            'video_sound' (LTX-2.5: also describes the sound), 'video_start' (image to
+            'video_sound' (LTX-2.5: also describes the sound), 'video_multishot' (LTX-2.5:
+            2-4 shots in one clip, every cut written out, sound across the cuts), 'video_start' (image to
             video: motion only, reads the start image), 'sfx' (Stable Audio: sound
             tags), 'music' (ACE-Step genre tags), 'music_sa3' (Stable Audio 3: one
             sentence plus BPM, wordless choir at most; the length is added on generating)
@@ -444,11 +464,22 @@ async def generate_video(
     seed: int | None = None,
     image_asset_id: str | None = None,
     loras: list[dict[str, Any]] | None = None,
+    end_image_asset_id: str | None = None,
+    loop: bool = False,
+    quality: str = "standard",
+    temporal_upscale: bool = False,
+    auto_duration: bool = False,
+    audio_asset_id: str | None = None,
+    motion_speed: float = 1.0,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
-    Takes several minutes, depending on the model. The frame count is rounded to the
-    grid the model requires (Wan 4n+1, LTX-Video 8n+1).
+    Takes one to several minutes, depending on the model. The frame count is rounded to the
+    grid the model requires (Wan 4n+1, LTX 8n+1).
+
+    RECOMMENDED: LTX-2.5 (ltx25-distilled-nvfp4, or ltx25-distilled-int8 on RTX 20/30/40):
+    picture and sound in one pass, MP4. Use fps=24, sizes from its features.sizes (1280x704
+    is 720p 16:9), frames 97 = 4 s, 121 = 5 s, up to 481 = 20 s.
 
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
@@ -458,6 +489,10 @@ async def generate_video(
     Args:
         prompt: What should be visible -- describe it in detail, including motion.
             For image-to-video, describe only the motion; don't retell the image.
+            LTX-2.5: one present-tense paragraph -- shot, setting and light, the action with
+            verbs, camera movement, last the sound; dialogue in quotation marks. Several
+            shots: write each cut out in prose ("A hard cut transitions to a close-up of
+            ..."), 2-4 shots; expand_prompt(target='video_multishot') writes that form.
         width, height: Resolution. 832x480 is the cheapest Wan default. For
             image-to-video, match the start image's aspect ratio where possible.
         frames: Number of frames. 49 at 16 fps is just over 3 seconds.
@@ -472,12 +507,35 @@ async def generate_video(
             'trigger' words into the prompt. 0.6-1.0 is the usual strength.
             Wan 2.2 A14B LoRAs often come as a high-noise and a low-noise file: load
             both, each is applied to its own expert automatically.
+            LoRAs recommended for LTX-2.5 carry features.recommended_for=['ltx25'] and a
+            recommended features.strength (download them with download_model).
+        end_image_asset_id: LTX-2.5: last frame. With image_asset_id the clip moves from
+            the start image to the end image (transition); without it, it ends on it.
+        loop: LTX-2.5: the start image is also the end image -- a seamless loop. Keep the
+            camera still and describe a repeating motion (flames, water, breathing); with a
+            camera move the last frames fell apart in the test.
+        quality: LTX-2.5: 'standard' or 'dfr' (Diffusion Fidelity Rendering: detail
+            keyframes plus a detail IC-LoRA, sharper, slower). Not with an end image.
+        temporal_upscale: LTX-2.5 with quality='dfr': double frame rate at the same
+            duration (24 -> 48 fps).
+        auto_duration: LTX-2.5: the model picks the length from the described action
+            (1-20 s); `frames` is ignored. Write pauses ("a beat of silence") into the
+            prompt if the clip should hold.
+        audio_asset_id: LTX-2.5: a sound the picture follows (e.g. music from
+            generate_audio). The clip gets its length (at most 20 s), the original sound
+            ends up in the MP4.
+        motion_speed: LTX-2.5: slow motion, 1 = real time, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x
+            slower at the same playback fps. Reliable together with the Slow Motion
+            Control LoRA and a start image.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
         "width": width, "height": height, "frames": frames, "fps": fps,
         "model_id": model_id, "seed": seed, "image_asset_id": image_asset_id,
-        "loras": loras or [],
+        "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
+        "quality": quality, "temporal_upscale": temporal_upscale,
+        "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
+        "motion_speed": motion_speed,
     }
     return await _generate("/api/generate/video", payload, ctx)
 

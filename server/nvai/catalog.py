@@ -13,6 +13,8 @@ Feldbedeutung:
 """
 from __future__ import annotations
 
+import re
+from pathlib import PurePosixPath
 from typing import Any
 
 # ---------------------------------------------------------------- BILD
@@ -549,7 +551,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Vor jedem Bild baut ein mitgelieferter Upsampler (Qwen3.5-9B) den Prompt zur "
             "vollen Bildbeschreibung aus — BFL zufolge ist das Modell genau darauf trainiert, "
             "und kurze Prompts ergäben sonst generische Bilder. Die ausgebaute Beschreibung "
-            "steht im Asset unter „caption“. Wiederholte Prompts nimmt NV-AI aus dem "
+            "steht im Asset unter „caption“. Wiederholte Prompts nimmt NVAI-open aus dem "
             "Zwischenspeicher.\n\n"
             "Elemente lassen sich per Bounding-Box-Tabelle am Prompt-Ende platzieren "
             "([oben, links, unten, rechts] auf einem 0–1000-Raster). Die Boxen lenken Lage "
@@ -741,7 +743,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Encoder (9,4 GB) und Modell (12,5 GB) passen nicht gleichzeitig in 16 GB — "
             "jeder Lauf zahlt einen Nachlade-Zyklus",
             "Neu und wenig erprobt; kaum LoRAs oder ControlNets im Umlauf",
-            "Nur Text-zu-Bild in NV-AI; die Edit-Variante ist nicht eingebunden",
+            "Nur Text-zu-Bild in NVAI-open; die Edit-Variante ist nicht eingebunden",
         ],
     },
     {
@@ -949,7 +951,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Bildkacheln. Sonst wie die Dev-Fassung: Pixelraum, eine Datei, rund 4 Megapixel, "
             "Referenzbilder.\n\n"
             "Gemessen auf einer RTX 5060 Ti bei 1728 × 2304: 142 s. Die Vorlage nimmt den Sampler "
-            "dpmpp_2m_sde_gpu; mit der fp8-Datei zerfiel der Hintergrund dabei in Blöcke, NV-AI "
+            "dpmpp_2m_sde_gpu; mit der fp8-Datei zerfiel der Hintergrund dabei in Blöcke, NVAI-open "
             "nimmt deshalb euler (sauber).\n\n"
             "Werte aus ComfyUIs Vorlage image_hidream_o1.json, Sampler geändert. MIT-Lizenz."
         ),
@@ -979,7 +981,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         "description": (
             "Boogu, Juni 2026 (Forschungsprojekt, Version 0.1). 10 Mrd. Parameter mit Qwen3-VL-8B "
             "als Text-Encoder. Die Turbo-Fassung rechnet 4 Schritte bei cfg 1, der negative "
-            "Prompt wirkt nicht. NV-AI nimmt die korrigierte „hotfix“-Fassung.\n\n"
+            "Prompt wirkt nicht. NVAI-open nimmt die korrigierte „hotfix“-Fassung.\n\n"
             "Gemessen auf einer RTX 5060 Ti bei 832 × 1216: 9,8 s, beim ersten Bild 17 s. Im Test "
             "ganze Figur, glatter grauer Hintergrund wie verlangt.\n\n"
             "Werte aus ComfyUIs Vorlage image_boogu_image_0_1_turbo_t2i.json. Apache-2.0."
@@ -1129,7 +1131,7 @@ AUDIO_MODELS: list[dict[str, Any]] = [
         "best_for": "Instrumentale Spielmusik, Ambient und Spannungsflächen",
         "description": (
             "Das Musikmodell von Stability AI aus dem Jahr 2026, destilliert auf 8 Schritte. "
-            "Erzeugt instrumentale Stücke in 44,1 kHz Stereo, in NV-AI bis 5 Minuten (laut "
+            "Erzeugt instrumentale Stücke in 44,1 kHz Stereo, in NVAI-open bis 5 Minuten (laut "
             "Stability kann das Modell bis 6:20), laut Stability nur mit lizenzierten Daten "
             "trainiert. Kein Gesang und keine Liedtexte, "
             "ein Chor kommt höchstens als wortlose Klangfläche. Gattung, Instrumente, Stimmung "
@@ -1144,7 +1146,7 @@ AUDIO_MODELS: list[dict[str, Any]] = [
             "Kein Gesang, keine Liedtexte",
             "Community License mit 1-Mio.-USD-Umsatzgrenze; der Text-Encoder (T5Gemma) steht unter den Gemma-Bedingungen",
             "Lange Stücke brauchen viel Grafikspeicher: 300 s füllten 16 GB fast ganz (60 s: 9,7 GB)",
-            "Neu in NV-AI, noch wenig erprobt",
+            "Neu in NVAI-open, noch wenig erprobt",
         ],
     },
     {
@@ -1211,7 +1213,156 @@ AUDIO_MODELS: list[dict[str, Any]] = [
 
 # --------------------------------------------------------------- VIDEO
 
+# LTX-2.5: was beide Fassungen (NVFP4 fuer RTX 50, INT8 fuer RTX 20/30/40) teilen. Die optionalen
+# Dateien schalten Zusatzfunktionen frei (registry.is_installed/features_for): den Laengenkopf fuer
+# "Laenge automatisch", den zeitlichen Hochskalierer fuer DFR mit 48 fps und das Detail-IC-LoRA fuer
+# DFR. Das IC-LoRA liegt in einem eigenen Repo mit eigener Freigabe auf Hugging Face; fehlt sie,
+# laeuft LTX-2.5 trotzdem, nur ohne DFR.
+LTX25_SHARED_FILES: list[dict[str, Any]] = [
+    {"repo": "Lightricks/LTX-2.5",
+     "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
+     "target": "text_encoders"},
+    {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-video-vae-bf16.safetensors", "target": "vae"},
+    {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-audio-vae-bf16.safetensors", "target": "vae"},
+    {"repo": "Lightricks/LTX-2.5",
+     "file": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+     "target": "latent_upscale_models"},
+    {"repo": "Lightricks/LTX-2.5", "file": "model_patches/ltx-2.5-duration-head-bf16.safetensors",
+     "target": "model_patches", "optional": "auto_duration"},
+    {"repo": "Lightricks/LTX-2.5",
+     "file": "latent_upscale_models/ltx-2.5-latent-temporal-upscaler-x2-bf16-1.0.safetensors",
+     "target": "latent_upscale_models", "optional": "temporal_upscale"},
+    {"repo": "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+     "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+     "target": "loras", "optional": "dfr"},
+]
+
+# Breite und Hoehe auf Vielfachen von 64 (die erste Stufe rechnet auf halber Groesse).
+LTX25_SIZES = [
+    {"label": "1280 × 704 — 16:9, 720p", "w": 1280, "h": 704},
+    {"label": "704 × 1280 — 9:16, hochkant", "w": 704, "h": 1280},
+    {"label": "1024 × 576 — 16:9, schneller", "w": 1024, "h": 576},
+    {"label": "1024 × 1024 — quadratisch", "w": 1024, "h": 1024},
+    {"label": "1920 × 1088 — 1080p, langsam", "w": 1920, "h": 1088},
+    {"label": "1088 × 1920 — 1080p hochkant, langsam", "w": 1088, "h": 1920},
+]
+
+# Was die Generieren-Seite und Claude (list_models) anbieten. auto_duration, dfr und temporal_upscale
+# setzt registry.features_for auf False, solange die optionalen Dateien fehlen.
+LTX25_FEATURES: dict[str, Any] = {
+    "start_image": "optional", "end_image": True, "loop": True, "audio_input": True,
+    "auto_duration": True, "dfr": True, "temporal_upscale": True, "motion_speed": True,
+    "multishot": True, "fps": 24, "max_seconds": 20, "sizes": LTX25_SIZES,
+    "prompt_hint": (
+        "Ein Absatz im Präsens, 4 bis 8 Sätze: Einstellung, Ort und Licht, die Handlung von Anfang "
+        "bis Ende mit Verben, Figuren, die Kamerabewegung, zuletzt der Ton. Gesprochenes in "
+        "Anführungszeichen. Mehrere Einstellungen: jeden Schnitt ausschreiben (\"A hard cut "
+        "transitions to …\"), 2 bis 4 Einstellungen."),
+    "placeholder": (
+        "Cinematic wide shot of a lighthouse on a rocky coast at dusk. Waves crash against the rocks "
+        "while the beam sweeps slowly across the dark sea. The camera pushes in slowly. Sound: roaring "
+        "surf, gusting wind, a distant foghorn."),
+}
+
+LTX25_WARNING = ("LTX-2 Community License: kostenlos nur unter 10 Mio. US-$ Jahresumsatz; das "
+                 "Wasserzeichen darf nicht entfernt werden. Repo gated — Lizenz auf Hugging Face "
+                 "akzeptieren und Token hinterlegen. Für DFR hat das Detail-IC-LoRA eine eigene "
+                 "Freigabe.")
+
+LTX25_WAYS = (
+    "Wege in NVAI-open:\n"
+    "• Text zu Video oder mit Startbild: zwei Stufen, erst halbe Auflösung, dann hochskaliert und "
+    "nachgerechnet.\n"
+    "• Start- und Endbild: ein Übergang zwischen zwei Bildern. Mit „Schleife“ ist das Startbild "
+    "auch das Endbild, für nahtlose Loops.\n"
+    "• Höchste Qualität (DFR, Diffusion Fidelity Rendering): Detail-Keyframes und ein "
+    "Detail-IC-LoRA, auf Wunsch mit 48 fps.\n"
+    "• Länge automatisch: Ein Zusatzkopf schätzt die Dauer aus der beschriebenen Handlung.\n"
+    "• Ton vorgeben: ein vorhandener Ton, etwa Musik aus ACE-Step, bleibt unverändert, das Bild "
+    "richtet sich danach.\n"
+    "• Mehrere Einstellungen (Multishot): Schnitte im Prompt ausschreiben.\n"
+    "• Zeitlupe: zusammen mit der Slow-Motion-LoRA von Lightricks.\n"
+)
+
+
 VIDEO_MODELS: list[dict[str, Any]] = [
+    # LTX-2.5 steht vorn: Ohne eigene Wahl nimmt NVAI-open das erste installierte Videomodell
+    # (registry.get_active_model), und LTX-2.5 ist das empfohlene (Nutzerwunsch 24.10.2026).
+    {
+        "id": "ltx25-distilled-nvfp4",
+        "name": "LTX-2.5 (NVFP4, destilliert, mit Ton)",
+        "kind": "video",
+        "family": "ltx25",
+        "workflow": "ltx25",
+        "files": [
+            # Repo ist gated: Lizenz auf Hugging Face akzeptieren und Token hinterlegen.
+            {"repo": "Lightricks/LTX-2.5",
+             "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
+             "target": "diffusion_models"},
+            *LTX25_SHARED_FILES,
+        ],
+        "size_gb": 37.51,
+        "vram_gb": 16,
+        "license": "LTX-2 Community License",
+        "commercial_ok": True,
+        "warning": LTX25_WARNING,
+        "best_for": "Das empfohlene Videomodell: Video mit Ton aus Text, Startbild oder Start- und Endbild",
+        "description": (
+            "Lightricks, August 2026. 22 Mrd. Parameter, erzeugt Bild und Ton in einem Durchgang: "
+            "Geräusche, Musik und Sprache passend zur Szene; Gesprochenes gehört in "
+            "Anführungszeichen in den Prompt. Text-Encoder ist Gemma 4 12B (INT8). Modell und Encoder "
+            "passen nicht gleichzeitig in 16 GB, ComfyUI lagert aus.\n\n"
+            + LTX25_WAYS + "\n"
+            "Gemessen auf einer RTX 5060 Ti (16 GB, 24 fps, 1280 × 704, mit Ton): 5 s aus Text in 93 s "
+            "(erster Lauf mit Laden 122 s), mit Startbild 109 s, Start- und Endbild 154 s, Schleife "
+            "über 4 s 125 s; 1920 × 1088 in 251 s; 20 s zu vorgegebenem Ton bei 1024 × 576 in 302 s. "
+            "Der Grafikspeicher ist dabei fast voll. Leise beschriebene Geräusche („crackles softly“) "
+            "kommen sehr leise heraus, laute Quellen ausdrücklich nennen.\n\n"
+            "Ausgabe als MP4 mit Ton. Graphen nach ComfyUIs Vorlagen video_ltx2_5_t2v, _i2v, _flf2v "
+            "und _dfr_i2v."
+        ),
+        "pros": ["Video mit passendem Ton", "Text, Startbild, Start- und Endbild, Schleife",
+                 "DFR für mehr Detail, auf Wunsch mit 48 fps",
+                 "Länge automatisch, Ton vorgeben, Multishot, Zeitlupe",
+                 "NVFP4: rechnet auf RTX 50 in Hardware", "Lizenz erlaubt die EU"],
+        "cons": ["37,5 GB Download", "Kostenlos nur unter 10 Mio. US-$ Umsatz",
+                 "DFR braucht eine eigene Freigabe auf Hugging Face (Detail-IC-LoRA)",
+                 "Breite und Höhe werden auf Vielfache von 64 gerundet", "Zensur nicht dokumentiert"],
+        "features": LTX25_FEATURES,
+    },
+    {
+        "id": "ltx25-distilled-int8",
+        "name": "LTX-2.5 (INT8, destilliert, mit Ton)",
+        "kind": "video",
+        "family": "ltx25",
+        "workflow": "ltx25",
+        "files": [
+            {"repo": "Lightricks/LTX-2.5",
+             "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-comfy-int8-convrot.safetensors",
+             "target": "diffusion_models"},
+            *LTX25_SHARED_FILES,
+        ],
+        "size_gb": 40.29,
+        "vram_gb": 16,
+        "license": "LTX-2 Community License",
+        "commercial_ok": True,
+        "warning": LTX25_WARNING,
+        "best_for": "Dasselbe LTX-2.5 für RTX 20/30/40: INT8 rechnet dort in Hardware",
+        "description": (
+            "Dasselbe Modell in der INT8-Fassung, die ComfyUIs eigene LTX-2.5-Vorlagen verwenden "
+            "(INT8 mit ConvRot). Für Karten ohne FP4-Einheiten gedacht: RTX 20, 30 und 40 rechnen "
+            "INT8 in Hardware, NVFP4 müssten sie Schicht für Schicht entpacken.\n\n"
+            + LTX25_WAYS + "\n"
+            "Auf einer RTX 50 ist die NVFP4-Fassung kleiner und die richtige; diese Fassung ist in "
+            "NVAI-open noch nicht gemessen."
+        ),
+        "pros": ["Alle Wege wie die NVFP4-Fassung", "INT8 läuft ab RTX 20 in Hardware",
+                 "Lizenz erlaubt die EU"],
+        "cons": ["40,3 GB Download", "In NVAI-open noch nicht gemessen",
+                 "Kostenlos nur unter 10 Mio. US-$ Umsatz",
+                 "DFR braucht eine eigene Freigabe auf Hugging Face (Detail-IC-LoRA)"],
+        "features": LTX25_FEATURES,
+    },
     {
         "id": "wan21-t2v-1.3b",
         "name": "Wan 2.1 T2V 1.3B",
@@ -1339,53 +1490,6 @@ VIDEO_MODELS: list[dict[str, Any]] = [
         ],
     },
     {
-        "id": "ltx25-distilled-nvfp4",
-        "name": "LTX-2.5 (NVFP4, destilliert, mit Ton)",
-        "kind": "video",
-        "family": "ltx25",
-        "workflow": "ltx25",
-        "files": [
-            # Repo ist gated: Lizenz auf Hugging Face akzeptieren und Token hinterlegen.
-            {"repo": "Lightricks/LTX-2.5",
-             "file": "diffusion_models/ltx-2.5-22b-distilled-transformer-nvfp4.safetensors",
-             "target": "diffusion_models"},
-            {"repo": "Lightricks/LTX-2.5",
-             "file": "text_encoders/gemma4-12b-with-proj-ltx-2.5-comfy-int8-convrot.safetensors",
-             "target": "text_encoders"},
-            {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-video-vae-bf16.safetensors", "target": "vae"},
-            {"repo": "Lightricks/LTX-2.5", "file": "vae/ltx-2.5-audio-vae-bf16.safetensors", "target": "vae"},
-            {"repo": "Lightricks/LTX-2.5",
-             "file": "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
-             "target": "latent_upscale_models"},
-        ],
-        "size_gb": 37.92,
-        "vram_gb": 16,
-        "license": "LTX-2 Community License",
-        "commercial_ok": True,
-        "warning": ("LTX-2 Community License: kostenlos nur unter 10 Mio. US-$ Jahresumsatz; das "
-                    "Wasserzeichen darf nicht entfernt werden. Repo gated — Lizenz auf Hugging Face "
-                    "akzeptieren und Token hinterlegen."),
-        "best_for": "Video mit Ton aus Text oder Startbild — stärkstes lokales Videomodell",
-        "description": (
-            "Lightricks, August 2026. 22 Mrd. Parameter, erzeugt Bild und Ton in einem Durchgang: "
-            "Geräusche, Musik und Sprache passend zur Szene. Mit Startbild wird es zum ersten Frame "
-            "(Bild zu Video), ohne ist es Text zu Video.\n\n"
-            "Die destillierte Fassung rechnet in zwei Stufen mit festen Sigmas: erst auf halber "
-            "Auflösung, dann hochskaliert und nachgerechnet. Text-Encoder ist Gemma 4 12B (INT8). "
-            "Modell und Encoder passen nicht gleichzeitig in 16 GB; ComfyUI lagert aus.\n\n"
-            "Gemessen auf einer RTX 5060 Ti, 97 Frames (4 s) bei 24 fps: 1280 × 704 in 72 s, "
-            "832 × 448 in 78 s (erstes Video, mit Laden), Bild zu Video 448 × 832 in 45 s. Im Test "
-            "Schmiede mit Funken und Hammerklang, Leuchtturm mit Kamerafahrt; mit Startbild blieb "
-            "die Figur erhalten.\n\n"
-            "Ausgabe als MP4 mit Ton. Werte aus ComfyUIs Vorlagen video_ltx2_5_t2v.json und "
-            "*_i2v.json."
-        ),
-        "pros": ["Video mit passendem Ton", "Text zu Video und Bild zu Video in einem Modell",
-                 "NVFP4: rechnet auf RTX 50 in Hardware", "Lizenz erlaubt die EU"],
-        "cons": ["38 GB Download", "Kostenlos nur unter 10 Mio. US-$ Umsatz",
-                 "Breite und Höhe werden auf Vielfache von 64 gerundet", "Zensur nicht dokumentiert"],
-    },
-    {
         "id": "ltx23-nvfp4",
         "name": "LTX-2.3 (NVFP4, mit Ton)",
         "kind": "video",
@@ -1414,7 +1518,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             "und Ton in einem Durchgang). Für 2.3 gibt es weit mehr Community-Erweiterungen als für "
             "2.5: LoRAs für Stile, Figuren und Bewegung, und Feintunings ohne Inhaltsfilter. Dafür "
             "ist es der richtige Unterbau.\n\n"
-            "NV-AI rechnet wie ComfyUIs Vorlage video_ltx2_3_t2v.json: dev-Checkpoint in NVFP4 "
+            "NVAI-open rechnet wie ComfyUIs Vorlage video_ltx2_3_t2v.json: dev-Checkpoint in NVFP4 "
             "plus destillierte LoRA (Stärke 0,5), zwei Stufen mit festen Sigmas, Text-Encoder "
             "Gemma 3 12B (fp4). Mit Startbild Bild zu Video. Gemessen auf einer RTX 5060 Ti, 97 "
             "Frames (4 s) bei 24 fps: 1280 × 704 mit Ton in 101 s, Bild zu Video 448 × 832 in 65 s. "
@@ -1477,7 +1581,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
         "best_for": "Schnelle Videoentwürfe mit Kandinsky",
         "description": (
             "Dieselbe Kandinsky 5.0 Lite, auf 16 Schritte und ohne CFG destilliert. Laut "
-            "Modellkarte auf einer H100 35 s statt 77 s für 5 s Video. NV-AI rechnet mit 16 "
+            "Modellkarte auf einer H100 35 s statt 77 s für 5 s Video. NVAI-open rechnet mit 16 "
             "Schritten und cfg 1; der Negativprompt wirkt dabei nicht. Gemessen auf einer RTX 5060 "
             "Ti: 5 s Video (121 Frames, 768 × 512) in rund 300 s. Im Test ein Schmied mit "
             "schlüssiger Hammerbewegung und Glut."
@@ -1538,7 +1642,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             "Genmo, 10 Mrd. Parameter, Apache-2.0. Laut Hersteller stark bei Bewegung und "
             "Prompttreue, gedacht für 480p (848 × 480) bei 30 fps. Text-Encoder T5-XXL (mit Chroma "
             "geteilt).\n\n"
-            "NV-AI rechnet wie ComfyUIs Mochi-Beispiel: 30 Schritte, cfg 4,5, euler. Frames werden "
+            "NVAI-open rechnet wie ComfyUIs Mochi-Beispiel: 30 Schritte, cfg 4,5, euler. Frames werden "
             "auf 6n+1 gerundet, der VAE dekodiert gekachelt. Gemessen auf einer RTX 5060 Ti: 49 "
             "Frames in 848 × 480 in 351 s mit Laden. Im Test ein Fuchs, der sauber durch Schnee "
             "läuft, mit seitlicher Kamerafahrt."
@@ -1686,7 +1790,7 @@ MODEL_3D: list[dict[str, Any]] = [
         "description": (
             "Neueste Hunyuan3D-Version im ComfyUI-Format. Die nötigen Nodes sind in dieser "
             "ComfyUI-Installation vorhanden, es braucht also keinen separaten Worker-Prozess — "
-            "nur der Workflow-Builder in NV-AI fehlt noch."
+            "nur der Workflow-Builder in NVAI-open fehlt noch."
         ),
         "pros": [
             "Beste lokal erreichbare Mesh-Qualität",
@@ -1694,7 +1798,7 @@ MODEL_3D: list[dict[str, Any]] = [
             "GLB-Export direkt nach Unity",
         ],
         "cons": [
-            "Workflow-Builder in NV-AI fehlt noch",
+            "Workflow-Builder in NVAI-open fehlt noch",
             "Tencent-Lizenz mit regionalen Einschränkungen — für die EU kritisch",
             "Nicht für ein kommerzielles Spiel ohne Lizenzprüfung",
         ],
@@ -1897,7 +2001,7 @@ CONTROLNET_MODELS: list[dict[str, Any]] = [
             "Modell einen Panzer IV richtig rät, gibst du die Silhouette vor.\n\n"
             "Die Tiefenkarte kann aus Blender kommen, aus einem groben Blockout oder aus "
             "einer Dreiseitenansicht. Übergib sie als Referenzbild mit "
-            "`preprocess=\"none\"` — NV-AI verarbeitet sie dann unverändert weiter.\n\n"
+            "`preprocess=\"none\"` — NVAI-open verarbeitet sie dann unverändert weiter.\n\n"
             "Nur für SD 3.5 Large. Auf 16 GB wird es eng: vorher VRAM leeren."
         ),
         "pros": [
@@ -1908,7 +2012,7 @@ CONTROLNET_MODELS: list[dict[str, Any]] = [
         "cons": [
             "8,7 GB Download",
             "Zusätzlich ~4,3 GB VRAM neben dem Bildmodell — auf 16 GB knapp",
-            "Braucht eine Tiefenkarte; NV-AI erzeugt selbst keine",
+            "Braucht eine Tiefenkarte; NVAI-open erzeugt selbst keine",
             "Nur SD 3.5, nicht für FLUX oder Chroma",
         ],
     },
@@ -1929,7 +2033,7 @@ CONTROLNET_MODELS: list[dict[str, Any]] = [
         "description": (
             "Führt das Bild an Kanten entlang. Praktisch, wenn deine Vorlage bereits ein "
             "Strichbild ist — Blaupause, technische Zeichnung, Konzeptskizze. Aus einem "
-            "Foto holt NV-AI die Kanten selbst heraus (`preprocess=\"canny\"`), dafür "
+            "Foto holt NVAI-open die Kanten selbst heraus (`preprocess=\"canny\"`), dafür "
             "braucht es kein weiteres Modell.\n\n"
             "Kanten sind strenger als Tiefe: das Ergebnis folgt der Vorlage sehr genau. "
             "Für Silhouettentreue gut, für freie Interpretation zu eng."
@@ -1948,8 +2052,133 @@ CONTROLNET_MODELS: list[dict[str, Any]] = [
     },
 ]
 
+# ---------------------------------------------------------------- LORAS
+
+def _lora(repo: str, file: str, **fields: Any) -> dict[str, Any]:
+    """Empfohlene LoRA als fester Katalogeintrag. Die ID folgt derselben Regel wie beim Laden aus der
+    Suche (registry.register_custom), damit eine schon geladene LoRA als dieser Eintrag erscheint
+    und nicht doppelt."""
+    def slug(text: str) -> str:
+        return re.sub(r"[^\w.-]+", "_", text.lower()).strip("_") or "lora"
+
+    entry: dict[str, Any] = {
+        "id": f"lora-{slug(repo.split('/')[-1])}-{slug(PurePosixPath(file).stem)}",
+        "kind": "lora", "family": "ltx2", "workflow": None,
+        "files": [{"repo": repo, "file": file, "target": "loras"}],
+        "vram_gb": 0, "trigger": "", "source_url": f"https://huggingface.co/{repo}",
+        "pros": [], "cons": [],
+    }
+    entry.update(fields)
+    return entry
+
+
+_NO_LICENSE = ("Keine Lizenzangabe im Repo: vor einer kommerziellen Nutzung beim Autor nachfragen.")
+_GATED_LORA = ("LTX-2 Community License. Repo gated — die Lizenz auf Hugging Face eigens akzeptieren "
+               "(eigene Freigabe neben LTX-2.5).")
+
+# Für LTX-2.5 empfohlene LoRAs (Nutzerwunsch 24.10.2026), auf der Generieren-Seite aufklappbar unter
+# dem Videomodell. features: strength = empfohlene Stärke, use = wozu sie gehört (start_image,
+# end_image, audio_input, motion_speed), recommended_for = Modellfamilien. LTX-2.3-LoRAs laufen laut
+# Lightricks meist auch auf LTX-2.5 (Modellkarte Lightricks/LTX-2.5).
+LORA_MODELS: list[dict[str, Any]] = [
+    _lora("Lightricks/LTX-2.5-22b-LoRA-Cinemagraph", "ltx-2.5-22b-lora-cinemagraph-0.9.safetensors",
+          name="Cinemagraph (LTX-2.5, Lightricks)", size_gb=0.20,
+          license="LTX-2 Community License", commercial_ok=True, warning=_GATED_LORA,
+          trigger="CINEMAGRAPH_MOTION",
+          best_for="Lebendes Standbild: ein Element bewegt sich, der Rest steht still",
+          description=("Offizielle LoRA von Lightricks für LTX-2.5. Aus einem Startbild wird ein "
+                       "Cinemagraph: ein Element bewegt sich (Wasser, Rauch, Haare, Licht), alles "
+                       "andere bleibt stehen. Mit „Schleife“ wird daraus ein nahtloser Loop, etwa für "
+                       "Menü- und Ladebildschirme. Trigger CINEMAGRAPH_MOTION in den Prompt, Stärke "
+                       "1,0 bis 1,2."),
+          features={"strength": 1.0, "use": "start_image", "recommended_for": ["ltx25"]}),
+    _lora("Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control",
+          "ltx-2.5-22b-lora-slow-motion-control-1.0.safetensors",
+          name="Slow Motion Control (LTX-2.5, Lightricks)", size_gb=0.65,
+          license="LTX-2 Community License", commercial_ok=True, warning=_GATED_LORA,
+          best_for="Zeitlupe 2× bis 40× bei gleicher Abspielrate",
+          description=("Offizielle LoRA von Lightricks für LTX-2.5. Mit Startbild und der "
+                       "Einstellung „Zeitlupe“ (0,5 = 2×, 0,2 = 5×, 0,1 = 10× langsamer) läuft die "
+                       "Bewegung langsamer ab, abgespielt wird weiter mit 24 fps. Kein Trigger-Wort, "
+                       "und „slow motion“ nicht in den Prompt schreiben. Stärke 1,0."),
+          features={"strength": 1.0, "use": "motion_speed", "recommended_for": ["ltx25"]}),
+    _lora("joyfox/LTX-2.3-Transition-LORA", "ltx2.3-transition.safetensors",
+          name="Transition (LTX-2.3, joyfox)", size_gb=0.39,
+          license="Apache-2.0", commercial_ok=True,
+          best_for="Übergänge und Verwandlungen zwischen Start- und Endbild",
+          description=("Für LTX-2.3 trainiert, auf Übergänge zwischen erstem und letztem Bild: "
+                       "Verwandlungen, Szenen- und Stilwechsel. Hilft laut Autor auch bei Text und "
+                       "Startbild. Stärke 1,0. Mit LTX-2.5 in NVAI-open getestet (Dorfplatz von Tag zu "
+                       "Nacht, Start- und Endbild): kaum ein Unterschied zu ohne LoRA."),
+          features={"strength": 1.0, "use": "end_image", "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: bei Tag zu Nacht kaum ein Unterschied zu ohne LoRA"}),
+    _lora("vrgamedevgirl84/LTX_2.3_Crisp_Enhance_Style_LoRa", "LTX2.3_Crisp_Enhance.safetensors",
+          name="Crisp Enhance (LTX-2.3, vrgamedevgirl84)", size_gb=0.71,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE,
+          best_for="Schärfer: mehr Mikrodetail, Kanten und Kontrast",
+          description=("Für LTX-2.3. Hebt Schärfe, Kanten und Kontrast an. Mit LTX-2.3 in NVAI-open "
+                       "getestet: deutlich schärfer, änderte aber den Bildaufbau."),
+          features={"strength": 0.8, "recommended_for": ["ltx25"]}),
+    _lora("vrgamedevgirl84/LTX_2.3_Fantasy_Anime_Style_LoRa", "Fantasy_Anime.safetensors",
+          name="Fantasy Anime (LTX-2.3, vrgamedevgirl84)", size_gb=0.35,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE, trigger="f4nt4sy4n1m6",
+          best_for="Fantasy-Anime mit Cel-Shading",
+          description=("Für LTX-2.3. Fantasy-Anime-Illustration mit Cel-Shading; laut Autor ohne "
+                       "fremde Figuren trainiert. Trigger f4nt4sy4n1m6, Stärke 1,0. Mit LTX-2.5 in "
+                       "NVAI-open getestet: deutlicher Anime-Look mit Cel-Shading."),
+          features={"strength": 1.0, "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: deutlicher Anime-Look"}),
+    _lora("vrgamedevgirl84/LTX_2.3_Fantasy_Painterly_Style_LoRa", "Fantasy_Painterly.safetensors",
+          name="Fantasy Painterly (LTX-2.3, vrgamedevgirl84)", size_gb=0.35,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE, trigger="D4rkP41nt3r",
+          best_for="Gemalte Fantasy-Szenen mit sichtbaren Pinselstrichen",
+          description=("Für LTX-2.3. Fantasy wie in Öl gemalt: Pinselstriche, Farbschichten, "
+                       "leuchtendes Licht. Trigger D4rkP41nt3r. Mit LTX-2.5 in NVAI-open getestet: "
+                       "deutlich gemalt, dunklere Farben."),
+          features={"strength": 1.0, "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: deutlich gemalt"}),
+    _lora("vrgamedevgirl84/LTX_2.3_Clay_Mation_Style_LoRa", "Claymation.safetensors",
+          name="Claymation (LTX-2.3, vrgamedevgirl84)", size_gb=0.35,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE, trigger="claymation style",
+          best_for="Knetfiguren und Stop-Motion-Dioramen",
+          description=("Für LTX-2.3. Figuren und Orte wie aus Knete geformt, mit Fingerabdrücken und "
+                       "Miniatur-Kulissen. Trigger claymation style. Mit LTX-2.5 in NVAI-open getestet: "
+                       "nur angedeutet (Filz- und Miniatur-Look), auch mit Stärke 1,4."),
+          features={"strength": 1.0, "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: nur angedeutet, auch mit Stärke 1,4"}),
+    _lora("vrgamedevgirl84/LTX_2.3_Paper_Cut_Out_Style_LoRa", "PaperCutOutStyle.safetensors",
+          name="Paper Cut-Out (LTX-2.3, vrgamedevgirl84)", size_gb=0.35,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE, trigger="Pap3rCut0u7",
+          best_for="Papierschnitt-Dioramen wie aus einem Bilderbuch",
+          description=("Für LTX-2.3. Alles wirkt aus Papierlagen geschnitten und gefaltet. Trigger "
+                       "Pap3rCut0u7. Mit LTX-2.5 in NVAI-open getestet: bei Stärke 1,0 kaum zu sehen, "
+                       "bei 1,5 ein flacher Papierschnitt-Look."),
+          features={"strength": 1.5, "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: erst mit Stärke 1,5 deutlich"}),
+    _lora("vrgamedevgirl84/LTX_2.3_Cinematic_Sci-fi-Cyberpunk_Style_LoRa",
+          "Cinematic_sci-fi-cyberpunk.safetensors",
+          name="Sci-fi Cyberpunk (LTX-2.3, vrgamedevgirl84)", size_gb=0.35,
+          license="keine Angabe", commercial_ok=False, warning=_NO_LICENSE, trigger="C6b4rP8nk",
+          best_for="Neon-Noir und Cyberpunk-Städte",
+          description=("Für LTX-2.3. Realistischer Cyberpunk-Look: Neonlicht, nasse Straßen, "
+                       "Hightech. Trigger C6b4rP8nk."),
+          features={"strength": 1.0, "recommended_for": ["ltx25"]}),
+    _lora("fal/ltx2.3-audio-reactive-lora", "ltx2.3_audio_reactive_lora_v2.safetensors",
+          name="Audio Reactive (LTX-2.3, fal)", size_gb=1.35,
+          license="LTX-2 Community License", commercial_ok=True,
+          best_for="Visualizer und Musikvideos, die auf den Takt reagieren",
+          description=("Für LTX-2.3, Fassung 2. Formen, Partikel und Licht pulsieren im Takt eines "
+                       "vorgegebenen Tons. Am besten mit Startbild und „Ton vorgeben“, Stärke 1,0 bis "
+                       "1,5, 5 bis 15 Sekunden. Mit LTX-2.5 in NVAI-open getestet: Schon ohne LoRA "
+                       "pulsierte der Visualizer zum vorgegebenen Ton; mit LoRA folgte die Helligkeit der "
+                       "Lautstärke etwas enger (Korrelation 0,23 statt 0,09), das Bild wurde weicher."),
+          features={"strength": 1.0, "use": "audio_input", "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: Das Bild folgt dem Ton etwas enger; LTX-2.5 pulsiert auch ohne"}),
+]
+
+
 ALL_MODELS: list[dict[str, Any]] = (
-    IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS
+    IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
 )
 
 KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
@@ -1959,5 +2188,6 @@ KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
 # Empfehlung nach Grafikkarte (registry.gpu_advice). RTX 50 rechnet NVFP4 in Hardware;
 # ältere Karten entpacken es Schicht für Schicht und sind deutlich langsamer — dort
 # INT8-Fassungen, die ab RTX 20 nativ laufen.
-RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4"]
-RECOMMENDED_OLDER = ["flux3-klein-int8", "z-image-int8"]
+# LTX-2.5 ist das empfohlene Videomodell (Nutzerwunsch 24.10.2026).
+RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "ltx25-distilled-nvfp4"]
+RECOMMENDED_OLDER = ["flux3-klein-int8", "z-image-int8", "ltx25-distilled-int8"]

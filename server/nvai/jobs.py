@@ -373,7 +373,8 @@ def _resolve_model(p: dict[str, Any], kind: str) -> dict[str, Any]:
         raise RuntimeError(t(f"Unbekanntes Modell: {model_id}", f"Unknown model: {model_id}"))
     if not registry.is_installed(entry):
         # Snapshot-Modelle (ganze Repos wie TRELLIS.2) haben kein "file", nur "repo".
-        missing = [f.get("file") or f["repo"] for f in entry["files"] if not registry.file_path(f).exists()]
+        missing = [f.get("file") or f["repo"] for f in entry["files"]
+                   if not f.get("optional") and not registry.file_path(f).exists()]
         raise RuntimeError(t(
             f"Modell '{model_id}' unvollstaendig. Fehlt: {', '.join(missing)}",
             f"Model '{model_id}' is incomplete. Missing: {', '.join(missing)}",
@@ -644,7 +645,7 @@ def prompt_upsampler() -> dict[str, Any] | None:
 
     Sie baut auch fuer die anderen Bildmodelle einen knappen Prompt zur vollen Bildbeschreibung aus
     ("Prompt ausbauen"). Es gibt sie als int8 (9,75 GB, Standard) und w4a8 (6,72 GB). Passt int8
-    nicht in die Karte, nimmt NV-AI w4a8, wenn sie geladen ist. Gemessen 23.10.2026 auf einer RTX 4060
+    nicht in die Karte, nimmt NVAI-open w4a8, wenn sie geladen ist. Gemessen 23.10.2026 auf einer RTX 4060
     mit 8 GB: "Prompt ausbauen" mit int8 134-203 s, weil ComfyUI die Gewichte fuer jedes erzeugte Wort
     erneut ueber PCIe holen musste; mit w4a8 7,5-8,6 s (RTX 5060 Ti mit int8: 10,8-11,0 s).
     """
@@ -734,7 +735,7 @@ async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list
 
 async def _expand_other(p: dict[str, Any], upsampler: dict[str, Any], ref_images: list[str],
                         ctx: JobContext) -> str:
-    """Prompt ausbauen fuer Video, Ton und 3D: derselbe Upsampler mit NV-AIs eigenen
+    """Prompt ausbauen fuer Video, Ton und 3D: derselbe Upsampler mit NVAI-opens eigenen
     Systemprompts (prompt_targets.py)."""
     target = p["target"]
     upsampler_file = workflows.file_name(upsampler)
@@ -778,7 +779,7 @@ async def _expand_prompt(job: Job, ctx: JobContext) -> list[str]:
                   for i, a in enumerate(ref_ids)]
     target = p.get("target", "image")
     # Bilder mit Referenzen oder Box-Tabelle brauchen BFLs Systemprompts (Bearbeiten,
-    # Platzierung); ein schlichter Bildprompt nimmt NV-AIs kurzen.
+    # Platzierung); ein schlichter Bildprompt nimmt NVAI-opens kurzen.
     if target == "image" and not ref_ids and flux3_prompt.detect(p["prompt"]) is None:
         p["target"] = target
         p["expanded"] = await _expand_other(p, upsampler, [], ctx)
@@ -1051,11 +1052,69 @@ async def _txt2audio(job: Job, ctx: JobContext) -> list[str]:
     })
 
 
+def _check_video_options(p: dict[str, Any], entry: dict[str, Any]) -> None:
+    """Die Zusatzwege von LTX-2.5 (features des Modells) nur dort, wo es sie gibt -- und mit einer
+    Meldung, die sagt, was fehlt, statt eines ComfyUI-Fehlers mitten im Lauf."""
+    feats = registry.features_for(entry)
+    asked = [k for k, v in (("end_image", p.get("end_image_asset_id") or p.get("loop")),
+                            ("dfr", p.get("quality") == "dfr"),
+                            ("temporal_upscale", p.get("temporal_upscale")),
+                            ("auto_duration", p.get("auto_duration")),
+                            ("audio_input", p.get("audio_asset_id")),
+                            ("motion_speed", float(p.get("motion_speed") or 1.0) < 1.0)) if v]
+    if asked and entry.get("family") != "ltx25":
+        raise RuntimeError(t(
+            f"{_name(entry)} kann das nicht ({', '.join(asked)}) — das geht mit LTX-2.5.",
+            f"{_name(entry)} cannot do that ({', '.join(asked)}) — LTX-2.5 can."))
+    missing = feats.get("missing") or {}
+    texts = {
+        "dfr": t("Für „Höchste Qualität (DFR)“ fehlt das Detail-IC-LoRA",
+                 "“Best quality (DFR)” needs the detail IC-LoRA"),
+        "temporal_upscale": t("Für 48 fps fehlt der zeitliche Hochskalierer",
+                              "48 fps needs the temporal upscaler"),
+        "auto_duration": t("Für „Länge automatisch“ fehlt der Längenkopf",
+                           "“Automatic length” needs the duration head"),
+    }
+    for name in asked:
+        if name in texts and not feats.get(name):
+            url = missing.get(name, "")
+            raise RuntimeError(texts[name] + t(
+                f". Lizenz auf {url} akzeptieren und LTX-2.5 unter „Modelle“ erneut laden "
+                "(lädt nur, was fehlt).",
+                f". Accept the license on {url} and download LTX-2.5 again under “Models” "
+                "(only what is missing is downloaded)."))
+    if p.get("temporal_upscale") and p.get("quality") != "dfr":
+        raise RuntimeError(t("48 fps (zeitlich verdoppelt) gibt es nur mit „Höchste Qualität (DFR)“.",
+                             "48 fps (temporal upscale) is only available with “Best quality (DFR)”."))
+    if (p.get("end_image_asset_id") or p.get("loop")) and p.get("quality") == "dfr":
+        raise RuntimeError(t("Start- und Endbild bzw. Schleife gehen nur ohne DFR.",
+                             "Start and end image or a loop only work without DFR."))
+
+
+def _stage_audio(asset_id: str) -> tuple[str, float | None]:
+    """Ton-Asset nach ComfyUIs input/ (LoadAudio) und seine Laenge in Sekunden, soweit bekannt:
+    aus den Metadaten der Erzeugung, bei WAV aus dem Dateikopf."""
+    asset = db.get_asset(asset_id)
+    if asset is None or asset.kind != "audio":
+        raise RuntimeError(t(f"Ton nicht gefunden: {asset_id}", f"Audio not found: {asset_id}"))
+    src = config.ASSET_DIR / asset.filename
+    if not src.exists():
+        raise RuntimeError(t(f"Tondatei fehlt: {src}", f"Audio file missing: {src}"))
+    seconds = (asset.meta or {}).get("seconds")
+    if seconds is None and src.suffix.lower() == ".wav":
+        import wave
+        with contextlib.suppress(wave.Error, OSError), wave.open(str(src)) as w:
+            seconds = w.getnframes() / float(w.getframerate())
+    return comfy.stage_input(src), float(seconds) if seconds else None
+
+
 @register("txt2video")
 async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     p = job.params
     entry = _resolve_model(p, "video")
     wf = entry["workflow"]
+    _check_video_options(p, entry)
+    fps = float(p.get("fps", 16))
     frames = workflows.normalize_frames(int(p.get("frames", 49)), wf)
 
     # Bild-zu-Video: das Startbild muss in ComfyUIs input/ liegen, damit LoadImage
@@ -1067,12 +1126,35 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
             f"{_name(entry)} ist ein Bild-zu-Video-Modell — bitte ein Startbild angeben.",
             f"{_name(entry)} is an image-to-video model — please provide a start image.",
         ))
+    # LTX-2.5: Endbild bzw. Schleife (das Startbild auch als Endbild) und vorgegebener Ton.
+    if p.get("loop"):
+        if not p.get("start_image"):
+            raise RuntimeError(t("Eine Schleife braucht ein Startbild.", "A loop needs a start image."))
+        p["end_image"] = p["start_image"]
+    elif p.get("end_image_asset_id"):
+        p["end_image"] = _stage_image(p["end_image_asset_id"], t("Endbild", "End image"))
+    if p.get("audio_asset_id"):
+        p["audio_input"], seconds = _stage_audio(p["audio_asset_id"])
+        if seconds:
+            # Das Video ist hoechstens so lang wie der Ton (und hoechstens 20 s).
+            frames = workflows.ltx_frames_for_seconds(min(seconds, workflows.LTX25_MAX_SECONDS), fps,
+                                                      at_most=True)
+        p["auto_duration"] = False
+    p["frames"] = frames
 
+    temporal = p.get("quality") == "dfr" and bool(p.get("temporal_upscale"))
+    fps_out = fps * (2 if temporal else 1)
+    frames_out = (frames - 1) * 2 + 1 if temporal else frames
     return await _run_generation(job, ctx, "video", {
         "width": p.get("width"), "height": p.get("height"),
-        "frames": frames, "fps": p.get("fps"),
-        "duration_s": round(frames / max(p.get("fps", 16), 1), 2),
+        # Mit "Laenge automatisch" waehlt das Modell die Laenge erst im Lauf.
+        "frames": None if p.get("auto_duration") else frames_out, "fps": fps_out,
+        "duration_s": None if p.get("auto_duration") else round(frames / max(fps, 1), 2),
         "image_asset_id": p.get("image_asset_id"),
+        "end_image_asset_id": p.get("end_image_asset_id"), "loop": bool(p.get("loop")),
+        "quality": p.get("quality") or "standard", "auto_duration": bool(p.get("auto_duration")),
+        "audio_asset_id": p.get("audio_asset_id"),
+        "motion_speed": float(p.get("motion_speed") or 1.0),
     })
 
 

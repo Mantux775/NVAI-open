@@ -1,7 +1,7 @@
 import Foundation
 
 /// Protokoll unter ~/Library/Logs/NV-AI/nvai.log – die Datei, die Tester mitschicken.
-/// Dazu NSLog, damit es auch in `log show --predicate 'process == "NV-AI"'` erscheint.
+/// Dazu NSLog, damit es auch in `log show --predicate 'process == "NVAI-open"'` erscheint.
 enum AppLog {
     private static let queue = DispatchQueue(label: "nvai.log")
     private static let maxBytes = 5 * 1024 * 1024
@@ -18,7 +18,7 @@ enum AppLog {
 
     private static func write(_ level: String, _ message: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) [\(level)] \(message)\n"
-        NSLog("NV-AI %@ %@", level, message)
+        NSLog("NVAI-open %@ %@", level, message)
         queue.async {
             let fm = FileManager.default
             try? fm.createDirectory(at: directory, withIntermediateDirectories: true)

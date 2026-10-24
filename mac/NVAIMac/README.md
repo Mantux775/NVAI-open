@@ -1,11 +1,11 @@
-# NV-AI for Mac
+# NVAI-open for Mac
 
 A native macOS app (SwiftUI, Apple Silicon, macOS 15 or later) that generates images locally and
-serves the same REST API as NV-AI for Windows (contract `server/openapi.json`, `api` 1). The
+serves the same REST API as NVAI-open for Windows (contract `server/openapi.json`, `api` 1). The
 PhotoCraft add-on talks to it unchanged at `http://127.0.0.1:8100`.
 
 License: MIT. Third-party components: `Resources/Third-Party-Notices.txt` (also in the app under
-NV-AI > Licenses). Models are not part of the app; the model list shows each model's license.
+NVAI-open > Licenses). Models are not part of the app; the model list shows each model's license.
 
 ## Languages
 
@@ -62,7 +62,7 @@ text report with timestamp, Mac, macOS, installed models, the recent jobs (witho
 the last 300 lines of `nvai.log`. Anonymized: home folder → `~`, user and computer name, e-mail,
 IP and MAC addresses, the Hugging Face token and long hex strings are replaced. "Report on
 GitHub" saves it and opens a prefilled issue. For tests without the save dialog:
-`NV-AI.app/Contents/MacOS/NV-AI --problem-report <file> [--description "…"] --quit`.
+`NVAI-open.app/Contents/MacOS/NVAI-open --problem-report <file> [--description "…"] --quit`.
 
 ## Expand prompt
 
@@ -89,7 +89,7 @@ ssh my-mac 'zsh ~/NVAIMac/scripts/build.sh'          # xcodebuild, signed ad hoc
 ## Run for tests
 
 ```sh
-open -n ~/NVAIMac/dd/Build/Products/Release/NV-AI.app --args -serverPort 8110 -modelsDirectory /path/to/models
+open -n ~/NVAIMac/dd/Build/Products/Release/NVAI-open.app --args -serverPort 8110 -modelsDirectory /path/to/models
 curl -s http://127.0.0.1:8110/api/version
 ```
 
@@ -98,7 +98,7 @@ curl -s http://127.0.0.1:8110/api/version
 - **Models:** in the model folder, FLUX.2 under `<organization>/<repo>`, Core ML under `coreml/<id>`. The folder must be named `models`.
 - **Server start:** The server starts in the app delegate at launch, before anything else and independent of the window. Measured with `open -g -j` (hidden, in the background): it listens after 1 s. If the port is busy, it retries every 2 s.
 - **Log:** `~/Library/Logs/NV-AI/nvai.log` (rotated at 5 MB) records start, server state, jobs and errors.
-- **Checks without a screen:** `NV-AI --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] --quit` renders the app's own window with cacheDisplay, which needs no screen recording permission. `--report` writes the test report.
+- **Checks without a screen:** `NVAI-open --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] --quit` renders the app's own window with cacheDisplay, which needs no screen recording permission. `--report` writes the test report.
 
 ## Release
 
@@ -107,8 +107,8 @@ NOTARY_KEY=/path/AuthKey_XXXX.p8 NOTARY_KEY_ID=XXXX NOTARY_ISSUER=<issuer-uuid> 
 ADDON_DIR=/path/to/photocraft-addon zsh ~/NVAIMac/scripts/release.sh
 ```
 
-The result is `~/NVAIMac/release/NV-AI-<version>.dmg` containing:
-- NV-AI.app
+The result is `~/NVAIMac/release/NVAI-open-<version>.dmg` containing:
+- NVAI-open.app
 - the PhotoCraft add-on app, if `ADDON_DIR` points to its `build-app.sh`
 - `Getting Started.txt`, `Erste Schritte.txt` and `Third-Party Notices.txt`
 

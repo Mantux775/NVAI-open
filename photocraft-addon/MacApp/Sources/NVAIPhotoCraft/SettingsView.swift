@@ -1,7 +1,7 @@
 import PhotoCraftKit
 import SwiftUI
 
-/// Einstellungen (⌘,): NV-AI-Adresse und Token, PhotoCraft-Steuerport, Sprache.
+/// Einstellungen (⌘,): NVAI-open-Adresse und Token, PhotoCraft-Steuerport, Sprache.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var draft = AppSettings()
@@ -13,12 +13,12 @@ struct SettingsView: View {
             Section {
                 TextField(t("Adresse", "Address"), text: $draft.nvaiURL, prompt: Text(verbatim: "http://127.0.0.1:8100"))
                 SecureField("Token", text: $draft.nvaiToken,
-                            prompt: Text(t("nur für NV-AI auf einem anderen Rechner", "only for NV-AI on another computer")))
+                            prompt: Text(t("nur für NVAI-open auf einem anderen Rechner", "only for NVAI-open on another computer")))
             } header: {
-                Text(verbatim: "NV-AI")
+                Text(verbatim: "NVAI-open")
             } footer: {
-                Text(t("Normalerweise läuft NV-AI auf diesem Mac (http://127.0.0.1:8100, ohne Token). Eine NV-AI auf einem anderen Rechner braucht deren Adresse und Token.",
-                       "Normally NV-AI runs on this Mac (http://127.0.0.1:8100, no token). An NV-AI on another computer needs its address and token."))
+                Text(t("Normalerweise läuft NVAI-open auf diesem Mac (http://127.0.0.1:8100, ohne Token). Eine NVAI-open auf einem anderen Rechner braucht deren Adresse und Token.",
+                       "Normally NVAI-open runs on this Mac (http://127.0.0.1:8100, no token). An NVAI-open on another computer needs its address and token."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

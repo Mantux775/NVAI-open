@@ -1,4 +1,4 @@
-"""Programme starten: PhotoCraft mit Steuerkanal und NV-AI."""
+"""Programme starten: PhotoCraft mit Steuerkanal und NVAI-open."""
 from __future__ import annotations
 
 import logging
@@ -86,7 +86,7 @@ def start_photocraft(force: bool = False, wait: float = 25.0) -> str:
     ungespeicherte Arbeit gehört zuerst gesichert.
     """
     if port_open(config.PHOTOCRAFT_PORT):
-        return t("PhotoCraft mit NV-AI-Anbindung läuft bereits.", "PhotoCraft with NV-AI connection is already running.")
+        return t("PhotoCraft mit NVAI-open-Anbindung läuft bereits.", "PhotoCraft with NVAI-open connection is already running.")
     exe = config.photocraft_exe()
     if exe is None:
         raise LaunchError(t(
@@ -99,9 +99,9 @@ def start_photocraft(force: bool = False, wait: float = 25.0) -> str:
         ))
     if photocraft_pids() and not force:
         raise LaunchError(t(
-            "PhotoCraft läuft bereits ohne NV-AI-Anbindung. Bitte dort speichern und "
+            "PhotoCraft läuft bereits ohne NVAI-open-Anbindung. Bitte dort speichern und "
             "schließen – dann PhotoCraft hier neu starten.",
-            "PhotoCraft is already running without the NV-AI connection. Please save and close it "
+            "PhotoCraft is already running without the NVAI-open connection. Please save and close it "
             "there – then start PhotoCraft again from here.",
         ))
     config.ensure_dirs()
@@ -118,7 +118,7 @@ def start_photocraft(force: bool = False, wait: float = 25.0) -> str:
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:
         if port_open(config.PHOTOCRAFT_PORT) and config.TOKEN_FILE.exists():
-            return t("PhotoCraft wurde mit NV-AI-Anbindung gestartet.", "PhotoCraft was started with the NV-AI connection.")
+            return t("PhotoCraft wurde mit NVAI-open-Anbindung gestartet.", "PhotoCraft was started with the NVAI-open connection.")
         time.sleep(0.4)
     raise LaunchError(t("PhotoCraft wurde gestartet, meldet sich aber nicht am Steuerkanal.",
                         "PhotoCraft was started but does not answer on the control channel."))
@@ -128,13 +128,13 @@ def nvai_running() -> bool:
     return port_open(urlparse(config.NVAI_URL).port or 80)
 
 
-# Bis NV-AI nach einem Start antwortet, zeigt das Panel „NV-AI startet …“ statt des Startknopfs.
+# Bis NVAI-open nach einem Start antwortet, zeigt das Panel „NVAI-open startet …“ statt des Startknopfs.
 NVAI_START_PATIENCE = 120.0
 _nvai_started_at: float | None = None
 
 
 def nvai_starter() -> tuple[str, Path] | None:
-    """Womit sich NV-AI hier starten lässt: ``("setup", nvai-start.cmd)`` aus der Installation,
+    """Womit sich NVAI-open hier starten lässt: ``("setup", nvai-start.cmd)`` aus der Installation,
     ``("dev", scripts\\start.ps1)`` aus dem Entwicklungsordner – oder None."""
     install = config.nvai_setup()
     if install and install.start_script.is_file():
@@ -146,7 +146,7 @@ def nvai_starter() -> tuple[str, Path] | None:
 
 
 def nvai_start_pending() -> bool:
-    """Wurde NV-AI eben gestartet und darf noch hochfahren?"""
+    """Wurde NVAI-open eben gestartet und darf noch hochfahren?"""
     return _nvai_started_at is not None and time.monotonic() - _nvai_started_at < NVAI_START_PATIENCE
 
 
@@ -162,33 +162,33 @@ def _run_setup_start(script: Path) -> None:
     try:
         code = proc.wait(timeout=30)
     except subprocess.TimeoutExpired:
-        log.warning("nvai-start.cmd läuft nach 30 s noch – NV-AI startet vermutlich trotzdem")
+        log.warning("nvai-start.cmd läuft nach 30 s noch – NVAI-open startet vermutlich trotzdem")
         return
     if code != 0:
-        raise LaunchError(t(f"NV-AI ließ sich nicht starten: {script.name} endete mit Code {code}.",
-                            f"NV-AI could not be started: {script.name} ended with code {code}."))
+        raise LaunchError(t(f"NVAI-open ließ sich nicht starten: {script.name} endete mit Code {code}.",
+                            f"NVAI-open could not be started: {script.name} ended with code {code}."))
 
 
 def start_nvai() -> str:
-    """NV-AI starten: über ``nvai-start.cmd`` des Setups (ohne Fenster) oder im
+    """NVAI-open starten: über ``nvai-start.cmd`` des Setups (ohne Fenster) oder im
     Entwicklungsstand über ``scripts\\start.ps1`` in einem minimierten Konsolenfenster. Dieses
-    Fenster zeigt die Serverausgabe; wer es schließt, beendet NV-AI.
+    Fenster zeigt die Serverausgabe; wer es schließt, beendet NVAI-open.
 
-    Bereit ist NV-AI erst, wenn ``/api/version`` antwortet – das zeigt der Status.
+    Bereit ist NVAI-open erst, wenn ``/api/version`` antwortet – das zeigt der Status.
     """
     global _nvai_started_at
     if not config.nvai_is_local():
-        raise LaunchError(t(f"NV-AI läuft auf einem anderen Rechner ({config.NVAI_URL}) und muss dort "
+        raise LaunchError(t(f"NVAI-open läuft auf einem anderen Rechner ({config.NVAI_URL}) und muss dort "
                             "gestartet werden.",
-                            f"NV-AI runs on another computer ({config.NVAI_URL}) and has to be started there."))
+                            f"NVAI-open runs on another computer ({config.NVAI_URL}) and has to be started there."))
     if nvai_running():
-        return t("NV-AI läuft bereits.", "NV-AI is already running.")
+        return t("NVAI-open läuft bereits.", "NVAI-open is already running.")
     starter = nvai_starter()
     if starter is None:
-        raise LaunchError(t("NV-AI ist auf diesem PC nicht installiert. Bitte zuerst das NV-AI-Setup ausführen.",
-                            "NV-AI is not installed on this PC. Please run the NV-AI setup first."))
+        raise LaunchError(t("NVAI-open ist auf diesem PC nicht installiert. Bitte zuerst das NVAI-open-Setup ausführen.",
+                            "NVAI-open is not installed on this PC. Please run the NVAI-open setup first."))
     kind, script = starter
-    log.info("starte NV-AI: %s", script)
+    log.info("starte NVAI-open: %s", script)
     if kind == "setup":
         _run_setup_start(script)
     else:
@@ -200,4 +200,4 @@ def start_nvai() -> str:
             cwd=str(script.parent.parent), startupinfo=info, creationflags=CREATE_NEW_CONSOLE,
         )
     _nvai_started_at = time.monotonic()
-    return t("NV-AI wird gestartet …", "NV-AI is starting …")
+    return t("NVAI-open wird gestartet …", "NVAI-open is starting …")

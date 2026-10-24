@@ -160,11 +160,11 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
       )}
       {!loraMode && <p className="muted small">
         {t(
-          'Vor dem Laden prüft NV-AI die Datei. Laden lassen sich vollständige SDXL-Checkpoints '
+          'Vor dem Laden prüft NVAI-open die Datei. Laden lassen sich vollständige SDXL-Checkpoints '
             + '(zum Beispiel Juggernaut, Pony, Illustrious) und SD-1.5-Checkpoints. Teile neuerer Modelle '
             + '(Qwen, FLUX, Wan …) erkennt die Prüfung und nennt das passende Modell aus dem Katalog. Die '
             + 'Lizenz steht im Repo — bitte dort prüfen, bevor Bilder veröffentlicht werden.',
-          'NV-AI checks each file before downloading it. Complete SDXL checkpoints (for example '
+          'NVAI-open checks each file before downloading it. Complete SDXL checkpoints (for example '
             + 'Juggernaut, Pony, Illustrious) and SD 1.5 checkpoints can be downloaded. Parts of newer '
             + 'models (Qwen, FLUX, Wan …) are recognized, and the check names the matching catalog '
             + 'model. The license is stated in the repo — please check it there before publishing images.',
