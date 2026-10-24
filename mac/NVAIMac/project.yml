@@ -11,9 +11,9 @@ options:
 
 packages:
   Flux2:
-    # FLUX.2 Klein auf MLX (MIT). Fest auf die geprüfte Fassung; mlx-swift ist darin exakt gepinnt.
-    url: https://github.com/VincentGourbin/flux-2-swift-mlx
-    exactVersion: 3.1.0
+    # FLUX.2 Klein auf MLX (MIT), lokale Kopie von 3.1.0 mit Abbruchprüfung nach jedem Schritt
+    # (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md); mlx-swift ist darin exakt gepinnt.
+    path: Packages/flux-2-swift-mlx
   StableDiffusion:
     # Core ML Stable Diffusion für kleine Macs und die Modellsuche, wie in NVAILocal.
     url: https://github.com/apple/ml-stable-diffusion
@@ -46,7 +46,7 @@ targets:
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
         MARKETING_VERSION: "0.4.5"
-        CURRENT_PROJECT_VERSION: "9"
+        CURRENT_PROJECT_VERSION: "10"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

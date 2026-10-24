@@ -11,12 +11,12 @@ set -euo pipefail
 host="${MAC_HOST:-macmini}"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$here"
-files=(project.yml Sources Resources scripts)
+files=(project.yml Sources Resources scripts Packages)
 [ -f Package.resolved ] && files+=(Package.resolved)
 tar -czf - "${files[@]}" | ssh -o BatchMode=yes "$host" '
   set -e
   mkdir -p ~/NVAIMac && cd ~/NVAIMac
-  rm -rf Sources scripts
+  rm -rf Sources scripts Packages
   tar -xzf -
   XCODEGEN=${XCODEGEN:-$(command -v xcodegen || echo ~/tools/xcodegen/bin/xcodegen)}
   "$XCODEGEN" generate --quiet

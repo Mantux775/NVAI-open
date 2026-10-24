@@ -7,13 +7,13 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.8.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.8/NVAI-open-Setup-0.5.8.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.8/NV-AI-0.4.4.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.8/NVAI-open-0.4.5.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.8 for Windows, the Mac app stays at 0.4.4 ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.8))
+October 2026: NVAI-open 0.5.8 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.8))
 
 | | |
 |---|---|
@@ -21,6 +21,7 @@ October 2026: NVAI-open 0.5.8 for Windows, the Mac app stays at 0.4.4 ([release 
 | LTX-2.5 fully built in | The recommended video model: text or start image, start and end image, seamless loop, your own sound, automatic length, several shots, up to 20 s and 1080p |
 | Recommended LoRAs | Under the video model, one click to download, with a note on how each did on LTX-2.5 |
 | New name | NV-AI is now called NVAI-open. Folders, settings and models stay where they are |
+| Mac app 0.4.5 | Now called NVAI-open too. A running image stops after the current step instead of after the whole image |
 
 Since 0.5.7: music without distortion (own limiter), Stable Audio 3 Medium, tidier "Models" page. Since 0.5.6: the strongest graphics card computes by itself, fill with FLUX 3. Since 0.5.5: outpainting without ghost outlines, "Extend" tab in the PhotoCraft add-on. Since 0.5.4: outpainting, shorter "Expand prompt", tested realism LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon (experimental, testers wanted: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) and several graphics cards ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), expand prompt on the Mac.
 
@@ -30,6 +31,7 @@ Since 0.5.7: music without distortion (own limiter), Stable Audio 3 Medium, tidi
 | LTX-2.5 voll ausgebaut | Das empfohlene Videomodell: Text oder Startbild, Start- und Endbild, nahtlose Schleife, eigener Ton, Länge automatisch, mehrere Einstellungen, bis 20 s und 1080p |
 | Empfohlene LoRAs | Unter dem Videomodell, mit einem Klick geladen, mit einem Hinweis, wie sie auf LTX-2.5 abschnitten |
 | Neuer Name | NV-AI heißt jetzt NVAI-open. Ordner, Einstellungen und Modelle bleiben, wo sie sind |
+| Mac-App 0.4.5 | Heißt jetzt ebenfalls NVAI-open. Ein laufendes Bild endet nach dem aktuellen Schritt statt erst nach dem ganzen Bild |
 
 Seit 0.5.7: Musik ohne Übersteuern (eigener Limiter), Stable Audio 3 Medium, aufgeräumte Seite „Modelle“. Seit 0.5.6: Die stärkste Grafikkarte rechnet von selbst, Füllen mit FLUX 3. Seit 0.5.5: Outpainting ohne Geisterkonturen, Reiter „Erweitern“ im PhotoCraft-Add-on. Seit 0.5.4: Outpainting, kürzeres „Prompt ausbauen“, getestete Realismus-LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon (experimentell, Tester gesucht: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) und mehrere Grafikkarten ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), Prompt ausbauen auf dem Mac.
 

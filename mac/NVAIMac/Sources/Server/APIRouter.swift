@@ -63,11 +63,11 @@ enum APIRouter {
                     return .json(["cancelled": false, "detail": t("Es läuft kein Auftrag.", "No job is running.")])
                 }
                 return .json(["cancelled": true, "job_id": job.id,
-                              "detail": t("Der Auftrag endet nach dem aktuellen Bild.", "The job ends after the current image.")])
+                              "detail": t("Der Auftrag endet nach dem aktuellen Rechenschritt.", "The job ends after the current step.")])
             }
             if let c = route("POST", "/api/jobs/:id/cancel") {
                 // Wartend sofort, Download sofort (Core ML; FLUX.2 nach der aktuellen Datei),
-                // ein laufendes Bild nach dem aktuellen Bild.
+                // ein laufendes Bild nach dem aktuellen Rechenschritt.
                 let job = try await JobQueue.shared.cancel(c[0])
                 return .json(["ok": true, "job_id": job.id, "pending": job.status == "running", "stopped": [String]()])
             }

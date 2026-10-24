@@ -37,8 +37,8 @@ struct EngineJob: Sendable {
 /// FLUX.2 Klein über flux-2-swift-mlx. Hält die Pipeline zwischen Aufträgen geladen;
 /// den Text-Encoder entlädt das Paket nach jedem Bild selbst.
 ///
-/// Abbrechen kann das Paket eine laufende Rechnung nicht (es prüft nirgends auf Abbruch).
-/// Deshalb bricht die Warteschlange nur zwischen zwei Bildern ab.
+/// Abbrechen: Die lokale Kopie des Pakets prüft nach jedem Rechenschritt auf Abbruch des Tasks
+/// (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md); die Warteschlange bricht dafür ihren Task ab.
 actor Flux2Engine {
     static let shared = Flux2Engine()
 

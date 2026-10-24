@@ -60,6 +60,9 @@ actor JobQueue {
     private var worker: Task<Void, Never>?
     /// Laufender Download als eigene Task, damit „Abbrechen“ ihn mitten in der Datei stoppen kann.
     private var downloadTask: Task<Void, Error>?
+    /// Die laufende FLUX.2-Rechnung. Das Paket prüft nach jedem Schritt auf Abbruch
+    /// (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md), ein Abbrechen wirkt also innerhalb eines Schritts.
+    private var imageTask: Task<CGImage, Error>?
     private var onChange: (@Sendable () -> Void)?
 
     func setOnChange(_ handler: @escaping @Sendable () -> Void) { onChange = handler }
@@ -163,8 +166,8 @@ actor JobQueue {
 
     // MARK: Abbrechen
 
-    /// Wartende Aufträge fallen sofort weg; ein laufender endet nach dem aktuellen Bild,
-    /// weil das Rechenpaket mitten im Bild nicht abbrechen kann.
+    /// Wartende Aufträge fallen sofort weg; ein laufendes Bild endet nach dem aktuellen
+    /// Rechenschritt (FLUX.2) bzw. sofort (Core ML).
     func cancel(_ id: String) throws -> JobRecord {
         guard let job = jobs[id] else { throw APIError(404, t("Unbekannter Auftrag: \(id)", "Unknown job: \(id)")) }
         switch job.status {
@@ -183,10 +186,10 @@ actor JobQueue {
         case "running":
             update(id) {
                 $0.cancelRequested = true
-                $0.stage = $0.request?.engine == "coreml" ? t("bricht ab", "cancelling")
-                                                          : t("bricht nach dem aktuellen Bild ab", "cancelling after the current image")
+                $0.stage = t("bricht ab", "cancelling")
             }
             if job.request?.engine == "coreml" { CoreMLEngine.shared.requestCancel() }
+            imageTask?.cancel()
         default:
             break
         }
@@ -203,9 +206,9 @@ actor JobQueue {
         guard let job = jobs[id] else { throw APIError(404, t("Unbekannter Auftrag: \(id)", "Unknown job: \(id)")) }
         if job.status == "running" {
             throw APIError(409, t("Der Auftrag läuft gerade. Abbrechen über POST /api/jobs/current/cancel; "
-                                  + "er endet dann nach dem aktuellen Bild.",
+                                  + "er endet dann nach dem aktuellen Rechenschritt.",
                                   "The job is running. Cancel it with POST /api/jobs/current/cancel; "
-                                  + "it then ends after the current image."))
+                                  + "it then ends after the current step."))
         }
         jobs[id] = nil
         order.removeAll { $0 == id }
@@ -419,9 +422,17 @@ actor JobQueue {
                 func render(_ m: EngineMode, _ w: Int, _ h: Int, _ s: UInt64) async throws -> CGImage {
                     let job = EngineJob(mode: m, prompt: req.prompt, width: w, height: h,
                                         steps: req.steps, guidance: req.guidance, seed: s)
-                    return try await Flux2Engine.shared.generate(job) { step, total in
-                        Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
+                    // Eigener Task, damit „Abbrechen“ die Rechnung mitten im Bild beenden kann.
+                    let work = Task {
+                        try await Flux2Engine.shared.generate(job) { step, total in
+                            Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
+                        }
                     }
+                    imageTask = work
+                    defer { imageTask = nil }
+                    // Kam der Abbruch, bevor der Task stand, gleich beenden.
+                    if jobs[id]?.cancelRequested == true { work.cancel() }
+                    return try await work.value
                 }
                 if let original, let edges = req.outpaint {
                     // Erweitern per Maske in einem Durchgang (OutpaintMask.swift); der Referenzweg ließ

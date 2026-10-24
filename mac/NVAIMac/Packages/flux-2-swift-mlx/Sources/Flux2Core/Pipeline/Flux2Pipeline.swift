@@ -1,0 +1,2586 @@
+// Flux2Pipeline.swift - Main Pipeline for Flux.2 Image Generation
+// Copyright 2025 Vincent Gourbin
+
+import Foundation
+import MLX
+import MLXRandom
+import MLXNN
+import CoreGraphics
+import ImageIO
+
+#if canImport(AppKit)
+import AppKit
+#endif
+
+/// Generation mode for Flux.2
+public enum Flux2GenerationMode: Sendable {
+    /// Text-to-Image generation
+    case textToImage
+
+    /// Image-to-Image generation with reference images
+    /// - Parameter images: Reference images (1-3). Multiple images are concatenated along sequence dimension
+    ///             with unique time-based position IDs for each, allowing the transformer to
+    ///             attend to all reference images during generation.
+    ///
+    /// Note: Flux.2 I2I uses conditioning mode (not noise-injection like SD).
+    /// Reference images provide visual context through transformer attention.
+    /// The model always denoises from pure noise while attending to reference tokens.
+    case imageToImage(images: [CGImage])
+}
+
+/// Progress callback for generation (currentStep, totalSteps)
+public typealias Flux2ProgressCallback = @Sendable (Int, Int) -> Void
+
+/// Checkpoint callback for saving intermediate images (step, image)
+public typealias Flux2CheckpointCallback = @Sendable (Int, CGImage) -> Void
+
+/// Context passed to a denoising step hook.
+///
+/// `sigmaNext == 0` on the final iteration — chains relying on RePaint-style
+/// blending (e.g. masked inpainting) use this to restore the unchanged region
+/// to the clean original-image latent on the last step.
+public struct Flux2StepContext: Sendable {
+    /// Zero-based step index within the denoising loop.
+    public let stepIdx: Int
+    /// Total number of denoising steps that will run for this generation.
+    public let totalSteps: Int
+    /// Current sigma value (noise level at the start of this step).
+    public let sigma: Float
+    /// Next sigma value (noise level after this step). Equals `0` on the final step.
+    public let sigmaNext: Float
+    /// Target image height in pixels.
+    public let height: Int
+    /// Target image width in pixels.
+    public let width: Int
+    /// Whether this is the I2I conditioning path (true) or the T2I path (false).
+    public let isI2I: Bool
+}
+
+/// Per-step hook called inside the denoising loop, after the scheduler step.
+///
+/// Lets a chain (e.g. masked inpainting) inspect or transform the packed latents
+/// `[1, seq_len, 128]` between steps. Return the latents unchanged to act as a
+/// pure observer, or return a new tensor to influence subsequent steps.
+public typealias Flux2StepHook = @Sendable (Flux2StepContext, MLXArray) -> MLXArray
+
+/// Result of image generation including the image and metadata
+public struct Flux2GenerationResult: Sendable {
+    /// The generated image
+    public let image: CGImage
+
+    /// The prompt that was actually used for generation
+    /// If upsampling was enabled, this contains the enhanced prompt
+    public let usedPrompt: String
+
+    /// Whether the prompt was upsampled/enhanced
+    public let wasUpsampled: Bool
+
+    /// The original prompt before any enhancement
+    public let originalPrompt: String
+
+    public init(image: CGImage, usedPrompt: String, wasUpsampled: Bool, originalPrompt: String) {
+        self.image = image
+        self.usedPrompt = usedPrompt
+        self.wasUpsampled = wasUpsampled
+        self.originalPrompt = originalPrompt
+    }
+}
+
+/// Flux.2 Image Generation Pipeline
+///
+/// Supports:
+/// - Flux.2 Dev (32B) - Mistral text encoder
+/// - Flux.2 Klein 4B - Qwen3-4B text encoder (Apache 2.0)
+/// - Flux.2 Klein 9B - Qwen3-8B text encoder (Non-commercial)
+///
+/// Two-phase pipeline for memory efficiency:
+/// 1. Text encoding (unloaded after use)
+/// 2. Image generation with Transformer + VAE
+public class Flux2Pipeline: @unchecked Sendable {
+    /// Model variant (dev, klein-4b, klein-9b)
+    public let model: Flux2Model
+
+    /// Quantization configuration
+    public let quantization: Flux2QuantizationConfig
+
+    /// Memory optimization settings for transformer inference
+    public var memoryOptimization: MemoryOptimizationConfig
+
+    /// Text encoder (Mistral - for Dev)
+    private var textEncoder: Flux2TextEncoder?
+
+    /// Klein text encoder (Qwen3 - for Klein 4B/9B)
+    private var kleinEncoder: KleinTextEncoder?
+
+    /// Optional override for the Klein text encoder (Qwen3) directory.
+    /// When non-nil, `loadTextEncoder()` loads weights + tokenizer from
+    /// this path instead of resolving and downloading the curated Qwen3
+    /// variant. Lets hosting apps swap in alternate Qwen3 builds
+    /// (abliterated, fine-tuned, different quantisation, …) without
+    /// forking the package. See `docs/TextEncoders.md` for the expected
+    /// directory layout and dimension constraints. Has no effect when
+    /// `model == .dev` (which uses the Mistral encoder).
+    private let kleinEncoderPath: URL?
+
+    /// Diffusion transformer
+    private var transformer: Flux2Transformer2DModel?
+
+    /// VAE variant (standard or small-decoder)
+    public let vaeVariant: ModelRegistry.VAEVariant
+
+    /// VAE decoder
+    private var vae: AutoencoderKLFlux2?
+
+    /// Scheduler
+    private let scheduler: FlowMatchEulerScheduler
+
+    /// Memory manager
+    private let memoryManager = Flux2MemoryManager.shared
+
+    /// Model downloader
+    private var downloader: Flux2ModelDownloader?
+
+    /// LoRA adapter manager
+    private var loraManager: LoRAManager?
+
+    /// Source directory the transformer weights were resolved from (set by
+    /// `loadTransformer`) — anchor for pre-quantized checkpoint exports.
+    private var transformerSourcePath: URL?
+
+    /// When set, `loadTransformer` ignores any pre-quantized checkpoint and
+    /// loads from the source weights. Used by exports to guarantee the
+    /// result is derived from the source, never from a previous export.
+    private var skipPrequantizedCheckpoint = false
+
+    /// Whether the currently loaded transformer came from a pre-quantized
+    /// checkpoint (informational; also guards export round-trips).
+    public private(set) var transformerLoadedFromPrequantized = false
+
+    /// Whether LoRA weights have been merged into the CURRENT transformer
+    /// instance. Unlike `loraManager.count`, this survives `unloadLoRA` —
+    /// merged weights cannot be un-merged without reloading the base model,
+    /// so this is the flag export safety checks must consult.
+    public private(set) var transformerHasMergedLoRAs = false
+
+    /// Active LoRA scheduler overrides (from loaded LoRA config)
+    private var loraSchedulerOverrides: SchedulerOverrides?
+
+    /// Whether models are loaded
+    public private(set) var isLoaded: Bool = false
+
+    /// Memory profile for GPU cache management (auto = dynamic based on RAM)
+    public var memoryProfile: MemoryConfig.CacheProfile = .auto
+
+    /// Clear cache every N denoising steps (0 = disabled)
+    public var clearCacheEveryNSteps: Int = 5
+
+    /// Compile the denoising transformer forward with `MLX.compile`.
+    ///
+    /// **Opt-in, experimental — OFF by default, and there is currently no
+    /// reason to enable it in production.** Measured on klein-9b bf16
+    /// (1 MP, 4 steps, M3 Max 96 GB, 2026-07): steady-state step time is
+    /// unchanged (13.2 s compiled vs 12.5–13.6 s baseline) because this
+    /// codebase already hand-optimizes the elementwise hot spots that
+    /// `compile` would fuse (modulation precomputed outside the block loop,
+    /// fused RoPE Metal kernel, `MLXFast` rmsNorm/SDPA); the remaining step
+    /// time is GEMM/SDPA-bound, which `compile` does not accelerate. The
+    /// output is numerically identical to the uncompiled path (mean RGB
+    /// delta 0.01/255 at equal seed).
+    ///
+    /// The switch is kept for experimentation (future mlx-swift versions,
+    /// other model variants, modified forward paths). Behaviour when
+    /// enabled:
+    /// - the compiled closure is cached on the pipeline; MLX re-traces it
+    ///   automatically when input shapes change (resolution, text length)
+    ///   and it is rebuilt if the transformer instance or guidance arity
+    ///   changes. First step after a (re)build pays a one-time trace
+    ///   (~1–2 s on klein-9b).
+    /// - `memoryOptimization` is forced to `.disabled` on the transformer:
+    ///   intra-forward `eval()` graph segmentation is illegal under compile
+    ///   tracing. Peak memory therefore rises to the unsegmented level —
+    ///   do NOT combine with low-memory profiles on constrained machines.
+    /// - the KV-cached path (`klein-9b-kv`) is not affected.
+    public var compileDenoisingStep: Bool = false
+
+    /// Cached compiled forward (see `compileDenoisingStep`).
+    private var compiledForward: (([MLXArray]) -> [MLXArray])?
+    /// Identity key of the compiled closure: transformer instance + guidance arity.
+    private var compiledForwardKey: (transformer: ObjectIdentifier, hasGuidance: Bool)?
+
+    /// Transformer forward used by the standard denoising loops. Routes
+    /// through the compiled closure when `compileDenoisingStep` is set,
+    /// otherwise calls the transformer directly.
+    private func denoiseForward(
+        _ transformer: Flux2Transformer2DModel,
+        hiddenStates: MLXArray,
+        encoderHiddenStates: MLXArray,
+        timestep: MLXArray,
+        guidance: MLXArray?,
+        imgIds: MLXArray,
+        txtIds: MLXArray
+    ) -> MLXArray {
+        guard compileDenoisingStep else {
+            return transformer.callAsFunction(
+                hiddenStates: hiddenStates,
+                encoderHiddenStates: encoderHiddenStates,
+                timestep: timestep,
+                guidance: guidance,
+                imgIds: imgIds,
+                txtIds: txtIds
+            )
+        }
+
+        let hasGuidance = guidance != nil
+        let key = (transformer: ObjectIdentifier(transformer), hasGuidance: hasGuidance)
+        if compiledForward == nil || compiledForwardKey! != key {
+            Flux2Debug.log("Compiling denoising forward (guidance: \(hasGuidance))...")
+            // Intra-forward eval() (memory-optimization graph segmentation) is
+            // illegal inside compile tracing — and pointless once the graph is
+            // compiled. Disable it for this transformer; peak memory rises to
+            // the unsegmented level, which is the trade-off of compiling.
+            if transformer.memoryOptimization != .disabled {
+                Flux2Debug.log("compileDenoisingStep: overriding memoryOptimization \(transformer.memoryOptimization) → .disabled (intra-forward eval is incompatible with compile)")
+                transformer.memoryOptimization = .disabled
+            }
+            // Weights are tracked as compile state via `inputs: [transformer]`,
+            // so LoRA merges (value-only updates) don't stale the trace.
+            compiledForward = compile(inputs: [transformer]) { (arrays: [MLXArray]) -> [MLXArray] in
+                [transformer.callAsFunction(
+                    hiddenStates: arrays[0],
+                    encoderHiddenStates: arrays[1],
+                    timestep: arrays[2],
+                    guidance: hasGuidance ? arrays[3] : nil,
+                    imgIds: hasGuidance ? arrays[4] : arrays[3],
+                    txtIds: hasGuidance ? arrays[5] : arrays[4]
+                )]
+            }
+            compiledForwardKey = key
+        }
+
+        var args = [hiddenStates, encoderHiddenStates, timestep]
+        if let guidance { args.append(guidance) }
+        args.append(imgIds)
+        args.append(txtIds)
+        return compiledForward!(args)[0]
+    }
+
+    /// Keep the text encoder loaded between generations (default `false`).
+    ///
+    /// By default the pipeline is memory-first: the text encoder is loaded,
+    /// used, and unloaded on EVERY generation so it never coexists with the
+    /// transformer. On machines with headroom this re-load is pure waste
+    /// (~1s warm, several seconds cold for the Klein/Qwen3 encoders; much
+    /// more for the Dev/Mistral-24B encoder).
+    ///
+    /// When `true`, the encoder stays resident across generations — the
+    /// text-encoding phase of subsequent generations skips the reload
+    /// entirely. The trade-off is peak memory: encoder + transformer are
+    /// resident simultaneously during denoising (e.g. Klein-9B bf16 +
+    /// Qwen3-8B-4bit ≈ +5 GB). Policy belongs to the host: enable it based
+    /// on available RAM, leave it off on constrained machines. Releasing
+    /// the pipeline instance still frees the encoder as usual.
+    public var keepTextEncoderLoaded: Bool = false
+
+    /// Initialize the Flux.2 pipeline
+    /// - Parameters:
+    ///   - model: Model variant (dev, klein-4b, klein-9b)
+    ///   - quantization: Quantization configuration
+    ///   - memoryOptimization: Memory optimization settings (nil = auto-detect based on system RAM)
+    ///   - vaeVariant: VAE decoder variant (standard or small-decoder)
+    ///   - hfToken: HuggingFace token for model downloads
+    ///   - kleinEncoderPath: Optional local directory containing a Qwen3
+    ///     text encoder (`config.json`, `tokenizer.json`, `*.safetensors`).
+    ///     When set, the Klein text encoder loads from this path instead
+    ///     of resolving and downloading the curated Qwen3 variant. The
+    ///     architecture must match the target Klein variant (Qwen3-4B for
+    ///     Klein 4B, Qwen3-8B for Klein 9B). See `docs/TextEncoders.md`
+    ///     for the directory layout and a list of compatible builds. Has
+    ///     no effect when `model == .dev` (which uses the Mistral encoder).
+    public init(
+        model: Flux2Model = .dev,
+        quantization: Flux2QuantizationConfig = .balanced,
+        memoryOptimization: MemoryOptimizationConfig? = nil,
+        vaeVariant: ModelRegistry.VAEVariant = .smallDecoder,
+        hfToken: String? = nil,
+        kleinEncoderPath: URL? = nil
+    ) {
+        self.model = model
+        self.quantization = quantization
+        self.vaeVariant = vaeVariant
+        self.memoryOptimization = memoryOptimization ?? MemoryOptimizationConfig.recommended(
+            forRAMGB: Flux2MemoryManager.shared.physicalMemoryGB
+        )
+        self.scheduler = FlowMatchEulerScheduler()
+        self.downloader = hfToken != nil ? Flux2ModelDownloader(hfToken: hfToken) : Flux2ModelDownloader()
+        self.kleinEncoderPath = kleinEncoderPath
+    }
+
+    // MARK: - Model Loading
+
+    // MARK: - Internal accessors for chain helpers
+    //
+    // Exposed only within `Flux2Core` so the in-module
+    // `Flux2Pipeline+ChainHelpers.swift` extension can reach the otherwise
+    // private model instances and helpers. Out-of-module callers go through
+    // the public API on that extension.
+
+    internal func ensureVAELoaded() async throws { try await loadVAE() }
+    internal var vaeForChains: AutoencoderKLFlux2? { vae }
+    internal func preprocessImageForVAEPublic(
+        _ image: CGImage,
+        targetHeight: Int,
+        targetWidth: Int
+    ) async -> MLXArray {
+        await preprocessImageForVAE(image, targetHeight: targetHeight, targetWidth: targetWidth)
+    }
+
+    /// Run a synchronous CPU block on a Default-QoS Dispatch worker,
+    /// regardless of the calling task's QoS.
+    ///
+    /// CoreGraphics rasterisation calls (`CGContext.draw(_:in:)` with
+    /// `interpolationQuality = .high`) dispatch their internal workers at
+    /// `.default` QoS. Calling them from a cooperative thread that
+    /// inherits a higher QoS (e.g. User-Initiated via MainActor button
+    /// click → `await chain.run()`) triggers the runtime priority-inversion
+    /// warning *"Thread running at User-initiated quality-of-service class
+    /// waiting on a lower QoS thread"* even though the work is correct
+    /// and the system silently elevates the worker via priority
+    /// inheritance.
+    ///
+    /// The fix has two pieces:
+    /// 1. `withCheckedContinuation` makes the cooperative thread *suspend*
+    ///    instead of *block* — no blocking thread means no inversion check.
+    /// 2. `DispatchWorkItem(qos: .default, flags: [.enforceQoS])` prevents
+    ///    Dispatch from elevating the worker's QoS to match the caller,
+    ///    so CG sees a Default-QoS caller and its internal workers stay at
+    ///    Default — symmetric, no inversion at the CG level either.
+    static func runAtDefaultQoS<T: Sendable>(
+        _ body: @Sendable @escaping () -> T
+    ) async -> T {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+            let workItem = DispatchWorkItem(qos: .default, flags: [.enforceQoS]) {
+                continuation.resume(returning: body())
+            }
+            DispatchQueue.global(qos: .default).async(execute: workItem)
+        }
+    }
+
+    /// Load all required models
+    /// - Parameter progressCallback: Optional callback for download progress
+    public func loadModels(progressCallback: Flux2DownloadProgressCallback? = nil) async throws {
+        let beacon = RuntimeBeacon.begin(task: "load-models", model: model.rawValue)
+        defer { beacon?.end() }
+
+        // Check memory before loading
+        let memCheck = memoryManager.checkTextEncodingPhase(config: quantization)
+        if !memCheck.isOk {
+            Flux2Debug.log("Memory warning: \(memCheck.message)")
+        }
+
+        // Download models if needed
+        if !hasRequiredModels {
+            try await downloadRequiredModels(progress: progressCallback)
+        }
+
+        isLoaded = true
+        Flux2Debug.log("Pipeline ready for generation")
+    }
+
+    /// Download required models
+    private func downloadRequiredModels(progress: Flux2DownloadProgressCallback?) async throws {
+        guard let downloader = downloader else { return }
+
+        for component in missingModels {
+            if case .textEncoder = component {
+                // Text encoder is handled separately by Flux2TextEncoder
+                continue
+            }
+            _ = try await downloader.download(component, progress: progress)
+        }
+    }
+
+    /// Load text encoder for Phase 1
+    /// Uses Mistral for Dev, Qwen3 for Klein models
+    private func loadTextEncoder() async throws {
+        // Check if already loaded
+        switch model {
+        case .dev:
+            guard textEncoder == nil else { return }
+        case .klein4B, .klein4BBase, .klein9B, .klein9BBase, .klein9BKV:
+            guard kleinEncoder == nil else { return }
+        }
+
+        memoryManager.logMemoryState()
+        Flux2Debug.log("Loading text encoder for \(model.displayName)...")
+
+        // Map quantization
+        let mistralQuant: MistralQuantization
+        switch quantization.textEncoder {
+        case .bf16:
+            mistralQuant = .bf16
+        case .mlx8bit:
+            mistralQuant = .mlx8bit
+        case .mlx6bit:
+            mistralQuant = .mlx6bit
+        case .mlx4bit:
+            mistralQuant = .mlx4bit
+        }
+
+        switch model {
+        case .dev:
+            textEncoder = Flux2TextEncoder(quantization: mistralQuant)
+            try await textEncoder!.load()
+
+        case .klein4B, .klein4BBase:
+            kleinEncoder = KleinTextEncoder(variant: .klein4B, quantization: mistralQuant)
+            try await kleinEncoder!.load(from: kleinEncoderPath)
+
+        case .klein9B, .klein9BBase, .klein9BKV:
+            kleinEncoder = KleinTextEncoder(variant: .klein9B, quantization: mistralQuant)
+            try await kleinEncoder!.load(from: kleinEncoderPath)
+        }
+
+        memoryManager.logMemoryState()
+    }
+
+    /// Unload text encoder to free memory for transformer
+    @MainActor
+    private func unloadTextEncoder() {
+        Flux2Debug.log("Unloading text encoder...")
+
+        switch model {
+        case .dev:
+            textEncoder?.unload()
+            textEncoder = nil
+        case .klein4B, .klein4BBase, .klein9B, .klein9BBase, .klein9BKV:
+            kleinEncoder?.unload()
+            kleinEncoder = nil
+        }
+
+        // Force synchronization to ensure all GPU operations complete
+        // This helps release memory before loading the next model
+        eval([])
+
+        memoryManager.fullCleanup()
+
+        // Additional sync after cache clear
+        eval([])
+
+        // Log memory state to verify release
+        memoryManager.logMemoryState()
+
+        // For large models (Dev), give the system a moment to reclaim memory
+        // This prevents the text encoder and transformer from overlapping in memory
+        if model == .dev {
+            Flux2Debug.log("Waiting for memory reclamation (Dev model)...")
+            Thread.sleep(forTimeInterval: 0.5)
+            memoryManager.fullCleanup()
+            eval([])
+        }
+    }
+
+    /// Load transformer for Phase 2
+    private func loadTransformer() async throws {
+        guard transformer == nil else { return }
+
+        MLX.Memory.peakMemory = 0
+        memoryManager.logMemoryState()
+        Flux2Debug.log("Loading transformer for \(model.displayName)...")
+
+        // Get the appropriate transformer variant based on model type and quantization
+        let variant = ModelRegistry.TransformerVariant.variant(for: model, quantization: quantization.transformer)
+
+        // Find model path
+        guard let modelPath = Flux2ModelDownloader.findModelPath(for: .transformer(variant)) else {
+            let downloadCmd: String
+            switch model {
+            case .dev:
+                downloadCmd = "flux2 download --transformer \(quantization.transformer.rawValue)"
+            case .klein4B, .klein4BBase:
+                downloadCmd = "flux2 download --model klein-4b"
+            case .klein9B, .klein9BBase:
+                downloadCmd = "flux2 download --model klein-9b"
+            case .klein9BKV:
+                downloadCmd = "flux2 download --model klein-9b-kv"
+            }
+            let hint = Flux2ModelDownloader.unavailableReason(for: .transformer(variant)) ?? "Run: \(downloadCmd)"
+            throw Flux2Error.modelNotLoaded("\(model.displayName) transformer weights not found. \(hint)")
+        }
+
+        // Create model with appropriate config and memory optimization
+        transformer = Flux2Transformer2DModel(
+            config: model.transformerConfig,
+            memoryOptimization: memoryOptimization
+        )
+        Flux2Debug.log("Memory optimization: \(memoryOptimization)")
+        transformerSourcePath = modelPath
+        transformerHasMergedLoRAs = false  // fresh instance, nothing merged yet
+
+        // Fast path: a pre-quantized MLX checkpoint exported earlier (see
+        // Flux2PrequantizedCheckpoint / `flux2 export-quantized`) skips the
+        // bf16 read, the key mapping, and the quantize pass entirely. Its
+        // validation runs BEFORE any model mutation, so on failure the same
+        // pristine instance falls through to the standard path below.
+        // Exports set `skipPrequantizedCheckpoint` to guarantee the result
+        // derives from the source weights, never from a previous export.
+        var loadedFromPrequantized = false
+        if quantization.transformer != .bf16, !skipPrequantizedCheckpoint {
+            loadedFromPrequantized = Flux2PrequantizedCheckpoint.load(
+                into: transformer!,
+                makeStructureClone: {
+                    Flux2Transformer2DModel(
+                        config: self.model.transformerConfig,
+                        memoryOptimization: self.memoryOptimization)
+                },
+                sourceModelPath: modelPath,
+                quantization: quantization.transformer
+            )
+            if loadedFromPrequantized {
+                memoryManager.fullCleanup()
+            }
+        }
+        transformerLoadedFromPrequantized = loadedFromPrequantized
+
+        if !loadedFromPrequantized {
+            // Load weights with explicit memory management
+            // For large models (Dev), this can temporarily use 2x memory during mapping
+            Flux2Debug.log("Loading transformer weights from disk...")
+            var weights: [String: MLXArray]
+            do {
+                weights = try Flux2WeightLoader.loadWeights(from: modelPath)
+                Flux2Debug.log("Applying weights to model...")
+                try Flux2WeightLoader.applyTransformerWeights(&weights, to: transformer!)
+            } catch {
+                // `transformer` was assigned above; leaving a randomly
+                // initialised instance resident would make every later call
+                // short-circuit `guard transformer == nil` and produce noise.
+                unloadTransformer()
+                throw error
+            }
+
+            // Explicitly release the raw weights dictionary to free memory
+            // This is important for Dev model where weights can be ~32GB
+            weights.removeAll()
+            eval([])  // Sync to ensure weights are released
+            memoryManager.fullCleanup()
+            Flux2Debug.log("Raw weights released from memory")
+
+            // Quantize transformer to native MLX QuantizedLinear if requested
+            // This handles both:
+            // 1. Pre-quantized weights (quanto→float16→MLX qint8): negligible precision loss
+            // 2. On-the-fly quantization from bf16 (e.g. Klein 9B qint8, any model int4)
+            // The quantization uses MLX's native QuantizedLinear format which:
+            // - Reduces memory usage proportionally to bit width (8-bit: ~50%, 4-bit: ~75%)
+            // - Uses optimized quantizedMM() for faster inference on Apple Silicon
+            // - Enables efficient dequant→merge→requant for LoRA weight merging
+            if quantization.transformer != .bf16 {
+                let bits = quantization.transformer.bits
+                let groupSize = quantization.transformer.groupSize
+                let mode = quantization.transformer.mode
+                Flux2Debug.log("Quantizing transformer on-the-fly to \(bits)-bit (groupSize=\(groupSize), mode=\(mode.rawValue))...")
+                memoryManager.logMemoryState()
+                quantize(model: transformer!, groupSize: groupSize, bits: bits, mode: mode)
+                eval(transformer!.parameters())
+                memoryManager.fullCleanup()
+                memoryManager.logMemoryState()
+                Flux2Debug.log("Transformer quantized to QuantizedLinear (\(bits)-bit, \(mode.rawValue))")
+            }
+        }
+
+        // Merge LoRA weights if any are loaded — common tail, shared by both
+        // load paths so their behavior cannot drift.
+        if let loraManager = loraManager, loraManager.count > 0 {
+            if loraManager.loadedLayerPaths.isEmpty {
+                // A previous fusion already consumed the LoRA weights
+                // (clearWeightsAfterFusion). This freshly loaded transformer
+                // holds BASE weights only — merging would silently no-op
+                // while hasLoRA still reports LoRAs active.
+                Flux2Debug.warning(
+                    "[LoRA] \(loraManager.count) LoRA(s) registered but their weights were already fused into a previous transformer instance and cleared — the reloaded transformer has NO LoRA applied. Reload the LoRA adapters to re-merge.")
+            } else {
+                MLX.Memory.peakMemory = 0
+                Flux2Debug.log("[LoRA] Before merge:")
+                memoryManager.logMemoryState()
+                Flux2WeightLoader.mergeLoRAWeights(from: loraManager, into: transformer!)
+                // Free LoRA matrices from memory after fusion (they're now baked into base weights)
+                loraManager.clearWeightsAfterFusion()
+                transformerHasMergedLoRAs = true
+                memoryManager.fullCleanup()
+                Flux2Debug.log("[LoRA] After merge:")
+                memoryManager.logMemoryState()
+            }
+        }
+
+        // Ensure weights are evaluated
+        eval(transformer!.parameters())
+
+        memoryManager.logMemoryState()
+        Flux2Debug.log("Transformer loaded successfully\(loadedFromPrequantized ? " (pre-quantized checkpoint)" : "")")
+    }
+
+    // MARK: - LoRA Support
+
+    /// Load a LoRA adapter
+    /// - Parameter config: LoRA configuration
+    /// - Returns: Information about the loaded LoRA
+    @discardableResult
+    public func loadLoRA(_ config: LoRAConfig) throws -> LoRAInfo {
+        if loraManager == nil {
+            loraManager = LoRAManager()
+        }
+
+        let info = try loraManager!.loadLoRA(config)
+
+        // Store scheduler overrides if present
+        if let overrides = config.schedulerOverrides, overrides.hasOverrides {
+            loraSchedulerOverrides = overrides
+            Flux2Debug.log("[LoRA] Scheduler overrides detected:")
+            if let sigmas = overrides.customSigmas {
+                Flux2Debug.log("  - Custom sigmas: \(sigmas.count) values")
+            }
+            if let steps = overrides.numSteps {
+                Flux2Debug.log("  - Recommended steps: \(steps)")
+            }
+            if let guidance = overrides.guidance {
+                Flux2Debug.log("  - Recommended guidance: \(guidance)")
+            }
+        }
+
+        // Validate compatibility
+        if info.targetModel != .unknown {
+            let expectedModel: LoRAInfo.TargetModel
+            switch model {
+            case .dev: expectedModel = .dev
+            case .klein4B, .klein4BBase: expectedModel = .klein4B
+            case .klein9B, .klein9BBase, .klein9BKV: expectedModel = .klein9B
+            }
+
+            if info.targetModel != expectedModel {
+                Flux2Debug.log("[LoRA] Warning: LoRA was trained for \(info.targetModel.rawValue), but using \(model.rawValue)")
+            }
+        }
+
+        // If transformer is already loaded, merge LoRA weights immediately
+        if let transformer = transformer {
+            Flux2WeightLoader.mergeLoRAWeights(from: loraManager!, into: transformer)
+            // Free LoRA matrices from memory after fusion (they're now baked into base weights)
+            loraManager!.clearWeightsAfterFusion()
+            transformerHasMergedLoRAs = true
+        }
+
+        return info
+    }
+
+    /// Unload a LoRA by name
+    public func unloadLoRA(name: String) {
+        loraManager?.unloadLoRA(name: name)
+        // Clear overrides if no more LoRAs are loaded
+        if loraManager?.count == 0 {
+            loraSchedulerOverrides = nil
+        }
+    }
+
+    /// Unload all LoRAs
+    public func unloadAllLoRAs() {
+        loraManager?.unloadAll()
+        loraSchedulerOverrides = nil
+    }
+
+    /// Whether any LoRAs are loaded
+    public var hasLoRA: Bool {
+        loraManager?.count ?? 0 > 0
+    }
+
+    /// Get active LoRA scheduler overrides (if any)
+    /// The CLI can use this to apply recommended settings
+    public var activeSchedulerOverrides: SchedulerOverrides? {
+        loraSchedulerOverrides
+    }
+
+    /// Load VAE for Phase 2
+    private func loadVAE() async throws {
+        guard vae == nil else { return }
+
+        Flux2Debug.log("Loading VAE (\(vaeVariant.displayName))...")
+
+        guard let modelPath = Flux2ModelDownloader.findModelPath(for: .vae(vaeVariant)) else {
+            let hint = Flux2ModelDownloader.unavailableReason(for: .vae(vaeVariant)).map { " \($0)" } ?? ""
+            throw Flux2Error.modelNotLoaded("VAE weights not found for variant: \(vaeVariant.rawValue).\(hint)")
+        }
+
+        // VAE files may be in 'vae' subdirectory (standard variant from Klein 4B repo)
+        let vaePath = modelPath.appendingPathComponent("vae")
+        let weightsPath = FileManager.default.fileExists(atPath: vaePath.path) ? vaePath : modelPath
+
+        // Load config from JSON if available, otherwise use variant preset
+        let configURL = weightsPath.appendingPathComponent("config.json")
+        let vaeConfig: VAEConfig
+        if FileManager.default.fileExists(atPath: configURL.path) {
+            vaeConfig = try VAEConfig.load(from: configURL)
+            Flux2Debug.log("VAE config loaded from config.json (decoder channels: \(vaeConfig.effectiveDecoderChannels))")
+        } else {
+            vaeConfig = vaeVariant.vaeConfig
+            Flux2Debug.log("VAE using preset config for \(vaeVariant.rawValue)")
+        }
+
+        // Create model with appropriate config
+        vae = AutoencoderKLFlux2(config: vaeConfig)
+
+        // Load weights — prefer diffusion_pytorch_model.safetensors (standard diffusers file)
+        // to avoid conflicts when directory contains multiple safetensors files
+        let standardWeightsFile = weightsPath.appendingPathComponent("diffusion_pytorch_model.safetensors")
+        do {
+            let weights: [String: MLXArray]
+            if FileManager.default.fileExists(atPath: standardWeightsFile.path) {
+                Flux2Debug.log("Loading VAE weights from diffusion_pytorch_model.safetensors")
+                weights = try Flux2WeightLoader.loadWeights(from: standardWeightsFile)
+            } else {
+                weights = try Flux2WeightLoader.loadWeights(from: weightsPath)
+            }
+            try Flux2WeightLoader.applyVAEWeights(weights, to: vae!)
+        } catch {
+            // Don't leave a randomly initialised VAE resident (see loadTransformer).
+            vae = nil
+            throw error
+        }
+
+        // Ensure weights are evaluated
+        eval(vae!.parameters())
+
+        Flux2Debug.log("VAE loaded successfully (\(vaeVariant.displayName), decoder: \(vaeConfig.effectiveDecoderChannels))")
+    }
+
+    /// Export the transformer as a pre-quantized MLX checkpoint next to its
+    /// source weights, so subsequent loads with the same quantization skip
+    /// the bf16 read and the quantize pass (see `Flux2PrequantizedCheckpoint`).
+    ///
+    /// The export always derives from the SOURCE weights (never from a
+    /// previous export): the fast path is disabled for the internal load and
+    /// a checkpoint-loaded resident transformer is dropped first. If a
+    /// checkpoint already exists, the call is a no-op returning its URL
+    /// unless `force` is set. Requires a non-bf16 transformer quantization.
+    /// The write is explicit by design — call this from the host when
+    /// trading disk for load time is wanted (roughly the quantized model
+    /// size on disk, e.g. ~9.6 GB for Klein 9B qint8). Delete the model's
+    /// `mlx-prequantized/` subdirectory to reclaim the space.
+    ///
+    /// - Parameters:
+    ///   - allowLoRABaked: the bake check runs AFTER the load against
+    ///     `transformerHasMergedLoRAs` (merged weights survive `unloadLoRA`);
+    ///     when allowed, the export is tagged `lora_baked` in metadata and
+    ///     `load` warns loudly on every use.
+    ///   - force: delete and regenerate an existing checkpoint.
+    /// - Returns: URL of the written (or already existing) safetensors file.
+    @discardableResult
+    public func exportPrequantizedTransformer(
+        allowLoRABaked: Bool = false,
+        force: Bool = false
+    ) async throws -> URL {
+        guard quantization.transformer != .bf16 else {
+            throw Flux2Error.invalidConfiguration(
+                "exportPrequantizedTransformer requires a quantized transformer configuration (current: bf16)")
+        }
+
+        let beacon = RuntimeBeacon.begin(task: "export-quantized", model: model.rawValue)
+        defer { beacon?.end() }
+
+        // Resolve the source directory up-front (same resolution as
+        // loadTransformer) so the exists/force decision precedes any load.
+        let variant = ModelRegistry.TransformerVariant.variant(
+            for: model, quantization: quantization.transformer)
+        guard let sourcePath = Flux2ModelDownloader.findModelPath(for: .transformer(variant)) else {
+            let hint = Flux2ModelDownloader.unavailableReason(for: .transformer(variant))
+                ?? "download the model before exporting"
+            throw Flux2Error.modelNotLoaded("\(model.displayName) transformer weights not found — \(hint)")
+        }
+
+        let checkpointExists = Flux2PrequantizedCheckpoint.exists(
+            sourceModelPath: sourcePath, quantization: quantization.transformer)
+
+        // Without force, only a VALID existing checkpoint is a no-op; an
+        // invalid/stale squatter is regenerated (the load-side warning tells
+        // users to re-run the export — that advice must work).
+        if checkpointExists, !force,
+           Flux2PrequantizedCheckpoint.isValid(
+               sourceModelPath: sourcePath, quantization: quantization.transformer)
+        {
+            let url = Flux2PrequantizedCheckpoint.weightsURL(
+                sourceModelPath: sourcePath, quantization: quantization.transformer)
+            Flux2Debug.log(
+                "Pre-quantized checkpoint already exists and is valid — nothing to do (pass force to regenerate from the source weights): \(url.path)")
+            return url
+        }
+
+        // Every reason to refuse is a pure predicate, so all of them run BEFORE
+        // anything is mutated: an export that aborts must not have deleted the
+        // user's existing checkpoint (`force` makes that ~10 GB irreversible)
+        // nor evicted a resident multi-GB transformer.
+
+        // The export must derive from the SOURCE weights, never from a previous
+        // export, so a checkpoint-loaded resident transformer has to be
+        // reloaded — as does one loaded from a *different* directory (a path
+        // override set or cleared since the load), since the decisions here are
+        // all made against `sourcePath` and the save must write there too.
+        // That reload discards LoRA matrices fusion already consumed: it can
+        // only warn, and the session would silently continue base-only while
+        // `hasLoRA` still says true. Guard on exactly the predicate that
+        // triggers the unload, or the check misses the case it was written for
+        // (resident checkpoint load, unchanged source path).
+        let mustReload = transformerLoadedFromPrequantized || transformerSourcePath != sourcePath
+        if mustReload, transformerHasMergedLoRAs {
+            throw Flux2Error.invalidConfiguration(
+                "The resident transformer has merged LoRA weights (loaded from \(transformerSourcePath?.path ?? "?")) and this export has to reload it from \(sourcePath.path) — the merged matrices cannot be recovered. Unload the LoRAs, or reload them after the export.")
+        }
+        if Flux2PrequantizedCheckpoint.isSymlinked(
+            sourceModelPath: sourcePath, quantization: quantization.transformer)
+        {
+            // Saving would replace the link with a local file and silently undo
+            // the relocation (`remove()` refuses to unlink it for the same
+            // reason), so refuse before touching anything.
+            throw Flux2Error.invalidConfiguration(
+                "The existing pre-quantized checkpoint under \(sourcePath.path) is a symlink (relocated to another disk) — regenerate it at the relocation target, or remove the link, before exporting here.")
+        }
+
+        // Past this point the export mutates state — but not the existing
+        // checkpoint file: `save()` below writes to a temp file and replaces
+        // it atomically, so there is no need to (and must not) delete it
+        // ahead of the fallible reload/quantize/save that follows. Deleting
+        // it here would leave the user with NEITHER checkpoint if that reload
+        // then failed (disk I/O, OOM, a shape mismatch) — `force` regenerating
+        // from source is not worth losing the current file over.
+        if mustReload {
+            unloadTransformer()
+        }
+        skipPrequantizedCheckpoint = true
+        defer { skipPrequantizedCheckpoint = false }
+        try await loadTransformer()
+
+        guard let transformer, let loadedSourcePath = transformerSourcePath else {
+            throw Flux2Error.modelNotLoaded("Transformer not loaded — cannot export")
+        }
+        // `loadTransformer()` resolves the source path again internally. If a
+        // path override changed during the load (it blocks on multi-GB I/O),
+        // every decision above — exists/isValid/remove/isSymlinked — was made
+        // against a different directory than the one the save would write to.
+        guard loadedSourcePath == sourcePath else {
+            throw Flux2Error.invalidConfiguration(
+                "The transformer's location changed during the export (checked \(sourcePath.path), loaded \(loadedSourcePath.path)) — a path override was set or cleared mid-run. Retry the export.")
+        }
+        // Bake check AFTER the load, against the instance actually being
+        // saved: `transformerHasMergedLoRAs` survives unloadLoRA (merged
+        // weights cannot be un-merged) and covers merges that happened
+        // during the load above — `loraManager.count` alone covers neither.
+        if !allowLoRABaked, transformerHasMergedLoRAs {
+            throw Flux2Error.invalidConfiguration(
+                "The loaded transformer contains merged LoRA weights (merges survive unloadLoRA) — the export would bake them into the base checkpoint for every future load. Pass allowLoRABaked: true only if that is intended.")
+        }
+        return try Flux2PrequantizedCheckpoint.save(
+            model: transformer,
+            sourceModelPath: loadedSourcePath,
+            quantization: quantization.transformer,
+            loRABaked: transformerHasMergedLoRAs)
+    }
+
+    /// Unload transformer to free memory
+    private func unloadTransformer() {
+        // The compiled forward retains the transformer (and its weights) —
+        // drop it first or the unload frees nothing.
+        compiledForward = nil
+        compiledForwardKey = nil
+        transformer = nil
+        transformerSourcePath = nil
+        transformerHasMergedLoRAs = false
+        transformerLoadedFromPrequantized = false
+        memoryManager.clearCache()
+    }
+
+    // MARK: - Generation API
+
+    /// Generate image from text prompt
+    /// - Parameters:
+    ///   - prompt: Text description of the image
+    ///   - height: Image height (default 1024)
+    ///   - width: Image width (default 1024)
+    ///   - steps: Number of denoising steps (default 50)
+    ///   - guidance: Guidance scale (default 4.0)
+    ///   - seed: Optional random seed
+    ///   - upsamplePrompt: Enhance prompt with visual details before encoding (default false)
+    ///   - checkpointInterval: Save intermediate image every N steps (nil = disabled)
+    ///   - onProgress: Optional progress callback
+    ///   - onCheckpoint: Optional callback when checkpoint image is generated
+    /// - Returns: Generated image
+    public func generateTextToImage(
+        prompt: String,
+        interpretImagePaths: [String]? = nil,
+        height: Int = 1024,
+        width: Int = 1024,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        precomputedEmbeddings: MLXArray? = nil,
+        checkpointInterval: Int? = nil,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> CGImage {
+        try await generate(
+            mode: .textToImage,
+            prompt: prompt,
+            interpretImagePaths: interpretImagePaths,
+            height: height,
+            width: width,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            precomputedEmbeddings: precomputedEmbeddings,
+            checkpointInterval: checkpointInterval,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    /// Generate image with reference images
+    ///
+    /// Flux.2 uses conditioning mode: reference images provide visual context through
+    /// transformer attention. The model always denoises from pure noise.
+    ///
+    /// - Parameters:
+    ///   - prompt: Text description
+    ///   - images: 1-3 reference images. Multiple images are concatenated along sequence dimension
+    ///             with unique time-based position IDs, allowing the transformer to attend to all references.
+    ///   - interpretImagePaths: File paths to images to analyze with VLM and inject description into prompt (not used as visual reference)
+    ///   - height: Optional height (inferred from first image if nil)
+    ///   - width: Optional width (inferred from first image if nil)
+    ///   - steps: Number of denoising steps
+    ///   - guidance: Guidance scale
+    ///   - seed: Optional random seed
+    ///   - upsamplePrompt: Enhance prompt with visual details before encoding (default false)
+    ///   - checkpointInterval: Save intermediate image every N steps (nil = disabled)
+    ///   - onProgress: Optional progress callback
+    ///   - onCheckpoint: Optional callback when checkpoint image is generated
+    /// - Returns: Generated image
+    public func generateImageToImage(
+        prompt: String,
+        images: [CGImage],
+        interpretImagePaths: [String]? = nil,
+        height: Int? = nil,
+        width: Int? = nil,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        checkpointInterval: Int? = nil,
+        maxReferencePixels: Int = 1024 * 1024,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> CGImage {
+        guard !images.isEmpty && images.count <= 3 else {
+            throw Flux2Error.invalidConfiguration("Provide 1-3 reference images")
+        }
+
+        // Infer dimensions from first image if not provided
+        let targetHeight = height ?? images[0].height
+        let targetWidth = width ?? images[0].width
+
+        return try await generate(
+            mode: .imageToImage(images: images),
+            prompt: prompt,
+            interpretImagePaths: interpretImagePaths,
+            height: targetHeight,
+            width: targetWidth,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            checkpointInterval: checkpointInterval,
+            maxReferencePixels: maxReferencePixels,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    /// Generate image with reference images from raw image data (PNG/JPEG)
+    /// - Note: Uses CGImageSource for pixel-exact decoding, avoiding NSImage roundtrip
+    ///         which can introduce subpixel shifts via AppKit re-rendering.
+    public func generateImageToImage(
+        prompt: String,
+        imageData: [Data],
+        interpretImagePaths: [String]? = nil,
+        height: Int? = nil,
+        width: Int? = nil,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        checkpointInterval: Int? = nil,
+        maxReferencePixels: Int = 1024 * 1024,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> CGImage {
+        let images = try imageData.enumerated().map { index, data in
+            guard let cgImage = Self.cgImage(from: data) else {
+                throw Flux2Error.invalidConfiguration("Failed to decode image data at index \(index)")
+            }
+            return cgImage
+        }
+        return try await generateImageToImage(
+            prompt: prompt,
+            images: images,
+            interpretImagePaths: interpretImagePaths,
+            height: height,
+            width: width,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            checkpointInterval: checkpointInterval,
+            maxReferencePixels: maxReferencePixels,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    // MARK: - Generation with Result (includes used prompt)
+
+    /// Generate an image from text with full result including the used prompt
+    /// - Returns: Flux2GenerationResult containing image and prompt metadata
+    public func generateTextToImageWithResult(
+        prompt: String,
+        interpretImagePaths: [String]? = nil,
+        height: Int = 1024,
+        width: Int = 1024,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        checkpointInterval: Int? = nil,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> Flux2GenerationResult {
+        try await generateWithResult(
+            mode: .textToImage,
+            prompt: prompt,
+            interpretImagePaths: interpretImagePaths,
+            height: height,
+            width: width,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            checkpointInterval: checkpointInterval,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    /// Generate an image from reference images with full result including the used prompt
+    /// - Returns: Flux2GenerationResult containing image and prompt metadata
+    public func generateImageToImageWithResult(
+        prompt: String,
+        images: [CGImage],
+        interpretImagePaths: [String]? = nil,
+        height: Int? = nil,
+        width: Int? = nil,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        checkpointInterval: Int? = nil,
+        maxReferencePixels: Int = 1024 * 1024,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> Flux2GenerationResult {
+        guard !images.isEmpty && images.count <= 3 else {
+            throw Flux2Error.invalidConfiguration("Provide 1-3 reference images")
+        }
+
+        // Infer dimensions from first image if not provided
+        let targetHeight = height ?? images[0].height
+        let targetWidth = width ?? images[0].width
+
+        return try await generateWithResult(
+            mode: .imageToImage(images: images),
+            prompt: prompt,
+            interpretImagePaths: interpretImagePaths,
+            height: targetHeight,
+            width: targetWidth,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            checkpointInterval: checkpointInterval,
+            maxReferencePixels: maxReferencePixels,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    /// Generate image with reference images from raw image data with full result
+    /// - Note: Uses CGImageSource for pixel-exact decoding, avoiding NSImage roundtrip.
+    /// - Returns: Flux2GenerationResult containing image and prompt metadata
+    public func generateImageToImageWithResult(
+        prompt: String,
+        imageData: [Data],
+        interpretImagePaths: [String]? = nil,
+        height: Int? = nil,
+        width: Int? = nil,
+        steps: Int = 50,
+        guidance: Float = 4.0,
+        seed: UInt64? = nil,
+        upsamplePrompt: Bool = false,
+        checkpointInterval: Int? = nil,
+        maxReferencePixels: Int = 1024 * 1024,
+        onProgress: Flux2ProgressCallback? = nil,
+        onCheckpoint: Flux2CheckpointCallback? = nil
+    ) async throws -> Flux2GenerationResult {
+        let images = try imageData.enumerated().map { index, data in
+            guard let cgImage = Self.cgImage(from: data) else {
+                throw Flux2Error.invalidConfiguration("Failed to decode image data at index \(index)")
+            }
+            return cgImage
+        }
+        return try await generateImageToImageWithResult(
+            prompt: prompt,
+            images: images,
+            interpretImagePaths: interpretImagePaths,
+            height: height,
+            width: width,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            checkpointInterval: checkpointInterval,
+            maxReferencePixels: maxReferencePixels,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint
+        )
+    }
+
+    /// Unified generation method (backward compatible - returns just the image)
+    public func generate(
+        mode: Flux2GenerationMode,
+        prompt: String,
+        interpretImagePaths: [String]? = nil,
+        height: Int,
+        width: Int,
+        steps: Int,
+        guidance: Float,
+        seed: UInt64?,
+        upsamplePrompt: Bool,
+        precomputedEmbeddings: MLXArray? = nil,
+        checkpointInterval: Int?,
+        maxReferencePixels: Int = 1024 * 1024,
+        onProgress: Flux2ProgressCallback?,
+        onCheckpoint: Flux2CheckpointCallback?,
+        onStep: Flux2StepHook? = nil
+    ) async throws -> CGImage {
+        let result = try await generateWithResult(
+            mode: mode,
+            prompt: prompt,
+            interpretImagePaths: interpretImagePaths,
+            height: height,
+            width: width,
+            steps: steps,
+            guidance: guidance,
+            seed: seed,
+            upsamplePrompt: upsamplePrompt,
+            precomputedEmbeddings: precomputedEmbeddings,
+            checkpointInterval: checkpointInterval,
+            maxReferencePixels: maxReferencePixels,
+            onProgress: onProgress,
+            onCheckpoint: onCheckpoint,
+            onStep: onStep
+        )
+        return result.image
+    }
+
+    /// Unified generation method with full result including used prompt
+    ///
+    /// - Parameter maxReferencePixels: I2I only — per-reference-image VAE encode
+    ///   budget in pixels (see ``encodeReferenceImages``). Ignored for text-to-image.
+    ///   Defaults to the historical 1024² budget.
+    /// - Parameter initLatents: Optional packed-sequence latents `[1, seq, 128]`
+    ///   of an init image (see ``encodeImageToPackedSequence``). Required when
+    ///   `strength < 1.0`: the denoising starts from
+    ///   `(1-σ₀)·initLatents + σ₀·noise` instead of pure noise — the img2img
+    ///   init used by diffusers' inpaint/img2img pipelines (`scale_noise`).
+    /// - Parameter strength: Denoising strength in `(0, 1]`. `1.0` (default)
+    ///   is the existing behavior: start from pure noise, full schedule.
+    ///   `< 1.0` skips the first `steps·(1-strength)` timesteps and anchors the
+    ///   start on `initLatents`, preserving the init image's low-frequency
+    ///   structure. Note the granularity: with 4-step distilled models only
+    ///   strength ≤ 0.75 actually skips a step. Ignored (with a log) when LoRA
+    ///   custom sigmas are active.
+    public func generateWithResult(
+        mode: Flux2GenerationMode,
+        prompt: String,
+        interpretImagePaths: [String]? = nil,
+        height: Int,
+        width: Int,
+        steps: Int,
+        guidance: Float,
+        seed: UInt64?,
+        upsamplePrompt: Bool,
+        precomputedEmbeddings: MLXArray? = nil,
+        checkpointInterval: Int?,
+        maxReferencePixels: Int = 1024 * 1024,
+        initLatents: MLXArray? = nil,
+        strength: Float = 1.0,
+        onProgress: Flux2ProgressCallback?,
+        onCheckpoint: Flux2CheckpointCallback?,
+        onStep: Flux2StepHook? = nil
+    ) async throws -> Flux2GenerationResult {
+        let beacon = RuntimeBeacon.begin(task: "generate", model: model.rawValue)
+        defer { beacon?.end() }
+        let userProgress = onProgress
+        let onProgress: Flux2ProgressCallback?
+        if let beacon {
+            onProgress = { step, totalSteps in
+                beacon.update(phase: "denoising", step: step, totalSteps: totalSteps)
+                userProgress?(step, totalSteps)
+            }
+        } else {
+            onProgress = userProgress
+        }
+
+        // Validate dimensions
+        let (validHeight, validWidth) = LatentUtils.validateDimensions(
+            height: height,
+            width: width
+        )
+
+        // Check image size feasibility
+        let sizeCheck = memoryManager.checkImageSize(width: validWidth, height: validHeight)
+        if case .insufficientMemory = sizeCheck {
+            throw Flux2Error.insufficientMemory(required: 100, available: memoryManager.estimatedAvailableMemoryGB)
+        }
+
+        // Set random seed
+        if let seed = seed {
+            MLXRandom.seed(seed)
+        }
+
+        // img2img-style init (diffusers `strength` semantics)
+        let effectiveStrength = max(0.01, min(1.0, strength))
+        let useImg2ImgInit = initLatents != nil && effectiveStrength < 1.0
+        if effectiveStrength < 1.0 && initLatents == nil {
+            throw Flux2Error.invalidConfiguration(
+                "strength < 1.0 requires initLatents (packed-sequence latents of the init image, see encodeImageToPackedSequence)")
+        }
+
+        Flux2Debug.log("Starting generation: \(validWidth)x\(validHeight), \(steps) steps, guidance=\(guidance)")
+
+        // Start profiling
+        let profiler = Flux2Profiler.shared
+
+        // === PHASE 1: Text Encoding ===
+        // Note: Progress will be reported once denoising loop starts with accurate step count
+
+        let textEmbeddings: MLXArray
+        var finalUsedPrompt: String = prompt
+        var wasPromptUpsampled: Bool = false
+
+        // Classical CFG (klein base only): cache an empty-prompt embedding to
+        // run the transformer twice per step. Skipped at guidance ≤ 1.
+        let useClassicalCFG = model.usesClassicalCFG && guidance > 1.0
+        var negativeTextEmbeddings: MLXArray? = nil
+
+        // MEMORY OPTIMIZATION: Compute phase limits for all phases
+        let phaseLimits = MemoryConfig.PhaseLimits.forModel(model, profile: memoryProfile)
+
+        if let precomputed = precomputedEmbeddings {
+            // Skip text encoding entirely — use pre-computed embeddings
+            textEmbeddings = precomputed
+            Flux2Debug.log("=== PHASE 1: SKIPPED (using pre-computed embeddings) ===")
+            Flux2Debug.log("Pre-computed embeddings shape: \(precomputed.shape)")
+        } else {
+            Flux2Debug.log("=== PHASE 1: Text Encoding ===")
+            beacon?.update(phase: "text-encoding")
+
+            MemoryConfig.applyCacheLimit(bytes: phaseLimits.textEncoding)
+
+            profiler.start("1. Load Text Encoder")
+            try await loadTextEncoder()
+            profiler.end("1. Load Text Encoder")
+
+            // === INTERPRET IMAGES: VLM semantic analysis ===
+            // If interpretImagePaths are provided, describe them with VLM and inject into prompt
+            // Note: VLM interpretation only available for Dev model (Mistral)
+            var enrichedPrompt = prompt
+            if let interpretPaths = interpretImagePaths, !interpretPaths.isEmpty {
+                switch model {
+                case .dev:
+                    Flux2Debug.log("Interpreting \(interpretPaths.count) image(s) with VLM for prompt injection...")
+                    profiler.start("1b. VLM Interpretation")
+
+                    let descriptions = try await textEncoder!.describeImagePathsForPrompt(interpretPaths, context: prompt)
+
+                    if !descriptions.isEmpty {
+                        // Build enriched prompt with image descriptions
+                        let imageContext = descriptions.enumerated().map { (idx, desc) in
+                            "Interpret image \(idx + 1): \(desc)"
+                        }.joined(separator: "\n")
+
+                        enrichedPrompt = """
+                        \(imageContext)
+
+                        User request: \(prompt)
+                        """
+
+                        Flux2Debug.log("Prompt enriched with \(descriptions.count) VLM description(s)")
+                        Flux2Debug.info("[VLM-Interpret] Enriched prompt:\n\(enrichedPrompt)")
+                    }
+
+                    profiler.end("1b. VLM Interpretation")
+
+                case .klein4B, .klein4BBase, .klein9B, .klein9BBase, .klein9BKV:
+                    // Klein + --interpret: load Mistral VLM temporarily to analyze images
+                    Flux2Debug.log("Klein with --interpret: loading Mistral VLM temporarily to analyze images...")
+                    profiler.start("1b. VLM Interpretation")
+
+                    // Step 1: Unload Qwen3 to free memory for Mistral
+                    Flux2Debug.log("Unloading Qwen3 to make room for Mistral VLM...")
+                    kleinEncoder?.unload()
+                    memoryManager.fullCleanup()
+
+                    // Step 2: Load Mistral VLM
+                    Flux2Debug.log("Loading Mistral VLM for image interpretation...")
+                    let tempMistralForInterpret = Flux2TextEncoder(quantization: quantization.textEncoder)
+                    try await tempMistralForInterpret.load()
+
+                    // Step 3: VLM interpretation (same logic as Dev)
+                    let descriptions = try await tempMistralForInterpret.describeImagePathsForPrompt(interpretPaths, context: prompt)
+
+                    if !descriptions.isEmpty {
+                        let imageContext = descriptions.enumerated().map { (idx, desc) in
+                            "Interpret image \(idx + 1): \(desc)"
+                        }.joined(separator: "\n")
+
+                        enrichedPrompt = """
+                        \(imageContext)
+
+                        User request: \(prompt)
+                        """
+
+                        Flux2Debug.log("Prompt enriched with \(descriptions.count) VLM description(s)")
+                        Flux2Debug.info("[VLM-Interpret] Enriched prompt:\n\(enrichedPrompt)")
+                    }
+
+                    // Step 4: Unload Mistral
+                    Flux2Debug.log("Unloading Mistral VLM...")
+                    tempMistralForInterpret.unload()
+                    memoryManager.fullCleanup()
+
+                    // Step 5: Reload Qwen3 for text encoding
+                    Flux2Debug.log("Reloading Qwen3 for Klein text encoding...")
+                    try await kleinEncoder!.load(from: kleinEncoderPath)
+
+                    profiler.end("1b. VLM Interpretation")
+                }
+            }
+
+            profiler.start("2. Text Encoding")
+            // Use vision-based upsampling for I2I if enabled (Dev only)
+            // Track the final prompt used for generation
+
+            switch model {
+            case .dev:
+                if upsamplePrompt, case .imageToImage(let images) = mode {
+                    // Use VLM to analyze reference images and enhance prompt
+                    Flux2Debug.log("Using vision-based prompt upsampling for I2I with \(images.count) image(s)")
+                    let enhancedPrompt = try await textEncoder!.upsamplePromptWithImages(enrichedPrompt, images: images)
+                    finalUsedPrompt = enhancedPrompt
+                    wasPromptUpsampled = true
+                    textEmbeddings = try textEncoder!.encode(enhancedPrompt, upsample: false)
+                } else {
+                    let (embeddings, usedPrompt) = try textEncoder!.encodeWithPrompt(enrichedPrompt, upsample: upsamplePrompt)
+                    textEmbeddings = embeddings
+                    finalUsedPrompt = usedPrompt
+                    wasPromptUpsampled = upsamplePrompt && (usedPrompt != enrichedPrompt)
+                }
+
+            case .klein4B, .klein4BBase, .klein9B, .klein9BBase, .klein9BKV:
+                // Klein I2I with upsampling: load Mistral VLM temporarily to see reference images
+                // This matches the official flux2 implementation which loads Mistral for Klein I2I upsampling
+                if upsamplePrompt, case .imageToImage(let images) = mode {
+                    Flux2Debug.log("Klein I2I with upsampling: using Mistral VLM to analyze reference images...")
+
+                    // Step 1: Unload Qwen3 (already loaded by loadTextEncoder) to free memory for Mistral
+                    Flux2Debug.log("Unloading Qwen3 to make room for Mistral VLM...")
+                    kleinEncoder?.unload()
+                    memoryManager.fullCleanup()
+
+                    // Step 2: Load Mistral VLM for vision-aware upsampling
+                    Flux2Debug.log("Loading Mistral VLM for image analysis...")
+                    let tempMistralEncoder = Flux2TextEncoder(quantization: quantization.textEncoder)
+                    try await tempMistralEncoder.load()
+
+                    // Step 3: Upsample prompt with images using Mistral VLM
+                    Flux2Debug.log("Upsampling prompt with \(images.count) reference image(s)...")
+                    let enhancedPrompt = try await tempMistralEncoder.upsamplePromptWithImages(enrichedPrompt, images: images)
+                    finalUsedPrompt = enhancedPrompt
+                    wasPromptUpsampled = true
+
+                    // Step 4: Unload Mistral to free memory
+                    Flux2Debug.log("Unloading Mistral VLM...")
+                    tempMistralEncoder.unload()
+                    memoryManager.fullCleanup()
+
+                    // Step 5: Reload Qwen3 for text encoding
+                    Flux2Debug.log("Reloading Qwen3 for Klein text encoding...")
+                    try await kleinEncoder!.load(from: kleinEncoderPath)
+
+                    // Step 6: Encode with Qwen3 (already upsampled, so upsample=false)
+                    textEmbeddings = try kleinEncoder!.encode(enhancedPrompt, upsample: false)
+                } else {
+                    // Standard Klein encoding (text-only upsampling if enabled)
+                    let (embeddings, usedPrompt) = try kleinEncoder!.encodeWithPrompt(enrichedPrompt, upsample: upsamplePrompt)
+                    textEmbeddings = embeddings
+                    finalUsedPrompt = usedPrompt
+                    wasPromptUpsampled = upsamplePrompt && (usedPrompt != enrichedPrompt)
+                }
+            }
+            eval(textEmbeddings)
+
+            // Classical CFG: encode the empty negative prompt with the same
+            // encoder before unloading. Stored separately and consumed in the
+            // denoising loop's uncond pass.
+            if useClassicalCFG {
+                Flux2Debug.log("Classical CFG enabled — encoding empty negative prompt")
+                let negEmbeds: MLXArray
+                switch model {
+                case .dev:
+                    negEmbeds = try textEncoder!.encode("", upsample: false)
+                case .klein4B, .klein4BBase, .klein9B, .klein9BBase, .klein9BKV:
+                    negEmbeds = try kleinEncoder!.encode("", upsample: false)
+                }
+                eval(negEmbeds)
+                negativeTextEmbeddings = negEmbeds
+                Flux2Debug.log("Negative embeddings shape: \(negEmbeds.shape)")
+            }
+
+            profiler.end("2. Text Encoding")
+
+            Flux2Debug.log("Text embeddings shape: \(textEmbeddings.shape)")
+
+            // Unload text encoder to free memory — unless the host opted
+            // into keeping it resident (`keepTextEncoderLoaded`), in which
+            // case only the GPU buffer cache is dropped before denoising.
+            profiler.start("3. Unload Text Encoder")
+            if keepTextEncoderLoaded {
+                Flux2Debug.log("Keeping text encoder resident (keepTextEncoderLoaded)")
+                memoryManager.fullCleanup()
+            } else {
+                await unloadTextEncoder()
+            }
+            profiler.end("3. Unload Text Encoder")
+        }
+
+        // === PHASE 2: Image Generation ===
+        Flux2Debug.log("=== PHASE 2: Image Generation ===")
+
+        // Check memory before loading transformer
+        let phase2Check = memoryManager.checkImageGenerationPhase(config: quantization)
+        if !phase2Check.isOk {
+            Flux2Debug.log("Memory warning: \(phase2Check.message)")
+        }
+
+        // Load transformer
+        profiler.start("4. Load Transformer")
+        try await loadTransformer()
+        profiler.end("4. Load Transformer")
+
+        // Load VAE
+        profiler.start("5. Load VAE")
+        try await loadVAE()
+        profiler.end("5. Load VAE")
+
+        // Generate initial latents in PATCHIFIED format [B, 128, H/16, W/16]
+        // This is the format expected by the BatchNorm normalization
+        var patchifiedLatents: MLXArray
+
+        switch mode {
+        case .textToImage:
+            patchifiedLatents = LatentUtils.generatePatchifiedLatents(
+                height: validHeight,
+                width: validWidth,
+                seed: seed
+            )
+            Flux2Debug.log("Generated patchified latents: \(patchifiedLatents.shape)")
+
+        case .imageToImage(let images):
+            // === FLUX.2 IMAGE-TO-IMAGE MODE ===
+            // Flux.2 uses CONDITIONING mode for all I2I:
+            // - Reference images are encoded and concatenated as context
+            // - Output starts from random noise (full denoising)
+            // - This is different from SD's "traditional" I2I with noise injection
+            // Generate random noise for OUTPUT
+            patchifiedLatents = LatentUtils.generatePatchifiedLatents(
+                height: validHeight,
+                width: validWidth,
+                seed: seed
+            )
+            eval(patchifiedLatents)
+            Flux2Debug.log("Generated output noise latents: \(patchifiedLatents.shape)")
+
+            // Encode ALL reference images
+            profiler.start("5b. VAE Encode References")
+            let (referenceLatents, referencePositionIds) = try await encodeReferenceImages(
+                images,
+                height: validHeight,
+                width: validWidth,
+                maxReferencePixels: maxReferencePixels
+            )
+            eval(referenceLatents)
+            profiler.end("5b. VAE Encode References")
+            Flux2Debug.log("Encoded \(images.count) reference images: latents \(referenceLatents.shape), posIds \(referencePositionIds.shape)")
+
+            // Pack output latents to sequence format
+            var packedOutputLatents = LatentUtils.packPatchifiedToSequence(patchifiedLatents)
+            eval(packedOutputLatents)
+            let outputSeqLen = packedOutputLatents.shape[1]
+            Flux2Debug.log("Output sequence length: \(outputSeqLen)")
+
+            // Generate position IDs for output and text
+            let textLength = textEmbeddings.shape[1]
+            let (textIds, outputImageIds, _) = LatentUtils.combinePositionIDs(
+                textLength: textLength,
+                height: validHeight,
+                width: validWidth
+            )
+
+            // Concatenate reference latents to output latents for transformer input
+            // [1, output_seq, 128] + [1, ref_seq, 128] -> [1, total_seq, 128]
+            let combinedLatents = concatenated([packedOutputLatents, referenceLatents], axis: 1)
+            Flux2Debug.log("Combined latents (output + refs): \(combinedLatents.shape)")
+            _ = combinedLatents  // Used for documentation
+
+            // Concatenate position IDs: output IDs + reference IDs
+            // Output IDs are [output_seq, 4], reference IDs are [ref_seq, 4]
+            let combinedImageIds = concatenated([outputImageIds, referencePositionIds], axis: 0)
+            Flux2Debug.log("Combined image IDs: \(combinedImageIds.shape)")
+
+            // Setup scheduler. Flux.2 I2I conditioning itself never skips
+            // timesteps; the optional img2img init (initLatents + strength)
+            // is an orthogonal, caller-requested anchor on the OUTPUT latents.
+            // Check for custom sigmas from LoRA (e.g., Turbo LoRAs)
+            if let customSigmas = loraSchedulerOverrides?.customSigmas {
+                if useImg2ImgInit {
+                    Flux2Debug.log("Warning: LoRA custom sigmas active — strength/initLatents ignored")
+                }
+                scheduler.setCustomSigmas(customSigmas)
+            } else {
+                scheduler.setTimesteps(
+                    numInferenceSteps: steps,
+                    imageSeqLen: outputSeqLen,
+                    strength: useImg2ImgInit ? effectiveStrength : 1.0
+                )
+                // A too-low strength slices the schedule down to the terminal
+                // sigma only (zero denoising steps): the standard loops would
+                // silently no-op and the KV path would crash on sigmas[1].
+                if useImg2ImgInit && scheduler.sigmas.count < 2 {
+                    throw Flux2Error.invalidConfiguration(
+                        "strength \(effectiveStrength) with \(steps) steps yields zero denoising steps — use strength ≥ 1/steps (here ≥ \(String(format: "%.2f", 1.0 / Float(max(1, steps))))).")
+                }
+                if useImg2ImgInit, let initLatents = initLatents {
+                    guard initLatents.shape == packedOutputLatents.shape else {
+                        throw Flux2Error.invalidConfiguration(
+                            "initLatents shape \(initLatents.shape) does not match output latents shape \(packedOutputLatents.shape)")
+                    }
+                    // diffusers scale_noise: latents = (1-σ₀)·init + σ₀·noise
+                    let sigma0 = MLXArray(scheduler.initialSigma)
+                    packedOutputLatents = (1 - sigma0) * initLatents + sigma0 * packedOutputLatents
+                    eval(packedOutputLatents)
+                    Flux2Debug.log("img2img init: strength=\(effectiveStrength), σ₀=\(scheduler.initialSigma)")
+                }
+            }
+
+            let effectiveSteps = scheduler.sigmas.count - 1
+            Flux2Debug.log("Starting I2I denoising loop (\(effectiveSteps) steps)...")
+            profiler.setTotalSteps(effectiveSteps)
+
+            // Guidance tensor (nil for Klein models which don't use guidance embeddings)
+            let guidanceTensor: MLXArray? = model.usesGuidanceEmbeds ? MLXArray([guidance]) : nil
+
+            // MEMORY OPTIMIZATION: Set cache limit for denoising phase
+            let phaseLimits = MemoryConfig.PhaseLimits.forModel(model, profile: memoryProfile)
+            MemoryConfig.applyCacheLimit(bytes: phaseLimits.denoising)
+
+            profiler.start("6. Denoising Loop")
+
+            if model.supportsKVCache {
+                // === KV-CACHED DENOISING PATH (klein-9b-kv) ===
+                // Step 0: Extract KV cache from reference tokens
+                // Steps 1+: Reuse cached KV (no reference re-processing, ~2.66x speedup)
+                Flux2Debug.log("Using KV-cached denoising (\(effectiveSteps) steps, ~2.66x speedup)")
+
+                guard let transformer = transformer else {
+                    throw Flux2Error.generationCancelled
+                }
+
+                // Step 0: KV extraction pass
+                let step0Start = Date()
+                let sigma0 = scheduler.sigmas[0]
+                let t0 = MLXArray([sigma0])
+
+                let (noisePred0, kvCache) = transformer.forwardKVExtract(
+                    hiddenStates: packedOutputLatents,
+                    referenceHiddenStates: referenceLatents,
+                    encoderHiddenStates: textEmbeddings,
+                    timestep: t0,
+                    guidance: guidanceTensor,
+                    imgIds: outputImageIds,
+                    txtIds: textIds,
+                    refIds: referencePositionIds
+                )
+
+                packedOutputLatents = scheduler.step(
+                    modelOutput: noisePred0,
+                    timestep: sigma0,
+                    sample: packedOutputLatents
+                )
+                eval(packedOutputLatents)
+
+                if let onStep = onStep {
+                    let sigmaNext = scheduler.sigmas[1]
+                    let ctx = Flux2StepContext(
+                        stepIdx: 0,
+                        totalSteps: effectiveSteps,
+                        sigma: sigma0,
+                        sigmaNext: sigmaNext,
+                        height: validHeight,
+                        width: validWidth,
+                        isI2I: true
+                    )
+                    packedOutputLatents = onStep(ctx, packedOutputLatents)
+                    eval(packedOutputLatents)
+                }
+
+                let step0Duration = Date().timeIntervalSince(step0Start)
+                profiler.recordStep(duration: step0Duration)
+                onProgress?(1, effectiveSteps)
+                try Task.checkCancellation()  // NVAI-open: Abbruch zwischen zwei Schritten
+                Flux2Debug.log("Step 0 (KV extraction): \(String(format: "%.1f", step0Duration))s, cached \(kvCache.layerCount) layers")
+
+                // Steps 1+: Cached denoising (no reference tokens in input)
+                for stepIdx in 1..<(scheduler.sigmas.count - 1) {
+                    let stepStart = Date()
+                    let sigma = scheduler.sigmas[stepIdx]
+                    let t = MLXArray([sigma])
+
+                    let noisePred = transformer.forwardKVCached(
+                        hiddenStates: packedOutputLatents,
+                        encoderHiddenStates: textEmbeddings,
+                        timestep: t,
+                        guidance: guidanceTensor,
+                        imgIds: outputImageIds,
+                        txtIds: textIds,
+                        kvCache: kvCache
+                    )
+
+                    packedOutputLatents = scheduler.step(
+                        modelOutput: noisePred,
+                        timestep: sigma,
+                        sample: packedOutputLatents
+                    )
+                    eval(packedOutputLatents)
+
+                    if let onStep = onStep {
+                        let sigmaNext = scheduler.sigmas[stepIdx + 1]
+                        let ctx = Flux2StepContext(
+                            stepIdx: stepIdx,
+                            totalSteps: effectiveSteps,
+                            sigma: sigma,
+                            sigmaNext: sigmaNext,
+                            height: validHeight,
+                            width: validWidth,
+                            isI2I: true
+                        )
+                        packedOutputLatents = onStep(ctx, packedOutputLatents)
+                        eval(packedOutputLatents)
+                    }
+
+                    if clearCacheEveryNSteps > 0 && (stepIdx + 1) % clearCacheEveryNSteps == 0 {
+                        MemoryConfig.clearCache()
+                    }
+
+                    let stepDuration = Date().timeIntervalSince(stepStart)
+                    profiler.recordStep(duration: stepDuration)
+                    onProgress?(stepIdx + 1, effectiveSteps)
+                    try Task.checkCancellation()  // NVAI-open: Abbruch zwischen zwei Schritten
+                    Flux2Debug.verbose("Step \(stepIdx + 1)/\(effectiveSteps) (cached)")
+
+                    // Checkpoint
+                    if let interval = checkpointInterval,
+                       let checkpointCallback = onCheckpoint,
+                       (stepIdx + 1) % interval == 0 {
+                        var checkpointPatchified = LatentUtils.unpackSequenceToPatchified(
+                            packedOutputLatents,
+                            height: validHeight,
+                            width: validWidth
+                        )
+                        checkpointPatchified = LatentUtils.denormalizeLatentsWithBatchNorm(
+                            checkpointPatchified,
+                            runningMean: vae!.batchNormRunningMean,
+                            runningVar: vae!.batchNormRunningVar
+                        )
+                        let checkpointLatents = LatentUtils.unpatchifyLatents(checkpointPatchified)
+                        eval(checkpointLatents)
+
+                        let checkpointDecoded = vae!.decode(checkpointLatents)
+                        eval(checkpointDecoded)
+
+                        if let checkpointImage = postprocessVAEOutput(checkpointDecoded) {
+                            checkpointCallback(stepIdx + 1, checkpointImage)
+                        }
+                    }
+                }
+
+                // KV cache is freed when it goes out of scope
+                Flux2Debug.log("KV-cached denoising complete")
+
+            } else {
+            // === STANDARD I2I DENOISING PATH ===
+
+            // Classical CFG: precompute uncond textIds once.
+            let i2iUncondTextIds: MLXArray?
+            if useClassicalCFG, let neg = negativeTextEmbeddings {
+                i2iUncondTextIds = LatentUtils.generateTextPositionIDs(length: neg.shape[1])
+                Flux2Debug.log("Classical CFG active for I2I — guidance=\(guidance), uncond seq=\(neg.shape[1])")
+            } else {
+                i2iUncondTextIds = nil
+            }
+
+            for stepIdx in 0..<(scheduler.sigmas.count - 1) {
+                let stepStart = Date()
+
+                let sigma = scheduler.sigmas[stepIdx]
+                let t = MLXArray([sigma])
+
+                // Concatenate current output latents with reference latents for this step
+                let inputLatents = concatenated([packedOutputLatents, referenceLatents], axis: 1)
+
+                // Check transformer is still loaded (may be unloaded during cancellation)
+                guard let transformer = transformer else {
+                    throw Flux2Error.generationCancelled
+                }
+
+                // Run transformer (conditional pass)
+                let noisePredCond = denoiseForward(
+                    transformer,
+                    hiddenStates: inputLatents,
+                    encoderHiddenStates: textEmbeddings,
+                    timestep: t,
+                    guidance: guidanceTensor,
+                    imgIds: combinedImageIds,
+                    txtIds: textIds
+                )
+
+                // Classical CFG: second (unconditional) pass with the SAME image
+                // conditioning — reference latents stay, only the text changes.
+                let noisePred: MLXArray
+                if useClassicalCFG,
+                   let negEmbeds = negativeTextEmbeddings,
+                   let uncondIds = i2iUncondTextIds {
+                    let noisePredUncond = denoiseForward(
+                        transformer,
+                        hiddenStates: inputLatents,
+                        encoderHiddenStates: negEmbeds,
+                        timestep: t,
+                        guidance: guidanceTensor,
+                        imgIds: combinedImageIds,
+                        txtIds: uncondIds
+                    )
+                    noisePred = noisePredUncond + MLXArray(guidance) * (noisePredCond - noisePredUncond)
+                } else {
+                    noisePred = noisePredCond
+                }
+
+                // Extract only the OUTPUT portion of the noise prediction
+                // noisePred shape is [1, total_seq, 128], we want first outputSeqLen
+                let outputNoisePred = noisePred[0..., 0..<outputSeqLen, 0...]
+
+                // Scheduler step on OUTPUT latents only
+                packedOutputLatents = scheduler.step(
+                    modelOutput: outputNoisePred,
+                    timestep: sigma,
+                    sample: packedOutputLatents
+                )
+                eval(packedOutputLatents)
+
+                // Step hook (see T2I path for rationale on running every step).
+                if let onStep = onStep {
+                    let sigmaNext = scheduler.sigmas[stepIdx + 1]
+                    let ctx = Flux2StepContext(
+                        stepIdx: stepIdx,
+                        totalSteps: effectiveSteps,
+                        sigma: sigma,
+                        sigmaNext: sigmaNext,
+                        height: validHeight,
+                        width: validWidth,
+                        isI2I: true
+                    )
+                    packedOutputLatents = onStep(ctx, packedOutputLatents)
+                    eval(packedOutputLatents)
+                }
+
+                // MEMORY OPTIMIZATION: Periodic cache clearing to prevent memory buildup
+                if clearCacheEveryNSteps > 0 && (stepIdx + 1) % clearCacheEveryNSteps == 0 {
+                    MemoryConfig.clearCache()
+                }
+
+                let stepDuration = Date().timeIntervalSince(stepStart)
+                profiler.recordStep(duration: stepDuration)
+
+                onProgress?(stepIdx + 1, effectiveSteps)
+                try Task.checkCancellation()  // NVAI-open: Abbruch zwischen zwei Schritten
+                Flux2Debug.verbose("Step \(stepIdx + 1)/\(effectiveSteps)")
+
+                // Checkpoint
+                if let interval = checkpointInterval,
+                   let checkpointCallback = onCheckpoint,
+                   (stepIdx + 1) % interval == 0 {
+                    var checkpointPatchified = LatentUtils.unpackSequenceToPatchified(
+                        packedOutputLatents,
+                        height: validHeight,
+                        width: validWidth
+                    )
+                    checkpointPatchified = LatentUtils.denormalizeLatentsWithBatchNorm(
+                        checkpointPatchified,
+                        runningMean: vae!.batchNormRunningMean,
+                        runningVar: vae!.batchNormRunningVar
+                    )
+                    let checkpointLatents = LatentUtils.unpatchifyLatents(checkpointPatchified)
+                    eval(checkpointLatents)
+
+                    let checkpointDecoded = vae!.decode(checkpointLatents)
+                    eval(checkpointDecoded)
+
+                    if let checkpointImage = postprocessVAEOutput(checkpointDecoded) {
+                        checkpointCallback(stepIdx + 1, checkpointImage)
+                    }
+                }
+
+                if stepIdx % 10 == 0 {
+                    memoryManager.clearCache()
+                }
+            }
+
+            } // end else (standard I2I path)
+
+            profiler.end("6. Denoising Loop")
+
+            // Decode final OUTPUT latents
+            profiler.start("7. VAE Decode")
+            var finalPatchified = LatentUtils.unpackSequenceToPatchified(
+                packedOutputLatents,
+                height: validHeight,
+                width: validWidth
+            )
+            finalPatchified = LatentUtils.denormalizeLatentsWithBatchNorm(
+                finalPatchified,
+                runningMean: vae!.batchNormRunningMean,
+                runningVar: vae!.batchNormRunningVar
+            )
+            let finalLatents = LatentUtils.unpatchifyLatents(finalPatchified)
+            eval(finalLatents)
+
+            let decoded = vae!.decode(finalLatents)
+            eval(decoded)
+            profiler.end("7. VAE Decode")
+
+            profiler.start("8. Post-processing")
+            guard let image = postprocessVAEOutput(decoded) else {
+                throw Flux2Error.generationFailed("Failed to convert VAE output to image")
+            }
+            profiler.end("8. Post-processing")
+
+            // End-of-generation hygiene: drop the transient GPU buffer cache
+            // (~3 GB measured after a 1 MP run). For a resident host app this
+            // is dead weight between generations; the next run re-warms it in
+            // milliseconds.
+            memoryManager.clearCache()
+
+            if profiler.isEnabled {
+                print(profiler.generateReport())
+            }
+
+            return Flux2GenerationResult(
+                image: image,
+                usedPrompt: finalUsedPrompt,
+                wasUpsampled: wasPromptUpsampled,
+                originalPrompt: prompt
+            )
+        }
+
+        // === TEXT-TO-IMAGE PATH (I2I returns earlier) ===
+
+        // Pack patchified latents to sequence format for transformer [B, seq_len, 128]
+        var packedLatents = LatentUtils.packPatchifiedToSequence(patchifiedLatents)
+        eval(packedLatents)
+
+        // Generate position IDs for latents and text
+        let textLength = textEmbeddings.shape[1]
+        let (textIds, imageIds, _) = LatentUtils.combinePositionIDs(
+            textLength: textLength,
+            height: validHeight,
+            width: validWidth
+        )
+
+        // Calculate image sequence length for scheduler mu
+        let imageSeqLen = packedLatents.shape[1]
+        Flux2Debug.log("Image sequence length: \(imageSeqLen)")
+
+        // Setup scheduler. Strength defaults to 1.0 (pure-noise start);
+        // callers providing initLatents can anchor the start on an init image
+        // (img2img semantics — used by the masked inpainting chain).
+        // Check for custom sigmas from LoRA (e.g., Turbo LoRAs)
+        if let customSigmas = loraSchedulerOverrides?.customSigmas {
+            if useImg2ImgInit {
+                Flux2Debug.log("Warning: LoRA custom sigmas active — strength/initLatents ignored")
+            }
+            scheduler.setCustomSigmas(customSigmas)
+        } else {
+            scheduler.setTimesteps(
+                numInferenceSteps: steps,
+                imageSeqLen: imageSeqLen,
+                strength: useImg2ImgInit ? effectiveStrength : 1.0
+            )
+            // A too-low strength slices the schedule down to the terminal
+            // sigma only (zero denoising steps) — surface it instead of
+            // silently returning the un-edited init image.
+            if useImg2ImgInit && scheduler.sigmas.count < 2 {
+                throw Flux2Error.invalidConfiguration(
+                    "strength \(effectiveStrength) with \(steps) steps yields zero denoising steps — use strength ≥ 1/steps (here ≥ \(String(format: "%.2f", 1.0 / Float(max(1, steps))))).")
+            }
+            if useImg2ImgInit, let initLatents = initLatents {
+                guard initLatents.shape == packedLatents.shape else {
+                    throw Flux2Error.invalidConfiguration(
+                        "initLatents shape \(initLatents.shape) does not match latents shape \(packedLatents.shape)")
+                }
+                // diffusers scale_noise: latents = (1-σ₀)·init + σ₀·noise
+                let sigma0 = MLXArray(scheduler.initialSigma)
+                packedLatents = (1 - sigma0) * initLatents + sigma0 * packedLatents
+                eval(packedLatents)
+                Flux2Debug.log("img2img init: strength=\(effectiveStrength), σ₀=\(scheduler.initialSigma)")
+            }
+        }
+
+        let effectiveSteps = scheduler.sigmas.count - 1
+        Flux2Debug.log("Starting denoising loop (\(effectiveSteps) steps)...")
+        profiler.setTotalSteps(effectiveSteps)
+
+        // OPTIMIZATION: Create guidance tensor ONCE before the loop
+        // Klein models don't use guidance embeddings
+        let guidanceTensor: MLXArray? = model.usesGuidanceEmbeds ? MLXArray([guidance]) : nil
+
+        // Classical CFG (klein base): precompute uncond text IDs once.
+        let uncondTextIds: MLXArray?
+        if useClassicalCFG, let neg = negativeTextEmbeddings {
+            uncondTextIds = LatentUtils.generateTextPositionIDs(length: neg.shape[1])
+            Flux2Debug.log("Classical CFG active — guidance=\(guidance), uncond seq=\(neg.shape[1])")
+        } else {
+            uncondTextIds = nil
+        }
+
+        // MEMORY OPTIMIZATION: Set cache limit for denoising phase
+        MemoryConfig.applyCacheLimit(bytes: phaseLimits.denoising)
+
+        profiler.start("6. Denoising Loop")
+
+        // Denoising loop - use sigmas (in [0, 1] range) for transformer
+        for stepIdx in 0..<(scheduler.sigmas.count - 1) {
+            let stepStart = Date()
+
+            let sigma = scheduler.sigmas[stepIdx]
+            let t = MLXArray([sigma])
+
+            // Check transformer is still loaded (may be unloaded during cancellation)
+            guard let transformer = transformer else {
+                throw Flux2Error.generationCancelled
+            }
+
+            // Run transformer (conditional pass)
+            let noisePredCond = denoiseForward(
+                transformer,
+                hiddenStates: packedLatents,
+                encoderHiddenStates: textEmbeddings,
+                timestep: t,
+                guidance: guidanceTensor,
+                imgIds: imageIds,
+                txtIds: textIds
+            )
+
+            // Classical CFG: second (unconditional) pass + linear combination.
+            // Matches diffusers' `noise = uncond + guidance * (cond - uncond)`.
+            let noisePred: MLXArray
+            if useClassicalCFG,
+               let negEmbeds = negativeTextEmbeddings,
+               let uncondIds = uncondTextIds {
+                let noisePredUncond = denoiseForward(
+                    transformer,
+                    hiddenStates: packedLatents,
+                    encoderHiddenStates: negEmbeds,
+                    timestep: t,
+                    guidance: guidanceTensor,
+                    imgIds: imageIds,
+                    txtIds: uncondIds
+                )
+                noisePred = noisePredUncond + MLXArray(guidance) * (noisePredCond - noisePredUncond)
+            } else {
+                noisePred = noisePredCond
+            }
+
+            // Scheduler step
+            packedLatents = scheduler.step(
+                modelOutput: noisePred,
+                timestep: sigma,
+                sample: packedLatents
+            )
+
+            // Synchronize GPU
+            eval(packedLatents)
+
+            // Step hook (e.g. RePaint masked-inpainting blend). Runs every step
+            // including the final one — chains that rely on `sigmaNext == 0` to
+            // restore the unchanged region must see that final iteration.
+            if let onStep = onStep {
+                let sigmaNext = scheduler.sigmas[stepIdx + 1]
+                let ctx = Flux2StepContext(
+                    stepIdx: stepIdx,
+                    totalSteps: effectiveSteps,
+                    sigma: sigma,
+                    sigmaNext: sigmaNext,
+                    height: validHeight,
+                    width: validWidth,
+                    isI2I: false
+                )
+                packedLatents = onStep(ctx, packedLatents)
+                eval(packedLatents)
+            }
+
+            // MEMORY OPTIMIZATION: Periodic cache clearing to prevent memory buildup
+            if clearCacheEveryNSteps > 0 && (stepIdx + 1) % clearCacheEveryNSteps == 0 {
+                MemoryConfig.clearCache()
+            }
+
+            // Record step time
+            let stepDuration = Date().timeIntervalSince(stepStart)
+            profiler.recordStep(duration: stepDuration)
+
+            // Report progress (using effective steps for I2I)
+            onProgress?(stepIdx + 1, effectiveSteps)
+            try Task.checkCancellation()  // NVAI-open: Abbruch zwischen zwei Schritten
+
+            Flux2Debug.verbose("Step \(stepIdx + 1)/\(effectiveSteps)")
+
+            // Generate checkpoint image if requested
+            if let interval = checkpointInterval,
+               let checkpointCallback = onCheckpoint,
+               (stepIdx + 1) % interval == 0 {
+                Flux2Debug.verbose("Generating checkpoint at step \(stepIdx + 1)...")
+
+                // Decode current latents to image
+                var checkpointPatchified = LatentUtils.unpackSequenceToPatchified(
+                    packedLatents,
+                    height: validHeight,
+                    width: validWidth
+                )
+                checkpointPatchified = LatentUtils.denormalizeLatentsWithBatchNorm(
+                    checkpointPatchified,
+                    runningMean: vae!.batchNormRunningMean,
+                    runningVar: vae!.batchNormRunningVar
+                )
+                let checkpointLatents = LatentUtils.unpatchifyLatents(checkpointPatchified)
+                eval(checkpointLatents)
+
+                let checkpointDecoded = vae!.decode(checkpointLatents)
+                eval(checkpointDecoded)
+                Flux2Debug.verbose("Checkpoint VAE output shape: \(checkpointDecoded.shape)")
+
+                if let checkpointImage = postprocessVAEOutput(checkpointDecoded) {
+                    checkpointCallback(stepIdx + 1, checkpointImage)
+                } else {
+                    Flux2Debug.log("Warning: Failed to convert checkpoint to image at step \(stepIdx + 1)")
+                }
+            }
+
+            // Periodic memory cleanup
+            if stepIdx % 10 == 0 {
+                memoryManager.clearCache()
+            }
+        }
+
+        profiler.end("6. Denoising Loop")
+
+        Flux2Debug.log("Denoising complete, decoding image...")
+
+        // Unpack sequence latents back to patchified format [B, 128, H/16, W/16]
+        var patchifiedFinal = LatentUtils.unpackSequenceToPatchified(
+            packedLatents,
+            height: validHeight,
+            width: validWidth
+        )
+        Flux2Debug.log("Unpacked patchified latents: \(patchifiedFinal.shape)")
+
+        // CRITICAL: Denormalize patchified latents with VAE BatchNorm AFTER denoising
+        // This reverses the normalization applied before the transformer
+        Flux2Debug.log("Denormalizing patchified latents with BatchNorm...")
+        patchifiedFinal = LatentUtils.denormalizeLatentsWithBatchNorm(
+            patchifiedFinal,
+            runningMean: vae!.batchNormRunningMean,
+            runningVar: vae!.batchNormRunningVar
+        )
+        eval(patchifiedFinal)
+
+        // Unpatchify to VAE format [B, 32, H/8, W/8]
+        let finalLatents = LatentUtils.unpatchifyLatents(patchifiedFinal)
+        Flux2Debug.log("Final latents for VAE: \(finalLatents.shape)")
+        eval(finalLatents)
+
+        // === PHASE 3: Decode to Image ===
+        Flux2Debug.log("=== PHASE 3: VAE Decoding ===")
+        beacon?.update(phase: "vae-decode")
+
+        // MEMORY OPTIMIZATION: Set cache limit for VAE decoding phase
+        MemoryConfig.applyCacheLimit(bytes: phaseLimits.vaeDecoding)
+
+        profiler.start("7. VAE Decode")
+        let decoded = vae!.decode(finalLatents)
+        eval(decoded)
+        profiler.end("7. VAE Decode")
+
+        // Convert to CGImage
+        profiler.start("8. Post-processing")
+        guard let image = postprocessVAEOutput(decoded) else {
+            throw Flux2Error.imageProcessingFailed("Failed to convert output to image")
+        }
+        profiler.end("8. Post-processing")
+
+        // End-of-generation hygiene: see the I2I return path above.
+        memoryManager.clearCache()
+
+        Flux2Debug.log("Generation complete!")
+        memoryManager.logMemoryState()
+
+        // Print profiling report if enabled
+        if profiler.isEnabled {
+            print(profiler.generateReport())
+        }
+
+        return Flux2GenerationResult(
+            image: image,
+            usedPrompt: finalUsedPrompt,
+            wasUpsampled: wasPromptUpsampled,
+            originalPrompt: prompt
+        )
+    }
+
+    // MARK: - Private Methods
+
+    /// Encode reference images for image-to-image generation (Flux.2 conditioning mode)
+    ///
+    /// Following the reference Flux.2 diffusers implementation:
+    /// 1. Each image is encoded SEPARATELY through VAE
+    /// 2. Each image gets a UNIQUE T-coordinate (T=10, T=20, T=30, etc.)
+    /// 3. Latents are concatenated AFTER encoding
+    ///
+    /// This preserves semantic information:
+    /// - The transformer can distinguish between different reference images
+    /// - Each reference image has its own position in the "time" dimension
+    /// - Images are resized to max 512² pixels each for memory efficiency
+    ///
+    /// - Parameters:
+    ///   - images: Reference images (1-10 supported)
+    ///   - height: Target output height
+    ///   - width: Target output width
+    ///   - maxReferencePixels: Per-image ceiling, in pixels, for the VAE
+    ///     conditioning encode. Any reference larger than this is downscaled
+    ///     (preserving aspect ratio) before encoding, which bounds token count
+    ///     and VRAM. Policy owned by the caller; defaults to the historical
+    ///     1024² budget (diffusers `pipeline_flux2.py:892-893`).
+    /// - Returns: Tuple of (latents [1, seq_len, 128], position IDs [seq_len, 4])
+    private func encodeReferenceImages(
+        _ images: [CGImage],
+        height: Int,
+        width: Int,
+        maxReferencePixels: Int = 1024 * 1024
+    ) async throws -> (latents: MLXArray, positionIds: MLXArray) {
+        guard let vae = vae else {
+            throw Flux2Error.modelNotLoaded("VAE")
+        }
+
+        guard !images.isEmpty else {
+            throw Flux2Error.invalidConfiguration("No reference images provided")
+        }
+
+        Flux2Debug.log("Encoding \(images.count) reference images separately with unique T-coordinates...")
+
+        // === STEP 1: Process each image separately ===
+        // Max area per image — caller-supplied policy (see `maxReferencePixels`).
+        // Historical default is 1024² (matches diffusers pipeline_flux2.py line
+        // 892-893; conditioning images, not the 768² upsampling budget). Floored
+        // at one 32px tile so a pathological value can never zero out the encode.
+        let multipleOf = 32  // vae_scale_factor * 2
+        let maxImageArea = max(maxReferencePixels, multipleOf * multipleOf)  // ~4096 tokens/image at 1024²
+
+        var allPackedLatents: [MLXArray] = []
+        var latentHeights: [Int] = []
+        var latentWidths: [Int] = []
+
+        for (index, image) in images.enumerated() {
+            Flux2Debug.log("Processing reference image \(index + 1)/\(images.count): \(image.width)x\(image.height)")
+
+            // Calculate target dimensions for this image
+            var targetWidth = image.width
+            var targetHeight = image.height
+            let pixelCount = targetWidth * targetHeight
+
+            if pixelCount > maxImageArea {
+                let scale = sqrt(Double(maxImageArea) / Double(pixelCount))
+                targetWidth = Int(Double(targetWidth) * scale)
+                targetHeight = Int(Double(targetHeight) * scale)
+            }
+
+            // Make dimensions multiples of 32
+            targetWidth = (targetWidth / multipleOf) * multipleOf
+            targetHeight = (targetHeight / multipleOf) * multipleOf
+
+            // Ensure minimum size
+            targetWidth = max(targetWidth, multipleOf)
+            targetHeight = max(targetHeight, multipleOf)
+
+            Flux2Debug.log("  -> Resized to \(targetWidth)x\(targetHeight)")
+
+            // Preprocess and encode
+            let processed = await preprocessImageForVAE(image, targetHeight: targetHeight, targetWidth: targetWidth)
+
+            // Encode with VAE -> [1, 32, H/8, W/8]
+            // IMPORTANT: Use samplePosterior=false to get deterministic mean (like diffusers argmax)
+            // This preserves color information better than sampling with noise
+            let rawLatents = vae.encode(processed, samplePosterior: false)
+
+            // Patchify: [1, 32, H/8, W/8] -> [1, 128, H/16, W/16]
+            var patchified = LatentUtils.packLatentsToPatchified(rawLatents)
+
+            // Normalize with BatchNorm (critical for Flux.2)
+            patchified = LatentUtils.normalizeLatentsWithBatchNorm(
+                patchified,
+                runningMean: vae.batchNormRunningMean,
+                runningVar: vae.batchNormRunningVar
+            )
+            eval(patchified)
+
+            // Pack to sequence: [1, 128, H/16, W/16] -> [1, seq_len, 128]
+            let packedLatents = LatentUtils.packPatchifiedToSequence(patchified)
+
+            // Remove batch dimension for concatenation: [1, seq_len, 128] -> [seq_len, 128]
+            let squeezed = packedLatents.squeezed(axis: 0)
+            allPackedLatents.append(squeezed)
+
+            // Track dimensions for position IDs
+            let patchifiedH = targetHeight / 16
+            let patchifiedW = targetWidth / 16
+            latentHeights.append(patchifiedH)
+            latentWidths.append(patchifiedW)
+
+            let seqLen = squeezed.shape[0]
+            Flux2Debug.log("  -> Encoded to \(seqLen) tokens (T-coordinate will be \(10 + 10 * index))")
+        }
+
+        // === STEP 2: Concatenate all latents ===
+        // Stack along sequence dimension: [seq1, 128] + [seq2, 128] + ... -> [total_seq, 128]
+        let concatenatedLatents = concatenated(allPackedLatents, axis: 0)
+
+        // Add batch dimension back: [total_seq, 128] -> [1, total_seq, 128]
+        let finalLatents = concatenatedLatents.expandedDimensions(axis: 0)
+
+        let totalSeqLen = finalLatents.shape[1]
+        Flux2Debug.log("Combined reference latents: \(finalLatents.shape) (total \(totalSeqLen) tokens)")
+
+        // === STEP 3: Generate position IDs with unique T-coordinates per image ===
+        let positionIds = LatentUtils.generateReferenceImagePositionIDs(
+            latentHeights: latentHeights,
+            latentWidths: latentWidths,
+            scale: 10
+        )
+
+        Flux2Debug.log("Position IDs generated: \(positionIds.shape)")
+        Flux2Debug.log("Reference encoding complete: \(images.count) images with unique T-coordinates")
+
+        return (latents: finalLatents, positionIds: positionIds)
+    }
+
+    /// Create CGImage from raw image data (PNG/JPEG) using CGImageSource for pixel-exact decoding.
+    /// This avoids NSImage roundtrip which can introduce subpixel shifts via AppKit re-rendering.
+    public static func cgImage(from data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    /// Preprocess image for VAE encoding.
+    /// When no resize is needed, reads pixels directly from CGImage.dataProvider to
+    /// preserve exact pixel values without format conversion or anti-aliasing artifacts.
+    /// When a resize is needed, uses CGContext with high-quality interpolation, then
+    /// reads from the resized image's dataProvider.
+    private func preprocessImageForVAE(_ image: CGImage, targetHeight: Int, targetWidth: Int) async -> MLXArray {
+        let sourceWidth = image.width
+        let sourceHeight = image.height
+
+        // Resize image using CoreGraphics if needed
+        let sourceImage: CGImage
+        if sourceWidth != targetWidth || sourceHeight != targetHeight {
+            Flux2Debug.log("Resizing image from \(sourceWidth)x\(sourceHeight) to \(targetWidth)x\(targetHeight)")
+
+            // Pixel buffer is captured by the Default-QoS work item below; the
+            // CGContext keeps a pointer into it, so the buffer (and any backing
+            // storage) must outlive the draw. The continuation handshake
+            // guarantees the await returns only after the work completes, so
+            // capturing pixelData by reference via UnsafeMutablePointer is safe.
+            let bytesPerPixel = 4
+            let bytesPerRow = bytesPerPixel * targetWidth
+            let pixelCount = targetHeight * bytesPerRow
+
+            let resized: CGImage? = await Self.runAtDefaultQoS {
+                let pixelData = UnsafeMutablePointer<UInt8>.allocate(capacity: pixelCount)
+                pixelData.initialize(repeating: 0, count: pixelCount)
+                defer {
+                    pixelData.deinitialize(count: pixelCount)
+                    pixelData.deallocate()
+                }
+
+                guard let context = CGContext(
+                    data: pixelData,
+                    width: targetWidth,
+                    height: targetHeight,
+                    bitsPerComponent: 8,
+                    bytesPerRow: bytesPerRow,
+                    space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+                ) else {
+                    return nil
+                }
+
+                // High quality interpolation
+                context.interpolationQuality = .high
+                context.draw(image, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+                return context.makeImage()
+            }
+
+            guard let resized else {
+                Flux2Debug.log("Failed to create resized image")
+                return MLXRandom.normal([1, 3, targetHeight, targetWidth])
+            }
+
+            sourceImage = resized
+        } else {
+            sourceImage = image
+        }
+
+        // Read pixels directly from CGImage data provider (no CGContext re-rendering).
+        // This preserves exact pixel values without format conversion or anti-aliasing.
+        let width = sourceImage.width
+        let height = sourceImage.height
+        let bpp = sourceImage.bitsPerPixel / 8  // bytes per pixel (3 for RGB, 4 for RGBA)
+        let bpr = sourceImage.bytesPerRow
+
+        guard let dataProvider = sourceImage.dataProvider,
+              let pixelCFData = dataProvider.data,
+              CFDataGetLength(pixelCFData) >= height * bpr else {
+            // Fallback to CGContext if direct access fails (e.g. compressed or unusual format)
+            Flux2Debug.log("Direct pixel access failed, falling back to CGContext")
+            return preprocessImageForVAEViaCGContext(sourceImage, height: height, width: width)
+        }
+
+        let bytes = CFDataGetBytePtr(pixelCFData)!
+
+        // Determine channel layout from bitmap info
+        let alphaInfo = CGImageAlphaInfo(rawValue: sourceImage.bitmapInfo.rawValue & CGBitmapInfo.alphaInfoMask.rawValue)
+        let hasAlpha = bpp >= 4
+        let alphaFirst = alphaInfo == .premultipliedFirst || alphaInfo == .first || alphaInfo == .noneSkipFirst
+
+        // RGB offsets depend on alpha position
+        let rOffset: Int
+        let gOffset: Int
+        let bOffset: Int
+        if hasAlpha && alphaFirst {
+            // ARGB layout
+            rOffset = 1; gOffset = 2; bOffset = 3
+        } else {
+            // RGB or RGBA layout
+            rOffset = 0; gOffset = 1; bOffset = 2
+        }
+
+        // Convert to float array and normalize to [-1, 1]
+        var floatData = [Float](repeating: 0, count: height * width * 3)
+        for y in 0..<height {
+            let rowStart = y * bpr
+            for x in 0..<width {
+                let pixelStart = rowStart + x * bpp
+                let pixelIndex = y * width + x
+
+                var r = Float(bytes[pixelStart + rOffset])
+                var g = Float(bytes[pixelStart + gOffset])
+                var b = Float(bytes[pixelStart + bOffset])
+
+                // Un-premultiply alpha if needed
+                if hasAlpha && (alphaInfo == .premultipliedFirst || alphaInfo == .premultipliedLast) {
+                    let a = Float(bytes[pixelStart + (alphaFirst ? 0 : 3)])
+                    if a > 0 && a < 255 {
+                        let scale = 255.0 / a
+                        r = min(r * scale, 255.0)
+                        g = min(g * scale, 255.0)
+                        b = min(b * scale, 255.0)
+                    }
+                }
+
+                // Normalize to [-1, 1]
+                floatData[pixelIndex] = r / 127.5 - 1.0
+                floatData[height * width + pixelIndex] = g / 127.5 - 1.0
+                floatData[2 * height * width + pixelIndex] = b / 127.5 - 1.0
+            }
+        }
+
+        return MLXArray(floatData).reshaped([1, 3, height, width])
+    }
+
+    /// Fallback: read pixels via CGContext when direct data provider access is not possible.
+    private func preprocessImageForVAEViaCGContext(_ image: CGImage, height: Int, width: Int) -> MLXArray {
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        var pixelData = [UInt8](repeating: 0, count: height * bytesPerRow)
+
+        guard let context = CGContext(
+            data: &pixelData,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else {
+            return MLXRandom.normal([1, 3, height, width])
+        }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var floatData = [Float](repeating: 0, count: height * width * 3)
+        for y in 0..<height {
+            for x in 0..<width {
+                let pixelIndex = y * width + x
+                let byteIndex = y * bytesPerRow + x * bytesPerPixel
+
+                floatData[pixelIndex] = Float(pixelData[byteIndex]) / 127.5 - 1.0
+                floatData[height * width + pixelIndex] = Float(pixelData[byteIndex + 1]) / 127.5 - 1.0
+                floatData[2 * height * width + pixelIndex] = Float(pixelData[byteIndex + 2]) / 127.5 - 1.0
+            }
+        }
+
+        return MLXArray(floatData).reshaped([1, 3, height, width])
+    }
+
+    /// Convert VAE output to CGImage
+    /// OPTIMIZED: Uses bulk array extraction instead of per-pixel loop
+    private func postprocessVAEOutput(_ tensor: MLXArray) -> CGImage? {
+        // tensor shape: [1, 3, H, W]
+        let shape = tensor.shape
+        guard shape.count == 4, shape[1] == 3 else {
+            Flux2Debug.log("Unexpected tensor shape: \(shape)")
+            return nil
+        }
+
+        let height = shape[2]
+        let width = shape[3]
+
+        // Denormalize from [-1, 1] to [0, 255] and convert to UInt8 in MLX
+        // This does the conversion on GPU, much faster than CPU loop
+        let denormalized = (tensor + 1.0) * 127.5
+        let clamped = clip(denormalized, min: 0, max: 255)
+
+        // Convert to [H, W, 3] layout for CGImage and cast to UInt8 on GPU
+        let hwc = clamped.squeezed(axis: 0)  // [3, H, W]
+            .transposed(axes: [1, 2, 0])      // [H, W, 3]
+            .asType(.uint8)                    // Convert to UInt8 on GPU
+
+        // Single eval and bulk extraction - MUCH faster than per-pixel loop
+        eval(hwc)
+        let pixelData = hwc.asArray(UInt8.self)
+
+        // Create CGImage
+        guard let providerRef = CGDataProvider(data: Data(pixelData) as CFData) else {
+            return nil
+        }
+
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 24,
+            bytesPerRow: width * 3,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+            provider: providerRef,
+            decode: nil,
+            shouldInterpolate: true,
+            intent: .defaultIntent
+        )
+    }
+}
+
+// MARK: - Memory Management
+
+extension Flux2Pipeline {
+    /// Estimate memory requirement for current configuration
+    public var estimatedMemoryGB: Int {
+        quantization.estimatedTotalMemoryGB
+    }
+
+    /// Clear all loaded models and free memory
+    public func clearAll() async {
+        await unloadTextEncoder()
+        unloadTransformer()
+        vae = nil
+        isLoaded = false
+        memoryManager.fullCleanup()
+    }
+}
+
+// MARK: - Model Status
+
+extension Flux2Pipeline {
+    /// Check if required models are downloaded
+    public var hasRequiredModels: Bool {
+        // Check transformer - use the appropriate variant for this model type and quantization
+        let transformerVariant = ModelRegistry.TransformerVariant.variant(for: model, quantization: quantization.transformer)
+        let hasTransformer = Flux2ModelDownloader.isDownloaded(.transformer(transformerVariant))
+
+        // Text encoder is handled by MistralCore/FluxTextEncoders, skip check here
+
+        // Check VAE
+        let hasVAE = Flux2ModelDownloader.isDownloaded(.vae(vaeVariant))
+
+        return hasTransformer && hasVAE
+    }
+
+    /// List missing models
+    public var missingModels: [ModelRegistry.ModelComponent] {
+        var missing: [ModelRegistry.ModelComponent] = []
+
+        // Use the appropriate transformer variant for this model type
+        let transformerVariant = ModelRegistry.TransformerVariant.variant(for: model, quantization: quantization.transformer)
+        if !Flux2ModelDownloader.isDownloaded(.transformer(transformerVariant)) {
+            missing.append(.transformer(transformerVariant))
+        }
+
+        // Text encoder is handled by MistralCore/FluxTextEncoders
+
+        if !Flux2ModelDownloader.isDownloaded(.vae(vaeVariant)) {
+            missing.append(.vae(vaeVariant))
+        }
+
+        return missing
+    }
+}
+

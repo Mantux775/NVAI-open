@@ -1,0 +1,316 @@
+# Flux.2 Swift MLX
+
+A native Swift implementation of [Flux.2](https://blackforestlabs.ai/) image generation models, running locally on Apple Silicon Macs using [MLX](https://github.com/ml-explore/mlx-swift).
+
+[![FluxForge Studio on the App Store](https://img.shields.io/badge/App_Store-FluxForge_Studio-0D96F6?logo=apple&logoColor=white)](https://apps.apple.com/us/app/fluxforge-studio/id6758351212) [![Website](https://img.shields.io/badge/Website-fluxforge.vinceforge.com-blue)](https://fluxforge.vinceforge.com)
+
+<a href="https://www.buymeacoffee.com/fluxforgestudio"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=fluxforgestudio&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
+
+## Downloads
+
+**[📦 Latest Release (v2.1.0)](https://github.com/VincentGourbin/flux-2-swift-mlx/releases/tag/v2.1.0)** — Universal binaries for Apple Silicon
+
+| Download | Description |
+|----------|-------------|
+| [Flux2App](https://github.com/VincentGourbin/flux-2-swift-mlx/releases/download/v2.1.0/Flux2App-v2.1.0-macOS.zip) | Demo macOS app with T2I, I2I, chat ([guide](docs/Flux2App.md)) |
+| [Flux2CLI](https://github.com/VincentGourbin/flux-2-swift-mlx/releases/download/v2.1.0/Flux2CLI-v2.1.0-macOS.zip) | Image generation CLI ([guide](docs/CLI.md)) |
+| [FluxEncodersCLI](https://github.com/VincentGourbin/flux-2-swift-mlx/releases/download/v2.1.0/FluxEncodersCLI-v2.1.0-macOS.zip) | Text encoders CLI ([guide](docs/TextEncoders.md)) |
+
+> **Note**: On first launch, macOS may block unsigned apps. Right-click → Open to bypass Gatekeeper.
+
+## Features
+
+### Image Generation (Flux2Core)
+- **Native Swift**: Pure Swift implementation, no Python dependencies at runtime
+- **MLX Acceleration**: Optimized for Apple Silicon (M1/M2/M3/M4) using MLX
+- **Multiple Models**: Dev (32B), Klein 4B, and Klein 9B variants
+- **Quantized Models**: On-the-fly quantization for all models — affine (qint8/int4) and microscaling FP (mxfp8/mxfp4/nvfp4) — Dev fits in ~17GB at 4-bit
+- **Small Decoder VAE**: Optional distilled decoder (~13% faster decode, Apache 2.0) — drop-in `--vae-variant small-decoder`
+- **Text-to-Image**: Generate images from text prompts
+- **Image-to-Image**: Transform images with text prompts and configurable strength
+- **Multi-Image Conditioning**: Combine elements from up to 3 reference images
+- **Prompt Upsampling**: Enhance prompts with Mistral/Qwen3 before generation
+- **LoRA Support**: Load and apply LoRA adapters for style transfer
+- **LoRA Training**: Train your own LoRAs on Apple Silicon ([guide](docs/examples/TRAINING_GUIDE.md))
+- **LoRA Evaluation**: Automated pipeline to evaluate training gap and recommend parameters ([guide](docs/examples/evaluate-lora/README.md))
+- **Image-to-Image Training**: Train paired I2I LoRAs (e.g. style transfer, image restoration)
+- **CLI Tool**: Full-featured command-line interface (`Flux2CLI`)
+- **macOS App**: Demo SwiftUI application (`Flux2App`) with T2I, I2I, and chat
+- **Engineering knowledge base**: measured baselines, decisions and verified pitfalls ([docs/knowledge](docs/knowledge/index.md), OKF-structured — readable by humans and agents)
+
+### Chains (Flux2Chains)
+- **`Flux2Chain` protocol**: composable, single-shot inference jobs returning
+  a regular `Flux2GenerationResult`. Each chain wraps `Flux2Pipeline` with
+  extra pre/in-loop/post stages, so progress callbacks, profiling, and
+  memory caps work like a normal `generate*` call.
+- **`Flux2MaskedInpaintingChain`**: RePaint-style per-step latent blending.
+  No Fill checkpoint required — works on every FLUX.2 base/distilled
+  variant. Soft masks (Gaussian-blurred edges) yield seamless edits.
+  Read the [by-the-book implementation guide](docs/INPAINTING_GUIDE.md) before integrating.
+  ([example](docs/examples/inpainting/))
+- **`Flux2OutpaintingChain`**: BFL-style outpainting API. Caller passes an
+  image, per-side paddings in pixels, and a prompt; the chain handles
+  canvas extension, smart mask construction, neutral noise seeding, and
+  I2I+RePaint inference internally. ([example](docs/examples/outpainting/))
+- **`Flux2StepHook`**: low-level extension point on
+  `Flux2Pipeline.generate*` — a per-step callback that lets new chains
+  transform packed latents between steps. Foundation for the RePaint
+  blend; available for region control, style transfer, etc.
+- A third chain — `Flux2Sharp3DRepairChain` (single-image 3D novel-view
+  repair via Apple SHARP + a FLUX.2 LoRA) — lives in the sibling repo
+  [`rephoto-swift-coreml`](https://github.com/VincentGourbin/rephoto-swift-coreml)
+  because it pulls in AMLR-licensed CoreML weights.
+
+### Text Encoders (FluxTextEncoders)
+- **Mistral Small 3.2 (24B)**: Text encoder for FLUX.2 dev/pro
+- **Qwen3 (4B/8B)**: Text encoder for FLUX.2 Klein
+- **Qwen3.5-4B VLM**: Native vision-language model for image analysis (~3GB, auto-downloaded)
+- **Gemma 4 E2B VLM (opt-in)**: Alternative provider for the same enrichment services, via [gemma-4-swift-mlx](https://github.com/VincentGourbin/gemma-4-swift-mlx) — link `FluxGemma4VLM` and call `FluxGemma4VLM.activate()` ([VLM API](docs/VLM-API.md#providers))
+- **FLUX.2 Image Description**: VLM-powered image analysis optimized for FLUX.2 regeneration
+- **Image Comparison**: Score two images on scene and style fidelity (0-10)
+- **Text Generation**: Streaming text generation with configurable parameters
+- **Interactive Chat**: Multi-turn conversation with chat template support
+- **Vision Analysis**: Image understanding via Pixtral (Mistral) or Qwen3.5 vision encoders
+- **FLUX.2 Embeddings**: Extract embeddings compatible with FLUX.2 image generation
+- **CLI Tool**: Complete command-line interface (`FluxEncodersCLI`)
+
+## Requirements
+
+- macOS 15.0 (Sequoia) or later (built on macOS 26 Tahoe)
+- Apple Silicon Mac (M1/M2/M3/M4)
+- Xcode 16.0 or later
+
+**Memory requirements by model (with on-the-fly quantization):**
+
+| Model | int4 | qint8 | bf16 |
+|-------|------|-------|------|
+| Klein 4B | 16 GB | 16 GB | 24 GB |
+| Klein 9B | 16 GB | 24 GB | 32 GB |
+| Dev (32B) | 32 GB | 96 GB | 96 GB |
+
+## Installation
+
+### Pre-built Binaries (Recommended)
+
+Download from the [Releases page](https://github.com/VincentGourbin/flux-2-swift-mlx/releases/latest):
+
+```bash
+# CLI
+unzip Flux2CLI-v2.1.0-macOS.zip
+./Flux2CLI t2i "a cat" --model klein-4b
+
+# App
+unzip Flux2App-v2.1.0-macOS.zip
+open Flux2App.app
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/VincentGourbin/flux-2-swift-mlx.git
+cd flux-2-swift-mlx
+```
+
+Build with Xcode (not `swift build`):
+
+1. Open the project in Xcode
+2. Select `Flux2CLI` or `Flux2App` scheme
+3. Build with `Cmd+B` (or `Cmd+R` to run)
+
+### Download Models
+
+The models are downloaded automatically from HuggingFace on first run.
+
+**For Dev (32B):**
+- Text Encoder: Mistral Small 3.2 (~25GB 8-bit)
+- Transformer: Flux.2 Dev (~33GB qint8, ~17GB int4)
+- VAE: Flux.2 VAE (~3GB) or [Small Decoder](docs/examples/small-decoder/) (~250MB, Apache 2.0)
+
+**For Klein 4B/9B:**
+- Text Encoder: Qwen3-4B or Qwen3-8B (~4-8GB 8-bit)
+- Transformer: Klein 4B (~4-7GB) or Klein 9B (~5-17GB depending on quantization)
+- VAE: Flux.2 VAE (~3GB) or [Small Decoder](docs/examples/small-decoder/) (~250MB, Apache 2.0)
+
+Models are cached in `~/Library/Caches/models/` by default (configurable via `--models-dir` or `ModelRegistry.customModelsDirectory` for sandboxed apps).
+
+## Usage
+
+### CLI
+
+```bash
+# Fast generation with Klein 4B (~26s, commercial OK)
+flux2 t2i "a beaver building a dam" --model klein-4b
+
+# Better quality with Klein 9B (~62s)
+flux2 t2i "a beaver building a dam" --model klein-9b
+
+# Maximum quality with Dev (~35min, requires 64GB+ RAM)
+flux2 t2i "a beautiful sunset over mountains" --model dev
+
+# With custom parameters
+flux2 t2i "a red apple on a white table" \
+  --width 512 \
+  --height 512 \
+  --steps 20 \
+  --guidance 4.0 \
+  --seed 42 \
+  --output apple.png
+
+# Image-to-Image with reference image
+flux2 i2i "transform into a watercolor painting" \
+  --images photo.jpg \
+  --strength 0.7 \
+  --steps 28 \
+  --output watercolor.png
+
+# Multi-image conditioning (combine elements)
+flux2 i2i "a cat wearing this jacket" \
+  --images cat.jpg \
+  --images jacket.jpg \
+  --steps 28 \
+  --output cat_jacket.png
+```
+
+See [CLI Documentation](docs/CLI.md) for all options.
+
+### As a Library
+
+```swift
+import Flux2Core
+
+// Initialize pipeline
+let pipeline = try await Flux2Pipeline()
+
+// Generate image
+let image = try await pipeline.generateTextToImage(
+    prompt: "a beautiful sunset over mountains",
+    height: 512,
+    width: 512,
+    steps: 20,
+    guidance: 4.0
+) { current, total in
+    print("Step \(current)/\(total)")
+}
+```
+
+## Architecture
+
+Flux.2 Dev is a ~32B parameter rectified flow transformer:
+
+- **8 Double-stream blocks**: Joint attention between text and image
+- **48 Single-stream blocks**: Combined text+image processing
+- **4D RoPE**: Rotary position embeddings for T, H, W, L axes
+- **SwiGLU FFN**: Gated activation in feed-forward layers
+- **AdaLN**: Adaptive layer normalization with timestep conditioning
+
+Text encoding uses [Mistral Small 3.2](https://github.com/VincentGourbin/mistral-small-3.2-swift-mlx) to generate 15360-dim embeddings.
+
+## On-the-fly Quantization
+
+All models support on-the-fly quantization to reduce transformer memory. No need to download separate variants — one bf16 model file serves all levels.
+
+| Model | bf16 | qint8 (-47%) | int4 (-72%) |
+|-------|------|-------------|-------------|
+| Klein 4B | 7.4 GB | 3.9 GB | 2.1 GB |
+| Klein 9B | 17.3 GB | 9.2 GB | 4.9 GB |
+| Dev (32B) | 61.5 GB | 32.7 GB | 17.3 GB |
+
+```bash
+# Klein 9B with qint8 (fits in 24 GB)
+flux2 t2i "a cat" --model klein-9b --transformer-quant qint8
+
+# Dev with int4 (fits in 32 GB)
+flux2 t2i "a cat" --model dev --transformer-quant int4
+```
+
+See [Quantization Benchmark](docs/examples/quantization-benchmark/) for detailed measurements and visual comparison.
+
+## Small Decoder VAE
+
+Drop-in distilled VAE decoder from Black Forest Labs — smaller channels (`[96, 192, 384, 384]` vs `[128, 256, 512, 512]`), ~13% faster decode, Apache 2.0 license.
+
+```bash
+# Download
+flux2 download --vae-only --vae-variant small-decoder
+
+# Use with any model
+flux2 t2i "a cat" --model klein-4b --vae-variant small-decoder
+```
+
+See [Small Decoder Benchmark](docs/examples/small-decoder/) for measured performance and visual comparison.
+
+## Activity Beacon (Opt-in)
+
+Heavy operations (generation, model loading, LoRA training, quantized export) can advertise themselves to external activity monitors such as [SiliconScope](https://github.com/kennss/SiliconScope). While the operation runs, a small JSON manifest lives at `~/Library/Application Support/ai-runtime-beacons/<pid>-<id>.json` and is deleted the moment it ends — errors included. Nothing is ever written unless you opt in:
+
+```swift
+// Swift package
+RuntimeBeacon.isEnabled = true
+```
+
+```bash
+# CLI: --beacon flag (t2i / i2i / inpaint / outpaint / train-lora / export-quantized /
+# profile / compare-encoders / evaluate-lora), or the environment variable
+FLUX2_RUNTIME_BEACON=1 flux2 t2i "..."
+```
+
+The manifest schema is deliberately runtime-agnostic (`version`, `pid`, `runtime`, `displayName`, `task`, `model`, `phase`, `step`, `totalSteps`, timestamps) — the same convention as [ltx-video-swift-mlx](https://github.com/VincentGourbin/ltx-video-swift-mlx), so monitors only need one reader. Manifests left behind by a force-killed process are garbage-collected on the next beacon start via a pid liveness check.
+
+> **Note:** sandboxed apps write inside their container, invisible to external monitors — the beacon targets CLI tools and non-sandboxed apps.
+
+## Documentation
+
+### Guides
+
+| Guide | Description |
+|-------|-------------|
+| [CLI Documentation](docs/CLI.md) | Command-line interface — all commands and options |
+| [LoRA Guide](docs/LoRA.md) | Loading and using LoRA adapters |
+| [LoRA Training Guide](docs/examples/TRAINING_GUIDE.md) | Training parameters, DOP, gradient checkpointing, YAML config |
+| [LoRA Evaluation](docs/examples/evaluate-lora/) | Automated gap analysis and training parameter recommendations |
+| [VLM API](docs/VLM-API.md) | VLM providers (Qwen3.5 bundled, Gemma 4 E2B opt-in) — image analysis, comparison, prompt rewriting, LoRA training setup |
+| [Text Encoders](docs/TextEncoders.md) | FluxTextEncoders library API and CLI |
+| [Custom Model Integration](docs/CustomModelIntegration.md) | Integrating custom MLX-compatible models into the framework |
+| [Flux2App Guide](docs/Flux2App.md) | Demo macOS application |
+
+### Examples and Benchmarks
+
+| Example | Description |
+|---------|-------------|
+| [Examples Gallery](docs/examples/) | Overview of all examples with sample outputs |
+| [Model Comparison](docs/examples/comparison.md) | Dev vs Klein 4B vs Klein 9B — performance, quality, when to use each |
+| [Quantization Benchmark](docs/examples/quantization-benchmark/) | Measured memory, speed, and visual quality for bf16/qint8/int4 |
+| [Small Decoder VAE](docs/examples/small-decoder/) | Distilled decoder benchmark — ~13% faster decode, visual comparison, Apache 2.0 |
+| [Flux.2 Dev Examples](docs/examples/flux2-dev/) | T2I, I2I, multi-image conditioning, VLM image interpretation |
+| [Flux.2 Klein 4B Examples](docs/examples/flux2-klein-4b/) | Fast T2I, multiple resolutions, quantization comparison |
+| [Flux.2 Klein 9B Examples](docs/examples/flux2-klein-9b/) | T2I, multiple resolutions, prompt upsampling |
+
+### LoRA Training
+
+| Guide | Description |
+|-------|-------------|
+| [LoRA Evaluation Pipeline](docs/examples/evaluate-lora/) | **New** — Automated gap analysis: VLM describes reference, generates baseline, compares, recommends training params |
+| [Cat Toy (Subject LoRA)](examples/cat-toy/) | Subject injection with DOP, trigger word `sks` (Klein 4B) |
+| [Tarot Style (Style LoRA)](docs/examples/tarot-style-lora/) | Style transfer, trigger word `rwaite`, 32 training images (Klein 4B) |
+
+> **Help Wanted** — The LoRA evaluation parameter recommendations are based on initial heuristics and will be refined with user feedback. If you use `evaluate-lora` and train LoRAs, please [share your results](https://github.com/VincentGourbin/flux-2-swift-mlx/issues) to help improve the recommendations!
+
+## Current Limitations
+
+- **Dev Performance**: Generation takes ~30 min for 1024x1024 images (use Klein for faster results)
+- **Dev Memory**: Requires 32GB+ with int4, 64GB+ with qint8 (Klein 4B works with 16GB)
+- **LoRA Training**: Supported on Klein 4B, Klein 9B, and Dev. Enable `gradient_checkpointing: true` for larger models to reduce memory by ~50%. Image-to-Image training doubles sequence length — gradient checkpointing is recommended.
+
+## Acknowledgments
+
+- [Black Forest Labs](https://blackforestlabs.ai/) for Flux.2
+- [Hugging Face Diffusers](https://github.com/huggingface/diffusers) for reference implementation
+- [MLX](https://github.com/ml-explore/mlx) team at Apple for the ML framework
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+**Disclaimer**: This is an independent implementation and is not affiliated with Black Forest Labs. Flux.2 model weights are subject to their own license terms.

@@ -301,8 +301,10 @@ Grenzen:
 
 - Qwen-Image und FLUX 3 laufen auf dem Mac nicht, dafür gibt es noch keine nativen, freien
   Ports.
-- Ein laufendes FLUX.2-Bild lässt sich nicht abbrechen: Das Paket prüft nirgends auf Abbruch,
-  abgebrochen wird nach dem aktuellen Bild. Core ML bricht beim nächsten Schritt ab.
+- Ein laufendes FLUX.2-Bild endet nach dem aktuellen Schritt (seit 0.4.5). Das Paket selbst prüft
+  nirgends auf Abbruch, deshalb liefert NVAI-open eine eigene Kopie mit einer Prüfung nach jedem
+  Schritt aus (`mac/NVAIMac/Packages/flux-2-swift-mlx`). Gemessen auf dem M1 bei 1024 × 1024:
+  abgebrochen 25 s nach der Anfrage, ein Schritt von vier. Core ML bricht beim nächsten Schritt ab.
 - Core-ML-Modelle haben ein festes Format. Andere Formate werden auf die gewünschte Größe
   gestreckt.
 
@@ -457,7 +459,7 @@ Die Skripte in `mac/NVAIMac/scripts` erwarten das Projekt unter `~/NVAIMac` auf 
 
 | Skript | Was es tut |
 |---|---|
-| `sync.sh` | Für die Entwicklung unter Windows, aus Git Bash: überträgt `project.yml`, `Sources`, `Resources`, `scripts` und `Package.resolved` per SSH nach `~/NVAIMac` auf einen Mac, der als `macmini` erreichbar ist, und führt dort `xcodegen generate` aus (XcodeGen unter `~/tools/xcodegen/bin/xcodegen` erwartet). `~/NVAIMac` ist nur ein Spiegel: `Sources` wird bei jedem Abgleich ersetzt |
+| `sync.sh` | Für die Entwicklung unter Windows, aus Git Bash: überträgt `project.yml`, `Sources`, `Resources`, `scripts`, `Packages` und `Package.resolved` per SSH nach `~/NVAIMac` auf einen Mac, der als `macmini` erreichbar ist, und führt dort `xcodegen generate` aus (XcodeGen unter `~/tools/xcodegen/bin/xcodegen` erwartet). `~/NVAIMac` ist nur ein Spiegel: `Sources` wird bei jedem Abgleich ersetzt |
 | `build.sh` | baut `~/NVAIMac/dd/Build/Products/Release/NVAI-open.app` (Release, arm64, ad hoc signiert); Protokoll in `~/NVAIMac/build.log` |
 | `release.sh` | baut die DMG (siehe unten) |
 

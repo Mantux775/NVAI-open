@@ -293,8 +293,10 @@ On 8 GB that is the limit. From 16 GB it runs comfortably.
 Limits:
 
 - Qwen-Image and FLUX 3 do not run on the Mac; there are no native, free ports for them yet.
-- A running FLUX.2 image cannot be cancelled: the package never checks for cancellation, so
-  cancelling takes effect after the current image. Core ML stops at the next step.
+- A running FLUX.2 image stops after the current step (since 0.4.5). The package itself never
+  checks for cancellation, so NVAI-open ships its own copy with a check after every step
+  (`mac/NVAIMac/Packages/flux-2-swift-mlx`). Measured on the M1 at 1024 × 1024: cancelled
+  25 s after the request, one step of four. Core ML stops at the next step.
 - Core ML models have a fixed size. Other sizes are stretched to the requested size.
 
 ### Files and feedback
@@ -445,7 +447,7 @@ The scripts in `mac/NVAIMac/scripts` expect the project in `~/NVAIMac` on the Ma
 
 | Script | What it does |
 |---|---|
-| `sync.sh` | For developing on Windows, run from Git Bash: copies `project.yml`, `Sources`, `Resources`, `scripts` and `Package.resolved` over SSH to `~/NVAIMac` on a Mac reachable as `macmini` and runs `xcodegen generate` there (XcodeGen expected at `~/tools/xcodegen/bin/xcodegen`). `~/NVAIMac` is only a mirror: `Sources` is replaced on every sync |
+| `sync.sh` | For developing on Windows, run from Git Bash: copies `project.yml`, `Sources`, `Resources`, `scripts`, `Packages` and `Package.resolved` over SSH to `~/NVAIMac` on a Mac reachable as `macmini` and runs `xcodegen generate` there (XcodeGen expected at `~/tools/xcodegen/bin/xcodegen`). `~/NVAIMac` is only a mirror: `Sources` is replaced on every sync |
 | `build.sh` | builds `~/NVAIMac/dd/Build/Products/Release/NVAI-open.app` (Release, arm64, ad-hoc signed); log in `~/NVAIMac/build.log` |
 | `release.sh` | builds the DMG (see below) |
 

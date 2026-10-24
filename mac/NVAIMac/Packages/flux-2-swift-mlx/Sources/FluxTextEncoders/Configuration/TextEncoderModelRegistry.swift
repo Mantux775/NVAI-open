@@ -1,0 +1,713 @@
+/**
+ * TextEncoderModelRegistry.swift
+ * Registry of available Mistral Small 3.2 and Qwen3 models for text encoders
+ */
+
+import Foundation
+
+// MARK: - Model Type
+
+/// Type of model architecture
+public enum ModelType: String, CaseIterable, Codable, Sendable {
+    case mistral = "mistral"
+    case qwen3 = "qwen3"
+    case qwen3VL = "qwen3_vl"
+    case qwen35 = "qwen3_5"
+
+    public var displayName: String {
+        switch self {
+        case .mistral: return "Mistral"
+        case .qwen3: return "Qwen3"
+        case .qwen3VL: return "Qwen3-VL"
+        case .qwen35: return "Qwen3.5"
+        }
+    }
+}
+
+// MARK: - Model Variant
+
+public enum ModelVariant: String, CaseIterable, Codable, Sendable {
+    case bf16 = "bf16"
+    case mlx8bit = "8bit"
+    case mlx6bit = "6bit"
+    case mlx4bit = "4bit"
+
+    public var displayName: String {
+        switch self {
+        case .bf16: return "Full Precision (BF16)"
+        case .mlx8bit: return "8-bit Quantized"
+        case .mlx6bit: return "6-bit Quantized"
+        case .mlx4bit: return "4-bit Quantized"
+        }
+    }
+
+    public var estimatedSize: String {
+        switch self {
+        case .bf16: return "~48GB"
+        case .mlx8bit: return "~25GB"
+        case .mlx6bit: return "~19GB"
+        case .mlx4bit: return "~14GB"
+        }
+    }
+
+    /// Estimated size in GB (as Int for consistency)
+    public var estimatedSizeGB: Int {
+        switch self {
+        case .bf16: return 48
+        case .mlx8bit: return 25
+        case .mlx6bit: return 19
+        case .mlx4bit: return 14
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .bf16: return "BF16"
+        case .mlx8bit: return "8-bit"
+        case .mlx6bit: return "6-bit"
+        case .mlx4bit: return "4-bit"
+        }
+    }
+
+    /// HuggingFace repository ID
+    public var repoId: String {
+        switch self {
+        case .bf16:
+            return "mistralai/Mistral-Small-3.2-24B-Instruct-2506"
+        case .mlx8bit:
+            return "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-8bit"
+        case .mlx6bit:
+            return "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-6bit"
+        case .mlx4bit:
+            return "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-4bit"
+        }
+    }
+
+    /// Full HuggingFace URL for the model
+    public var huggingFaceURL: String {
+        "https://huggingface.co/\(repoId)"
+    }
+
+    /// Whether this model requires accepting a license on HuggingFace before downloading
+    public var isGated: Bool {
+        switch self {
+        case .bf16:
+            // Original Mistral AI model is gated
+            return true
+        case .mlx8bit, .mlx6bit, .mlx4bit:
+            // lmstudio-community quantized versions are NOT gated
+            return false
+        }
+    }
+
+    /// License information
+    public var license: String {
+        "Apache 2.0"
+    }
+
+    /// Whether this model can be used commercially
+    public var isCommercialUseAllowed: Bool {
+        true  // Mistral Small 3.2 is Apache 2.0
+    }
+}
+
+// MARK: - Qwen3 Variant
+
+/// Quantization variants for Qwen3 models
+public enum Qwen3Variant: String, CaseIterable, Codable, Sendable {
+    case qwen3_4B_8bit = "qwen3-4b-8bit"
+    case qwen3_4B_4bit = "qwen3-4b-4bit"
+    case qwen3_8B_8bit = "qwen3-8b-8bit"
+    case qwen3_8B_4bit = "qwen3-8b-4bit"
+    
+    public var displayName: String {
+        switch self {
+        case .qwen3_4B_8bit: return "Qwen3 4B (8-bit)"
+        case .qwen3_4B_4bit: return "Qwen3 4B (4-bit)"
+        case .qwen3_8B_8bit: return "Qwen3 8B (8-bit)"
+        case .qwen3_8B_4bit: return "Qwen3 8B (4-bit)"
+        }
+    }
+    
+    public var estimatedSize: String {
+        switch self {
+        case .qwen3_4B_8bit: return "~4GB"
+        case .qwen3_4B_4bit: return "~2GB"
+        case .qwen3_8B_8bit: return "~8GB"
+        case .qwen3_8B_4bit: return "~4GB"
+        }
+    }
+    
+    public var shortName: String {
+        switch self {
+        case .qwen3_4B_8bit: return "4B-8bit"
+        case .qwen3_4B_4bit: return "4B-4bit"
+        case .qwen3_8B_8bit: return "8B-8bit"
+        case .qwen3_8B_4bit: return "8B-4bit"
+        }
+    }
+    
+    /// Klein variant this Qwen3 model supports
+    public var kleinVariant: KleinVariant {
+        switch self {
+        case .qwen3_4B_8bit, .qwen3_4B_4bit: return .klein4B
+        case .qwen3_8B_8bit, .qwen3_8B_4bit: return .klein9B
+        }
+    }
+
+    /// HuggingFace repository ID
+    public var repoId: String {
+        switch self {
+        case .qwen3_4B_8bit: return "lmstudio-community/Qwen3-4B-MLX-8bit"
+        case .qwen3_4B_4bit: return "lmstudio-community/Qwen3-4B-MLX-4bit"
+        case .qwen3_8B_8bit: return "lmstudio-community/Qwen3-8B-MLX-8bit"
+        case .qwen3_8B_4bit: return "lmstudio-community/Qwen3-8B-MLX-4bit"
+        }
+    }
+
+    /// Full HuggingFace URL for the model
+    public var huggingFaceURL: String {
+        "https://huggingface.co/\(repoId)"
+    }
+
+    /// Whether this model requires accepting a license on HuggingFace before downloading
+    /// All Qwen3 models from lmstudio-community are NOT gated
+    public var isGated: Bool { false }
+
+    /// Estimated size in GB (as Int for consistency with Flux2Core)
+    public var estimatedSizeGB: Int {
+        switch self {
+        case .qwen3_4B_8bit: return 4
+        case .qwen3_4B_4bit: return 2
+        case .qwen3_8B_8bit: return 8
+        case .qwen3_8B_4bit: return 4
+        }
+    }
+
+    /// License information
+    public var license: String {
+        "Apache 2.0"
+    }
+
+    /// Whether this model can be used commercially
+    public var isCommercialUseAllowed: Bool {
+        true  // Qwen3 is Apache 2.0
+    }
+}
+
+// MARK: - Qwen3-VL Variant
+
+/// Quantization variants for Qwen3-VL models (vision-language)
+/// VL-4B matches Klein 4B (hidden_size=2560), VL-8B matches Klein 9B (hidden_size=4096)
+public enum Qwen3VLVariant: String, CaseIterable, Codable, Sendable {
+    case qwen3VL_4B_8bit = "qwen3vl-4b-8bit"
+    case qwen3VL_4B_4bit = "qwen3vl-4b-4bit"
+    case qwen3VL_8B_8bit = "qwen3vl-8b-8bit"
+    case qwen3VL_8B_4bit = "qwen3vl-8b-4bit"
+
+    public var displayName: String {
+        switch self {
+        case .qwen3VL_4B_8bit: return "Qwen3-VL 4B (8-bit)"
+        case .qwen3VL_4B_4bit: return "Qwen3-VL 4B (4-bit)"
+        case .qwen3VL_8B_8bit: return "Qwen3-VL 8B (8-bit)"
+        case .qwen3VL_8B_4bit: return "Qwen3-VL 8B (4-bit)"
+        }
+    }
+
+    public var estimatedSize: String {
+        switch self {
+        case .qwen3VL_4B_8bit: return "~5GB"
+        case .qwen3VL_4B_4bit: return "~3GB"
+        case .qwen3VL_8B_8bit: return "~9GB"
+        case .qwen3VL_8B_4bit: return "~5GB"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .qwen3VL_4B_8bit: return "VL-4B-8bit"
+        case .qwen3VL_4B_4bit: return "VL-4B-4bit"
+        case .qwen3VL_8B_8bit: return "VL-8B-8bit"
+        case .qwen3VL_8B_4bit: return "VL-8B-4bit"
+        }
+    }
+
+    /// Klein variant this model maps to (based on hidden_size match)
+    public var kleinVariant: KleinVariant {
+        switch self {
+        case .qwen3VL_4B_8bit, .qwen3VL_4B_4bit: return .klein4B   // hidden_size=2560
+        case .qwen3VL_8B_8bit, .qwen3VL_8B_4bit: return .klein9B   // hidden_size=4096
+        }
+    }
+
+    public var repoId: String {
+        switch self {
+        case .qwen3VL_4B_8bit: return "lmstudio-community/Qwen3-VL-4B-Instruct-MLX-8bit"
+        case .qwen3VL_4B_4bit: return "lmstudio-community/Qwen3-VL-4B-Instruct-MLX-4bit"
+        case .qwen3VL_8B_8bit: return "lmstudio-community/Qwen3-VL-8B-Instruct-MLX-8bit"
+        case .qwen3VL_8B_4bit: return "lmstudio-community/Qwen3-VL-8B-Instruct-MLX-4bit"
+        }
+    }
+
+    public var huggingFaceURL: String {
+        "https://huggingface.co/\(repoId)"
+    }
+
+    public var isGated: Bool { false }
+
+    public var estimatedSizeGB: Int {
+        switch self {
+        case .qwen3VL_4B_8bit: return 5
+        case .qwen3VL_4B_4bit: return 3
+        case .qwen3VL_8B_8bit: return 9
+        case .qwen3VL_8B_4bit: return 5
+        }
+    }
+
+    public var license: String { "Apache 2.0" }
+    public var isCommercialUseAllowed: Bool { true }
+}
+
+// MARK: - Qwen3.5 Variant
+
+/// Quantization variants for Qwen3.5 VLM models
+public enum Qwen35Variant: String, CaseIterable, Codable, Sendable {
+    case qwen35_4B_8bit = "qwen35-4b-8bit"
+    case qwen35_4B_4bit = "qwen35-4b-4bit"
+
+    public var displayName: String {
+        switch self {
+        case .qwen35_4B_8bit: return "Qwen3.5 4B (8-bit)"
+        case .qwen35_4B_4bit: return "Qwen3.5 4B (4-bit)"
+        }
+    }
+
+    public var estimatedSize: String {
+        switch self {
+        case .qwen35_4B_8bit: return "~5GB"
+        case .qwen35_4B_4bit: return "~3GB"
+        }
+    }
+
+    public var shortName: String {
+        switch self {
+        case .qwen35_4B_8bit: return "3.5-4B-8bit"
+        case .qwen35_4B_4bit: return "3.5-4B-4bit"
+        }
+    }
+
+    public var repoId: String {
+        switch self {
+        case .qwen35_4B_8bit: return "mlx-community/Qwen3.5-4B-MLX-8bit"
+        case .qwen35_4B_4bit: return "mlx-community/Qwen3.5-4B-MLX-4bit"
+        }
+    }
+
+    public var huggingFaceURL: String { "https://huggingface.co/\(repoId)" }
+    public var isGated: Bool { false }
+    public var estimatedSizeGB: Int {
+        switch self {
+        case .qwen35_4B_8bit: return 5
+        case .qwen35_4B_4bit: return 3
+        }
+    }
+    public var license: String { "Apache 2.0" }
+}
+
+/// Model info for Qwen3.5
+public struct Qwen35ModelInfo: Sendable {
+    public let id: String
+    public let repoId: String
+    public let name: String
+    public let description: String
+    public let variant: Qwen35Variant
+    public let parameters: String
+
+    public var displayName: String { name }
+    public var huggingFaceURL: String { "https://huggingface.co/\(repoId)" }
+    public var isGated: Bool { false }
+}
+
+// MARK: - Model Info
+
+public struct ModelInfo: Codable, Sendable {
+    public let id: String
+    public let repoId: String
+    public let name: String
+    public let description: String
+    public let variant: ModelVariant
+    public let parameters: String
+    public let modelType: ModelType
+    public let isGated: Bool
+
+    /// Full HuggingFace URL for the model
+    public var huggingFaceURL: String {
+        "https://huggingface.co/\(repoId)"
+    }
+
+    public init(
+        id: String,
+        repoId: String,
+        name: String,
+        description: String,
+        variant: ModelVariant,
+        parameters: String,
+        modelType: ModelType = .mistral,
+        isGated: Bool = false
+    ) {
+        self.id = id
+        self.repoId = repoId
+        self.name = name
+        self.description = description
+        self.variant = variant
+        self.parameters = parameters
+        self.modelType = modelType
+        self.isGated = isGated
+    }
+}
+
+// MARK: - Qwen3 Model Info
+
+public struct Qwen3ModelInfo: Codable, Sendable {
+    public let id: String
+    public let repoId: String
+    public let name: String
+    public let description: String
+    public let variant: Qwen3Variant
+    public let parameters: String
+
+    /// Display name (alias for name)
+    public var displayName: String { name }
+
+    /// Full HuggingFace URL for the model
+    public var huggingFaceURL: String {
+        "https://huggingface.co/\(repoId)"
+    }
+
+    /// Whether this model requires accepting a license on HuggingFace before downloading
+    /// All Qwen3 models from lmstudio-community are NOT gated
+    public var isGated: Bool { false }
+
+    public init(
+        id: String,
+        repoId: String,
+        name: String,
+        description: String,
+        variant: Qwen3Variant,
+        parameters: String
+    ) {
+        self.id = id
+        self.repoId = repoId
+        self.name = name
+        self.description = description
+        self.variant = variant
+        self.parameters = parameters
+    }
+}
+
+// MARK: - Qwen3-VL Model Info
+
+public struct Qwen3VLModelInfo: Sendable {
+    public let id: String
+    public let repoId: String
+    public let name: String
+    public let description: String
+    public let variant: Qwen3VLVariant
+    public let parameters: String
+
+    public var displayName: String { name }
+    public var huggingFaceURL: String { "https://huggingface.co/\(repoId)" }
+    public var isGated: Bool { false }
+
+    public init(
+        id: String,
+        repoId: String,
+        name: String,
+        description: String,
+        variant: Qwen3VLVariant,
+        parameters: String
+    ) {
+        self.id = id
+        self.repoId = repoId
+        self.name = name
+        self.description = description
+        self.variant = variant
+        self.parameters = parameters
+    }
+}
+
+// MARK: - Model Registry
+
+@MainActor
+public final class TextEncoderModelRegistry {
+    public static let shared = TextEncoderModelRegistry()
+
+    private var models: [ModelInfo] = []
+    private var qwen3Models: [Qwen3ModelInfo] = []
+    private var qwen3VLModels: [Qwen3VLModelInfo] = []
+    private var qwen35Models: [Qwen35ModelInfo] = []
+
+    private init() {
+        registerDefaultModels()
+        registerQwen3Models()
+        registerQwen3VLModels()
+        registerQwen35Models()
+    }
+
+    private func registerDefaultModels() {
+        // Mistral Small 3.2 models
+        // Quantized versions from lmstudio-community include VLM (vision) layers
+        models = [
+            ModelInfo(
+                id: "mistral-small-3.2-bf16",
+                repoId: "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+                name: "Mistral Small 3.2 (BF16)",
+                description: "Original full precision model from Mistral AI - reference quality",
+                variant: .bf16,
+                parameters: "24B",
+                modelType: .mistral,
+                isGated: true  // Original Mistral AI model is gated
+            ),
+            ModelInfo(
+                id: "mistral-small-3.2-8bit",
+                repoId: "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-8bit",
+                name: "Mistral Small 3.2 (8-bit)",
+                description: "8-bit quantized with VLM layers, good balance of quality and memory",
+                variant: .mlx8bit,
+                parameters: "24B",
+                modelType: .mistral,
+                isGated: false  // lmstudio-community is NOT gated
+            ),
+            ModelInfo(
+                id: "mistral-small-3.2-6bit",
+                repoId: "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-6bit",
+                name: "Mistral Small 3.2 (6-bit)",
+                description: "6-bit quantized with VLM layers, balanced compression",
+                variant: .mlx6bit,
+                parameters: "24B",
+                modelType: .mistral,
+                isGated: false  // lmstudio-community is NOT gated
+            ),
+            ModelInfo(
+                id: "mistral-small-3.2-4bit",
+                repoId: "lmstudio-community/Mistral-Small-3.2-24B-Instruct-2506-MLX-4bit",
+                name: "Mistral Small 3.2 (4-bit)",
+                description: "4-bit quantized with VLM layers, memory efficient",
+                variant: .mlx4bit,
+                parameters: "24B",
+                modelType: .mistral,
+                isGated: false  // lmstudio-community is NOT gated
+            ),
+        ]
+    }
+    
+    private func registerQwen3Models() {
+        // Qwen3 models for FLUX.2 Klein
+        qwen3Models = [
+            Qwen3ModelInfo(
+                id: "qwen3-4b-8bit",
+                repoId: "lmstudio-community/Qwen3-4B-MLX-8bit",
+                name: "Qwen3 4B (8-bit)",
+                description: "8-bit quantized Qwen3 4B for Klein 4B embeddings",
+                variant: .qwen3_4B_8bit,
+                parameters: "4B"
+            ),
+            Qwen3ModelInfo(
+                id: "qwen3-4b-4bit",
+                repoId: "lmstudio-community/Qwen3-4B-MLX-4bit",
+                name: "Qwen3 4B (4-bit)",
+                description: "4-bit quantized Qwen3 4B for Klein 4B embeddings (memory efficient)",
+                variant: .qwen3_4B_4bit,
+                parameters: "4B"
+            ),
+            Qwen3ModelInfo(
+                id: "qwen3-8b-8bit",
+                repoId: "lmstudio-community/Qwen3-8B-MLX-8bit",
+                name: "Qwen3 8B (8-bit)",
+                description: "8-bit quantized Qwen3 8B for Klein 9B embeddings",
+                variant: .qwen3_8B_8bit,
+                parameters: "8B"
+            ),
+            Qwen3ModelInfo(
+                id: "qwen3-8b-4bit",
+                repoId: "lmstudio-community/Qwen3-8B-MLX-4bit",
+                name: "Qwen3 8B (4-bit)",
+                description: "4-bit quantized Qwen3 8B for Klein 9B embeddings (memory efficient)",
+                variant: .qwen3_8B_4bit,
+                parameters: "8B"
+            ),
+        ]
+    }
+
+    /// URL for downloading tekken.json from the original Mistral repo
+    public static let tekkenJsonURL = "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506/resolve/main/tekken.json"
+
+    // MARK: - Mistral Models
+    
+    public func allModels() -> [ModelInfo] {
+        return models
+    }
+
+    public func model(withId id: String) -> ModelInfo? {
+        return models.first { $0.id == id }
+    }
+
+    public func model(withVariant variant: ModelVariant) -> ModelInfo? {
+        return models.first { $0.variant == variant }
+    }
+
+    public func defaultModel() -> ModelInfo {
+        return model(withVariant: .mlx8bit) ?? models[0]
+    }
+    
+    // MARK: - Qwen3 Models
+    
+    public func allQwen3Models() -> [Qwen3ModelInfo] {
+        return qwen3Models
+    }
+    
+    public func qwen3Model(withId id: String) -> Qwen3ModelInfo? {
+        return qwen3Models.first { $0.id == id }
+    }
+    
+    public func qwen3Model(withVariant variant: Qwen3Variant) -> Qwen3ModelInfo? {
+        return qwen3Models.first { $0.variant == variant }
+    }
+    
+    /// Get the recommended Qwen3 model for a Klein variant
+    public func qwen3Model(forKlein variant: KleinVariant) -> Qwen3ModelInfo? {
+        switch variant {
+        case .klein4B: return qwen3Model(withVariant: .qwen3_4B_8bit)
+        case .klein9B: return qwen3Model(withVariant: .qwen3_8B_8bit)
+        }
+    }
+    
+    public func defaultQwen3Model() -> Qwen3ModelInfo {
+        return qwen3Model(withVariant: .qwen3_4B_8bit) ?? qwen3Models[0]
+    }
+
+    // MARK: - Qwen3-VL Models
+
+    private func registerQwen3VLModels() {
+        qwen3VLModels = [
+            Qwen3VLModelInfo(
+                id: "qwen3vl-4b-8bit",
+                repoId: "lmstudio-community/Qwen3-VL-4B-Instruct-MLX-8bit",
+                name: "Qwen3-VL 4B (8-bit)",
+                description: "8-bit quantized Qwen3-VL 4B for Klein 4B VL embeddings",
+                variant: .qwen3VL_4B_8bit,
+                parameters: "4B"
+            ),
+            Qwen3VLModelInfo(
+                id: "qwen3vl-4b-4bit",
+                repoId: "lmstudio-community/Qwen3-VL-4B-Instruct-MLX-4bit",
+                name: "Qwen3-VL 4B (4-bit)",
+                description: "4-bit quantized Qwen3-VL 4B for Klein 4B VL embeddings (memory efficient)",
+                variant: .qwen3VL_4B_4bit,
+                parameters: "4B"
+            ),
+            Qwen3VLModelInfo(
+                id: "qwen3vl-8b-8bit",
+                repoId: "lmstudio-community/Qwen3-VL-8B-Instruct-MLX-8bit",
+                name: "Qwen3-VL 8B (8-bit)",
+                description: "8-bit quantized Qwen3-VL 8B for Klein 9B VL embeddings",
+                variant: .qwen3VL_8B_8bit,
+                parameters: "8B"
+            ),
+            Qwen3VLModelInfo(
+                id: "qwen3vl-8b-4bit",
+                repoId: "lmstudio-community/Qwen3-VL-8B-Instruct-MLX-4bit",
+                name: "Qwen3-VL 8B (4-bit)",
+                description: "4-bit quantized Qwen3-VL 8B for Klein 9B VL embeddings (memory efficient)",
+                variant: .qwen3VL_8B_4bit,
+                parameters: "8B"
+            ),
+        ]
+    }
+
+    public func allQwen3VLModels() -> [Qwen3VLModelInfo] {
+        return qwen3VLModels
+    }
+
+    public func qwen3VLModel(withVariant variant: Qwen3VLVariant) -> Qwen3VLModelInfo? {
+        return qwen3VLModels.first { $0.variant == variant }
+    }
+
+    /// Get the recommended Qwen3-VL model for a Klein variant (8-bit by default)
+    public func qwen3VLModel(forKlein variant: KleinVariant) -> Qwen3VLModelInfo? {
+        switch variant {
+        case .klein4B: return qwen3VLModel(withVariant: .qwen3VL_4B_8bit)
+        case .klein9B: return qwen3VLModel(withVariant: .qwen3VL_8B_8bit)
+        }
+    }
+
+    // MARK: - Qwen3.5 Models
+
+    private func registerQwen35Models() {
+        qwen35Models = [
+            Qwen35ModelInfo(
+                id: "qwen35-4b-8bit",
+                repoId: "mlx-community/Qwen3.5-4B-MLX-8bit",
+                name: "Qwen3.5 4B (8-bit)",
+                description: "8-bit quantized Qwen3.5 4B VLM for image analysis (recommended)",
+                variant: .qwen35_4B_8bit,
+                parameters: "4B"
+            ),
+            Qwen35ModelInfo(
+                id: "qwen35-4b-4bit",
+                repoId: "mlx-community/Qwen3.5-4B-MLX-4bit",
+                name: "Qwen3.5 4B (4-bit)",
+                description: "4-bit quantized Qwen3.5 4B VLM for image analysis (memory efficient)",
+                variant: .qwen35_4B_4bit,
+                parameters: "4B"
+            ),
+        ]
+    }
+
+    public func allQwen35Models() -> [Qwen35ModelInfo] {
+        return qwen35Models
+    }
+
+    public func qwen35Model(withVariant variant: Qwen35Variant) -> Qwen35ModelInfo? {
+        return qwen35Models.first { $0.variant == variant }
+    }
+
+    // MARK: - Print Methods
+    
+    public func printAvailableModels() {
+        print("\nAvailable Mistral Small 3.2 Models:")
+        print("=".padding(toLength: 70, withPad: "=", startingAt: 0))
+
+        for model in models {
+            let isDownloaded = TextEncoderModelDownloader.isModelDownloaded(model)
+            let status = isDownloaded ? "Downloaded" : "Not downloaded"
+
+            print("\n  \(model.name)")
+            print("  ID: \(model.id)")
+            print("  Repo: \(model.repoId)")
+            print("  Size: \(model.variant.estimatedSize)")
+            print("  Status: \(status)")
+
+            if isDownloaded, let path = TextEncoderModelDownloader.findModelPath(for: model) {
+                print("  Path: \(path.path)")
+            }
+        }
+
+        print("\n" + "=".padding(toLength: 70, withPad: "=", startingAt: 0))
+    }
+    
+    public func printAvailableQwen3Models() {
+        print("\nAvailable Qwen3 Models (for FLUX.2 Klein):")
+        print("=".padding(toLength: 70, withPad: "=", startingAt: 0))
+        
+        for model in qwen3Models {
+            print("\n  \(model.name)")
+            print("  ID: \(model.id)")
+            print("  Repo: \(model.repoId)")
+            print("  Size: \(model.variant.estimatedSize)")
+            print("  For: \(model.variant.kleinVariant.displayName)")
+        }
+        
+        print("\n" + "=".padding(toLength: 70, withPad: "=", startingAt: 0))
+    }
+}
