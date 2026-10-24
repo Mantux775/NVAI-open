@@ -26,23 +26,42 @@ photos of people who agreed to it.
 Both are under "Models". Their repositories on Hugging Face are gated: accept the license there
 first and store your token in NVAI-open.
 
-## Step 1: pick the photo
+The whole chain takes five steps: the portrait is made under "Generate → Image", everything else
+under "Generate → Video".
 
-In the "Video" tab, upload the photo with "Upload image" or click it in the list. A photo that shows
-only head and shoulders works best, because FLUX 3 takes the face from it.
+## Step 1: create the portrait (Generate → Image)
 
-![Start image: the photo is selected](images/photo-video-1.jpg)
+Under "Generate", choose "Image", pick FLUX 3 Image Klein and the size 896 × 1152, and describe a
+casual photo. The prompt of the example:
 
-## Step 2: describe the role
+> Natural, unedited smartphone photo. Head-and-shoulders portrait of a friendly man in his late
+> forties with short greying brown hair, a short beard and light blue eyes, smiling slightly, wearing
+> a dark blue hoodie. He sits on a sofa in a bright living room, soft daylight from a window, slightly
+> off-center framing, like a casual photo taken by a friend.
 
-Open "Person from a photo" and write who the person should be: clothing, place, style, in English
-or German. Then click "Create four start images".
+![Generate → Image: FLUX 3, 896 × 1152, the prompt and two portraits](images/photo-video-portrait.jpg)
+
+With "Count" 2 under "Advanced settings" you get two portraits to choose from; the example continues
+with the right one. With a real photo, skip this step and upload the photo in step 2.
+
+## Step 2: pick the portrait as the start image (Generate → Video)
+
+Switch to "Video" and click the portrait in the "Start image" list, or upload the photo there with
+"Upload image". A picture that shows only head and shoulders works best, because FLUX 3 takes the face
+from it.
+
+![Start image: the portrait is selected](images/photo-video-1.jpg)
+
+## Step 3: describe the role
+
+Below the start images, open "Person from a photo" and write who the person should be: clothing,
+place, style, in English or German. Then click "Create four start images".
 
 ![Person from a photo: the role is described](images/photo-video-2.jpg)
 
 Name clothing and surroundings explicitly. Whatever you leave open, FLUX 3 invents.
 
-## Step 3: pick the most similar start image
+## Step 4: pick the most similar start image
 
 About a minute and a half later four start images in the video format are at the front of the list,
 and the first one is selected. Click the one that looks most like the person, and look at them at
@@ -50,10 +69,11 @@ full resolution: FLUX 3 tends to make faces a little slimmer and younger.
 
 ![Four start images, the chosen one is marked](images/photo-video-3.jpg)
 
-## Step 4: describe what happens
+## Step 5: describe what happens
 
 In the prompt, write in one paragraph what moves, what the camera does, the spoken line in quotation
 marks together with the voice, and the sounds. Set the length (7 s here) and click "Generate".
+LTX-2.5 makes the video with speech and sound.
 
 ![Prompt with the spoken line and the zoom out; size and length](images/photo-video-4.jpg)
 

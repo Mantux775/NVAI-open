@@ -26,23 +26,42 @@ Menschen verwenden, die damit einverstanden sind.
 Beide stehen unter „Modelle“. Ihre Repos auf Hugging Face sind gesperrt: Dort erst die Lizenz
 akzeptieren und den Token in NVAI-open hinterlegen.
 
-## Schritt 1: das Foto wählen
+Die ganze Kette hat fünf Schritte: Das Porträt entsteht unter „Generieren → Bild“, alles Weitere
+unter „Generieren → Video“.
 
-Im Reiter „Video“ das Foto mit „Bild hochladen“ hochladen oder in der Liste anklicken. Am besten
-eignet sich ein Foto, das nur Kopf und Schultern zeigt, denn FLUX 3 übernimmt daraus das Gesicht.
+## Schritt 1: das Porträt erzeugen (Generieren → Bild)
 
-![Startbild: das Foto ist ausgewählt](../images/photo-video-1-de.jpg)
+Unter „Generieren“ auf „Bild“ gehen, FLUX 3 Image Klein und das Format 896 × 1152 wählen und ein
+Alltagsfoto beschreiben. Der Prompt aus dem Beispiel:
 
-## Schritt 2: die Rolle beschreiben
+> Natural, unedited smartphone photo. Head-and-shoulders portrait of a friendly man in his late
+> forties with short greying brown hair, a short beard and light blue eyes, smiling slightly, wearing
+> a dark blue hoodie. He sits on a sofa in a bright living room, soft daylight from a window, slightly
+> off-center framing, like a casual photo taken by a friend.
 
-„Person aus einem Foto“ aufklappen und beschreiben, wer die Person sein soll: Kleidung, Ort, Stil, auf
-Deutsch oder Englisch. Dann auf „Vier Startbilder erzeugen“ klicken.
+![Generieren → Bild: FLUX 3, 896 × 1152, der Prompt und zwei Porträts](../images/photo-video-portrait-de.jpg)
+
+Mit „Anzahl“ 2 unter „Feineinstellung“ gibt es zwei Porträts zur Auswahl; im Beispiel geht es mit dem
+rechten weiter. Mit einem echten Foto diesen Schritt überspringen und das Foto in Schritt 2 hochladen.
+
+## Schritt 2: das Porträt als Startbild wählen (Generieren → Video)
+
+Auf „Video“ wechseln und das Porträt in der Liste „Startbild“ anklicken oder das Foto dort mit „Bild
+hochladen“ hochladen. Am besten eignet sich ein Bild, das nur Kopf und Schultern zeigt, denn FLUX 3
+übernimmt daraus das Gesicht.
+
+![Startbild: das Porträt ist ausgewählt](../images/photo-video-1-de.jpg)
+
+## Schritt 3: die Rolle beschreiben
+
+Unter den Startbildern „Person aus einem Foto“ aufklappen und beschreiben, wer die Person sein soll:
+Kleidung, Ort, Stil, auf Deutsch oder Englisch. Dann auf „Vier Startbilder erzeugen“ klicken.
 
 ![Person aus einem Foto: die Rolle ist beschrieben](../images/photo-video-2-de.jpg)
 
 Kleidung und Umgebung ausdrücklich nennen. Was offen bleibt, erfindet FLUX 3.
 
-## Schritt 3: das ähnlichste Startbild wählen
+## Schritt 4: das ähnlichste Startbild wählen
 
 Nach gut anderthalb Minuten stehen vier Startbilder im Videoformat vorn in der Liste, das erste ist
 ausgewählt. Das anklicken, das der Person am meisten ähnelt, und dabei in voller Auflösung ansehen:
@@ -50,11 +69,11 @@ FLUX 3 macht Gesichter gern etwas schmaler und jünger.
 
 ![Vier Startbilder, das gewählte ist markiert](../images/photo-video-3-de.jpg)
 
-## Schritt 4: beschreiben, was passiert
+## Schritt 5: beschreiben, was passiert
 
 Im Prompt in einem Absatz beschreiben, was sich bewegt, was die Kamera macht, den gesprochenen Satz in
 Anführungszeichen mit der Stimme und die Geräusche. Die Länge einstellen (hier 7 s) und auf
-„Generieren“ klicken.
+„Generieren“ klicken. LTX-2.5 macht daraus das Video mit Sprache und Ton.
 
 ![Prompt mit dem Satz und dem Zoom; Format und Länge](../images/photo-video-4-de.jpg)
 

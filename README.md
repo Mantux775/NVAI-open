@@ -142,7 +142,14 @@ Under the video model, "Recommended LoRAs" lists LoRAs that fit LTX-2.5, one cli
 
 ![A portrait, the start image from FLUX 3 and three frames of the video from LTX-2.5](docs/images/photo-video-chain.jpg)
 
-Pick a portrait in the video tab and describe a role: under "Person from a photo" FLUX 3 keeps the face and creates four start images in that role, and LTX-2.5 turns the one you pick into a video with speech and sound. Here a generated portrait (the man does not exist) becomes a king who says "Everyone can be a king these days."; then the camera zooms out to the film set, jogging pants and sneakers included. On an RTX 5060 Ti the four start images took 96 s, the 7-second video 144 s.
+A portrait becomes a role, and the role becomes a video with speech and sound. In NVAI-open it takes four steps:
+
+1. **Generate → Image:** create a portrait, here with FLUX 3. You can also use a photo of someone who agreed to it; then start with step 2.
+2. **Generate → Video:** click the portrait in the start image list, or upload the photo there with "Upload image".
+3. **Person from a photo:** describe the role and click "Create four start images". FLUX 3 keeps the face and puts the person into the role. Pick the image that looks most like them.
+4. **Prompt:** describe what moves, what the camera does and what the person says, then click "Generate". LTX-2.5 makes the video with speech and sound.
+
+In the example the generated man (he does not exist) becomes a king who says "Everyone can be a king these days."; then the camera zooms out to the film set, jogging pants and sneakers included. On an RTX 5060 Ti the four start images took 96 s, the 7-second video 144 s.
 
 <p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="The king says his line, then the camera zooms out to the film set"></p>
 <p align="center"><sub>The video as a GIF, without sound. <a href="docs/videos/photo-video-king.mp4">MP4 with sound</a>.</sub></p>
@@ -361,7 +368,14 @@ Unter dem Videomodell listet „Empfohlene LoRAs“ LoRAs, die zu LTX-2.5 passen
 
 ![Ein Porträt, das Startbild von FLUX 3 und drei Frames aus dem Video von LTX-2.5](docs/images/photo-video-chain-de.jpg)
 
-Im Video-Reiter ein Porträt wählen und eine Rolle beschreiben: Unter „Person aus einem Foto“ übernimmt FLUX 3 das Gesicht und erzeugt vier Startbilder in dieser Rolle, LTX-2.5 macht aus dem gewählten ein Video mit Sprache und Ton. Hier wird aus einem erzeugten Porträt (den Mann gibt es nicht) ein König, der sagt: „Everyone can be a king these days.“ Dann zoomt die Kamera heraus ins Filmstudio, samt Jogginghose und Turnschuhen. Auf einer RTX 5060 Ti brauchten die vier Startbilder 96 s, das 7-Sekunden-Video 144 s.
+Aus einem Porträt wird eine Rolle und aus der Rolle ein Video mit Sprache und Ton. In NVAI-open sind das vier Schritte:
+
+1. **Generieren → Bild:** ein Porträt erzeugen, hier mit FLUX 3. Es geht auch das Foto eines Menschen, der damit einverstanden ist; dann mit Schritt 2 beginnen.
+2. **Generieren → Video:** das Porträt in der Liste der Startbilder anklicken oder das Foto dort mit „Bild hochladen“ hochladen.
+3. **Person aus einem Foto:** die Rolle beschreiben und auf „Vier Startbilder erzeugen“ klicken. FLUX 3 übernimmt das Gesicht und versetzt die Person in die Rolle. Das Bild auswählen, das ihr am meisten ähnelt.
+4. **Prompt:** beschreiben, was sich bewegt, was die Kamera macht und was die Person sagt, dann auf „Generieren“ klicken. LTX-2.5 macht daraus das Video mit Sprache und Ton.
+
+Im Beispiel wird aus dem erzeugten Mann (den es nicht gibt) ein König, der sagt: „Everyone can be a king these days.“ Dann zoomt die Kamera heraus ins Filmstudio, samt Jogginghose und Turnschuhen. Auf einer RTX 5060 Ti brauchten die vier Startbilder 96 s, das 7-Sekunden-Video 144 s.
 
 <p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="Der König sagt seinen Satz, dann zoomt die Kamera heraus ins Filmstudio"></p>
 <p align="center"><sub>Das Video als GIF, ohne Ton. <a href="docs/videos/photo-video-king.mp4">MP4 mit Ton</a>.</sub></p>
