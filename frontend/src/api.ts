@@ -15,7 +15,7 @@ export interface LoraRef {
 /** Die vier Modi, die wirklich etwas erzeugen. */
 export type GenKind = 'image' | 'audio' | 'video' | '3d'
 // Wofür "Prompt ausbauen" schreibt (server/nvai/prompt_targets.py)
-export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_start' | 'sfx' | 'music' | '3d'
+export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d'
 
 export interface Job {
   id: string

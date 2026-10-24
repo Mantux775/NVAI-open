@@ -48,6 +48,26 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NV-AI das aktive Bildmodell.
 
+### Neu in 0.5.7
+
+| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
+|---|---|---|---|
+| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumentale Musik, kein Gesang (Chor nur wortlos); in NV-AI bis 5 Minuten | 60 s in 9–12 s (bis 9,7 GB Grafikspeicher), 300 s in 64 s (16-GB-Karte fast voll) | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
+
+Den Prompt für Stable Audio 3 als einen Satz schreiben: Gattung mit Hauptinstrumenten, Schichten
+und Schlagwerk, die Stimmung, dann „BPM: 100.“. NV-AI hängt „Length: N seconds“ passend zur Dauer
+an. „✨ Prompt ausbauen“ schreibt diese Form (`target="music_sa3"`).
+
+ACE-Step 1.5 Turbo läuft jetzt wie ComfyUIs Vorlage (8 Schritte, CFG 1, shift 3). Vorher nahm NV-AI
+12 Schritte und CFG 2 ohne shift, das klang hart und gepresst. Die Lizenz ist MIT (im Katalog stand
+Apache-2.0).
+
+Jede Audioausgabe läuft jetzt vor dem Speichern durch NV-AIs eigenen Limiter (Grenze −1 dBFS, 5 ms
+Vorlauf, 80 ms Rücklauf); ACE-Step wird vorher um 3 dB abgesenkt. Seine rohe Ausgabe hat Spitzen bis
++5,7 dBFS, und der MP3-Encoder schnitt alles über 0 dB hart ab. Gemessen mit gleichem Seed, True Peak
+der MP3: Industrial +2,3 → 0,0 dBTP, Blaskapelle +2,0 → +0,2 dBTP (nur mit den 3 dB: +1,3 und +0,9).
+Was über −1 dB bleibt, ist MP3-Überschwingen.
+
 ### Neu in 0.5.3
 
 | Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |

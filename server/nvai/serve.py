@@ -26,8 +26,13 @@ def main() -> None:
     config.ensure_dirs()
     log = open(config.DATA_DIR / "nvai-server.log", "a", encoding="utf-8", buffering=1)
     sys.stdout = sys.stderr = log
+    # Ohne Frist wartete uvicorn beim Beenden, bis jede offene Verbindung zu war -- eine offene
+    # Weboberflaeche haelt ihren WebSocket (/ws) aber ewig: Der Prozess blieb haengen, und weil der
+    # Lifespan erst danach laeuft, auch ComfyUI mit belegtem VRAM (gemessen 23.10.: fuenf solche
+    # Serverprozesse nach fuenf Neustarts). Nach der Frist werden offene Verbindungen getrennt.
     server = uvicorn.Server(uvicorn.Config(
         "nvai.main:app", host=config.API_HOST, port=config.API_PORT, log_level="info",
+        timeout_graceful_shutdown=5,
     ))
     # Als `python -m nvai.serve` laeuft diese Datei als __main__, main.py importiert
     # aber nvai.serve -- ein zweites Modulobjekt mit server = None. Dann fiel

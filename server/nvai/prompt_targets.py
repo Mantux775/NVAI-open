@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 
-TARGETS = ("image", "video", "video_sound", "video_start", "sfx", "music", "3d")
+TARGETS = ("image", "video", "video_sound", "video_start", "sfx", "music", "music_sa3", "3d")
 
 _COMMON = (
     "Output only the finished prompt in English, no heading, no quotation marks, no "
@@ -87,6 +87,21 @@ SYSTEM: dict[str, str] = {
         "singing. Example: epic orchestral, choir, war drums, brass, cinematic, minor key, "
         "slow build, dark, heroic, instrumental. " + _COMMON
     ),
+    # Stable Audio 3 ist auf einen fliessenden Satz plus "BPM: X. Length: Y seconds" trainiert
+    # (Systemprompt der ComfyUI-Vorlage audio_stable_audio_3_medium). Die Laenge haengt der
+    # Graph selbst an, passend zur eingestellten Dauer (workflows, stable_audio_3).
+    "music_sa3": (
+        "You turn a short idea into a prompt for an instrumental music model (Stable Audio 3). "
+        "The model only hears, it does not see: describe only what is audible (instruments, "
+        "sounds, rhythm, mood), never people, places, colours, light, weather or scenery. "
+        "Write one natural, fluid sentence: start with the genre or style and a few adjectives, "
+        "name the main instruments, then supporting layers such as pads, drones or effects, then "
+        "rhythm and percussion, and weave the mood and energy into the sentence. The model cannot "
+        "sing words: if the idea asks for a choir or voices, describe them as wordless (humming, "
+        "chanting invented syllables). End with 'BPM: <number>.' Example: Dark cinematic march "
+        "with low brass and trombones, a wordless male choir chanting in unison, booming war drums "
+        "and snare rolls creating menacing, unstoppable power. BPM: 100. " + _COMMON
+    ),
     "3d": (
         "You turn a short idea into an image prompt whose result is turned into a 3D model. "
         "The image alone decides the mesh, so it must show exactly one complete object. "
@@ -111,6 +126,8 @@ FORMAT = {
     "sfx": ("Output one line of 6 to 12 comma-separated lowercase sound tags, no sentences, "
             "only what can be heard, ending with 'no music'."),
     "music": "Output one line of 8 to 16 comma-separated lowercase tags, no sentences.",
+    "music_sa3": ("Output one sentence of 25 to 50 words about what can be heard only, then "
+                  "'BPM: <number>.' and nothing else."),
     "video_start": ("Write 25 to 50 words that describe only the motion and the camera. Do not "
                     "mention clothing, background or anything that stays the same."),
     "image": "Write 3 to 5 sentences, 40 to 80 words in total, no more.",
@@ -155,6 +172,42 @@ def shorten(target: str, text: str) -> str:
     return " ".join(sents[i] for i in sorted(keep))
 
 
+# Gemessen 23.10.: trotz Anweisung 4 Saetze und ~90 Woerter, darunter "dark infantry silhouettes
+# carrying torn flags", "smoke-darkened storm clouds", "amber window lights" -- Bildbeschreibung,
+# die ein Musikmodell nur verwirrt. Satzteile (zwischen Kommas) mit solchen Woertern fliegen raus,
+# wenn darin nichts Hoerbares steht; ganze Saetze zu streichen nahm auch Trommeln und Chor mit.
+_VISUAL = re.compile(r"\b(silhouettes?|sky|skies|clouds?|lights?|lit|window\w*|roofs?|reflect\w*|"
+                     r"colou?rs?|blue|amber|navy|grey|gray|smoke\w*|flags?|background|foreground|"
+                     r"shadows?|scenery|landscape|horizon|lighthouse|buildings?|streets?)\b", re.I)
+_AUDIBLE = re.compile(r"\b(drums?|percussion|snares?|cymbals?|timpani|brass|horns?|trombones?|trumpets?|"
+                      r"tubas?|strings?|violins?|cellos?|bass\w*|piano|synth\w*|pads?|drones?|choir|"
+                      r"voices?|vocals?|chant\w*|humm\w*|guitars?|organ|bells?|chimes?|beats?|rhythm\w*|"
+                      r"tempo|melod\w*|harmon\w*|chords?|sounds?|tones?|notes?)\b", re.I)
+_BPM = re.compile(r"\bBPM:\s*(\d{2,3})\b\.?", re.I)
+SA3_WORDS = 70
+
+
+def music_sa3(text: str) -> str:
+    """Hoerbare Saetze (hoechstens SA3_WORDS Woerter), danach "BPM: N."."""
+    flat = " ".join(text.split())
+    m = _BPM.search(flat)
+    body = _BPM.sub("", flat).strip()
+    body = re.sub(r"(?i)[\s.]*Length:\s*\d+\s*(?:seconds|s)\b\.?", "", body).strip()
+    keep, used = [], 0
+    for sent in (x for x in _SENTENCE.split(body) if x):
+        parts = [x for x in sent.rstrip(" .").split(",")
+                 if not (_VISUAL.search(x) and not _AUDIBLE.search(x))]
+        x = ",".join(parts).strip(" ,")
+        if not x:
+            continue
+        if keep and used + len(x.split()) > SA3_WORDS:
+            break
+        keep.append(x)
+        used += len(x.split())
+    out = ". ".join(keep) + "."
+    return f"{out} BPM: {m.group(1)}." if m else out
+
+
 def clean(target: str, text: str) -> str:
     """Anfuehrungszeichen und eine vorangestellte Ueberschrift entfernen, die das Modell
     trotz Anweisung gelegentlich schreibt."""
@@ -169,6 +222,8 @@ def clean(target: str, text: str) -> str:
     if m and target.startswith("video"):
         rest = out[m.end():]
         out = rest[:1].upper() + rest[1:]
+    if target == "music_sa3":
+        return music_sa3(out)
     if target in ("sfx", "music"):
         # Schreibt das Modell doch Prosa, haengt es die Tag-Zeile oft in Anfuehrungszeichen an.
         tags = [m for m in re.findall(r'["“]([^"”]{20,})["”]', out) if m.count(",") >= 3]

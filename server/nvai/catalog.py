@@ -1110,6 +1110,44 @@ AUDIO_MODELS: list[dict[str, Any]] = [
         ],
     },
     {
+        "id": "stable-audio-3-medium",
+        "name": "Stable Audio 3 Medium",
+        "kind": "audio",
+        "family": "stable_audio3",
+        "workflow": "stable_audio_3",
+        "files": [
+            {"repo": "Comfy-Org/stable-audio-3",
+             "file": "checkpoints/stable_audio_3_medium.safetensors", "target": "checkpoints"},
+            # Text-Encoder T5Gemma separat, wie in ComfyUIs Vorlage audio_stable_audio_3_medium
+            {"repo": "Comfy-Org/stable-audio-3",
+             "file": "text_encoders/t5gemma_b_b_ul2.safetensors", "target": "text_encoders"},
+        ],
+        "size_gb": 10.41,
+        "vram_gb": 10,
+        "license": "Stability AI Community License",
+        "commercial_ok": True,
+        "best_for": "Instrumentale Spielmusik, Ambient und Spannungsflächen",
+        "description": (
+            "Das Musikmodell von Stability AI aus dem Jahr 2026, destilliert auf 8 Schritte. "
+            "Erzeugt instrumentale Stücke in 44,1 kHz Stereo, in NV-AI bis 5 Minuten (laut "
+            "Stability kann das Modell bis 6:20), laut Stability nur mit lizenzierten Daten "
+            "trainiert. Kein Gesang und keine Liedtexte, "
+            "ein Chor kommt höchstens als wortlose Klangfläche. Gattung, Instrumente, Stimmung "
+            "und Tempo beschreiben, als Satz oder als Liste."
+        ),
+        "pros": [
+            "Laut Stability nur mit lizenzierten Daten trainiert",
+            "Bis 5 Minuten am Stück, 44,1 kHz Stereo; gemessen 60 s in 9–12 s, 300 s in 64 s",
+            "Destilliert: 8 Schritte, CFG 1",
+        ],
+        "cons": [
+            "Kein Gesang, keine Liedtexte",
+            "Community License mit 1-Mio.-USD-Umsatzgrenze; der Text-Encoder (T5Gemma) steht unter den Gemma-Bedingungen",
+            "Lange Stücke brauchen viel Grafikspeicher: 300 s füllten 16 GB fast ganz (60 s: 9,7 GB)",
+            "Neu in NV-AI, noch wenig erprobt",
+        ],
+    },
+    {
         "id": "ace-step-v1-3.5b",
         "name": "ACE-Step v1 3.5B",
         "kind": "audio",
@@ -1150,7 +1188,7 @@ AUDIO_MODELS: list[dict[str, Any]] = [
                    "file": "checkpoints/ace_step_1.5_turbo_aio.safetensors", "target": "checkpoints"}],
         "size_gb": 9.34,
         "vram_gb": 11,
-        "license": "Apache-2.0",
+        "license": "MIT",
         "commercial_ok": True,
         "best_for": "Bessere Musikqualität als v1, mit mehr Steuerung",
         "description": (
@@ -1161,7 +1199,7 @@ AUDIO_MODELS: list[dict[str, Any]] = [
         "pros": [
             "Hörbar besser als v1 bei Instrumentierung und Struktur",
             "BPM/Tonart/Taktart direkt steuerbar — wichtig für adaptive Spielmusik",
-            "Apache-2.0",
+            "MIT",
         ],
         "cons": [
             "11 GB VRAM: neben einem Bildmodell wird es eng",

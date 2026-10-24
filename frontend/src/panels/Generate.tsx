@@ -406,7 +406,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const expandTarget: ExpandTarget =
     mode === 'image' ? 'image'
       : mode === '3d' ? '3d'
-        : mode === 'audio' ? (isAce ? 'music' : 'sfx')
+        : mode === 'audio' ? (selected?.family === 'stable_audio3' ? 'music_sa3' : isAce ? 'music' : 'sfx')
           : usesStart && sourceId ? 'video_start'
             : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
 

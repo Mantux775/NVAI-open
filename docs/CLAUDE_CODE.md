@@ -96,6 +96,8 @@ license. Downloads are several GB; ask the user first.
 | Image 1440² / editing with a reference image | FLUX 3 Klein NVFP4 | ~26 s / ~45 s |
 | Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
+| Music 60 s / 20 s | ACE-Step 1.5 Turbo (8 steps, CFG 1, shift 3) | ~17 s / ~10 s |
+| Instrumental 60 s / 20 s / 300 s | Stable Audio 3 Medium (8 steps, CFG 1) | ~9–12 s / ~7 s / ~64 s |
 | Video 832×480, 25 frames | Wan 2.1 T2V 1.3B | ~120 s |
 | Image 1728 × 2304 (4 MP) | HiDream-O1 Dev fp8 | ~41 s, first run ~87 s |
 | Image 832 × 1216, 4 steps | Boogu-Image Turbo NVFP4 | ~10 s, first run ~17 s |
@@ -365,7 +367,7 @@ content, not the shape — they don't replace a ControlNet.
 
 ## Audio
 
-Two fundamentally different models — adapt the prompt style accordingly:
+Three different models — adapt the prompt style to the model:
 
 **Stable Audio Open** → sound effects and ambience. Describe the **sound**, not the music:
 
@@ -385,7 +387,31 @@ prompt: "epic orchestral, choir, war drums, cinematic, minor key"
 lyrics: ""            # empty = instrumental
 ```
 
-`seconds` controls the length. Short SFX: 3–8 s. Music: 30–120 s.
+**ACE-Step 1.5** takes tempo, time signature and key directly: `bpm`, `time_signature` ("2" =
+2/4, "3", "4", "6" = 6/8) and `key_scale` ("Bb major", "A minor"). Without them 120 BPM, 4/4 and
+C major apply. A march: 120 BPM, "2", "Bb major". Since 0.5.7 NV-AI runs it like ComfyUI's
+template (8 steps, CFG 1, shift 3); before it used 12 steps and CFG 2 without shift, which
+sounded harsh and compressed.
+
+**Stable Audio 3 Medium** (since 0.5.7) → instrumental music up to 5 minutes, no vocals (a choir
+only without words). Write the prompt as **one sentence**: genre with the main instruments,
+layers and percussion, the mood, then "BPM: 100.". NV-AI appends "Length: N seconds" to match
+`seconds`. `expand_prompt` with `target="music_sa3"` writes exactly this form.
+
+```
+prompt: "A dark orchestral war theme with low brass, taiko drums and a wordless male choir,
+         slowly building tension over a steady march rhythm. BPM: 90."
+```
+
+Measured: 300 s in 64 s, but the 16 GB card was almost full (60 s: 9.7 GB).
+
+**Levels:** since 0.5.7 every audio output goes through NV-AI's own limiter before it is saved
+(ceiling −1 dBFS). ACE-Step is lowered by 3 dB first: its raw output peaks up to +5.7 dBFS, and
+the MP3 encoder used to cut everything above 0 dB off hard. Measured with the limiter: ACE-Step
+−14 to −17 LUFS, Stable Audio 3 −12 to −15 LUFS, true peak at most +0.2 dBTP (MP3 overshoot).
+Normalize before putting a track into a video (ffmpeg `loudnorm`, −14 LUFS).
+
+`seconds` controls the length (up to 300). Short SFX: 3–8 s. Music: 30–120 s.
 
 ## Video
 
@@ -521,8 +547,8 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
 `list_models` returns `commercial_ok`. Critical cases:
 
 - **Hunyuan3D** — Tencent Hunyuan Community License, not licensed in the EU, the UK and South Korea. Replacement: **TripoSG** (MIT).
-- **Stability Community License** (Stable Audio Open) — commercial use up to US$1 million
-  in revenue.
+- **Stability Community License** (Stable Audio Open, Stable Audio 3) — commercial use up to
+  US$1 million in revenue.
 - **FLUX Kommunity License v1.0** (FLUX 3 Image Klein) — images may be used commercially only by
   "Qualifying Users" below US$5 million annual revenue, including affiliated companies.
   Conditions (section 2.e): a content filter **or** reviewing every image for unlawful and
@@ -530,7 +556,7 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
   terminate the license at any time by notice (8.b). The images must not be used to train any
   other image model (4.b). No EU exclusion. The repo is gated — accept the license on Hugging
   Face and store a token. Without these conditions: **Qwen-Image-2512** (Apache-2.0).
-- Unproblematic: SDXL, FLUX schnell, ACE-Step, Wan (all variants), Chroma, TripoSG, TRELLIS.2.
+- Unproblematic: SDXL, FLUX schnell, ACE-Step (1.5: MIT, v1: Apache-2.0), Wan (all variants), Chroma, TripoSG, TRELLIS.2.
 
 `list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)
 with `content_note` and `content_source`. NV-AI itself has no content filter.

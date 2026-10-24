@@ -6,6 +6,7 @@ geprueft. Ein Builder pro `workflow`-Schluessel aus catalog.py.
 from __future__ import annotations
 
 import random
+import re
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +56,12 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "hidream_o1": {"steps": 40, "cfg": 5.0, "sampler": "euler", "scheduler": "normal",
                    "noise_scale": 8.0},
     "stable_audio": {"steps": 50, "cfg": 5.0, "sampler": "dpmpp_3m_sde_gpu", "scheduler": "exponential"},
+    # Wie ComfyUIs Vorlage audio_stable_audio_3_medium: destilliert, 8 Schritte, CFG 1, lcm.
+    "stable_audio_3": {"steps": 8, "cfg": 1.0, "sampler": "lcm", "scheduler": "simple"},
     "ace_step":   {"steps": 50, "cfg": 5.0, "sampler": "euler",    "scheduler": "simple"},
-    "ace_step_15": {"steps": 12, "cfg": 2.0, "sampler": "euler",   "scheduler": "simple"},
+    # Wie ComfyUIs Vorlage audio_ace_step_1_5_checkpoint (Turbo, destilliert): 8 Schritte, CFG 1, shift 3.
+    # Vorher 12/2,0 ohne shift: harter, uebersteuerter Klang, Spitzen bis +1 dB (Nutzer: "furchtbar").
+    "ace_step_15": {"steps": 8, "cfg": 1.0, "sampler": "euler",   "scheduler": "simple", "shift": 3.0},
     "wan_t2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan22_ti2v": {"steps": 30, "cfg": 5.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan_i2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
@@ -781,7 +786,28 @@ def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 
 # --------------------------------------------------------------- AUDIO
 
+# Absenkung der ACE-Step-1.5-Ausgabe in dB (AudioAdjustVolume nimmt ganze Zahlen), Nutzerwunsch 23.10.
+ACE15_GAIN_DB = -3
+# Spitzenbegrenzer vor jedem Speichern (NVAIAudioLimiter, nvai/comfy_nodes/nvai_audio.py). Gemessen an
+# ACE-Step (rohe Spitzen bis +5,7 dBFS): nach -3 dB griff er bei -1 dB nur 4 % der Zeit um mehr als 1 dB
+# ein; ohne die Absenkung bei -1,5 dB 30 % (Blaskapelle), das presst hoerbar.
+AUDIO_CEILING_DB = -1.0
+_LIMITER_ID = "90"
+
+
 def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """Audio-Graph je Workflow, vor dem Speichern immer durch den Limiter."""
+    graph, seed = _audio_graph(entry, p)
+    for node in list(graph.values()):
+        if node["class_type"] == "SaveAudioMP3":
+            graph[_LIMITER_ID] = {"class_type": "NVAIAudioLimiter", "inputs": {
+                "audio": node["inputs"]["audio"], "ceiling_db": AUDIO_CEILING_DB,
+                "lookahead_ms": 5.0, "release_ms": 80.0}}
+            node["inputs"]["audio"] = [_LIMITER_ID, 0]
+    return graph, seed
+
+
+def _audio_graph(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry["workflow"]
     d = defaults_for(wf)
     seed = _seed(p)
@@ -815,6 +841,34 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
             "6": {"class_type": "KSampler", "inputs": {
                 **common_sampler,
                 "model": ["1", 0], "positive": ["4", 0], "negative": ["4", 1],
+                "latent_image": ["5", 0],
+            }},
+            "7": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
+            "8": {"class_type": "SaveAudioMP3",
+                  "inputs": {"audio": ["7", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
+        }
+        return graph, seed
+
+    if wf == "stable_audio_3":
+        # Wie ComfyUIs Vorlage audio_stable_audio_3_medium: Modell und VAE aus dem Checkpoint, der
+        # Text-Encoder (T5Gemma) separat; die Laenge steht nur im Latent, ohne
+        # ConditioningStableAudio. Den Prompt-Ausbau der Vorlage (Qwen3.5-2B) uebernimmt NV-AI nicht.
+        te = _file_by_target(entry, "text_encoders")
+        # Trainiert auf "... BPM: X. Length: Y seconds": die Laenge passend zur Dauer setzen,
+        # eine abweichende Angabe im Prompt ersetzen.
+        text = re.sub(r"[\s.]*Length:\s*\d+(?:[.,]\d+)?\s*(?:seconds|secs?|s)\b\.?\s*$", "",
+                      p["prompt"].strip(), flags=re.I).rstrip(" .")
+        text = f"{text}. Length: {round(seconds)} seconds"
+        graph = {
+            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
+            "9": {"class_type": "CLIPLoader", "inputs": {"clip_name": te, "type": "stable_audio"}},
+            "2": {"class_type": "CLIPTextEncode", "inputs": {"text": text, "clip": ["9", 0]}},
+            "3": {"class_type": "CLIPTextEncode",
+                  "inputs": {"text": p.get("negative_prompt", ""), "clip": ["9", 0]}},
+            "5": {"class_type": "EmptyLatentAudio", "inputs": {"seconds": seconds, "batch_size": 1}},
+            "6": {"class_type": "KSampler", "inputs": {
+                **common_sampler,
+                "model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0],
                 "latent_image": ["5", 0],
             }},
             "7": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
@@ -857,7 +911,9 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
             "bpm": int(p.get("bpm") or 120),
             "timesignature": str(p.get("time_signature") or "4"),
             "keyscale": p.get("key_scale") or "C major",
-            "generate_audio_codes": True, "cfg_scale": _pick(p, d, "cfg"),
+            # cfg_scale lenkt das Sprachmodell, das die Audio-Codes plant -- nicht den Sampler.
+            # Die Vorlage nimmt 2, unabhaengig vom Sampler-CFG.
+            "generate_audio_codes": True, "cfg_scale": 2.0,
             "temperature": 0.85, "top_p": 0.9, "top_k": 0, "min_p": 0.0,
         }
         graph = {
@@ -868,14 +924,20 @@ def build_audio(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
             }},
             "4": {"class_type": "EmptyAceStep1.5LatentAudio",
                   "inputs": {"seconds": seconds, "batch_size": 1}},
+            "8": {"class_type": "ModelSamplingAuraFlow",
+                  "inputs": {"model": ["1", 0], "shift": d.get("shift", 3.0)}},
             "5": {"class_type": "KSampler", "inputs": {
                 **common_sampler,
-                "model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0],
+                "model": ["8", 0], "positive": ["2", 0], "negative": ["3", 0],
                 "latent_image": ["4", 0],
             }},
             "6": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+            # ACE-Step mischt so laut, dass die Spitzen ueber 0 dBFS liegen (gemessen True Peak bis
+            # +2,3 dBFS, -10,2 LUFS) und beim Abspielen uebersteuern: 3 dB leiser speichern.
+            "9": {"class_type": "AudioAdjustVolume",
+                  "inputs": {"audio": ["6", 0], "volume": ACE15_GAIN_DB}},
             "7": {"class_type": "SaveAudioMP3",
-                  "inputs": {"audio": ["6", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
+                  "inputs": {"audio": ["9", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
         }
         return graph, seed
 
@@ -1339,7 +1401,7 @@ HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
 IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
                     "qwen_image", "qwen_image_lightning", "qwen_image21"}
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
-AUDIO_WORKFLOWS = {"stable_audio", "ace_step", "ace_step_15"}
+AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
                    "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25", "ltx23",
                    "kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v", "mochi"}

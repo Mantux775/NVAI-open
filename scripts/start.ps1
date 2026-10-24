@@ -73,7 +73,8 @@ if ($Lan) {
 
 Push-Location (Join-Path $repo "server")
 try {
-    & $py -m uvicorn nvai.main:app --host $bind --port $port
+    # Frist beim Beenden: eine offene Weboberflaeche haelt ihren WebSocket sonst ewig (siehe serve.py)
+    & $py -m uvicorn nvai.main:app --host $bind --port $port --timeout-graceful-shutdown 5
 } finally {
     Pop-Location
 }

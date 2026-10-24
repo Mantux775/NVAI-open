@@ -168,7 +168,7 @@ class GenerateVideoRequest(BaseModel):
     )
 
 
-ExpandTarget = Literal["image", "video", "video_sound", "video_start", "sfx", "music", "3d"]
+ExpandTarget = Literal["image", "video", "video_sound", "video_start", "sfx", "music", "music_sa3", "3d"]
 
 
 class ExpandPromptRequest(BaseModel):

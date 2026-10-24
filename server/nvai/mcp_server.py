@@ -371,8 +371,10 @@ async def expand_prompt(
         target: 'image' (default), 'video' (Wan, LTX-Video: motion and camera),
             'video_sound' (LTX-2.5: also describes the sound), 'video_start' (image to
             video: motion only, reads the start image), 'sfx' (Stable Audio: sound
-            tags), 'music' (ACE-Step genre tags) or '3d' (an image prompt for one
-            object without floor or shadow, then image_to_3d). Measured 3-12 s each.
+            tags), 'music' (ACE-Step genre tags), 'music_sa3' (Stable Audio 3: one
+            sentence plus BPM, wordless choir at most; the length is added on generating)
+            or '3d' (an image prompt for one object without floor or shadow, then
+            image_to_3d). Measured 3-12 s each.
 
     Returns:
         prompt (as given), expanded (the full description), seconds.
@@ -404,11 +406,15 @@ async def generate_audio(
 
     Depending on the active model: Stable Audio Open for sound effects and ambience
     (describe the sound, e.g. "footsteps on gravel, close mic"), ACE-Step for
-    music (genre tags, e.g. "epic orchestral, choir, drums").
+    music with vocals or choir (genre tags, e.g. "epic orchestral, choir, drums"),
+    stable-audio-3-medium for instrumental music up to a few minutes (no vocals; one
+    sentence: genre with main instruments, layers and percussion creating a mood, then
+    "BPM: 100. Length: 60 seconds").
 
     Args:
-        prompt: Sound description (SFX) or genre tags (music).
-        seconds: Length in seconds. Stable Audio can do up to 47 s.
+        prompt: Sound description (SFX), genre tags (ACE-Step) or one descriptive sentence
+            (Stable Audio 3).
+        seconds: Length in seconds. Stable Audio Open can do up to 47 s.
         lyrics: ACE-Step only: song lyrics. Empty = instrumental.
         negative_prompt: What to avoid.
         model_id: Force a model; otherwise the active audio model.

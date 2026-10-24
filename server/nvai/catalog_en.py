@@ -633,6 +633,28 @@ EN: dict[str, dict[str, Any]] = {
             "Results often need post-processing (cutting, loop points)",
         ],
     },
+    "stable-audio-3-medium": {
+        "best_for": "Instrumental game music, ambience and tension beds",
+        "description": (
+            "Stability AI's 2026 music model, distilled to 8 steps. Generates instrumental "
+            "pieces at 44.1 kHz stereo, in NV-AI up to 5 minutes (according to Stability the model "
+            "can do up to 6:20), trained only on licensed data according to Stability. No vocals "
+            "and no lyrics; a choir comes through at most "
+            "as a wordless texture. Describe genre, instruments, mood and tempo, as a sentence "
+            "or as a list."
+        ),
+        "pros": [
+            "Trained only on licensed data according to Stability",
+            "Up to 5 minutes in one go, 44.1 kHz stereo; measured 60 s in 9–12 s, 300 s in 64 s",
+            "Distilled: 8 steps, CFG 1",
+        ],
+        "cons": [
+            "No vocals, no lyrics",
+            "Community License with a USD 1 million revenue cap; the text encoder (T5Gemma) is under the Gemma terms",
+            "Long pieces need a lot of graphics memory: 300 s almost filled 16 GB (60 s: 9.7 GB)",
+            "New in NV-AI, not much experience yet",
+        ],
+    },
     "ace-step-v1-3.5b": {
         "best_for": "Complete pieces of music including vocals",
         "description": (
@@ -663,7 +685,7 @@ EN: dict[str, dict[str, Any]] = {
         "pros": [
             "Audibly better than v1 in instrumentation and structure",
             "BPM/key/time signature directly controllable — important for adaptive game music",
-            "Apache-2.0",
+            "MIT",
         ],
         "cons": [
             "11 GB VRAM: tight alongside an image model",
@@ -1096,4 +1118,11 @@ SIZE_LABELS: dict[str, str] = {
     "1728 × 1152 — 2 MP quer, Fahrzeuge mit Detail":
         "1728 × 1152 — 2 MP landscape, detailed vehicles",
     "2048 × 2048 — 4 MP, maximal": "2048 × 2048 — 4 MP, maximum",
+    # HIDREAM_O1_SIZES
+    "2048 × 2048 — 4 MP, trainiert": "2048 × 2048 — 4 MP, trained",
+    "1728 × 2304 — 4 MP hochkant, Figuren": "1728 × 2304 — 4 MP portrait, figures",
+    "2304 × 1728 — 4 MP quer": "2304 × 1728 — 4 MP landscape",
+    "1664 × 2496 — 4 MP 2:3, Figuren": "1664 × 2496 — 4 MP 2:3, figures",
+    "2496 × 1664 — 4 MP 3:2, Fahrzeuge": "2496 × 1664 — 4 MP 3:2, vehicles",
+    "2560 × 1440 — 4 MP 16:9, Panorama": "2560 × 1440 — 4 MP 16:9, panorama",
 }

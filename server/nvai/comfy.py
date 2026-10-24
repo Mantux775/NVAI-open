@@ -73,6 +73,18 @@ def _explain(message: str) -> str:
 # zwei Prozesse auf derselben ComfyUI-Datenbank vertragen sich nicht.
 
 
+def _install_nodes() -> None:
+    """NV-AIs eigene Knoten (nvai/comfy_nodes, z. B. der Audio-Limiter) nach ComfyUIs custom_nodes/
+    legen, wenn sie dort fehlen oder veraltet sind. ComfyUI liest sie beim Start ein."""
+    dest = config.COMFY_ROOT / "custom_nodes"
+    if not dest.is_dir():
+        return
+    for src in Path(__file__).with_name("comfy_nodes").glob("*.py"):
+        target = dest / src.name
+        if not target.exists() or target.read_bytes() != src.read_bytes():
+            shutil.copyfile(src, target)
+
+
 def comfy_python() -> Path:
     """Interpreter des ComfyUI-venv (separat vom Server-venv, siehe Architektur)."""
     venv = config.COMFY_ROOT / ".venv"
@@ -139,6 +151,7 @@ class Backend:
                 f"ComfyUI venv missing: {py}\nPlease run scripts/setup_comfyui.ps1.",
             ))
         config.ensure_dirs()
+        _install_nodes()
         log = self.log_path.open("a", encoding="utf-8", errors="replace")
         log.write(f"\n{'=' * 60}\nStart {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         args = [str(py), "main.py", "--port", str(self.port), "--listen", "127.0.0.1",

@@ -6,30 +6,32 @@ Local image, audio, video and 3D generation on your own computer. No cloud, no s
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.6.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.6/NV-AI-Setup-0.5.6.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.6/NV-AI-0.4.4.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NV-AI-Setup-0.5.7.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.7/NV-AI-Setup-0.5.7.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NV-AI-0.4.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.7/NV-AI-0.4.4.dmg) |
 
 All releases: [github.com/Mantux775/NVAI-open/releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NV-AI 0.5.6 for Windows, the Mac app stays at 0.4.4 ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.6))
+October 2026: NV-AI 0.5.7 for Windows, the Mac app stays at 0.4.4 ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.7))
 
 | | |
 |---|---|
-| Two graphics cards, measured | NV-AI now computes on the strongest card by itself. Before, everything ran on card 0, in my PC the slower RTX 4060: FLUX 3 took 29 instead of 9 s there, Qwen-Image-2512 18 minutes instead of 97 s. What a second card brings and what it doesn't: [measurements in #1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) |
-| Fill with FLUX 3 | FLUX 3 now fills a masked area too: NV-AI cuts it out with its surroundings, greys it, lets FLUX 3 paint it and puts back only the area, aligned. In the PhotoCraft add-on "Fill" chooses FLUX 3 by itself: [Fill with FLUX 3](#fill-with-flux-3) |
-| Clearer card choice | Which card computes images, language models and 3D is now a table of buttons, the strongest card is marked |
+| Music without distortion | ACE-Step 1.5 now runs with the settings it was made for, and its peaks no longer get cut off: NV-AI lowers it by 3 dB and runs every audio output through its own limiter at −1 dB. Before, the MP3 encoder cut peaks of up to +5.5 dB off hard |
+| Stable Audio 3 Medium | Instrumental music up to 5 minutes, 60 s in about 10 s. "Expand prompt" writes the one-sentence form it needs |
+| Tidier "Models" page | "Graphics cards" is collapsed like "Storage locations", the line shows where everything runs |
+| Quitting fixed | With the web interface open, quitting left NV-AI and ComfyUI running in the background, with the graphics memory taken. Now it closes open connections after 5 s and quits (measured: 5.6 s) |
 
-Since 0.5.5: outpainting without ghost outlines, "Extend" tab in the PhotoCraft add-on. Since 0.5.4: outpainting, shorter "Expand prompt", tested realism LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon (experimental, testers wanted: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) and several graphics cards ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), expand prompt on the Mac.
+Since 0.5.6: the strongest graphics card computes by itself, fill with FLUX 3. Since 0.5.5: outpainting without ghost outlines, "Extend" tab in the PhotoCraft add-on. Since 0.5.4: outpainting, shorter "Expand prompt", tested realism LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Since 0.5.3: LoRAs from Hugging Face and Civitai, LTX-2.3, Mochi 1, Kandinsky 5, expand prompt for video, audio and 3D. Since 0.5.2: LTX-2.5 with sound, Boogu-Image, HiDream-O1, censored/uncensored labels, cancel, storage locations. Since 0.5.0/0.5.1: report a problem as an anonymized GitHub issue, AMD Radeon (experimental, testers wanted: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) and several graphics cards ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), expand prompt on the Mac.
 
 | | |
 |---|---|
-| Zwei Grafikkarten, gemessen | NV-AI rechnet jetzt von selbst auf der stärksten Karte. Bisher lief alles auf Karte 0, bei mir der langsameren RTX 4060: FLUX 3 brauchte dort 29 statt 9 s, Qwen-Image-2512 18 Minuten statt 97 s. Was eine zweite Karte bringt und was nicht: [Messwerte in #1](https://github.com/Mantux775/NVAI-open/issues/1#issuecomment-6373776729) |
-| Füllen mit FLUX 3 | FLUX 3 füllt jetzt auch einen maskierten Bereich: NV-AI schneidet ihn mit Umgebung aus, färbt ihn grau, lässt FLUX 3 malen und setzt nur den Bereich ausgerichtet zurück. Im PhotoCraft-Add-on nimmt „Füllen“ FLUX 3 von selbst: [Füllen mit FLUX 3](#füllen-mit-flux-3) |
-| Klarere Kartenwahl | Welche Karte Bilder, Sprachmodelle und 3D rechnet, ist jetzt eine Tabelle aus Schaltflächen, die stärkste Karte ist markiert |
+| Musik ohne Übersteuern | ACE-Step 1.5 läuft jetzt mit den Einstellungen, für die es gemacht ist, und seine Spitzen werden nicht mehr abgeschnitten: NV-AI senkt es um 3 dB und schickt jede Audioausgabe durch einen eigenen Limiter bei −1 dB. Bisher schnitt der MP3-Encoder Spitzen von bis zu +5,5 dB hart ab |
+| Stable Audio 3 Medium | Instrumentale Musik bis 5 Minuten, 60 s in rund 10 s. „Prompt ausbauen“ schreibt die Ein-Satz-Form, die es braucht |
+| Aufgeräumte Seite „Modelle“ | „Grafikkarten“ ist zugeklappt wie „Speicherorte“, die Zeile zeigt, wo alles rechnet |
+| Beenden repariert | Mit offener Weboberfläche liefen NV-AI und ComfyUI nach dem Beenden im Hintergrund weiter und belegten den Grafikspeicher. Jetzt trennt es offene Verbindungen nach 5 s und beendet sich (gemessen: 5,6 s) |
 
-Seit 0.5.5: Outpainting ohne Geisterkonturen, Reiter „Erweitern“ im PhotoCraft-Add-on. Seit 0.5.4: Outpainting, kürzeres „Prompt ausbauen“, getestete Realismus-LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon (experimentell, Tester gesucht: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) und mehrere Grafikkarten ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), Prompt ausbauen auf dem Mac.
+Seit 0.5.6: Die stärkste Grafikkarte rechnet von selbst, Füllen mit FLUX 3. Seit 0.5.5: Outpainting ohne Geisterkonturen, Reiter „Erweitern“ im PhotoCraft-Add-on. Seit 0.5.4: Outpainting, kürzeres „Prompt ausbauen“, getestete Realismus-LoRAs (Boreal, Lenovo UltraReal, Wuli Turbo, Wan 2.2 Lightning). Seit 0.5.3: LoRAs von Hugging Face und Civitai, LTX-2.3, Mochi 1, Kandinsky 5, Prompt ausbauen für Video, Audio und 3D. Seit 0.5.2: LTX-2.5 mit Ton, Boogu-Image, HiDream-O1, Kennzeichnung zensiert/unzensiert, Abbrechen, Speicherorte. Seit 0.5.0/0.5.1: Problem als anonymisiertes GitHub-Issue melden, AMD Radeon (experimentell, Tester gesucht: [#2](https://github.com/Mantux775/NVAI-open/issues/2)) und mehrere Grafikkarten ([#1](https://github.com/Mantux775/NVAI-open/issues/1)), Prompt ausbauen auf dem Mac.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -51,7 +53,7 @@ It has only been tested on my own hardware: a Windows PC with an RTX 5060 Ti (16
 | Editing | Reference images, image to image, inpainting with a mask (since 0.5.6 also with FLUX 3) | Reference images, image to image, inpainting with a mask |
 | Expand prompt | For every model: images, video, sound, music, 3D | Images, since 0.4 |
 | LoRAs | From Hugging Face and Civitai, checked before download, for images and video | |
-| Audio | Sound effects (Stable Audio Open), music with vocals (ACE-Step) | |
+| Audio | Sound effects (Stable Audio Open), music with vocals (ACE-Step), instrumental music up to 5 minutes (Stable Audio 3) | |
 | Video | LTX-2.5 and LTX-2.3 with sound, Wan 2.1/2.2, Mochi, Kandinsky 5, text or image to video | |
 | 3D | Image to GLB model, with PBR textures (TRELLIS.2) or shape only (TripoSG) | |
 | Graphics | NVIDIA, AMD Radeon (experimental), several cards (the strongest one computes by itself) | Apple Silicon |
@@ -242,7 +244,7 @@ Getestet ist sie nur auf meiner eigenen Hardware: einem Windows-PC mit RTX 5060 
 | Bearbeiten | Referenzbilder, Bild zu Bild, Füllen mit Maske (seit 0.5.6 auch mit FLUX 3) | Referenzbilder, Bild zu Bild, Füllen mit Maske |
 | Prompt ausbauen | Für jedes Modell: Bild, Video, Ton, Musik, 3D | Bilder, seit 0.4 |
 | LoRAs | Von Hugging Face und Civitai, vor dem Laden geprüft, für Bild und Video | |
-| Audio | Soundeffekte (Stable Audio Open), Musik mit Gesang (ACE-Step) | |
+| Audio | Soundeffekte (Stable Audio Open), Musik mit Gesang (ACE-Step), instrumentale Musik bis 5 Minuten (Stable Audio 3) | |
 | Video | LTX-2.5 und LTX-2.3 mit Ton, Wan 2.1/2.2, Mochi, Kandinsky 5, aus Text oder Bild | |
 | 3D | Aus einem Bild ein GLB-Modell, mit PBR-Texturen (TRELLIS.2) oder als reine Form (TripoSG) | |
 | Grafik | NVIDIA, AMD Radeon (experimentell), mehrere Karten (die stärkste rechnet von selbst) | Apple Silicon |

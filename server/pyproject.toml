@@ -1,6 +1,6 @@
 [project]
 name = "nvai-server"
-version = "0.5.6"
+version = "0.5.7"
 description = "Local NVIDIA GPU asset generation server (images + 3D) with MCP bridge for Claude Code"
 requires-python = ">=3.12"
 dependencies = [
