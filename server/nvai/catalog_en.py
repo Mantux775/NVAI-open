@@ -23,6 +23,19 @@ FLUX3_LICENSE_WARNING = (
     "revenue (including affiliated companies), review every image before publication, label "
     "as AI-generated where required by law. BFL can terminate the license at any time."
 )
+KREA2_PROMPT_HINT = (
+    "Full English sentences, style first: medium, then the subject with material and light, last the "
+    "background. State the framing explicitly (\"medium shot from the waist up, his whole head inside "
+    "the frame\"), otherwise Krea moves what the prompt stresses into view and crops other parts. Krea 2 "
+    "is trained on detailed descriptions; expand a few words with \"Expand prompt\" first. The negative "
+    "prompt has no effect here (cfg 1)."
+)
+KREA2_LICENSE_WARNING = (
+    "Krea 2 Community License: commercial use only below US$1 million in annual revenue (including "
+    "affiliated companies), a content filter or a review of every image by hand is required, label as "
+    "AI-generated where required by law. Krea can terminate the license with 30 days' notice."
+)
+_LICENSE_CON_KREA2 = "Community license: commercial use only below US$1 million revenue, review obligation, can be terminated"
 QWEN21_LICENSE_WARNING = (
     "Qwen Research License: research and evaluation only, no commercial use — including no "
     "images for a game you sell. For final assets use Qwen-Image-2512 (Apache-2.0)."
@@ -311,6 +324,104 @@ EN: dict[str, dict[str, Any]] = {
         "cons": [
             "50 steps with two passes each — many times the Lightning time",
             "Encoder and model do not fit into 16 GB at the same time",
+        ],
+    },
+    "qwen-image-2512-int8": {
+        "name": "Qwen-Image-2512 (INT8, for RTX 20/30/40)",
+        "best_for": "Qwen-Image-2512 on cards without FP4 (RTX 20/30/40)",
+        "features": {
+            "prompt_hint": QWEN_PROMPT_HINT + " Without a negative prompt of your own, the "
+                           "one from Qwen's model card applies.",
+        },
+        "description": (
+            "The same model as `qwen-image-2512-nvfp4` (50 steps, cfg 4), but in INT8 instead of "
+            "NVFP4. INT8 is computed in hardware on every NVIDIA card from RTX 20 onward; NVFP4 only "
+            "on RTX 50, on older cards it is unpacked layer by layer and is much slower.\n\n"
+            "Quantized with Comfy-Org's tool comfy-quants (int8 tensorwise with ConvRot), runs "
+            "without a custom node. The file is 20.6 GB; on cards with less memory ComfyUI streams "
+            "parts from system memory.\n\n"
+            "Measured on an RTX 5060 Ti (16 GB) at 1024 × 1024: 119 s per image, 132 s with "
+            "loading (NVFP4 there 101 and 108 s). The test crate came out just as well: lettering "
+            "exact, rope handles through drilled holes.\n\n"
+            "Measured on an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4): 653 s including loading, the "
+            "NVFP4 version 1095 s there. Neither fits into 8 GB, but INT8 is computed in hardware. "
+            "Lettering and rope handles came out clean here too.\n\n"
+            "Everything else — prompt rules, negative prompt, native sizes — as with the NVFP4 version."
+        ),
+        "pros": [
+            "Computed in hardware on RTX 20/30/40",
+            "RTX 4060 (8 GB): 653 instead of 1095 s with NVFP4",
+            "Negative prompt works (cfg 4.0)",
+            "Apache-2.0",
+            "Shares text encoder and VAE with the NVFP4 versions",
+        ],
+        "cons": [
+            "20.6 GB instead of 14.9 GB: on 16 GB and less ComfyUI streams parts in",
+            "On RTX 50 the NVFP4 version is the faster choice",
+            "Community upload, not an official version by Qwen or Comfy-Org",
+        ],
+    },
+    "krea2-turbo-nvfp4": {
+        "name": "Krea 2 Turbo (NVFP4, 8 steps)",
+        "warning": KREA2_LICENSE_WARNING,
+        "best_for": "Photographic, aesthetic images with little AI look — third choice after Qwen and FLUX 3",
+        "features": {"prompt_hint": KREA2_PROMPT_HINT},
+        "description": (
+            "Krea 2 by Krea.ai (June 2026): a diffusion transformer with 12 billion parameters, released "
+            "with open weights as Raw (for fine-tuning) and Turbo (distilled, 8 steps, cfg 1). Krea is known "
+            "for images with little AI look. The text encoder is Qwen3-VL-4B, the same as FLUX 3's, and the "
+            "VAE is Qwen-Image's; if you have one of those models, only 7.7 GB remain to download.\n\n"
+            "Measured on the RTX 5060 Ti (24 Oct): about 20 s per 1 MP image, 41 s for the first run including "
+            "loading, 1408 × 1408 (2 MP) in 37 s; in the same comparison with the same prompt and seed "
+            "Qwen-Image-2512 took 109–160 s and FLUX 3 31–36 s. Krea looked the most photographic: natural "
+            "hands and faces, letter-perfect crate lettering, the ropes pass through drilled holes (but the "
+            "crate came without a lid, which the prompt did not mention), and the standing figure has both "
+            "boots in the frame. For the old fisherman, whose prompt stresses his hands, the head was cut off "
+            "at the top in three of three images; with \"medium shot from the waist up, his whole head inside "
+            "the frame\" it was in the frame in two of two.\n\n"
+            "Output from 1 to 2 MP. The negative prompt has no effect (cfg 1). Krea's template expands short "
+            "prompts first; here \"Expand prompt\" does that.\n\n"
+            "License: Krea 2 Community License — see warning."
+        ),
+        "pros": [
+            "Photographic look, little AI smoothness",
+            "Measured about 20 s per image (1 MP), 2 MP in 37 s",
+            "Letter-perfect text in the image",
+            "8 steps, NVFP4 only 7.7 GB",
+            "Shares text encoder and VAE with FLUX 3 and Qwen-Image",
+        ],
+        "cons": [
+            _LICENSE_CON_KREA2,
+            "State the framing explicitly, otherwise it crops (fisherman: head cut off 3 of 3)",
+            "Negative prompt has no effect (cfg 1)",
+            "No reference images; for editing, FLUX 3 remains the choice",
+        ],
+    },
+    "krea2-turbo-int8": {
+        "name": "Krea 2 Turbo (INT8, for RTX 20/30/40)",
+        "warning": KREA2_LICENSE_WARNING,
+        "best_for": "Krea 2 on cards without FP4 (RTX 20/30/40)",
+        "features": {"prompt_hint": KREA2_PROMPT_HINT},
+        "description": (
+            "The same model as `krea2-turbo-nvfp4`, in Comfy-Org's INT8 version (ConvRot), which is "
+            "computed in hardware on every NVIDIA card from RTX 20 onward. 13.5 GB; on cards with less "
+            "memory ComfyUI streams parts from system memory. The prompt hints of the NVFP4 version apply "
+            "here too.\n\n"
+            "Measured on an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4), 1024 × 1024: 193 s for the first "
+            "image, then 82 s, the image as with NVFP4 (letter-perfect). The NVFP4 version took 46 s on the "
+            "same card including loading, although the 4060 has no FP4 units: at 7.7 GB it fits into the "
+            "graphics memory, the INT8 version at 13.5 GB does not. On 8 GB cards, use the NVFP4 version; "
+            "not measured with 12 or 16 GB.\n\n"
+            "License: Krea 2 Community License — see warning."
+        ),
+        "pros": [
+            "Computed in hardware on RTX 20/30/40",
+            "Shares text encoder and VAE with FLUX 3 and Qwen-Image",
+        ],
+        "cons": [
+            _LICENSE_CON_KREA2,
+            "On RTX 50 the NVFP4 version is the faster choice",
+            "On 8 GB slower than NVFP4 (RTX 4060: 82 instead of 46 s), because it does not fit into memory",
         ],
     },
     "flux3-klein-nvfp4": {
@@ -843,8 +954,14 @@ EN: dict[str, dict[str, Any]] = {
         "best_for": "Living still image: one element moves, the rest stays still",
         "description": ("Official LoRA by Lightricks for LTX-2.5. Turns a start image into a cinemagraph: "
                         "one element moves (water, smoke, hair, light), everything else stays still. "
-                        "With \"Loop\" it becomes a seamless loop, for menu and loading screens for "
-                        "example. Put the trigger CINEMAGRAPH_MOTION into the prompt, strength 1.0 to 1.2."),
+                        "Only works together with \"Loop\", which NVAI-open switches on when you activate "
+                        "it; the result is a seamless loop, for menu and loading screens for example. Put "
+                        "the trigger CINEMAGRAPH_MOTION into the prompt, strength 1.0 to 1.2. Measured (a "
+                        "king in front of flickering torches, 4 s): with a loop 6 % of the picture moved "
+                        "and the face stood still; a loop without the LoRA 28 %; without a loop 82–84 %, "
+                        "also at strength 1.2, because the camera pushed in."),
+        "features": {"tested": "Tested on LTX-2.5: only works with \"Loop\" (6 % instead of 28 % of the "
+                               "picture moving, the face still)"},
     },
     "lora-ltx-2.5-22b-lora-slow-motion-control-ltx-2.5-22b-lora-slow-motion-control-1.0": {
         "warning": _GATED_LORA_EN,
@@ -852,7 +969,12 @@ EN: dict[str, dict[str, Any]] = {
         "description": ("Official LoRA by Lightricks for LTX-2.5. With a start image and the \"Slow "
                         "motion\" setting (0.5 = 2×, 0.2 = 5×, 0.1 = 10× slower) the motion runs slower "
                         "while playback stays at 24 fps. No trigger word, and do not write \"slow "
-                        "motion\" into the prompt. Strength 1.0."),
+                        "motion\" into the prompt. Strength 1.0. Measured with Lightricks' settings (a wave "
+                        "against rocks, 1920 × 1088, 5 s, 0.2): the spray fell over the whole 5 s instead of "
+                        "about 1.5 s, the droplets stayed sharp. Without the LoRA the spray stood almost "
+                        "still as a milky veil. At 1280 × 704 and 0.25 the effect was weaker."),
+        "features": {"tested": "Tested on LTX-2.5 (1080p, slow motion 0.2): the spray falls over 5 s instead "
+                               "of 1.5 s, droplets sharp; without the LoRA only a milky, frozen veil"},
     },
     "lora-ltx-2.3-transition-lora-ltx2.3-transition": {
         "best_for": "Transitions and transformations between a start and an end image",
@@ -1259,13 +1381,17 @@ SIZE_LABELS: dict[str, str] = {
     "1728 × 1152 — 2 MP quer, Fahrzeuge mit Detail":
         "1728 × 1152 — 2 MP landscape, detailed vehicles",
     "2048 × 2048 — 4 MP, maximal": "2048 × 2048 — 4 MP, maximum",
+    # KREA2_SIZES (die beiden übrigen stehen schon bei FLUX 3)
+    "1408 × 1408 — 2 MP, Objekte mit Detail": "1408 × 1408 — 2 MP, detailed objects",
+    "1920 × 1088 — 2 MP 16:9, Panorama": "1920 × 1088 — 2 MP 16:9, panorama",
     # LTX25_SIZES
-    "1280 × 704 — 16:9, 720p": "1280 × 704 — 16:9, 720p",
-    "704 × 1280 — 9:16, hochkant": "704 × 1280 — 9:16, portrait",
-    "1024 × 576 — 16:9, schneller": "1024 × 576 — 16:9, faster",
+    "1920 × 1088 — 1080p, beste Qualität (rund 2,7-mal so lang)":
+        "1920 × 1088 — 1080p, best quality (about 2.7 times as long)",
+    "1088 × 1920 — 1080p hochkant, beste Qualität": "1088 × 1920 — 1080p portrait, best quality",
+    "1280 × 704 — 16:9, 720p, schneller": "1280 × 704 — 16:9, 720p, faster",
+    "704 × 1280 — 9:16, hochkant, schneller": "704 × 1280 — 9:16, portrait, faster",
+    "1024 × 576 — 16:9, am schnellsten": "1024 × 576 — 16:9, fastest",
     "1024 × 1024 — quadratisch": "1024 × 1024 — square",
-    "1920 × 1088 — 1080p, langsam": "1920 × 1088 — 1080p, slow",
-    "1088 × 1920 — 1080p hochkant, langsam": "1088 × 1920 — 1080p portrait, slow",
     # HIDREAM_O1_SIZES
     "2048 × 2048 — 4 MP, trainiert": "2048 × 2048 — 4 MP, trained",
     "1728 × 2304 — 4 MP hochkant, Figuren": "1728 × 2304 — 4 MP portrait, figures",

@@ -209,7 +209,7 @@ export interface ModelFeatures {
   missing: Record<string, string>
   // LoRAs: empfohlene Stärke, wozu sie gehört, für welche Modellfamilien empfohlen, Testergebnis
   strength: number
-  use: 'start_image' | 'end_image' | 'audio_input' | 'motion_speed'
+  use: 'start_image' | 'end_image' | 'audio_input' | 'motion_speed' | 'loop'
   recommended_for: string[]
   tested: string
 }

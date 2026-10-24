@@ -384,10 +384,17 @@ def gpu_advice(entry: dict[str, Any]) -> dict[str, Any]:
     note = ""
     fmt = _precision(entry)
     if fmt == "nvfp4" and not fp4:
-        note = t(f"{info['name']} hat keine FP4-Einheiten: das Modell läuft, aber deutlich "
-                 "langsamer. Für diese Karte gedacht sind die INT8-Fassungen.",
-                 f"{info['name']} has no FP4 units: the model runs, but much slower. "
-                 "The INT8 versions are meant for this card.")
+        # Gemessen 25.10. auf einer RTX 4060 mit 8 GB: Was in den Grafikspeicher passt, ist schnell
+        # (Krea 2 NVFP4 7,7 GB: 46 s, INT8 13,5 GB: 82 s); passt keine Fassung, gewinnt INT8
+        # (Qwen-Image-2512: NVFP4 1095 s, INT8 653 s).
+        note = t(f"{info['name']} hat keine FP4-Einheiten: das Modell läuft, aber langsamer als auf "
+                 "RTX 50. Gedacht sind hier die INT8-Fassungen, außer wenn nur die NVFP4-Fassung in den "
+                 "Grafikspeicher passt: Auf einer RTX 4060 mit 8 GB war Krea 2 mit NVFP4 schneller "
+                 "(46 statt 82 s), Qwen-Image-2512 mit INT8 (653 statt 1095 s).",
+                 f"{info['name']} has no FP4 units: the model runs, but slower than on RTX 50. The "
+                 "INT8 versions are meant for this card, unless only the NVFP4 version fits into the "
+                 "graphics memory: on an RTX 4060 with 8 GB, Krea 2 was faster with NVFP4 (46 instead "
+                 "of 82 s), Qwen-Image-2512 with INT8 (653 instead of 1095 s).")
     elif fmt == "fp8" and cc < 8.9:
         note = t(f"{info['name']} hat keine FP8-Einheiten: das Modell wird hochgerechnet "
                  "und läuft langsamer.",

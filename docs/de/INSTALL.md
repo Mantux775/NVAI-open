@@ -137,7 +137,7 @@ Für 3D enthält die vollständige Installation des Setups TripoSG. TRELLIS.2 (`
 PBR-Texturen) gibt es nur bei der Installation aus dem Quelltext (siehe
 [Optional: 3D-Worker](#optional-3d-worker)).
 
-Die beiden empfohlenen Bildmodelle, Qwen-Image-2512 und FLUX 3 Image Klein, beschreibt
+Die drei empfohlenen Bildmodelle, Qwen-Image-2512, FLUX 3 Image Klein und Krea 2, beschreibt
 [MODELLE.md](MODELLE.md) ausführlich.
 
 ### LoRAs (Hugging Face und Civitai)

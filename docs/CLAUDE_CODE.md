@@ -95,6 +95,8 @@ license. Downloads are several GB; ask the user first.
 | Image 1024², known prompt, new seed | FLUX 3 Klein NVFP4 | 13–16 s, four images ~37 s |
 | Image 1440² / editing with a reference image | FLUX 3 Klein NVFP4 | ~26 s / ~45 s |
 | Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
+| Image 1024² / 1408², 8 steps | Krea 2 Turbo NVFP4 | ~20 s / ~37 s, first image after FLUX 3 ~41 s |
+| Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 INT8 (for RTX 20/30/40) | ~119 s, with loading ~132 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
 | Music 60 s / 20 s | ACE-Step 1.5 Turbo (8 steps, CFG 1, shift 3) | ~17 s / ~10 s |
 | Instrumental 60 s / 20 s / 300 s | Stable Audio 3 Medium (8 steps, CFG 1) | ~9–12 s / ~7 s / ~64 s |
@@ -106,6 +108,8 @@ license. Downloads are several GB; ask the user first.
 | Start and end image 5 s / loop 4 s, 1280 × 704 | LTX-2.5 NVFP4 | ~154 s / ~125 s |
 | Video with sound 1920 × 1088, 5 s / multishot 1280 × 704, 8 s | LTX-2.5 NVFP4 | ~251 s / ~170 s |
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
+| Best quality (DFR) 1920 × 1088, 5 s | LTX-2.5 NVFP4 | ~786 s (standard path ~241 s) |
+| DFR 1280 × 704, 4 s / with 48 fps | LTX-2.5 NVFP4 | ~118 s / ~294 s |
 | Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
 | Video 848 × 480, 49 frames | Mochi 1 preview fp8 | ~351 s with loading |
 | Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
@@ -116,7 +120,7 @@ user up front instead of leaving them waiting.
 
 ## Images
 
-### Model choice: the two recommended models
+### Model choice: the three recommended models
 
 - **Qwen-Image-2512, full version `qwen-image-2512-nvfp4`** (50 steps, cfg 4) — first choice for
   **final assets**, **text in the image** and **structural details**. Crate lettering comes out
@@ -148,6 +152,21 @@ user up front instead of leaving them waiting.
   (RTX 20/30/40, from 8 GB according to BFL). On an RTX 50 card such as the RTX 5060 Ti, the
   NVFP4 version is the right one. `list_models` marks what suits the detected card with
   `recommended` and explains in `gpu_note` when a format does not run in hardware there.
+  `qwen-image-2512-int8` is the same for Qwen-Image-2512.
+- **Krea 2 Turbo, `krea2-turbo-nvfp4`** (Krea.ai, June 2026, 12B parameters, 8 steps, cfg 1) — the
+  third choice: **photographic images with little AI look**, fast. Measured with the same prompt and
+  seed: about 20 s per 1 MP image (41 s for the first one after FLUX 3), 1408² in 37 s; Qwen-Image-2512
+  took 109–160 s, FLUX 3 31–36 s. Natural hands and faces, letter-perfect crate lettering, ropes
+  through drilled holes, a standing figure with both boots in the frame. Weak: **name the framing**,
+  otherwise it moves what the prompt stresses into view — an old fisherman ("weathered hands") lost
+  his head at the top of the frame in three of three images; with "Medium shot from the waist up, his
+  whole head and face inside the frame with free space above his head." in none of two. The crate came
+  without a lid, which the prompt did not mention. No reference images, no mask, `negative_prompt` has
+  no effect. Text encoder (Qwen3-VL-4B) and VAE are the same files as FLUX 3's and Qwen-Image's, so
+  only 7.7 GB remain to download. **Mind the license** (see Licenses): commercial use only below
+  US$1 million revenue. `krea2-turbo-int8` for RTX 20/30/40; on an RTX 4060 with 8 GB it took 193 s
+  for the first image and 82 s after that, but the NVFP4 version took only 46 s including loading
+  there (7.7 GB fit into the graphics memory, 13.5 GB do not): on 8 GB cards, use NVFP4.
 
 What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under
 `features`: whether the negative prompt works, reference images, upsampler, recommended sizes,
@@ -163,10 +182,10 @@ NVFP4 needs PyTorch **cu130** in the ComfyUI venv (`setup_comfyui.ps1` installs 
 everything is three to five times slower, because ComfyUI then disables its fast NVFP4 kernels.
 FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.42.1).
 
-### Prompts for Qwen and FLUX 3
+### Prompts for Qwen, FLUX 3 and Krea 2
 
-Both read the prompt with a language model (Qwen2.5-VL-7B and Qwen3-VL-4B respectively), not
-with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`) do **not** apply to them.
+All three read the prompt with a language model (Qwen2.5-VL-7B, and Qwen3-VL-4B for FLUX 3 and
+Krea 2), not with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`) do **not** apply to them.
 
 - **Full English sentences.** First medium and style, then the subject with material, color and
   condition, then lighting and background. Long prompts are no problem.
@@ -191,6 +210,9 @@ with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`) do **not** 
   fixed. If the text cites all ids, it counts as a finished description and goes to the model
   without the upsampler (that is how BFL's reference code does it). The boxes steer position and
   size but are not a hard mask.
+- **Krea 2:** as for Qwen, and **name the framing** ("medium shot from the waist up, his whole head
+  inside the frame", "full body, both boots inside the frame"). It has no upsampler of its own:
+  expand a few words with `expand_prompt` first.
 
 ### Decide first: scene or isolated object?
 
@@ -452,7 +474,28 @@ gave 3 s for a door that opens slowly; 20 s of a given sound became a 19.7 s cli
 as quiet ("crackles softly") come out at −41 to −52 LUFS, speech and a forge at −14 to −18 LUFS:
 name loud sources explicitly. Generated sound goes through the audio limiter (−2.5 dB, because AAC
 overshoots dense sound by up to 1.9 dB) since 0.5.8; a
-given sound stays unchanged. DFR and the two Lightricks LoRAs are not tested yet (gated repos).
+given sound stays unchanged.
+
+**DFR** (accept the license of the detail IC-LoRA on Hugging Face first): ComfyUI's template
+video_ltx2_5_dfr_i2v.json inserts the start image at a quarter of its size in every stage, and
+LTXVImgToVideoInplace scales a smaller image up to the latent size and fixes it as the first frame. At
+1080p the whole video turned soft (same seed: edge sharpness of the face in the first frame 14 instead
+of 554 on the standard path). Since 0.5.9 NVAI-open uses the full image in stages 2 and 3. Measured
+afterwards (edge sharpness of the face at 0 / 0.5 / 2 / 4.5 s): DFR 445 / 395 / 625 / 523, standard
+554 / 548 / 211 / 411 — the detail stays over the whole clip, at 786 instead of 241 s (5 s, 1080p).
+The web interface makes DFR the default once the IC-LoRA is installed; an end image or a loop switches
+back to standard. `temporal_upscale=True` (48 fps) kept the same sharpness, even and odd frames alike,
+at 294 instead of 118 s (4 s, 1280 × 704).
+
+**Cinemagraph LoRA:** only works with a start image and `loop=True` (the web interface switches the
+loop on when you activate the LoRA). Measured with a king in front of flickering torches (4 s): with
+the loop 6 % of the picture moved and the face stood still, a loop without the LoRA 28 %, without a
+loop 82–84 % (also at strength 1.2), because the camera pushed in.
+
+**Slow Motion LoRA:** with Lightricks' settings (1920 × 1088, 121 frames, `motion_speed=0.2`, strength
+1.0) the spray of a wave against rocks fell over the whole 5 s instead of about 1.5 s at speed 1.0, with
+sharp droplets: real slow motion. Without the LoRA the spray stood almost still as a milky veil. At
+1280 × 704 and 0.25 the effect was weaker. 5 s at 1080p took 232–275 s.
 
 **Recommended LoRAs** (`list_models(kind="lora")`, `features.recommended_for` contains `ltx25`,
 `features.strength` is the suggested strength): Cinemagraph and Slow Motion Control (official, gated),
@@ -463,6 +506,37 @@ LTX-2.5: Fantasy Anime and Fantasy Painterly show clearly; Paper Cut-Out only at
 `features.strength`); Claymation is only hinted at; Transition hardly changed a day-to-night
 transition; with Audio Reactive the brightness followed the music a little more closely, but LTX-2.5
 already pulses to a given sound without it.
+
+### LTX-2.5: sharpness, bitrate and prompt traps (measured at 1920 × 1088)
+
+- **Prefer the higher quality and say so:** final videos at 1920 × 1088 (about 2.7 times as long as
+  1280 × 704), start images in that size too, and `quality="dfr"` when `features.dfr` is true (about
+  three times as long).
+- **Bitrate:** MP4s are saved with CRF 12 instead of ComfyUI's 18 (`crf` per request). With the same
+  seed 16.0 instead of 7.3 Mbit/s, 10 instead of 4.5 MB for 5 s. Fine detail barely changes: the
+  softness comes from the model, not from the encoder.
+- **Face after a zoom out: give an end image.** Without one, the face in the last frame of a 7-second
+  zoom out (about 80 px wide) came out soft and distorted. An end image made with FLUX 3 (same
+  references) keeps it: the last frame matches the end image, 648 instead of 509 s. Asked for a
+  "wider shot", FLUX 3 kept the framing; a wider end image comes from outpainting
+  (`outpaint=[320, 184, 320, 184]` turns 1920 × 1088 into 2560 × 1456, the person then ends at 75 %).
+- **End image or standard path:** with an end image the picture stood almost still for the first
+  second and faces turned soft during big moves, but the ending matched the end image sharply. The
+  standard path moves at once and keeps faces sharper during the motion. Use the end image when the
+  face has to be right at the end (zoom, ending at rest).
+- **Prompt traps** (a speaking person in front of a crowd, two seeds each): "shouts" gives grimaces
+  ("says firmly in a rough, deep voice" is calmer). A gesture that "may rise out of the top of the
+  frame" makes the camera follow it. "The camera holds a medium close-up" became a push-in to an
+  extreme close-up; "Static camera, a locked-off medium shot; the framing stays exactly as in the first
+  frame." held the framing. "Proud, calm expression" became a grin; "stern, determined expression and
+  does not smile" did not. A raised fist filling the frame lost a finger; keep it small next to the
+  head.
+- **Start image:** thin props that cross people (rifles, flag poles) morph into each other in the
+  video. Keep them apart in the start image (FLUX 3 edit in the video size) and do not move them all
+  at once in the prompt.
+- **Big body moves:** a person landing after a jump (8 s) worked as a motion, but the face was
+  unrecognizable afterwards. Check start images of full-size people at 100 % for their eyes before
+  rendering.
 
 ### Person from a photo (since 0.5.8)
 
@@ -626,6 +700,11 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
   terminate the license at any time by notice (8.b). The images must not be used to train any
   other image model (4.b). No EU exclusion. The repo is gated — accept the license on Hugging
   Face and store a token. Without these conditions: **Qwen-Image-2512** (Apache-2.0).
+- **Krea 2 Community License** (Krea 2 Turbo) — commercial use only below US$1 million annual
+  revenue, including affiliated companies; a content filter **or** a review of every image by hand;
+  AI labeling where the law requires it; Krea can terminate the license with 30 days' notice. The
+  files come from Comfy-Org/Krea-2 (not gated). Without these conditions: **Qwen-Image-2512**
+  (Apache-2.0).
 - Unproblematic: SDXL, FLUX schnell, ACE-Step (1.5: MIT, v1: Apache-2.0), Wan (all variants), Chroma, TripoSG, TRELLIS.2.
 
 `list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)

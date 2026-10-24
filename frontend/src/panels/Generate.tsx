@@ -124,6 +124,17 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [endId, setEndId] = useState('')
   const [loop, setLoop] = useState(false)
   const [quality, setQuality] = useState<'standard' | 'dfr'>('standard')
+  // DFR ist die Vorgabe, sobald das Detail-LoRA installiert ist (Nutzer, 24.10.: "die höhere Qualität
+  // immer bevorzugen, aber darauf hinweisen"), bis jemand die Qualität selbst umstellt.
+  const qualityTouched = useRef(false)
+  const chooseQuality = (q: 'standard' | 'dfr') => {
+    qualityTouched.current = true
+    setQuality(q)
+  }
+  // Endbild und Schleife gehen nur ohne DFR: Wer eines davon wählt, bekommt Standard.
+  const leaveDfr = () => {
+    if (quality === 'dfr') setQuality('standard')
+  }
   const [temporal, setTemporal] = useState(false)
   const [audioId, setAudioId] = useState('')
   const [audioAssets, setAudioAssets] = useState<Asset[]>([])
@@ -293,10 +304,29 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     setLoraPicks((list) => (list.some((p) => p.model_id === id)
       ? list.filter((p) => p.model_id !== id)
       : [...list, { model_id: id, strength }]))
+  // LoRAs mit features.use "loop" (Cinemagraph) wirken nur mit Schleife: gemessen 25.10. bewegten sich
+  // ohne Schleife 82–89 % des Bildes, mit Schleife 6 %. Beim Einschalten deshalb die Schleife mit an.
+  const pickLora = (l: ModelInfo, strength?: number) => {
+    const on = !loraPicks.some((p) => p.model_id === l.id)
+    if (on && l.features?.use === 'loop' && sourceId) {
+      leaveDfr()
+      setEndId('')
+      setLoop(true)
+    }
+    toggleLora(l.id, strength)
+  }
 
   // LTX-2.5 (seit 0.5.8): eigene Formate, Länge in Sekunden, Zusatzwege laut features.
   const vfeat = mode === 'video' ? selected?.features : undefined
   const isLtx25 = mode === 'video' && selected?.family === 'ltx25'
+  const dfrReady = !!vfeat?.dfr
+  useEffect(() => {
+    if (!dfrReady) {
+      if (quality === 'dfr') setQuality('standard')
+    } else if (!qualityTouched.current && quality !== 'dfr' && !loop && !endId) {
+      setQuality('dfr')
+    }
+  }, [dfrReady, quality, loop, endId])
   const videoSizes = isLtx25 && vfeat?.sizes?.length ? vfeat.sizes : VIDEO_SIZES
   // 8n+1 Frames, der nächste Wert zu ltxSeconds (wie workflows.ltx_frames_for_seconds: 5 s = 121).
   // Höchstens 481 Frames (API-Grenze): 20 s bei 24 fps, 19 s bei 25, 16 s bei 30.
@@ -519,7 +549,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   }
 
   // Person aus einem Foto: FLUX 3 nimmt das gewählte Startbild als Referenz, behält das Gesicht und
-  // erzeugt vier Startbilder im Videoformat. Gemessen 24.10.: ~95 s für vier Bilder bei 1280 × 704;
+  // erzeugt vier Startbilder im Videoformat. Gemessen 24.10.: ~95 s für vier Bilder bei 1280 × 704,
+  // 242–247 s bei 1920 × 1088 (mit zwei Referenzen);
   // das Gesicht trifft FLUX besser, wenn das Foto nur Kopf und Schultern zeigt.
   const refModel = models
     .filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0)
@@ -904,7 +935,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                       ? t('Braucht FLUX 3 Image Klein', 'Needs FLUX 3 Image Klein')
                       : !sourceId
                         ? t('Erst oben das Foto als Startbild wählen', 'First pick the photo as the start image above')
-                        : t(`Vier Bilder mit ${refModel.name}, rund 1,5 Minuten`, `Four images with ${refModel.name}, about 1.5 minutes`)}
+                        : vidSize.w * vidSize.h > 1_500_000
+                          ? t(`Vier Bilder mit ${refModel.name} in 1080p, rund 4 Minuten`,
+                            `Four images with ${refModel.name} at 1080p, about 4 minutes`)
+                          : t(`Vier Bilder mit ${refModel.name}, rund 1,5 Minuten`,
+                            `Four images with ${refModel.name}, about 1.5 minutes`)}
                   >
                     {t('Vier Startbilder erzeugen', 'Create four start images')}
                   </button>
@@ -922,8 +957,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                       <span className="muted small">{t('optional', 'optional')}</span>
                     </h3>
                     <label className="check">
-                      <input type="checkbox" checked={loop} disabled={!sourceId || quality === 'dfr'}
-                        onChange={(e) => setLoop(e.target.checked)} />
+                      <input type="checkbox" checked={loop} disabled={!sourceId}
+                        onChange={(e) => {
+                          if (e.target.checked) leaveDfr()
+                          setLoop(e.target.checked)
+                        }} />
                       {t('Schleife: das Startbild ist auch das Endbild (nahtloser Loop)',
                         'Loop: the start image is also the end image (seamless loop)')}
                     </label>
@@ -945,15 +983,20 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                           <div key={a.id} className={endId === a.id ? 'source selected' : 'source'}
                             title={a.prompt || a.filename}>
                             <img src={a.url} alt={a.prompt} loading="lazy"
-                              onClick={() => quality !== 'dfr' && setEndId(a.id)} />
+                              onClick={() => {
+                                leaveDfr()
+                                setEndId(a.id)
+                              }} />
                           </div>
                         ))}
                       </div>
                     )}
                     <p className="hint small">
                       {quality === 'dfr'
-                        ? t('Start- und Endbild gehen nur ohne „Höchste Qualität (DFR)“.',
-                          'Start and end image only work without “Best quality (DFR)”.')
+                        ? t('Endbild und Schleife gehen nur ohne „Höchste Qualität (DFR)“; wer eines wählt, '
+                            + 'rechnet in Standardqualität.',
+                          'End image and loop only work without “Best quality (DFR)”; choosing one switches to '
+                            + 'standard quality.')
                         : t('Mit Endbild läuft das Video vom Startbild zum Endbild (Übergang). Eine Stufe in '
                             + 'voller Auflösung, deshalb langsamer als ohne.',
                           'With an end image the video runs from the start image to the end image (a '
@@ -1063,7 +1106,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 return (
                   <div key={l.id} className="lora-row">
                     <label title={l.source_url || l.name}>
-                      <input type="checkbox" checked={!!pick} onChange={() => toggleLora(l.id)} />
+                      <input type="checkbox" checked={!!pick} onChange={() => pickLora(l)} />
                       <span className="lora-name">{l.name.replace(/^.*\//, '').replace(/\.safetensors$/, '')}</span>
                     </label>
                     {pick && (
@@ -1109,7 +1152,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 : use === 'end_image' ? t('mit Start- und Endbild', 'with a start and end image')
                   : use === 'audio_input' ? t('mit „Ton vorgeben“', 'with “Given sound”')
                     : use === 'motion_speed' ? t('mit Startbild und „Zeitlupe“', 'with a start image and “Slow motion”')
-                      : ''
+                      : use === 'loop' ? t('mit Startbild und „Schleife“', 'with a start image and “Loop”')
+                        : ''
               return (
                 <div key={l.id} className="rec-lora">
                   <div className="row-between">
@@ -1127,7 +1171,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   <div className="row">
                     {l.installed ? (
                       <button className={pick ? 'btn small primary' : 'btn small'}
-                        onClick={() => toggleLora(l.id, l.features?.strength ?? 1)}>
+                        onClick={() => pickLora(l, l.features?.strength ?? 1)}>
                         {pick ? t('✓ aktiv', '✓ active') : t('Aktivieren', 'Activate')}
                       </button>
                     ) : dl ? (
@@ -1569,12 +1613,16 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 {/* row-gap statt row: .row stellt Beschriftungen über das Feld, hier gehören sie daneben */}
                 <div className="row-gap">
                   <label className="check">
-                    <input type="radio" checked={quality === 'standard'} onChange={() => setQuality('standard')} />
+                    <input type="radio" checked={quality === 'standard'} onChange={() => chooseQuality('standard')} />
                     {t('Standard', 'Standard')}
                   </label>
                   <label className="check">
                     <input type="radio" checked={quality === 'dfr'} disabled={!vfeat?.dfr}
-                      onChange={() => setQuality('dfr')} />
+                      onChange={() => {
+                        chooseQuality('dfr')
+                        setLoop(false)
+                        setEndId('')
+                      }} />
                     {t('Höchste Qualität (DFR)', 'Best quality (DFR)')}
                   </label>
                 </div>
@@ -1587,9 +1635,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )}
                 <p className="hint small">
                   {t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem Detail-IC-LoRA: '
-                      + 'schärfer, aber deutlich langsamer.',
-                    'DFR computes detail keyframes and a second stage with a detail IC-LoRA: sharper, '
-                      + 'but much slower.')}
+                      + 'Gesicht und Stoffe bleiben über die ganze Länge scharf, dafür rund dreimal so lang '
+                      + '(gemessen 5 s in 1080p: 13 statt 4 Minuten).',
+                    'DFR computes detail keyframes and a second stage with a detail IC-LoRA: faces and fabric '
+                      + 'stay sharp over the whole clip, at about three times the time (measured 5 s at 1080p: '
+                      + '13 instead of 4 minutes).')}
                   {!vfeat?.dfr && missingNote('dfr')}
                 </p>
 

@@ -25,6 +25,18 @@ export function HistoryPanel({ event }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Aufgeklappte Prompts (Job-IDs): lange Video-Prompts passen nicht in eine Zeile.
+  const [openPrompts, setOpenPrompts] = useState<Set<string>>(() => new Set())
+  const togglePrompt = (id: string) => {
+    // Beim Markieren von Text nicht zuklappen.
+    if (window.getSelection()?.toString()) return
+    setOpenPrompts((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const load = useCallback(async () => {
     const js = (await api.jobs(80)).filter((j) => j.kind !== 'download')
@@ -180,7 +192,28 @@ export function HistoryPanel({ event }: Props) {
           <article key={job.id} className="panel run">
             <header className="run-head">
               <span className={`badge ${job.status}`}>{job.status}</span>
-              <span className="prompt">{prompt || <em>{t('ohne Prompt', 'no prompt')}</em>}</span>
+              {prompt ? (
+                <span
+                  className={openPrompts.has(job.id) ? 'prompt open' : 'prompt'}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={openPrompts.has(job.id)}
+                  title={openPrompts.has(job.id)
+                    ? t('Klicken zum Zuklappen', 'Click to collapse')
+                    : t('Klicken für den ganzen Prompt', 'Click for the whole prompt')}
+                  onClick={() => togglePrompt(job.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      togglePrompt(job.id)
+                    }
+                  }}
+                >
+                  {prompt}
+                </span>
+              ) : (
+                <span className="prompt"><em>{t('ohne Prompt', 'no prompt')}</em></span>
+              )}
               <span className="muted small">
                 {new Date(job.created_at * 1000).toLocaleString(locale())}
               </span>

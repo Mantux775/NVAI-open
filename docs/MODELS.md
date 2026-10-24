@@ -1,13 +1,13 @@
-# Image models in NVAI-open: Qwen-Image-2512 and FLUX 3 Image Klein
+# Image models in NVAI-open: Qwen-Image-2512, FLUX 3 Image Klein and Krea 2
 
 *Deutsch: [de/MODELLE.md](de/MODELLE.md)*
 
 A reference for projects that generate images through NVAI-open. It applies to Claude Code with
-the `nvai` MCP server as well as to your own programs using the REST API. It describes the two
+the `nvai` MCP server as well as to your own programs using the REST API. It describes the three
 image models NVAI-open recommends: what they can do, how to address them, how long they take and
 where they fail.
 
-As of October 18, 2026. Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
+As of October 18, 2026 (Krea 2: October 24). Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
 All times and findings were measured there. Statements that come from the vendor are marked as
 such ("according to BFL").
 
@@ -15,20 +15,20 @@ such ("according to BFL").
 
 ## 1. At a glance
 
-| | **Qwen-Image-2512** | **FLUX 3 Image Klein** |
-|---|---|---|
-| Model ID | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` |
-| Vendor | Alibaba (Qwen) | Black Forest Labs, October 2026 |
-| Size | 20B parameters, NVFP4 | 5.6B parameters, NVFP4 |
-| Text encoder | Qwen2.5-VL-7B | Qwen3-VL-4B, plus a prompt upsampler (Qwen3.5-9B) |
-| Steps / CFG | 50 / 4.0 | 16 / 1 (distilled) |
-| Negative prompt | works; empty = default from Qwen's model card | has **no** effect |
-| Reference images | — | up to 10 |
-| Placement by box | — | yes |
-| Text in the image | letter-perfect | 3 of 3 error-free in testing |
-| Time per 1024² image | ~100 s | ~30 s for a new prompt, 13–16 s for a known one |
-| License | **Apache-2.0** | **FLUX Kommunity License** — revenue cap, review obligation |
-| Strengths | final assets, structural details, text | editing, consistent characters, layout, speed |
+| | **Qwen-Image-2512** | **FLUX 3 Image Klein** | **Krea 2 Turbo** |
+|---|---|---|---|
+| Model ID | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` | `krea2-turbo-nvfp4` |
+| Vendor | Alibaba (Qwen) | Black Forest Labs, October 2026 | Krea.ai, June 2026 |
+| Size | 20B parameters, NVFP4 | 5.6B parameters, NVFP4 | 12B parameters, NVFP4 |
+| Text encoder | Qwen2.5-VL-7B | Qwen3-VL-4B, plus a prompt upsampler (Qwen3.5-9B) | Qwen3-VL-4B (the same file as FLUX 3) |
+| Steps / CFG | 50 / 4.0 | 16 / 1 (distilled) | 8 / 1 (distilled) |
+| Negative prompt | works; empty = default from Qwen's model card | has **no** effect | has **no** effect |
+| Reference images | — | up to 10 | — |
+| Placement by box | — | yes | — |
+| Text in the image | letter-perfect | 3 of 3 error-free in testing | letter-perfect in the test |
+| Time per 1024² image | ~100 s | ~30 s for a new prompt, 13–16 s for a known one | ~20 s |
+| License | **Apache-2.0** | **FLUX Kommunity License** — revenue cap, review obligation | **Krea 2 Community License** — below US$1M revenue, review obligation |
+| Strengths | final assets, structural details, text | editing, consistent characters, layout, speed | photographic look, natural hands and faces, speed |
 
 ## 2. Which model for what
 
@@ -37,16 +37,51 @@ such ("according to BFL").
 | Final asset without a template: object, figure, icon, scene | **Qwen** |
 | Text, lettering, signs | **Qwen** |
 | Construction must be right (fastenings, hinges, handles) | **Qwen** |
+| Photographic image with little AI look, natural hands and faces | **Krea 2** (~20 s), name the framing; license only below US$1M revenue |
 | Change an existing image in a targeted way: replace a part, color, material | **FLUX 3** with the image as a reference |
 | The same character or object across several images | **FLUX 3** with a reference image |
 | Combine subjects from several images | **FLUX 3** with several references |
 | Several objects at fixed positions | **FLUX 3** with bounding boxes |
-| Quick drafts | FLUX 3 (13–16 s) or Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
-| Historically accurate vehicles (Panzer IV, Sd.Kfz. 251 …) | **none** — see section 8 |
+| Quick drafts | FLUX 3 (13–16 s), Krea 2 (~20 s) or Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
+| Historically accurate vehicles (Panzer IV, Sd.Kfz. 251 …) | **none** — see section 9 |
 | Only a few words of prompt, model without its own upsampler | first **✨ Expand prompt** (`expand_prompt`), see section 5 |
 | Trying out Qwen-Image 2.1 (`qwen-image-2.1-int8`) | **non-commercial only** (Qwen Research License); editing looked overprocessed in the test |
 
 Without a `model_id`, NVAI-open uses the active image model.
+
+### New in 0.5.9
+
+Video quality, measured on an RTX 5060 Ti with LTX-2.5 (1920 × 1088 unless stated otherwise):
+
+| What | Measured |
+|---|---|
+| Best quality (DFR) | The default once Lightricks' detail LoRA is installed (accept its license on Hugging Face). ComfyUI's template inserts the start image at a quarter of the size, which made the whole video soft at 1080p; NVAI-open now uses the full image. Same seed: faces and fabric stay sharp over the whole clip (edge sharpness of the face after 2 s: 625 instead of 211), at about three times the time (5 s: 786 instead of 241 s). Not with an end image or a loop |
+| Cinemagraph LoRA | Only works together with "Loop", which the web interface now switches on with it. A king in front of flickering torches, 4 s at 1280 × 704: with the loop 6 % of the picture moved and the face stood still; a loop without the LoRA 28 %; without a loop 82–84 % (also at strength 1.2), because the camera pushed in |
+| Slow Motion LoRA | Tested with Lightricks' settings (a wave against rocks, 1920 × 1088, 5 s, slow motion 0.2): the spray fell over the whole 5 s instead of about 1.5 s at real time, with sharp droplets. Without the LoRA the spray stood almost still as a milky veil. At 1280 × 704 and 0.25 the effect was weaker |
+| 48 fps | DFR with `temporal_upscale` keeps the sharpness of 24 fps (even and odd frames alike), at 294 instead of 118 s for 4 s at 1280 × 704 |
+| 1080p first | The size list starts with 1920 × 1088 and says that it takes about 2.7 times as long (5 s in 251 s instead of 93 s at 1280 × 704) |
+| Higher bitrate | MP4s are saved at CRF 12 instead of ComfyUI's 18: with the same seed 16.0 instead of 7.3 Mbit/s, 10 instead of 4.5 MB for 5 s. Fine detail barely changes, the softness comes from the model. `crf` per request |
+| Face after a zoom out | An end image made with FLUX 3 (same references) keeps the face. Without one, the face of the king in the last frame (about 80 px wide) was soft and distorted; with one, the last frame matches the end image. 7 s took 648 instead of 509 s |
+| Wider end image | Asked for a "wider shot", FLUX 3 kept the framing. Outpainting the end image (`outpaint=[320, 184, 320, 184]`, 1920 × 1088 → 2560 × 1456) gives a zoom out: the person ends at 75 % of the size |
+
+![The face after 2 s at full resolution: DFR in 0.5.8, the standard path and DFR in 0.5.9](images/dfr-before-after.jpg)
+
+Prompt traps seen in a scene with a speaking person and a crowd: "shouts" gives grimaces ("says
+firmly in a rough, deep voice" is calmer). A gesture that "may rise out of the frame" makes the
+camera follow it. "The camera holds a medium close-up" became a push-in to an extreme close-up;
+"Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." held the
+framing. "Proud, calm expression" became a grin; "stern, determined expression and does not smile"
+did not. Thin props such as rifles and flag poles that cross people in the start image morph into
+each other in the video, so keep them apart in the start image and do not move them all at once.
+
+**Krea 2 Turbo** (`krea2-turbo-nvfp4`) is the third recommended image model: the most photographic of the three, about 20 s per image, license only below US$1 million revenue. Comparison and prompt tips in section 6.
+
+![Explorer in full body, same prompt and seed: Qwen-Image-2512, FLUX 3 and Krea 2 Turbo](images/compare-krea2.jpg)
+
+Qwen-Image-2512 now also comes in INT8 for RTX 20/30/40 (`qwen-image-2512-int8`, see section 4): on an
+RTX 4060 with 8 GB 653 instead of 1095 s with NVFP4. Krea 2 on the same card was faster with NVFP4 (46
+instead of 82 s), because 7.7 GB fit into its memory (section 6).
+In the history, a click on a prompt shows it in full.
 
 ### New in 0.5.8
 
@@ -127,7 +162,7 @@ technical report). NVAI-open itself filters nothing. The same information is in 
 |---|---|
 | uncensored | Chroma1-HD, Pony Diffusion V6 XL, NoobAI-XL, Illustrious XL |
 | partly censored | SDXL, Z-Image, Wan 2.1 / 2.2 |
-| censored | Qwen-Image-2512, FLUX 3 Image Klein, FLUX.1 schnell |
+| censored | Qwen-Image-2512, FLUX 3 Image Klein, Krea 2, FLUX.1 schnell |
 | filtering unknown | Juggernaut XL, Qwen-Image 2.1, LongCat-Image, LTX-Video |
 
 Removed from the catalog in 0.5.2 (installed files stay): SD 3.5 Medium/Large, FLUX.1 dev,
@@ -164,7 +199,7 @@ The most important tools:
 | Tool | Purpose |
 |---|---|
 | `health` | always first: backend, active models, queue |
-| `list_models(kind="image", detailed=True)` | models with `features` (section 7), pros and cons, license |
+| `list_models(kind="image", detailed=True)` | models with `features` (section 8), pros and cons, license |
 | `generate_image(...)` | generates images and blocks until done. Returns `files`, `asset_ids`, `seed`, and for FLUX 3 also `caption` |
 | `list_assets(kind="image")` | latest images with asset ID and path |
 | `copy_asset(asset_id, destination)` | copy an image into your own project |
@@ -181,7 +216,7 @@ reconnecting.
 | `GET /api/models?kind=image` | models with `features`, plus `recommended` and `gpu_note` for the detected card |
 | `GET /api/models/search?q=…` | more models on Hugging Face (repos with checkpoint files) |
 | `GET /api/models/inspect?repo=…&file=…` | checks a file before downloading: architecture from the safetensors header, size. SDXL and SD 1.5 checkpoints can be downloaded |
-| `POST /api/generate/image` | create a job (JSON, fields as in section 6). Response: job with `id` |
+| `POST /api/generate/image` | create a job (JSON, fields as in section 7). Response: job with `id` |
 | `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
 | `GET /api/jobs/{id}/assets` | generated images: `id`, `filename`, `url`, `meta` (seed, settings, and `caption` for FLUX 3) |
 | `POST /api/upload` | upload your own image (multipart, field `file`). The returned `id` works as a reference image |
@@ -319,6 +354,22 @@ Plain light grey background, soft even light.
 - With Lightning (8 steps), structural details get lost. Lightning is only suitable for drafts.
 - Encoder and model do not fit into 16 GB at the same time. Every new prompt reloads; that is
   already included in the measured times.
+
+### INT8 version for RTX 20/30/40 (`qwen-image-2512-int8`)
+
+Only RTX 50 cards compute NVFP4 in hardware; an RTX 4060 needed 1095 s per image with it. For older
+cards there is an INT8 version, quantized with Comfy-Org's own tool comfy-quants (int8 tensorwise
+with ConvRot, the same layer selection as the official exports). It loads in stock ComfyUI without
+a custom node and computes in hardware on every NVIDIA card from the RTX 20 series on. It is a
+community upload (LAXMAYDAY, a byte-identical copy at wazimondo), 20.6 GB; text encoder and VAE are
+shared with the NVFP4 versions.
+
+Measured on an RTX 5060 Ti (16 GB), 1024 × 1024, 50 steps: 119 s per image, 132 s with loading
+(NVFP4: 101 and 108 s). The test crate came out just as well as with NVFP4: lettering exact, rope
+handles through drilled holes. With 16 GB or less, ComfyUI streams parts of the model from system
+memory. On an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4): 653 s including loading, the NVFP4
+version 1095 s; neither fits into 8 GB, but INT8 is computed in hardware. Lettering and rope handles
+came out clean there too.
 
 ## 5. FLUX 3 Image Klein (`flux3-klein-nvfp4`)
 
@@ -496,8 +547,8 @@ RTX 4070 in under 9 s per image (16 steps, 1 MP). We have not measured this yet.
 reference images, boxes and the upsampler work as with NVFP4.
 
 NVAI-open detects the card (`compute_cap` via nvidia-smi) and marks suitable models in
-`list_models` with `recommended`: on RTX 50 Qwen and FLUX 3 in NVFP4, on older cards FLUX 3 INT8
-and Z-Image INT8. A format that the detected card does not compute in hardware gets a note in
+`list_models` with `recommended`: on RTX 50 Qwen, FLUX 3 and LTX-2.5 in NVFP4, on older cards
+Qwen-Image-2512, FLUX 3, Z-Image and LTX-2.5 in INT8. A format that the detected card does not compute in hardware gets a note in
 `gpu_note`.
 
 ### License: FLUX Kommunity License v1.0
@@ -517,7 +568,78 @@ This is not legal advice; the full text in the model repository (`LICENSE.md`) i
 Point out this license for every FLUX 3 image that goes into a product that is sold. If these
 conditions don't work for you: Qwen.
 
-## 6. `generate_image` parameters
+## 6. Krea 2 Turbo (`krea2-turbo-nvfp4`)
+
+### Key facts
+
+- By Krea.ai, June 2026: a diffusion transformer with 12B parameters, released with open weights as
+  Raw (for fine-tuning) and Turbo (distilled). NVAI-open uses Turbo with the values from ComfyUI's
+  template `image_krea2_turbo_t2i.json`: 8 steps, CFG 1, sampler `euler`, scheduler `simple`.
+- Text encoder Qwen3-VL-4B, byte for byte the file FLUX 3 uses; the VAE is Qwen-Image's, also
+  identical (SHA-256 compared). With one of those models installed, only the 7.7 GB of Krea itself
+  remain to download, otherwise 12.8 GB. The files come from Comfy-Org/Krea-2, which unlike Krea's
+  own repositories is not gated.
+- Output from 1 to 2 MP according to Krea. The negative prompt has no effect (CFG 1).
+- No reference images, no mask, no second pass (`hires`). For editing, FLUX 3 remains the choice.
+- License: Krea 2 Community License, see below.
+
+### Compared with Qwen and FLUX 3 (measured)
+
+Same prompt and seed, RTX 5060 Ti, images checked at full resolution:
+
+| Subject | Qwen-Image-2512 | FLUX 3 | Krea 2 Turbo |
+|---|---|---|---|
+| Old fisherman mending a net, 1024² (first image, with loading) | 160 s | 36 s | 41 s |
+| Ammunition crate with lettering, 1024² | 109 s | 31 s | 21 s |
+| Explorer in full body, 832 × 1216 | 113 s | 32 s | 20 s |
+
+- **The most photographic of the three.** Hands and faces looked natural; skin, wool and leather
+  have texture instead of the smooth AI look.
+- **Text:** "MUNITION 7,92" came out letter-perfect, and the rope handles pass through drilled holes.
+  The crate came without a lid, which the prompt did not mention: name what has to be there.
+- **Full figure:** the standing explorer has both boots in the frame.
+- **Name the framing.** The fisherman prompt stresses his weathered hands, and Krea cut his head off
+  at the top in three of three images (two seeds, also at 1408 × 1408). With the sentence "Medium shot
+  from the waist up, his whole head and face inside the frame with free space above his head." the
+  head was in the frame in two of two. Without that sentence, FLUX 3 had the best composition.
+
+### Run times (measured)
+
+| Run | Time |
+|---|---|
+| 1024², 8 steps | 20–21 s |
+| 1408 × 1408 (2 MP) | 37 s |
+| first image after FLUX 3 (loading) | 41 s |
+
+### Writing the prompt
+
+As for Qwen: full English sentences, style and medium first, then the subject with material, color
+and construction, then light and background; text verbatim in quotation marks. State the framing
+("medium shot from the waist up", "full body, both boots inside the frame"). Krea 2 is trained on
+detailed descriptions; expand a few words with **✨ Expand prompt** first (Krea's own template does
+the same).
+
+### License: Krea 2 Community License
+
+- Commercial use only below US$1 million annual revenue, including affiliated companies.
+- A content filter or a review of every image by hand is required.
+- Label images as AI-generated where the law requires it.
+- Krea can terminate the license with 30 days' notice.
+- Without these conditions: Qwen-Image-2512 (Apache-2.0).
+
+### INT8 version for RTX 20/30/40 (`krea2-turbo-int8`)
+
+Comfy-Org's INT8 version (ConvRot), computed in hardware on every NVIDIA card from the RTX 20 series
+on. The model file is 13.5 GB (18.6 GB with text encoder and VAE); on cards with less memory ComfyUI
+streams parts from system memory.
+
+Measured on an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4), 1024 × 1024, the crate from above: 193 s for
+the first image, then 82 s, lettering exact as with NVFP4. The NVFP4 version took 46 s on the same card
+including loading, although the 4060 has no FP4 units: at 7.7 GB it fits into the graphics memory, the
+INT8 version at 13.5 GB does not. **On 8 GB cards, use the NVFP4 version.** With 12 or 16 GB not
+measured yet.
+
+## 7. `generate_image` parameters
 
 Applies equally to the MCP tool and to the body of `POST /api/generate/image`.
 
@@ -542,7 +664,7 @@ Applies equally to the MCP tool and to the body of `POST /api/generate/image`.
 Size by silhouette: standing figure 832 × 1216 (Qwen native 1056 × 1584), vehicle in landscape
 1216 × 832 (1584 × 1056), object and icon 1024 × 1024 (1328 × 1328).
 
-## 7. The `features` field
+## 8. The `features` field
 
 `GET /api/models` and `list_models(detailed=True)` return a `features` field for each image
 model. Other programs can adapt their controls to it, as the NVAI-open web UI does.
@@ -564,7 +686,7 @@ model. Other programs can adapt their controls to it, as the NVAI-open web UI do
 | `prompt_hint` | short prompt guide, in the request language (English by default) | ✓ | ✓ |
 | `placeholder` | example prompt | ✓ | ✓ |
 
-## 8. Known pitfalls
+## 9. Known pitfalls
 
 - **Historical vehicles:** no model knows the silhouette of a Panzer IV or a Kübelwagen. More
   seeds only give other fantasy vehicles. Fidelity would need a template plus a ControlNet, and
@@ -580,19 +702,20 @@ model. Other programs can adapt their controls to it, as the NVAI-open web UI do
 - **Check results at full resolution:** downscaled previews hide exactly the errors that matter,
   such as a rope handle without a hole.
 
-## 9. For maintainers
+## 10. For maintainers
 
 | What | Where |
 |---|---|
 | Catalog entries, `features`, texts | `server/nvai/catalog.py` |
-| ComfyUI graphs (`build_qwen_image`, `build_flux3`) | `server/nvai/workflows.py` |
+| ComfyUI graphs (`build_qwen_image`, `build_flux3`, `build_krea2`) | `server/nvai/workflows.py` |
 | Upsampler, box logic, cache | `server/nvai/flux3_prompt.py` (based on BFL's reference code, Apache-2.0) |
 | BFL's upsampler system prompts | `server/nvai/flux3_pup_prompts.json` |
 | Flow (upsampler, then image; providing references) | `server/nvai/jobs.py`, `_txt2img` |
 | MCP instructions and tool texts | `server/nvai/mcp_server.py` |
 | Model files | `external/comfyui/models/{diffusion_models,text_encoders,vae,loras}` (the Windows setup uses the model folder chosen during installation) |
 
-The graphs are modeled on the templates that ship with ComfyUI: `image_qwen_Image_2512.json` and
-`image_flux3_klein_*`. The CLIPLoader types are `qwen_image` and `flux3`, the empty latent is
-`EmptySD3LatentImage` or `EmptyFlux2LatentImage` respectively, references go through
+The graphs are modeled on the templates that ship with ComfyUI: `image_qwen_Image_2512.json`,
+`image_flux3_klein_*` and `image_krea2_turbo_t2i.json`. The CLIPLoader types are `qwen_image`,
+`flux3` and `krea2`, the empty latent is `EmptySD3LatentImage`, `EmptyFlux2LatentImage` or
+`EmptyLatentImage` respectively, references go through
 `ReferenceMultiLatent`, the upsampler through `TextGenerate`.

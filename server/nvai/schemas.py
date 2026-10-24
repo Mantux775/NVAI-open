@@ -175,8 +175,10 @@ class GenerateVideoRequest(BaseModel):
     end_image_asset_id: str | None = Field(
         None, description="LTX-2.5: Endbild (letzter Frame); mit image_asset_id ein Uebergang")
     loop: bool = Field(False, description="LTX-2.5: Schleife -- das Startbild ist auch das Endbild")
-    quality: Literal["standard", "dfr"] = Field(
-        "standard", description="LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer")
+    quality: Literal["standard", "full", "dfr"] = Field(
+        "standard", description="LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer; "
+                                "full = Versuch, eine Stufe in voller Aufloesung (gemessen nicht "
+                                "durchgehend schaerfer, 56 % laenger)")
     temporal_upscale: bool = Field(
         False, description="LTX-2.5 mit quality=dfr: doppelte Bildrate bei gleicher Dauer (24 -> 48 fps)")
     auto_duration: bool = Field(
@@ -187,6 +189,9 @@ class GenerateVideoRequest(BaseModel):
     motion_speed: float = Field(
         1.0, gt=0.0, le=1.0, description="LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x "
                                           "langsamer; verlaesslich mit der Slow-Motion-LoRA")
+    crf: float | None = Field(
+        None, ge=0.0, le=51.0, description="LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und "
+                                            "groessere Datei; leer = workflows.VIDEO_CRF")
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",

@@ -136,8 +136,8 @@ For 3D, the setup's full installation includes TripoSG. TRELLIS.2 (`trellis2-4b`
 textures) is only available when you install from source (see
 [Optional: 3D workers](#optional-3d-workers)).
 
-The two recommended image models, Qwen-Image-2512 and FLUX 3 Image Klein, are described in
-detail in [MODELS.md](MODELS.md).
+The three recommended image models, Qwen-Image-2512, FLUX 3 Image Klein and Krea 2, are described
+in detail in [MODELS.md](MODELS.md).
 
 ### LoRAs (Hugging Face and Civitai)
 

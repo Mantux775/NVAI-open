@@ -31,7 +31,7 @@ server = MCPServer(
         "block until done and return absolute file paths that can be used directly in "
         "Unity or Blender. Call health() first: it shows the backend, the active models "
         "and the queue.\n\n"
-        "IMAGE MODELS -- the two recommended ones (times measured on an RTX 5060 Ti 16 GB):\n"
+        "IMAGE MODELS -- the three recommended ones (times measured on an RTX 5060 Ti 16 GB):\n"
         "1. qwen-image-2512-nvfp4 (Qwen-Image-2512, 50 steps, cfg 4, Apache-2.0, ~100 s "
         "at 1024x1024): for final assets, text in the image (letter-perfect) and structural "
         "details. Prompt in full English sentences: medium and style, then the subject with "
@@ -48,6 +48,14 @@ server = MCPServer(
         "upsampler invents. The negative prompt has no effect. LICENSE: FLUX Kommunity "
         "License -- images may be used commercially only below US$5M annual revenue, and "
         "every image must be reviewed before publishing; point this out for final assets.\n"
+        "3. krea2-turbo-nvfp4 (Krea 2 Turbo, 8 steps, ~20 s at 1 MP, 37 s at 2 MP): the most "
+        "photographic of the three, natural hands and faces, letter-perfect text; no reference "
+        "images. State the framing explicitly ('medium shot from the waist up, his whole head "
+        "inside the frame'): without it the head of a man mending a net was cut off in three of "
+        "three images, with it in none of two. The negative prompt has no effect. LICENSE: Krea 2 "
+        "Community License -- commercial use only below US$1M annual revenue, every image must be "
+        "reviewed by hand (or a content filter used), Krea can terminate with 30 days' notice; "
+        "point this out for final assets.\n"
         "list_models(kind='image', detailed=True) returns 'features' for each model: which "
         "parameters have an effect, recommended sizes (sizes) and a prompt hint.\n\n"
         "SHORT PROMPTS: expand_prompt(prompt, width, height) turns a few words into a full "
@@ -58,23 +66,40 @@ server = MCPServer(
         "helmet). Not needed for flux3-klein-*: they expand internally.\n\n"
         "VIDEO -- the recommended model is LTX-2.5 (ltx25-distilled-nvfp4 on RTX 50, "
         "ltx25-distilled-int8 on older cards): picture and sound in one pass, 5 s at 1280x704 "
-        "in ~93 s on an RTX 5060 Ti. Prompt as one present-tense paragraph: shot, setting and "
+        "in ~93 s, at 1920x1088 in ~251 s on an RTX 5060 Ti. Prompt as one present-tense "
+        "paragraph: shot, setting and "
         "light, the action with verbs, camera movement, then the sound; spoken lines in "
         "quotation marks; name loud sound sources explicitly (sounds described as soft came out "
         "very quiet). generate_video takes, for LTX-2.5 only: a start image, end_image_asset_id "
         "or loop=True (seamless loop; keep the camera still), quality='dfr' (more detail, "
         "slower; temporal_upscale for 48 fps), auto_duration, audio_asset_id (the picture "
         "follows a given sound, e.g. "
-        "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA). "
+        "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA; "
+        "measured at 1920x1088 and 0.2: a wave's spray fell over 5 s instead of 1.5 s with sharp "
+        "droplets, without the LoRA it froze into a milky veil). "
         "Several shots in one clip: write the cuts out in prose (expand_prompt "
         "target='video_multishot'). list_models(kind='lora') marks LoRAs recommended for "
-        "LTX-2.5 in features.recommended_for. A person from a photo in a video: first "
+        "LTX-2.5 in features.recommended_for. The Cinemagraph LoRA (trigger CINEMAGRAPH_MOTION) "
+        "only works with a start image and loop=True: measured 6 % of the picture moving with a "
+        "still face, 82-84 % without loop. A person from a photo in a video: first "
         "generate_image with flux3-klein-*, the photo (cropped to head and shoulders) in "
         "reference_asset_ids, batch_size=4, in the video size, prompt 'Cinematic film still. The "
         "person from the first image, with exactly the same face, eyes, nose, mouth and hair "
         "color: <role>. Medium shot from the waist up, the face clearly visible.'; pick the most "
         "similar face at full resolution, then generate_video with image_asset_id. Keep the "
-        "person facing the camera; turned away, the face is redrawn and looks less alike.\n\n"
+        "person facing the camera; turned away, the face is redrawn and looks less alike.\n"
+        "Prefer the higher quality and say so: final videos at 1920x1088 (5 s in ~251 s, about "
+        "2.7 times 720p), start images in that size too, and quality='dfr' when the model's "
+        "features.dfr is true (detail stays sharp over the whole clip, about 3 times the time; not "
+        "with an end image or loop). If the face has to stay recognizable "
+        "after a zoom out or a big move, give an end image made with flux3-klein-* and the same "
+        "references (the last frame then matches it; a wider end image comes from outpaint, "
+        "FLUX ignored 'wider shot' when editing). Measured prompt traps: 'shouts' gives "
+        "grimaces ('says firmly in a rough, deep voice' is calmer); a gesture that may 'rise out "
+        "of the frame' makes the camera follow it; for a fixed frame write 'Static camera, a "
+        "locked-off medium shot; the framing stays exactly as in the first frame.'; 'calm, "
+        "proud expression' became a grin ('stern, determined, does not smile'). Thin props "
+        "(rifles, flag poles) that cross people in the start image morph into each other.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -471,6 +496,7 @@ async def generate_video(
     auto_duration: bool = False,
     audio_asset_id: str | None = None,
     motion_speed: float = 1.0,
+    crf: float | None = None,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
@@ -478,8 +504,9 @@ async def generate_video(
     grid the model requires (Wan 4n+1, LTX 8n+1).
 
     RECOMMENDED: LTX-2.5 (ltx25-distilled-nvfp4, or ltx25-distilled-int8 on RTX 20/30/40):
-    picture and sound in one pass, MP4. Use fps=24, sizes from its features.sizes (1280x704
-    is 720p 16:9), frames 97 = 4 s, 121 = 5 s, up to 481 = 20 s.
+    picture and sound in one pass, MP4. Use fps=24, sizes from its features.sizes: 1920x1088
+    (1080p) for final videos, about 2.7 times as long as 1280x704 (720p, for drafts) -- say so
+    to the user. Frames 97 = 4 s, 121 = 5 s, up to 481 = 20 s.
 
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
@@ -515,7 +542,10 @@ async def generate_video(
             camera still and describe a repeating motion (flames, water, breathing); with a
             camera move the last frames fell apart in the test.
         quality: LTX-2.5: 'standard' or 'dfr' (Diffusion Fidelity Rendering: detail
-            keyframes plus a detail IC-LoRA, sharper, slower). Not with an end image.
+            keyframes plus a detail IC-LoRA). Measured at 1080p: faces and fabric stay sharp over
+            the whole clip (face 2.5 to 3 times the edge sharpness of 'standard' after 2 s), at
+            about three times the time (5 s: 786 instead of 241 s). Prefer it for final videos when
+            features.dfr is true, and say so. Not with an end image or a loop.
         temporal_upscale: LTX-2.5 with quality='dfr': double frame rate at the same
             duration (24 -> 48 fps).
         auto_duration: LTX-2.5: the model picks the length from the described action
@@ -527,6 +557,8 @@ async def generate_video(
         motion_speed: LTX-2.5: slow motion, 1 = real time, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x
             slower at the same playback fps. Reliable together with the Slow Motion
             Control LoRA and a start image.
+        crf: LTX-2.5: H.264 quality of the MP4 (CRF, lower = better and larger). Empty =
+            12; ComfyUI's own default of 18 gave only 6 to 13 Mbit/s at 1080p.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
@@ -535,7 +567,7 @@ async def generate_video(
         "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
-        "motion_speed": motion_speed,
+        "motion_speed": motion_speed, "crf": crf,
     }
     return await _generate("/api/generate/video", payload, ctx)
 

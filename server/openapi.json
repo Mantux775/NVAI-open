@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "x-api-version": 1
  },
  "paths": {
@@ -2909,10 +2909,11 @@
       "type": "string",
       "enum": [
        "standard",
+       "full",
        "dfr"
       ],
       "title": "Quality",
-      "description": "LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer",
+      "description": "LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer; full = Versuch, eine Stufe in voller Aufloesung (gemessen nicht durchgehend schaerfer, 56 % laenger)",
       "default": "standard"
      },
      "temporal_upscale": {
@@ -2946,6 +2947,20 @@
       "title": "Motion Speed",
       "description": "LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x langsamer; verlaesslich mit der Slow-Motion-LoRA",
       "default": 1.0
+     },
+     "crf": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 51.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Crf",
+      "description": "LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und groessere Datei; leer = workflows.VIDEO_CRF"
      }
     },
     "type": "object",

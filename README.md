@@ -9,22 +9,21 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.8.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.8/NVAI-open-Setup-0.5.8.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.8/NVAI-open-0.4.5.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.9.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.9/NVAI-open-Setup-0.5.9.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.9/NVAI-open-0.4.5.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.8 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.8))
+October 2026: NVAI-open 0.5.9 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.9))
 
-- **From a photo to a video:** pick a photo, describe a role, and the person speaks in a video with sound. [Step by step](docs/PHOTO_TO_VIDEO.md)
-- **LTX-2.5 fully built in:** text or start image, start and end image, seamless loop, your own sound, several shots, up to 20 s and 1080p
-- **Recommended LoRAs** for LTX-2.5, one click to download
-- **New name:** NV-AI is now called NVAI-open; folders, settings and models stay where they are
-- **Mac app 0.4.5:** a running image stops after the current step
+- **Krea 2:** a third recommended image model, the most photographic of the three, about 20 s per image
+- **Sharper videos:** best quality (DFR) is the default once Lightricks' detail LoRA is installed and keeps faces sharp over the whole clip; 1080p comes first; twice the bitrate
+- **Qwen-Image-2512 for RTX 20/30/40** in an INT8 version
+- **History:** a click on a prompt shows it in full
 
-Neu: **Vom Foto zum Video** ([Schritt für Schritt](docs/de/FOTO_ZU_VIDEO.md)), **LTX-2.5 voll ausgebaut** (bis 20 s und 1080p), **empfohlene LoRAs** für LTX-2.5, neuer Name **NVAI-open**, **Mac-App 0.4.5** bricht ein laufendes Bild nach dem aktuellen Schritt ab.
+Neu: **Krea 2** als drittes empfohlenes Bildmodell (am fotografischsten, rund 20 s je Bild), **schärfere Videos** (DFR als Vorgabe, sobald das Detail-LoRA da ist, 1080p zuerst, doppelte Bitrate), **Qwen-Image-2512 für RTX 20/30/40**, im Verlauf zeigt ein Klick den ganzen Prompt.
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -40,7 +39,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 
 ### What you can do
 
-- **Images:** FLUX 3, Qwen-Image-2512 and many more. Edit with reference images, fill in or extend a picture.
+- **Images:** FLUX 3, Qwen-Image-2512, Krea 2 and many more. Edit with reference images, fill in or extend a picture.
 - **Video with sound:** LTX-2.5 makes the picture and the sound in one pass, speech included, up to 20 s and 1080p.
 - **Music and sounds:** songs with vocals, instrumental music up to 5 minutes, sound effects.
 - **3D models:** from an image to a textured model for Unity, Blender or any engine.
@@ -83,9 +82,9 @@ Generate an image of an object and turn it into a GLB model. TRELLIS.2 paints th
 
 ### Images
 
-FLUX 3 Image Klein is fast and edits a picture while keeping the rest intact. Qwen-Image-2512 is best at lettering and at how things are built, and its license (Apache-2.0) allows almost anything. Same prompt and seed:
+FLUX 3 Image Klein is fast and edits a picture while keeping the rest intact. Qwen-Image-2512 is best at lettering and at how things are built, and its license (Apache-2.0) allows almost anything. Krea 2 looks the most like a photo and takes about 20 s per image. Same prompt and seed:
 
-![Explorer, full body: FLUX 3, Qwen-Image-2512 and Qwen-Image 2.1](docs/images/compare-explorer.jpg)
+![Explorer, full body: Qwen-Image-2512, FLUX 3 and Krea 2](docs/images/compare-krea2.jpg)
 
 ![Crate with stencilled lettering: FLUX 3 and Qwen-Image-2512](docs/images/compare-crate.jpg)
 
@@ -182,7 +181,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was geht damit?
 
-- **Bilder:** FLUX 3, Qwen-Image-2512 und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
+- **Bilder:** FLUX 3, Qwen-Image-2512, Krea 2 und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache, bis 20 s und 1080p.
 - **Musik und Sounds:** Lieder mit Gesang, instrumentale Musik bis 5 Minuten, Soundeffekte.
 - **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
@@ -225,9 +224,9 @@ Ein Bild eines Objekts erzeugen und daraus ein GLB-Modell machen. TRELLIS.2 malt
 
 ### Bilder
 
-FLUX 3 Image Klein ist schnell und bearbeitet ein Bild, ohne den Rest zu verändern. Qwen-Image-2512 ist am besten bei Schrift und Konstruktion, und seine Lizenz (Apache-2.0) erlaubt fast alles. Gleicher Prompt und Seed:
+FLUX 3 Image Klein ist schnell und bearbeitet ein Bild, ohne den Rest zu verändern. Qwen-Image-2512 ist am besten bei Schrift und Konstruktion, und seine Lizenz (Apache-2.0) erlaubt fast alles. Krea 2 wirkt am ehesten wie ein Foto und braucht rund 20 s je Bild. Gleicher Prompt und Seed:
 
-![Entdeckerin, ganze Figur: FLUX 3, Qwen-Image-2512 und Qwen-Image 2.1](docs/images/compare-explorer.jpg)
+![Entdeckerin, ganze Figur: Qwen-Image-2512, FLUX 3 und Krea 2](docs/images/compare-krea2.jpg)
 
 ![Kiste mit Schablonenschrift: FLUX 3 und Qwen-Image-2512](docs/images/compare-crate.jpg)
 

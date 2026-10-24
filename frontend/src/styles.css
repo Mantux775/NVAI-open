@@ -214,6 +214,11 @@ kbd {
 .history { display: flex; flex-direction: column; gap: 14px; }
 .run-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .run-head .prompt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-head .prompt[role='button'] { cursor: pointer; }
+.run-head .prompt[role='button']:hover { color: var(--accent); }
+/* Aufgeklappt: ganzer Prompt mit Umbruch; Kopfzeile oben bündig, damit Status und Datum oben bleiben. */
+.run-head:has(.prompt.open) { align-items: flex-start; }
+.run-head .prompt.open { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; color: var(--text); }
 
 .badge {
   font-size: 11px;

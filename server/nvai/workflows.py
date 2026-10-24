@@ -42,6 +42,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # Referenzcode nimmt 4.0. Shift steckt in den Modell-Metadaten, kein eigener Node.
     "flux3_klein": {"steps": 16, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "flux3_klein_base": {"steps": 50, "cfg": 3.5, "sampler": "euler", "scheduler": "simple"},
+    # Krea 2 Turbo: Werte aus ComfyUIs Vorlage image_krea2_turbo_t2i.json (destilliert, cfg 1,
+    # negativer Prompt als ConditioningZeroOut, kein Shift-Knoten).
+    "krea2_turbo": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     # Boogu-Image 0.1: Werte aus ComfyUIs Vorlagen image_boogu_image_0_1_{turbo_t2i,edit}.json.
     # Turbo ist destilliert (4 Schritte, cfg 1, Negativ ausgenullt); Base und Edit rechnen
     # 25 Schritte mit cfg 3,5 und shift 3,16 (nur fuer die Sigmas, wie in der Vorlage).
@@ -456,6 +459,33 @@ def build_zimage(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     return graph, seed
 
 
+def build_krea2(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """Krea 2 (Krea.ai, Juni 2026): Single-Stream-DiT mit 12 Mrd. Parametern, Qwen3-VL-4B als
+    Text-Encoder (CLIPLoader-Typ "krea2") und dem VAE von Qwen-Image.
+
+    Nachgebaut nach ComfyUIs Vorlage image_krea2_turbo_t2i.json: 8 Schritte, cfg 1, euler/simple,
+    als Negativ ConditioningZeroOut des positiven Textes. Den Prompt-Ausbau der Vorlage
+    (TextGenerate) uebernimmt hier "Prompt ausbauen".
+    """
+    d = defaults_for(entry["workflow"])
+    seed = _seed(p)
+    ids = _Ids()
+
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "krea2", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
+        "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
+    }
+    pos, neg = _apply_controlnet(graph, p, ["4", 0], ["5", 0], ["3", 0], ids)
+    _image_tail(graph, p, d, seed, entry["workflow"], model=["1", 0], pos=pos, neg=neg, vae=["3", 0],
+                latent_node="EmptyLatentImage", ids=ids)
+    return graph, seed
+
+
 def build_qwen_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     """Qwen-Image 2512: MMDiT mit Qwen2.5-VL-7B als Text-Encoder.
 
@@ -759,6 +789,8 @@ def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         return build_longcat(entry, p)
     if wf == "zimage":
         return build_zimage(entry, p)
+    if wf == "krea2_turbo":
+        return build_krea2(entry, p)
     if wf in ("qwen_image", "qwen_image_lightning"):
         return build_qwen_image(entry, p)
     if wf == "qwen_image21":
@@ -796,6 +828,10 @@ AUDIO_CEILING_DB = -1.0
 # als MP3: Schrei und jubelnde Menge (-7,5 LUFS) lagen mit -1 dB nach dem Dekodieren bei +0,7 dBFS
 # (24.10.). Deshalb fuer Video mehr Abstand.
 VIDEO_AUDIO_CEILING_DB = -2.5
+# H.264-Qualitaet der LTX-Videos (CRF, Preset medium). ComfyUIs SaveVideo nimmt ohne Angabe 18;
+# das ergab bei 1080p nur 6 bis 13 Mbit/s (Nutzer, 24.10.: "8 Mbit, das ist zu wenig").
+# Per Auftrag ueberschreibbar (GenerateVideoRequest.crf).
+VIDEO_CRF = 12.0
 _LIMITER_ID = "90"
 
 
@@ -997,6 +1033,10 @@ class _LTX:
       Endbild    end_image, mit oder ohne start_image (Schleife: dasselbe Bild an beiden Enden): eine
                  Stufe in voller Aufloesung, die Bilder als Fuehrung an Frame 0 und -1 (LTXVAddGuide,
                  0,7), danach LTXVCropGuides -- wie video_ltx2_5_flf2v.json.
+      Voll       quality=full (nur API, Versuch): derselbe einstufige Weg ohne Endbild. Gemessen 24.10.
+                 (Che, 1080p, gleicher Seed): nicht durchgehend schaerfer als Standard (Gesicht bei
+                 0,5 s +39 %, bei 3 s -30 % Kantenschaerfe), aber 56 % laenger (430 statt 275 s). Der
+                 Schaerfegewinn beim Koenig (+37 %) kam vom scharfen Endbild, nicht von der einen Stufe.
       DFR        Drei Stufen wie video_ltx2_5_dfr_i2v.json: halbe Aufloesung mit Detail-Keyframes
                  (einer je Sekunde), doppelte mit dem Detail-IC-LoRA und Stufe 1 als Referenz,
                  auf Wunsch zeitlich verdoppelt (24 -> 48 fps, Ton bleibt der aus Stufe 2).
@@ -1114,8 +1154,10 @@ class _LTX:
             audio = [self.add("NVAIAudioLimiter", audio=[raw, 0], ceiling_db=VIDEO_AUDIO_CEILING_DB,
                               lookahead_ms=5.0, release_ms=80.0), 0]
         vid = self.add("CreateVideo", images=[dec, 0], fps=fps_out, audio=audio)
+        crf = self.p.get("crf")
         self.add("SaveVideo", video=[vid, 0], filename_prefix="nvai_video", format="mp4",
-                 **{"format.codec": "h264"})
+                 **{"format.codec": "h264", "format.codec.encoding": "re-encode",
+                    "format.codec.encoding.crf": float(VIDEO_CRF if crf is None else crf)})
         return self.g
 
     # -- die drei Wege -------------------------------------------------------------------------
@@ -1177,17 +1219,18 @@ class _LTX:
         detail = self.add("LoraLoaderModelOnly", model=self.model,
                           lora_name=_file_by_target(e, "loras", "ic-lora"), strength_model=1.0)
         euler = self.add("KSamplerSelect", sampler_name="euler")
-        # Startbild wie in der Vorlage: in Zielgroesse, dann ein Viertel davon ("area"); Stufe 1
-        # bekommt es vorverarbeitet, Stufe 2 und 3 unverarbeitet -- LTXVImgToVideoInplace skaliert
-        # es selbst auf die jeweilige Latentgroesse.
+        # Startbild: Stufe 1 vorverarbeitet wie im Standardweg, Stufe 2 und 3 unverarbeitet in
+        # voller Aufloesung. Anders als ComfyUIs Vorlage, die in allen Stufen ein Viertel des
+        # Bildes ("area") nimmt: LTXVImgToVideoInplace zieht ein kleineres Bild bilinear auf die
+        # Latentgroesse und setzt es als festen ersten Frame ein. Bei 1080p wurde so aus 480 x 272
+        # ein unscharfer Anker, und das ganze Video wurde weich (gemessen 24.10., Koenig, gleicher
+        # Seed: Gesichtsschaerfe im ersten Frame 14 statt 554 im Standardweg).
         small: Ref | None = None
         pre: Ref | None = None
         if start_image:
             load = self.add("LoadImage", image=start_image)
-            full = self.add("ImageScale", image=[load, 0], upscale_method="lanczos",
-                            width=self.w, height=self.h, crop="center")
-            small = [self.add("ImageScale", image=[full, 0], upscale_method="area",
-                              width=self.w // 4, height=self.h // 4, crop="disabled"), 0]
+            small = [self.add("ImageScale", image=[load, 0], upscale_method="lanczos",
+                              width=self.w, height=self.h, crop="center"), 0]
             pre = [self.add("LTXVPreprocess", image=small, img_compression=18), 0]
 
         # Stufe 1: halbe Aufloesung; leere Detail-Keyframes werden mit dem Video entrauscht.
@@ -1263,6 +1306,9 @@ def _build_ltx2(entry, p, seed, width, height, frames, fps, start_image) -> tupl
     b = _LTX(entry, p, seed, width, height, frames, fps)
     if entry["workflow"] == "ltx25" and p.get("end_image"):
         return b.keyframes(start_image, p["end_image"]), seed
+    if entry["workflow"] == "ltx25" and p.get("quality") == "full":
+        # Derselbe einstufige Weg wie mit Endbild, nur mit dem Startbild als Fuehrung (oder ohne).
+        return b.keyframes(start_image, None), seed
     if entry["workflow"] == "ltx25" and p.get("quality") == "dfr":
         return b.dfr(start_image), seed
     return b.standard(start_image), seed
@@ -1592,7 +1638,7 @@ FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}
 BOOGU_WORKFLOWS = {"boogu", "boogu_turbo"}
 HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
 IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
-                    "qwen_image", "qwen_image_lightning", "qwen_image21"}
+                    "qwen_image", "qwen_image_lightning", "qwen_image21", "krea2_turbo"}
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",

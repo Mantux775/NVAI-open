@@ -105,6 +105,37 @@ FLUX3_LICENSE_WARNING = (
     "soweit gesetzlich verlangt. BFL kann die Lizenz jederzeit kündigen."
 )
 
+# Krea 2 (Krea.ai, Juni 2026): laut Krea 1 bis 2 MP; Seiten Vielfache von 16.
+KREA2_SIZES = [
+    {"label": "1408 × 1408 — 2 MP, Objekte mit Detail", "w": 1408, "h": 1408},
+    {"label": "1152 × 1728 — 2 MP hochkant, Figuren mit Detail", "w": 1152, "h": 1728},
+    {"label": "1728 × 1152 — 2 MP quer, Fahrzeuge mit Detail", "w": 1728, "h": 1152},
+    {"label": "1920 × 1088 — 2 MP 16:9, Panorama", "w": 1920, "h": 1088},
+]
+KREA2_PROMPT_HINT = (
+    "Ganze englische Sätze, Stil zuerst: Medium, dann das Motiv mit Material und Licht, zuletzt der "
+    "Hintergrund. Den Bildausschnitt ausdrücklich nennen („medium shot from the waist up, his whole "
+    "head inside the frame“), sonst rückt Krea das Betonte ins Bild und schneidet anderes ab. Krea 2 "
+    "ist auf ausführliche Beschreibungen trainiert; ein paar Worte vorher mit „Prompt ausbauen“ "
+    "ausbauen. Der Negativprompt wirkt hier nicht (cfg 1)."
+)
+KREA2_PLACEHOLDER = (
+    "Candid 35 mm film photograph of an old fisherman mending a net on a wooden pier at golden hour, "
+    "weathered hands, salt-stained wool sweater, soft warm light, shallow depth of field"
+)
+KREA2_LICENSE_WARNING = (
+    "Krea 2 Community License: kommerziell nur bei unter 1 Mio. US-$ Jahresumsatz (inkl. "
+    "verbundener Unternehmen), Inhaltsfilter oder Prüfung jedes Bildes von Hand vorgeschrieben, "
+    "KI-Kennzeichnung soweit gesetzlich verlangt. Krea kann die Lizenz mit 30 Tagen Frist kündigen."
+)
+KREA2_FILES_SHARED = [
+    # Derselbe Qwen3-VL-4B wie bei FLUX 3 und derselbe VAE wie bei Qwen-Image (beide bytegleich,
+    # SHA-256 am 24.10. verglichen); Comfy-Org/Krea-2 ist anders als Kreas eigene Repos nicht gated.
+    {"repo": "Comfy-Org/Krea-2", "file": "text_encoders/qwen3vl_4b_int8_convrot.safetensors",
+     "target": "text_encoders"},
+    {"repo": "Comfy-Org/Krea-2", "file": "vae/qwen_image_vae.safetensors", "target": "vae"},
+]
+
 QWEN21_LICENSE_WARNING = (
     "Qwen Research License: nur für Forschung und Evaluation, keine kommerzielle Nutzung — "
     "auch keine Bilder für ein verkauftes Spiel. Für Endassets Qwen-Image-2512 (Apache-2.0) "
@@ -463,6 +494,65 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         ],
     },
     {
+        "id": "qwen-image-2512-int8",
+        "name": "Qwen-Image-2512 (INT8, für RTX 20/30/40)",
+        "kind": "image",
+        "family": "qwenimage",
+        "workflow": "qwen_image",
+        "files": [
+            # Mit Comfy-Orgs eigenem Werkzeug quantisiert (comfy-quants, int8 tensorwise mit ConvRot,
+            # dieselbe Schichtauswahl wie die offiziellen Exporte). Laeuft ohne Zusatz-Node ab ComfyUI
+            # 0.27 und rechnet auf jeder NVIDIA-Karte ab RTX 20 in Hardware. Community-Upload; eine
+            # bytegleiche Kopie liegt unter wazimondo/Qwen-Image-2512-int8-tensorwise.
+            {"repo": "LAXMAYDAY/Qwen-Image-2512-int8-tensorwise",
+             "file": "qwen-image-2512-int8-tensorwise.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "Comfy-Org/Qwen-Image_ComfyUI",
+             "file": "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+             "target": "text_encoders"},
+            {"repo": "Comfy-Org/Qwen-Image_ComfyUI",
+             "file": "split_files/vae/qwen_image_vae.safetensors", "target": "vae"},
+        ],
+        "size_gb": 30.2,
+        "vram_gb": 16,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Qwen-Image-2512 auf Karten ohne FP4 (RTX 20/30/40)",
+        "features": {
+            "text_rendering": True, "sizes": QWEN_NATIVE_SIZES,
+            "prompt_hint": QWEN_PROMPT_HINT + " Ohne eigenen Negativprompt gilt der aus "
+                           "Qwens Modellkarte.",
+            "placeholder": QWEN_PLACEHOLDER,
+        },
+        "description": (
+            "Dasselbe Modell wie `qwen-image-2512-nvfp4` (50 Schritte, cfg 4), aber in INT8 statt "
+            "NVFP4. INT8 rechnet auf jeder NVIDIA-Karte ab RTX 20 in Hardware; NVFP4 nur auf RTX 50, "
+            "auf älteren Karten wird es Schicht für Schicht entpackt und ist deutlich langsamer.\n\n"
+            "Quantisiert mit Comfy-Orgs Werkzeug comfy-quants (int8 tensorwise mit ConvRot), läuft "
+            "ohne Zusatz-Node. Die Datei ist 20,6 GB groß; auf Karten mit weniger Speicher lädt "
+            "ComfyUI Teile aus dem Arbeitsspeicher nach.\n\n"
+            "Gemessen auf einer RTX 5060 Ti (16 GB) bei 1024 × 1024: 119 s pro Bild, mit Laden "
+            "132 s (NVFP4 dort 101 bzw. 108 s). Die Testkiste kam gleichwertig: Schrift "
+            "buchstabengenau, Seilgriffe durch Bohrungen.\n\n"
+            "Auf einer RTX 4060 mit 8 GB (am Riser, PCIe 3.0 x4) gemessen: 653 s samt Laden, die "
+            "NVFP4-Fassung dort 1095 s. Keine der beiden passt in 8 GB, INT8 rechnet aber in Hardware. "
+            "Schrift und Seilgriffe auch hier sauber.\n\n"
+            "Alles Weitere — Prompt-Regeln, Negativprompt, native Formate — wie bei der NVFP4-Fassung."
+        ),
+        "pros": [
+            "Rechnet auf RTX 20/30/40 in Hardware",
+            "RTX 4060 (8 GB): 653 statt 1095 s mit NVFP4",
+            "Negativer Prompt wirkt (cfg 4.0)",
+            "Apache-2.0",
+            "Teilt Text-Encoder und VAE mit den NVFP4-Fassungen",
+        ],
+        "cons": [
+            "20,6 GB statt 14,9 GB: auf 16 GB und weniger lädt ComfyUI Teile nach",
+            "Auf RTX 50 ist die NVFP4-Fassung die schnellere Wahl",
+            "Community-Upload, keine offizielle Fassung von Qwen oder Comfy-Org",
+        ],
+    },
+    {
         "id": "qwen-image-2.1-int8",
         "name": "Qwen-Image 2.1 (INT8, 25 Schritte) — nicht kommerziell",
         "kind": "image",
@@ -695,6 +785,100 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Kommunity-Lizenz statt Apache: Umsatzgrenze, Prüfpflicht, jederzeit kündbar",
             "53 statt 13 s pro Bild — im Test ohne sichtbaren Gewinn",
             "BFL nennt als Produktionsmodell die destillierte Fassung",
+        ],
+    },
+    {
+        "id": "krea2-turbo-nvfp4",
+        "name": "Krea 2 Turbo (NVFP4, 8 Schritte)",
+        "kind": "image",
+        "family": "krea2",
+        "workflow": "krea2_turbo",
+        "files": [
+            {"repo": "Comfy-Org/Krea-2", "file": "diffusion_models/krea2_turbo_nvfp4.safetensors",
+             "target": "diffusion_models"},
+            *KREA2_FILES_SHARED,
+        ],
+        "size_gb": 12.8,
+        "vram_gb": 10,
+        "license": "Krea 2 Community License",
+        "commercial_ok": True,
+        "warning": KREA2_LICENSE_WARNING,
+        "best_for": "Fotografische, ästhetische Bilder mit wenig KI-Look — dritte Wahl nach Qwen und FLUX 3",
+        "features": {
+            "hires": False, "mask": False, "sizes": KREA2_SIZES,
+            "prompt_hint": KREA2_PROMPT_HINT, "placeholder": KREA2_PLACEHOLDER,
+        },
+        "description": (
+            "Krea 2 von Krea.ai (Juni 2026): ein Diffusion-Transformer mit 12 Mrd. Parametern, offen "
+            "veröffentlicht als Raw (zum Feintunen) und Turbo (destilliert, 8 Schritte, cfg 1). Krea ist "
+            "für Bilder mit wenig KI-Look bekannt. Text-Encoder ist Qwen3-VL-4B, derselbe wie bei FLUX 3, "
+            "der VAE ist der von Qwen-Image; wer eines der beiden Modelle hat, lädt nur noch 7,7 GB.\n\n"
+            "Gemessen auf der RTX 5060 Ti (24.10.): rund 20 s je Bild mit 1 MP, erster Lauf mit Laden 41 s, "
+            "1408 × 1408 (2 MP) 37 s; im selben Vergleich mit gleichem Prompt und Seed Qwen-Image-2512 "
+            "109–160 s und FLUX 3 31–36 s. Krea wirkte am fotografischsten: Hände und Gesichter natürlich, "
+            "die Kistenschrift buchstabengenau, die Seile laufen durch Bohrungen (die Kiste kam aber offen, "
+            "einen Deckel nannte der Prompt nicht), die stehende Figur hat beide Stiefel im Bild. Beim alten Fischer, dessen Prompt die Hände betont, lag der Kopf in drei "
+            "von drei Bildern oben außerhalb; mit „medium shot from the waist up, his whole head inside the "
+            "frame“ in zwei von zwei im Bild.\n\n"
+            "Ausgaben von 1 bis 2 MP. Der Negativprompt wirkt nicht (cfg 1). Kreas Vorlage baut kurze "
+            "Prompts vorher aus; hier übernimmt das „Prompt ausbauen“.\n\n"
+            "Lizenz: Krea 2 Community License — siehe Warnhinweis."
+        ),
+        "pros": [
+            "Fotografischer Look, wenig KI-Glätte",
+            "Gemessen rund 20 s je Bild (1 MP), 2 MP in 37 s",
+            "Schrift im Bild buchstabengenau",
+            "8 Schritte, NVFP4 nur 7,7 GB",
+            "Teilt Text-Encoder und VAE mit FLUX 3 und Qwen-Image",
+        ],
+        "cons": [
+            "Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar",
+            "Bildausschnitt ausdrücklich nennen, sonst schneidet es ab (Fischer: Kopf 3 von 3)",
+            "Negativer Prompt wirkungslos (cfg 1)",
+            "Keine Referenzbilder; zum Bearbeiten bleibt FLUX 3",
+        ],
+    },
+    {
+        "id": "krea2-turbo-int8",
+        "name": "Krea 2 Turbo (INT8, für RTX 20/30/40)",
+        "kind": "image",
+        "family": "krea2",
+        "workflow": "krea2_turbo",
+        "files": [
+            {"repo": "Comfy-Org/Krea-2", "file": "diffusion_models/krea2_turbo_int8_convrot.safetensors",
+             "target": "diffusion_models"},
+            *KREA2_FILES_SHARED,
+        ],
+        "size_gb": 18.6,
+        "vram_gb": 16,
+        "license": "Krea 2 Community License",
+        "commercial_ok": True,
+        "warning": KREA2_LICENSE_WARNING,
+        "best_for": "Krea 2 auf Karten ohne FP4 (RTX 20/30/40)",
+        "features": {
+            "hires": False, "mask": False, "sizes": KREA2_SIZES,
+            "prompt_hint": KREA2_PROMPT_HINT, "placeholder": KREA2_PLACEHOLDER,
+        },
+        "description": (
+            "Dasselbe Modell wie `krea2-turbo-nvfp4`, in Comfy-Orgs INT8-Fassung (ConvRot), die auf jeder "
+            "NVIDIA-Karte ab RTX 20 in Hardware rechnet. 13,5 GB; auf Karten mit weniger Speicher lädt "
+            "ComfyUI Teile aus dem Arbeitsspeicher nach. Die Prompt-Hinweise der NVFP4-Fassung gelten "
+            "auch hier.\n\n"
+            "Gemessen auf einer RTX 4060 mit 8 GB (am Riser, PCIe 3.0 x4), 1024 × 1024: erstes Bild 193 s, "
+            "danach 82 s, Bild wie mit NVFP4 (Schrift genau). Die NVFP4-Fassung brauchte auf derselben "
+            "Karte 46 s samt Laden, obwohl die 4060 FP4 nicht in Hardware rechnet: Mit 7,7 GB passt sie "
+            "in den Grafikspeicher, die INT8-Fassung mit 13,5 GB nicht. Auf Karten mit 8 GB deshalb "
+            "die NVFP4-Fassung nehmen; mit 12 oder 16 GB ungemessen.\n\n"
+            "Lizenz: Krea 2 Community License — siehe Warnhinweis."
+        ),
+        "pros": [
+            "Rechnet auf RTX 20/30/40 in Hardware",
+            "Teilt Text-Encoder und VAE mit FLUX 3 und Qwen-Image",
+        ],
+        "cons": [
+            "Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar",
+            "Auf RTX 50 ist die NVFP4-Fassung die schnellere Wahl",
+            "Auf 8 GB langsamer als NVFP4 (RTX 4060: 82 statt 46 s), weil sie nicht in den Speicher passt",
         ],
     },
     {
@@ -1238,13 +1422,15 @@ LTX25_SHARED_FILES: list[dict[str, Any]] = [
 ]
 
 # Breite und Hoehe auf Vielfachen von 64 (die erste Stufe rechnet auf halber Groesse).
+# 1080p zuerst (Nutzer, 24.10.: "die höhere Qualität immer bevorzugen, aber darauf hinweisen"); die
+# Generieren-Seite nimmt das erste Format als Vorgabe. Gemessen 5 s: 1080p 251 s, 720p 93 s.
 LTX25_SIZES = [
-    {"label": "1280 × 704 — 16:9, 720p", "w": 1280, "h": 704},
-    {"label": "704 × 1280 — 9:16, hochkant", "w": 704, "h": 1280},
-    {"label": "1024 × 576 — 16:9, schneller", "w": 1024, "h": 576},
+    {"label": "1920 × 1088 — 1080p, beste Qualität (rund 2,7-mal so lang)", "w": 1920, "h": 1088},
+    {"label": "1088 × 1920 — 1080p hochkant, beste Qualität", "w": 1088, "h": 1920},
+    {"label": "1280 × 704 — 16:9, 720p, schneller", "w": 1280, "h": 704},
+    {"label": "704 × 1280 — 9:16, hochkant, schneller", "w": 704, "h": 1280},
+    {"label": "1024 × 576 — 16:9, am schnellsten", "w": 1024, "h": 576},
     {"label": "1024 × 1024 — quadratisch", "w": 1024, "h": 1024},
-    {"label": "1920 × 1088 — 1080p, langsam", "w": 1920, "h": 1088},
-    {"label": "1088 × 1920 — 1080p hochkant, langsam", "w": 1088, "h": 1920},
 ]
 
 # Was die Generieren-Seite und Claude (list_models) anbieten. auto_duration, dfr und temporal_upscale
@@ -2088,10 +2274,15 @@ LORA_MODELS: list[dict[str, Any]] = [
           best_for="Lebendes Standbild: ein Element bewegt sich, der Rest steht still",
           description=("Offizielle LoRA von Lightricks für LTX-2.5. Aus einem Startbild wird ein "
                        "Cinemagraph: ein Element bewegt sich (Wasser, Rauch, Haare, Licht), alles "
-                       "andere bleibt stehen. Mit „Schleife“ wird daraus ein nahtloser Loop, etwa für "
-                       "Menü- und Ladebildschirme. Trigger CINEMAGRAPH_MOTION in den Prompt, Stärke "
-                       "1,0 bis 1,2."),
-          features={"strength": 1.0, "use": "start_image", "recommended_for": ["ltx25"]}),
+                       "andere bleibt stehen. Wirkt nur zusammen mit „Schleife“, die NVAI-open beim "
+                       "Aktivieren mit einschaltet; daraus wird ein nahtloser Loop, etwa für Menü- und "
+                       "Ladebildschirme. Trigger CINEMAGRAPH_MOTION in den Prompt, Stärke 1,0 bis 1,2. "
+                       "Gemessen (König vor flackernden Fackeln, 4 s): mit Schleife bewegten sich 6 % "
+                       "des Bildes, das Gesicht stand still; Schleife ohne LoRA 28 %; ohne Schleife "
+                       "82–84 %, auch mit Stärke 1,2, weil die Kamera heranfuhr."),
+          features={"strength": 1.0, "use": "loop", "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet: wirkt nur mit „Schleife“ (6 % statt 28 % des Bildes "
+                              "in Bewegung, Gesicht still)"}),
     _lora("Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control",
           "ltx-2.5-22b-lora-slow-motion-control-1.0.safetensors",
           name="Slow Motion Control (LTX-2.5, Lightricks)", size_gb=0.65,
@@ -2100,8 +2291,14 @@ LORA_MODELS: list[dict[str, Any]] = [
           description=("Offizielle LoRA von Lightricks für LTX-2.5. Mit Startbild und der "
                        "Einstellung „Zeitlupe“ (0,5 = 2×, 0,2 = 5×, 0,1 = 10× langsamer) läuft die "
                        "Bewegung langsamer ab, abgespielt wird weiter mit 24 fps. Kein Trigger-Wort, "
-                       "und „slow motion“ nicht in den Prompt schreiben. Stärke 1,0."),
-          features={"strength": 1.0, "use": "motion_speed", "recommended_for": ["ltx25"]}),
+                       "und „slow motion“ nicht in den Prompt schreiben. Stärke 1,0. Gemessen mit "
+                       "Lightricks' Einstellungen (Welle an Felsen, 1920 × 1088, 5 s, 0,2): Die Gischt sank "
+                       "über die ganzen 5 s statt in rund 1,5 s, die Tropfen blieben scharf. Ohne LoRA stand "
+                       "die Gischt als milchiger Schleier fast still. Mit 1280 × 704 und 0,25 war die Wirkung "
+                       "schwächer."),
+          features={"strength": 1.0, "use": "motion_speed", "recommended_for": ["ltx25"],
+                    "tested": "Auf LTX-2.5 getestet (1080p, Zeitlupe 0,2): Gischt sinkt über 5 s statt in "
+                              "1,5 s, Tropfen scharf; ohne LoRA nur ein milchiger, stehender Schleier"}),
     _lora("joyfox/LTX-2.3-Transition-LORA", "ltx2.3-transition.safetensors",
           name="Transition (LTX-2.3, joyfox)", size_gb=0.39,
           license="Apache-2.0", commercial_ok=True,
@@ -2189,5 +2386,7 @@ KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
 # ältere Karten entpacken es Schicht für Schicht und sind deutlich langsamer — dort
 # INT8-Fassungen, die ab RTX 20 nativ laufen.
 # LTX-2.5 ist das empfohlene Videomodell (Nutzerwunsch 24.10.2026).
-RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "ltx25-distilled-nvfp4"]
-RECOMMENDED_OLDER = ["flux3-klein-int8", "z-image-int8", "ltx25-distilled-int8"]
+RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "krea2-turbo-nvfp4",
+                   "ltx25-distilled-nvfp4"]
+RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-int8",
+                     "z-image-int8", "ltx25-distilled-int8"]

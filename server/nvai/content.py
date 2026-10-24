@@ -33,6 +33,11 @@ _QWEN = ("Der technische Bericht zu Qwen-Image nennt einen NSFW-Filter in der Da
          "The Qwen-Image technical report lists an NSFW filter in data preparation; there is no separate "
          "statement for 2512, which is the same model line.",
          "https://arxiv.org/pdf/2508.02324")
+_KREA2 = ("Laut Modellkarte wurden die Trainingsdaten vor dem Training auf schädliche Inhalte gefiltert und das "
+          "Modell gezielt gegen sexuell explizite Inhalte nachtrainiert.",
+          "According to the model card, training data was filtered for harmful content before training and the "
+          "model was fine-tuned against sexually explicit content.",
+          "https://huggingface.co/krea/Krea-2-Turbo")
 _ZIMAGE = ("Die Datenaufbereitung vergibt NSFW-Werte (ohne genannte Schwelle); das Modell erzeugt laut vielen "
            "Berichten trotzdem Nacktheit.",
            "Data preparation assigns NSFW scores (no threshold given); according to many reports the model still "
@@ -77,6 +82,9 @@ CONTENT: dict[str, tuple[str, str, str, str]] = {
     "flux3-klein-base-nvfp4": ("censored", *_BFL),
     "qwen-image-2512-nvfp4": ("censored", *_QWEN),
     "qwen-image-2512-lightning": ("censored", *_QWEN),
+    "qwen-image-2512-int8": ("censored", *_QWEN),
+    "krea2-turbo-nvfp4": ("censored", *_KREA2),
+    "krea2-turbo-int8": ("censored", *_KREA2),
     "z-image": ("partial", *_ZIMAGE),
     "z-image-int8": ("partial", *_ZIMAGE),
     "wan21-t2v-1.3b": ("partial", *_WAN),
