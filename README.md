@@ -127,11 +127,6 @@ LTX-2.5 by Lightricks makes the picture and the matching sound in one pass: spee
 ![Frames from four LTX-2.5 clips: text, start image, start and end image, loop](docs/images/ltx25-examples.jpg)
 <p align="center"><sub>Four clips, each with sound, shown as four frames from start to end. The start images were made with FLUX 3.</sub></p>
 
-**From a photo to a video.** Pick a photo of a person in the video tab and describe a role: under "Person from a photo" FLUX 3 keeps the face and creates four start images in that role, and LTX-2.5 brings the one you pick to life, with speech and sound. Step by step with screenshots: [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md).
-
-<p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="A generated example portrait as a king, then the camera zooms out to the film set"></p>
-<p align="center"><sub>A generated example portrait as a king who says "Everyone can be a king these days.", then the camera zooms out to the film set. <a href="docs/videos/photo-video-king.mp4">MP4 with sound</a>.</sub></p>
-
 Under the video model, "Recommended LoRAs" lists LoRAs that fit LTX-2.5, one click to download, the tested ones with a note on how they did: styles, transitions between two images, a visualizer for music. Painted fantasy and anime show clearly; most style LoRAs were trained for LTX-2.3, and some only show at a higher strength. Lightricks' own cinemagraph and slow-motion LoRAs and the DFR detail mode (up to 48 fps) are built in too; they need their license accepted on Hugging Face first.
 
 ![The same fox without a LoRA and with three style LoRAs](docs/images/ltx25-loras.jpg)
@@ -140,6 +135,17 @@ Under the video model, "Recommended LoRAs" lists LoRAs that fit LTX-2.5, one cli
   <img src="docs/images/ltx25-settings.jpg" width="420" alt="The LTX-2.5 settings: size, length, quality, given sound, slow motion, several shots">
   <img src="docs/images/ltx25-lora-list.jpg" width="420" alt="The recommended LoRAs for LTX-2.5 with download buttons and test notes">
 </p>
+
+### From a portrait to a video
+
+![A portrait, the start image from FLUX 3 and three frames of the video from LTX-2.5](docs/images/photo-video-chain.jpg)
+
+Pick a portrait in the video tab and describe a role: under "Person from a photo" FLUX 3 keeps the face and creates four start images in that role, and LTX-2.5 turns the one you pick into a video with speech and sound. Here a generated portrait (the man does not exist) becomes a king who says "Everyone can be a king these days."; then the camera zooms out to the film set, jogging pants and sneakers included. On an RTX 5060 Ti the four start images took 96 s, the 7-second video 144 s.
+
+<p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="The king says his line, then the camera zooms out to the film set"></p>
+<p align="center"><sub>The video as a GIF, without sound. <a href="docs/videos/photo-video-king.mp4">MP4 with sound</a>.</sub></p>
+
+Step by step with screenshots: [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md)
 
 ### 3D: from an image to a model
 
@@ -340,11 +346,6 @@ LTX-2.5 von Lightricks erzeugt Bild und passenden Ton in einem Durchgang: Sprach
 ![Frames aus vier LTX-2.5-Clips: Text, Startbild, Start- und Endbild, Schleife](docs/images/ltx25-examples-de.jpg)
 <p align="center"><sub>Vier Clips, jeder mit Ton, als vier Frames vom Anfang bis zum Ende. Die Startbilder stammen von FLUX 3.</sub></p>
 
-**Vom Foto zum Video.** Im Video-Reiter ein Foto einer Person wählen und eine Rolle beschreiben: Unter „Person aus einem Foto“ übernimmt FLUX 3 das Gesicht und erzeugt vier Startbilder in dieser Rolle, LTX-2.5 belebt das gewählte, mit Sprache und Ton. Schritt für Schritt mit Screenshots: [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md).
-
-<p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="Ein erzeugtes Beispielporträt als König, dann zoomt die Kamera heraus ins Filmstudio"></p>
-<p align="center"><sub>Ein erzeugtes Beispielporträt als König, der sagt: „Everyone can be a king these days.“ Dann zoomt die Kamera heraus ins Filmstudio. <a href="docs/videos/photo-video-king.mp4">MP4 mit Ton</a>.</sub></p>
-
 Unter dem Videomodell listet „Empfohlene LoRAs“ LoRAs, die zu LTX-2.5 passen, mit einem Klick geladen, die getesteten mit einem Hinweis, wie sie abschnitten: Stile, Übergänge zwischen zwei Bildern, ein Visualizer für Musik. Gemalte Fantasy und Anime wirken deutlich; die meisten Stil-LoRAs sind für LTX-2.3 trainiert, manche zeigen sich erst bei höherer Stärke. Die Cinemagraph- und Zeitlupen-LoRAs von Lightricks und der Detailmodus DFR (bis 48 fps) sind ebenfalls eingebaut; für sie muss vorher die Lizenz auf Hugging Face akzeptiert werden.
 
 ![Derselbe Fuchs ohne LoRA und mit drei Stil-LoRAs](docs/images/ltx25-loras-de.jpg)
@@ -353,6 +354,17 @@ Unter dem Videomodell listet „Empfohlene LoRAs“ LoRAs, die zu LTX-2.5 passen
   <img src="docs/images/ltx25-settings-de.jpg" width="420" alt="Die LTX-2.5-Einstellungen: Format, Länge, Qualität, Ton vorgeben, Zeitlupe, mehrere Einstellungen">
   <img src="docs/images/ltx25-lora-list-de.jpg" width="420" alt="Die empfohlenen LoRAs für LTX-2.5 mit Knöpfen zum Laden und Testhinweisen">
 </p>
+
+### Vom Porträt zum Video
+
+![Ein Porträt, das Startbild von FLUX 3 und drei Frames aus dem Video von LTX-2.5](docs/images/photo-video-chain-de.jpg)
+
+Im Video-Reiter ein Porträt wählen und eine Rolle beschreiben: Unter „Person aus einem Foto“ übernimmt FLUX 3 das Gesicht und erzeugt vier Startbilder in dieser Rolle, LTX-2.5 macht aus dem gewählten ein Video mit Sprache und Ton. Hier wird aus einem erzeugten Porträt (den Mann gibt es nicht) ein König, der sagt: „Everyone can be a king these days.“ Dann zoomt die Kamera heraus ins Filmstudio, samt Jogginghose und Turnschuhen. Auf einer RTX 5060 Ti brauchten die vier Startbilder 96 s, das 7-Sekunden-Video 144 s.
+
+<p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="Der König sagt seinen Satz, dann zoomt die Kamera heraus ins Filmstudio"></p>
+<p align="center"><sub>Das Video als GIF, ohne Ton. <a href="docs/videos/photo-video-king.mp4">MP4 mit Ton</a>.</sub></p>
+
+Schritt für Schritt mit Screenshots: [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md)
 
 ### 3D: vom Bild zum Modell
 
