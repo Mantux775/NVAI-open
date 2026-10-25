@@ -68,7 +68,7 @@ Without a `model_id`, NVAI-open uses the active image model.
 
 The working size for removing damage is 2 MP (at most the photo's size): at 1 MP a soldier in a group photo got a different face. Limits: small marks that FLUX leaves out (a hyphen in a caption) disappear in both modes, so check lettering; film grain partly stays with thorough; color can bleed across edges of equal brightness; SeedVR2 invents fine detail at strong enlargement. FLUX 3 output falls under the FLUX Kommunity License.
 
-![Iwo Jima 1945: original and restored and colorized](images/restore-colorize.jpg)
+![An aged test photo, restored and colorized by NVAI-open, next to the color original it was aged from](images/restore-car.jpg)
 
 ![Face: original, FLUX 3 alone, NVAI-open with only the color taken over](images/restore-face.jpg)
 
