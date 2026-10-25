@@ -88,9 +88,11 @@ Lettering does not survive the mesh stage on its own. "Take the front from the i
 
 ### Images
 
-FLUX 3 Image Klein is fast and edits a picture while keeping the rest intact. Qwen-Image-2512 is best at lettering and at how things are built, and its license (Apache-2.0) allows almost anything. Krea 2 looks the most like a photo and takes about 20 s per image. Same prompt and seed:
+Four models are recommended, each for something else. **Krea 2** looks the most like a photo and is the fastest, about 18 s per image. **MOSS-Image** is strongest at lettering and layout, about 57 s, under Apache-2.0. **Qwen-Image-2512** gets details and construction right, about 100 s, also Apache-2.0. **FLUX 3 Image Klein** takes about 28 s and edits a picture while keeping the rest intact. Same prompt and seed, one image each:
 
-![Explorer, full body: Qwen-Image-2512, FLUX 3 and Krea 2](docs/images/compare-krea2.jpg)
+![An astronaut with a mission patch: Qwen-Image-2512, FLUX 3, Krea 2 and MOSS-Image, same prompt and seed](docs/images/compare-astronaut.jpg)
+
+The patch should read "ARES VII": MOSS-Image wrote it the cleanest, Krea 2 wrote "ARES VIII". In the full comparison, only Qwen-Image-2512 set a pocket watch to ten past ten as asked.
 
 Krea 2 also takes an image as a style template: the lighthouse keeps its content and takes on the watercolor or the woodcut.
 
@@ -98,7 +100,7 @@ Krea 2 also takes an image as a style template: the lighthouse keeps its content
 
 ![Crate with stencilled lettering: FLUX 3 and Qwen-Image-2512](docs/images/compare-crate.jpg)
 
-MOSS-Image writes posters and signs letter-perfect, also under Apache-2.0, in about 51 s per image. With its 50 steps the crate's rope handles pass through drilled holes; with the 25 of ComfyUI's template they hung without a hold in one of three images:
+MOSS-Image writes posters and signs letter-perfect. With its 50 steps the crate's rope handles pass through drilled holes; with the 25 of ComfyUI's template they hung without a hold in one of three images:
 
 ![MOSS-Image: a poster with lettering, a crate with 25 and with 50 steps](docs/images/moss-image-en.jpg)
 
@@ -262,9 +264,11 @@ Schrift übersteht den Weg zum Mesh nicht von allein. „Vorderseite aus dem Bil
 
 ### Bilder
 
-FLUX 3 Image Klein ist schnell und bearbeitet ein Bild, ohne den Rest zu verändern. Qwen-Image-2512 ist am besten bei Schrift und Konstruktion, und seine Lizenz (Apache-2.0) erlaubt fast alles. Krea 2 wirkt am ehesten wie ein Foto und braucht rund 20 s je Bild. Gleicher Prompt und Seed:
+Vier Modelle sind empfohlen, jedes für etwas anderes. **Krea 2** wirkt am ehesten wie ein Foto und ist am schnellsten, rund 18 s je Bild. **MOSS-Image** ist am stärksten bei Schrift und Layout, rund 57 s, unter Apache-2.0. **Qwen-Image-2512** trifft Details und Konstruktion, rund 100 s, ebenfalls Apache-2.0. **FLUX 3 Image Klein** braucht rund 28 s und bearbeitet ein Bild, ohne den Rest zu verändern. Gleicher Prompt und Seed, je ein Bild:
 
-![Entdeckerin, ganze Figur: Qwen-Image-2512, FLUX 3 und Krea 2](docs/images/compare-krea2.jpg)
+![Eine Astronautin mit Aufnäher: Qwen-Image-2512, FLUX 3, Krea 2 und MOSS-Image, gleicher Prompt und Seed](docs/images/compare-astronaut-de.jpg)
+
+Auf dem Aufnäher soll „ARES VII“ stehen: MOSS-Image schrieb es am saubersten, Krea 2 schrieb „ARES VIII“. Im ganzen Vergleich stellte nur Qwen-Image-2512 eine Taschenuhr wie verlangt auf zehn nach zehn.
 
 Krea 2 nimmt auch ein Bild als Stilvorlage: Der Leuchtturm behält seinen Inhalt und wird zum Aquarell oder zum Holzschnitt.
 
@@ -272,7 +276,7 @@ Krea 2 nimmt auch ein Bild als Stilvorlage: Der Leuchtturm behält seinen Inhalt
 
 ![Kiste mit Schablonenschrift: FLUX 3 und Qwen-Image-2512](docs/images/compare-crate.jpg)
 
-MOSS-Image schreibt Plakate und Schilder buchstabengenau, ebenfalls unter Apache-2.0, in rund 51 s je Bild. Mit seinen 50 Schritten laufen die Seilgriffe der Kiste durch Bohrungen; mit den 25 aus ComfyUIs Vorlage hingen sie in einem von drei Bildern ohne Halt:
+MOSS-Image schreibt Plakate und Schilder buchstabengenau. Mit seinen 50 Schritten laufen die Seilgriffe der Kiste durch Bohrungen; mit den 25 aus ComfyUIs Vorlage hingen sie in einem von drei Bildern ohne Halt:
 
 ![MOSS-Image: Plakat mit Schrift, Kiste mit 25 und mit 50 Schritten](docs/images/moss-image-de.jpg)
 
