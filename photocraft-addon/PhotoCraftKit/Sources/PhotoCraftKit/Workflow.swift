@@ -40,6 +40,8 @@ public final class GenerationTask: @unchecked Sendable {
     public var docName = ""
     public var docIndex = -1
     public var docSize = (0, 0)
+    /// Farbmodus beim Start, etwa „Rgb“ oder „Gray“ (Restaurieren stellt vor dem Einfärben um).
+    public var docMode = ""
     public var region: Rect?
     public var selection: Rect?
     public var hasMask = false
@@ -112,6 +114,7 @@ public final class Workflow {
         task.docName = doc["name"]?.stringValue ?? ""
         task.docIndex = ui["session"]?["active"]?.intValue ?? 0
         task.docSize = (width, height)
+        task.docMode = doc["mode"]?.stringValue ?? ""
         let canvas = Rect(0, 0, width, height)
         let sel = (doc["hasSelection"]?.truthy ?? false) ? doc["selectionBounds"]?.rectValue : nil
         task.selection = sel
@@ -203,6 +206,10 @@ public final class Workflow {
     /// Kompletter Auftrag mit NVAI-open: planen, hochladen, rechnen, Ergebnisse speichern, erste Variante einfügen.
     public func run(_ task: GenerationTask, nvai: NVAIClient, progress: @escaping (Double, String) -> Void = { _, _ in }) async throws {
         try await nvai.checkCompatible()
+        if task.mode == "restore" {
+            try await runRestore(task, nvai: nvai, progress: progress)
+            return
+        }
         let masks = try await nvai.supportsMasks()
         let mode = Planning.baseMode(task.mode)
         if task.mode == "extend" && Planning.extendSteps(task.params["extend"]).isEmpty {
@@ -292,6 +299,128 @@ public final class Workflow {
         if task.params["auto_place"]?.truthy ?? true {
             progress(0.97, t("legt das Ergebnis in PhotoCraft ab", "placing the result in PhotoCraft"))
             _ = try await place(task, variant: 0, replace: false)
+        }
+    }
+
+    /// „Restaurieren“ (wie `bridge/tasks.py`, `_execute_restore`): Ausschnitt (Auswahl mit Rand oder ganzes Bild)
+    /// in voller Größe zu NVAI-open, dort Schäden entfernen, einfärben, schärfen (`POST /api/image/restore`),
+    /// Ergebnis als Ebene zurück. NVAI-open richtet jedes Ergebnis am Foto aus. Vor dem Einfügen bekommt ein
+    /// eingefärbtes Graustufenfoto ein RGB-Dokument, und ohne Auswahl wächst das Dokument mit, wenn SeedVR2
+    /// vergrößert hat; beides ist in PhotoCraft ein eigener, rückgängig zu machender Schritt.
+    func runRestore(_ task: GenerationTask, nvai: NVAIClient, progress: @escaping (Double, String) -> Void) async throws {
+        guard try await nvai.supportsRestore() else {
+            throw WorkflowError.message(t("Diese NVAI-open-Version kann noch keine Fotos restaurieren. Bitte NVAI-open "
+                                            + "aktualisieren (Windows ab 0.5.11, Mac ab 0.4.6).",
+                                          "This NVAI-open version cannot restore photos yet. Please update NVAI-open "
+                                            + "(Windows 0.5.11 or newer, Mac 0.4.6 or newer)."))
+        }
+        progress(0.02, t("liest das Dokument", "reading the document"))
+        let (captured, _) = try await capture(task)  // die Maske legt place() als Ebenenmaske an
+        guard let context = captured else {
+            throw WorkflowError.message(t("Das Dokument ließ sich nicht lesen.", "The document could not be read."))
+        }
+        var region = task.region ?? Rect(0, 0, task.docSize.0, task.docSize.1)
+        var upscalers: [JSONValue] = []
+        if task.params["sharpen"]?.truthy ?? false { upscalers = try await nvai.upscaleModels() }
+        let plan = try Planning.planRestore(prompt: task.prompt, params: task.params, models: try await nvai.imageModels(),
+                                            upscalers: upscalers, regionSize: (region.w, region.h),
+                                            hasSelection: task.selection != nil, docMode: task.docMode)
+        task.modelName = plan.modelName
+        task.technique = "restore"
+        task.working = plan.uploadSize
+        task.warning = plan.warnings.map(\.message).joined(separator: " ").nilIfEmpty
+        var uploads: [String] = []
+        defer {
+            let ids = uploads
+            Task { for id in ids { try? await nvai.deleteAsset(id) } }
+        }
+        progress(0.05, t("lädt das Foto zu NVAI-open", "uploading the photo to NVAI-open"))
+        var src = Imaging.flattenForModel(context)
+        if (src.width, src.height) != plan.uploadSize { src = Imaging.resize(src, to: plan.uploadSize) }
+        let asset = try await nvai.upload(png: try Imaging.pngData(src), filename: "photocraft-\(task.id)-context.png")
+        guard let id = asset["id"]?.stringValue else { throw NVAIError.invalidResponse(t("Upload ohne id", "upload without id")) }
+        uploads.append(id)
+        progress(0.08, t("übergibt an NVAI-open", "handing over to NVAI-open"))
+        var payload = plan.payload
+        payload["image_asset_id"] = .string(id)
+        guard let jobID = try await nvai.restoreImage(.object(payload))["id"]?.stringValue else {
+            throw NVAIError.invalidResponse(t("Job ohne id", "job without id"))
+        }
+        task.nvJob = jobID
+        let job = try await wait(task, jobID: jobID, nvai: nvai, progress: progress)
+        if plan.toRGB || plan.enlarge > 1 {
+            progress(0.91, t("bereitet das Dokument vor", "preparing the document"))
+            try await prepareDocument(task, plan)
+            region = task.region ?? Rect(0, 0, task.docSize.0, task.docSize.1)
+        }
+        progress(0.93, t("holt die Ergebnisse", "fetching the results"))
+        let rel = "jobs/\(task.id)"
+        for (k, assetValue) in (job["asset_ids"]?.arrayValue ?? []).enumerated() {
+            guard let assetID = assetValue.stringValue else { continue }
+            let found = try await nvai.asset(assetID)
+            let tmp = url("\(rel)/download-\(k + 1).png")
+            try await nvai.fetch(found["url"]?.stringValue ?? "").write(to: tmp)
+            try Imaging.writePNG(Imaging.fitExact(try Imaging.readRGBA(tmp), width: region.w, height: region.h),
+                                 to: url("\(rel)/result-\(k + 1).png"))
+            let meta = found["meta"]
+            task.modelName = meta?["model_name"]?.stringValue ?? task.modelName
+            task.variants.append(Variant(index: k, file: "\(rel)/result-\(k + 1).png", seed: meta?["seed"]?.intValue,
+                                         assetID: assetID))
+        }
+        guard !task.variants.isEmpty else { throw NVAIError.invalidResponse(t("kein Bild zurückgegeben", "no image returned")) }
+        if task.params["auto_place"]?.truthy ?? true {
+            progress(0.97, t("legt das Ergebnis in PhotoCraft ab", "placing the result in PhotoCraft"))
+            _ = try await place(task, variant: 0, replace: false)
+        }
+    }
+
+    /// Zieldokument für das Ergebnis herrichten (wie `bridge/tasks.py`, `_prepare_document`): Farbe für ein
+    /// Graustufenfoto und/oder um `plan.enlarge` vergrößern. Merkt sich Dokument und Größe, sonst fände `place`
+    /// das Ziel nicht wieder.
+    ///
+    /// Ein Graustufendokument nähme die eingefärbte Ebene nur grau an, und `image.mode.rgb` sperrt PhotoCraft für
+    /// die Fernsteuerung („uses ambient filesystem paths“). Deshalb entsteht ein neues RGB-Dokument „<Name> – farbig“
+    /// mit dem Original als unterster Ebene; das Graustufendokument bleibt unverändert.
+    func prepareDocument(_ task: GenerationTask, _ plan: Planning.RestorePlan) async throws {
+        busy = true
+        defer { busy = false }
+        let index = try findTarget(task, session: try await pc.inspect()["session"])
+        try await activate(index)
+        if plan.toRGB {
+            let source = try await pc.document()
+            let taken = Set((try await pc.inspect()["session"]?["documents"]?.arrayValue ?? []).compactMap { $0["name"]?.stringValue })
+            let stem = (task.docName as NSString).deletingPathExtension
+            let base = "\(stem.isEmpty ? task.docName : stem) – \(t("farbig", "color"))"
+            var name = base, n = 2
+            while taken.contains(name) { // place() findet das Ziel über den Namen
+                name = "\(base) (\(n))"
+                n += 1
+            }
+            let created = try await pc.execute("file.new", [
+                "width": .int(task.docSize.0), "height": .int(task.docSize.1), "mode": "rgb",
+                "depth": .int(source["depth"]?.intValue ?? 8), "background": "transparent", "name": .string(name),
+            ])
+            guard let target = created["document"]?.intValue else {
+                throw WorkflowError.message(t("PhotoCraft hat kein neues Dokument angelegt.", "PhotoCraft did not create a new document."))
+            }
+            let empty = (try await pc.document()["layers"]?.arrayValue ?? []).compactMap { $0["id"] }
+            let layers = (source["layers"]?.arrayValue ?? []).compactMap { $0["id"] }
+            var params: [String: JSONValue] = ["document": .int(target), "source": .int(index), "layers": .array(layers),
+                                               "offset": [0, 0]]
+            if layers.count == 1 { params["name"] = .string(t("Original", "Original")) }
+            _ = try await pc.execute("layer.copyToDocument", .object(params))
+            for layer in empty { _ = try await pc.execute("layer.delete", ["layer": layer]) }
+            task.docName = name
+            task.docIndex = target
+            task.docMode = "Rgb"
+        }
+        if plan.enlarge > 1 {
+            let size = try await pc.execute("image.imageSize", ["percent": .int(Int((plan.enlarge * 100).rounded())),
+                                                                "resample": "bicubic"])
+            let width = size["width"]?.intValue ?? Int((Double(task.docSize.0) * plan.enlarge).rounded())
+            let height = size["height"]?.intValue ?? Int((Double(task.docSize.1) * plan.enlarge).rounded())
+            task.docSize = (width, height)
+            task.region = Rect(0, 0, width, height)
         }
     }
 

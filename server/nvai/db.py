@@ -117,11 +117,18 @@ def get_job(job_id: str) -> Job | None:
     return _row_to_job(row) if row else None
 
 
-def list_jobs(limit: int = 50, offset: int = 0) -> list[Job]:
+def list_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None) -> list[Job]:
+    """Neueste zuerst; `exclude` laesst eine Art weg (der Verlauf zeigt keine Downloads und blaettert in
+    50er-Schritten -- mitgezaehlte Downloads machten die Seiten sonst kuerzer)."""
     with _lock:
-        rows = _c().execute(
-            "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset)
-        ).fetchall()
+        if exclude:
+            rows = _c().execute(
+                "SELECT * FROM jobs WHERE kind != ? ORDER BY created_at DESC LIMIT ? OFFSET ?", (exclude, limit, offset)
+            ).fetchall()
+        else:
+            rows = _c().execute(
+                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset)
+            ).fetchall()
     return [_row_to_job(r) for r in rows]
 
 

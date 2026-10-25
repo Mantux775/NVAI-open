@@ -15,6 +15,8 @@ struct JobRecord: Sendable, Identifiable {
     var startedAt: Double?
     var finishedAt: Double?
     var request: ImageJobRequest?
+    /// Foto restaurieren (seit 0.4.6, `POST /api/image/restore`).
+    var restore: RestoreJobRequest?
     var downloadModelID: String?
     /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
     var expandPrompt: String?
@@ -102,6 +104,15 @@ actor JobQueue {
         let job = JobRecord(id: AssetStore.newID("job"), kind: request.kind, status: "queued",
                             stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
                             request: request, lang: request.lang)
+        add(job)
+        return job
+    }
+
+    func submitRestore(_ request: RestoreJobRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "restore", status: "queued",
+                            stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
+                            lang: request.lang)
+        job.restore = request
         add(job)
         return job
     }
@@ -260,6 +271,9 @@ actor JobQueue {
                 try await runDownload(id, modelID: modelID)
             } else if let prompt = job.expandPrompt {
                 try await runExpand(id, prompt: prompt)
+            } else if let restore = job.restore {
+                AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
+                try await runRestore(id, restore)
             } else if let request = job.request {
                 try await runImage(id, request)
             }
@@ -553,6 +567,134 @@ actor JobQueue {
                 $0.assetIDs.append(asset.id)
                 $0.timings.append(timing)
             }
+        }
+    }
+
+    // MARK: Restaurieren
+
+    private func restoreProgress(_ id: String, run: Int, of count: Int, label: String, step: Int, total: Int) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            let inRun = total > 0 ? Double(step) / Double(total) : 0
+            $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
+            $0.stage = "\(label) · " + t("Schritt \(step) von \(total)", "step \(step) of \(total)")
+        }
+    }
+
+    /// Ein Lauf von FLUX.2 Klein mit dem Bild als Referenz, in genau der bestellten Größe zurück.
+    private func renderReference(_ id: String, image: CGImage, prompt: String, size: (width: Int, height: Int),
+                                 steps: Int, guidance: Float, seed: UInt64, run: Int, of count: Int,
+                                 label: String) async throws -> CGImage {
+        let source = ImageFiles.resized(image, width: size.width, height: size.height)
+        let job = EngineJob(mode: .references([source]), prompt: prompt, width: size.width, height: size.height,
+                            steps: steps, guidance: guidance, seed: seed)
+        let work = Task {
+            try await Flux2Engine.shared.generate(job) { step, total in
+                Task { await JobQueue.shared.restoreProgress(id, run: run, of: count, label: label, step: step, total: total) }
+            }
+        }
+        imageTask = work
+        defer { imageTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }
+        return ImageFiles.resized(try await work.value, width: size.width, height: size.height)
+    }
+
+    /// Foto restaurieren, wie `jobs._restore` unter Windows: je Variante erst die Schäden (FLUX.2 Klein rechnet
+    /// das Foto mit der Anweisung neu, `RestoreTools.align` rückt es aufs Foto), dann die Farbe (FLUX.2 Klein
+    /// färbt, übernommen wird nur Lab a/b auf die Helligkeit des Fotos bzw. des restaurierten Bildes). Ohne
+    /// Restaurieren behält das eingefärbte Foto seine volle Auflösung.
+    private func runRestore(_ id: String, _ req: RestoreJobRequest) async throws {
+        guard case .flux(let model)? = Models.find(req.modelID) else {
+            throw APIError(404, t("Unbekanntes Modell: \(req.modelID)", "Unknown model: \(req.modelID)"))
+        }
+        let photo = try await loadImage(req.imageAssetID, t("Foto", "Photo"))
+        await CoreMLEngine.shared.unload()
+        update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
+        let loadStart = Date()
+        let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
+        try await Flux2Engine.shared.load(model) { fraction, message in
+            Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
+        }
+        let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
+        let features = AnyModel.flux(model).features
+        let steps = features["steps"] as? Int ?? 4
+        let guidance = Float(features["cfg"] as? Double ?? 1.0)
+        let baseSeed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        let runsPerVariant = (req.repair ? 1 : 0) + (req.colorize ? 1 : 0)
+        let count = runsPerVariant * req.batch
+        func instruction(_ text: String) -> String { req.notes.isEmpty ? text : "\(text) \(req.notes)" }
+        let repairLabel = t("Schäden entfernen", "Removing damage"), colorLabel = t("Einfärben", "Colorizing")
+
+        for k in 0..<req.batch {
+            if jobs[id]?.cancelRequested == true { break }
+            let seed = baseSeed &+ UInt64(k)
+            let sampler = PeakMemorySampler()
+            sampler.start()
+            var current = photo
+            var seconds: [String: JSONValue] = [:]
+            var meta: [String: JSONValue] = [
+                "restore": .object(["repair": .bool(req.repair), "colorize": .bool(req.colorize), "sharpen": .bool(false)]),
+                "source_asset_id": .string(req.imageAssetID),
+                "source_size": .array([.int(photo.width), .int(photo.height)]),
+                "seed": .int(Int(seed)), "model_name": .string(model.name), "workflow": .string(model.workflow),
+                "engine": .string("mlx"), "notes": .string(req.notes), "variant": .int(k + 1),
+                "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+            ]
+            do {
+                if req.repair {
+                    let started = Date()
+                    let size = RestoreJobRequest.workingSize(photo.width, photo.height,
+                                                             megapixels: req.megapixels ?? RestoreJobRequest.repairMegapixels)
+                    let raw = try await renderReference(id, image: photo, prompt: instruction(RestoreJobRequest.repairInstruction),
+                                                        size: size, steps: steps, guidance: guidance, seed: seed,
+                                                        run: k * runsPerVariant, of: count, label: repairLabel)
+                    let (aligned, alignment) = RestoreTools.align(raw, to: photo)
+                    current = aligned
+                    var info: [String: JSONValue] = [
+                        "mode": .string("thorough"), "width": .int(size.width), "height": .int(size.height),
+                        "align": alignment.json,
+                    ]
+                    // „auto“ trifft unter Windows ein Bild-Sprachmodell; hier sieht der Text-Encoder keine Bilder.
+                    if req.repairMode == "auto" { info["auto"] = .string("thorough"); info["auto_answer"] = .null }
+                    meta["repair"] = .object(info)
+                    seconds["repair"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
+                }
+                if req.colorize && jobs[id]?.cancelRequested != true {
+                    let started = Date()
+                    let size = RestoreJobRequest.workingSize(current.width, current.height,
+                                                             megapixels: RestoreJobRequest.colorizeMegapixels)
+                    let raw = try await renderReference(id, image: current, prompt: instruction(RestoreJobRequest.colorizeInstruction),
+                                                        size: size, steps: steps, guidance: guidance, seed: seed &+ 101,
+                                                        run: k * runsPerVariant + (req.repair ? 1 : 0), of: count,
+                                                        label: colorLabel)
+                    let (aligned, alignment) = RestoreTools.align(raw, to: current)
+                    let (colored, info) = RestoreTools.colorize(aligned, onto: current)
+                    current = colored
+                    var colorInfo = info.objectValue ?? [:]
+                    colorInfo["width"] = .int(size.width)
+                    colorInfo["height"] = .int(size.height)
+                    colorInfo["align"] = alignment.json
+                    meta["colorize"] = .object(colorInfo)
+                    seconds["colorize"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
+                }
+            } catch {
+                _ = sampler.stop()
+                throw error
+            }
+            let peak = sampler.stop()
+            if jobs[id]?.cancelRequested == true { break }
+            meta["seconds"] = .object(seconds)
+            meta["width"] = .int(current.width)
+            meta["height"] = .int(current.height)
+            meta["peak_memory_mb"] = .int(Int(peak))
+            if k == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+            let parts = [req.repair ? t("gründlich restauriert", "restored thoroughly") : nil,
+                         req.colorize ? t("eingefärbt", "colorized") : nil].compactMap { $0 }
+            let label = t("Foto ", "Photo ") + parts.joined(separator: ", ")
+            let asset = try await AssetStore.shared.addImage(png: try ImageFiles.pngData(current), jobID: id,
+                                                             prompt: req.notes.isEmpty ? label : "\(label): \(req.notes)",
+                                                             modelID: model.id, meta: meta)
+            update(id) { $0.assetIDs.append(asset.id) }
         }
     }
 }

@@ -31,7 +31,7 @@ server = MCPServer(
         "block until done and return absolute file paths that can be used directly in "
         "Unity or Blender. Call health() first: it shows the backend, the active models "
         "and the queue.\n\n"
-        "IMAGE MODELS -- the three recommended ones (times measured on an RTX 5060 Ti 16 GB):\n"
+        "IMAGE MODELS -- the four recommended ones (times measured on an RTX 5060 Ti 16 GB):\n"
         "1. qwen-image-2512-nvfp4 (Qwen-Image-2512, 50 steps, cfg 4, Apache-2.0, ~100 s "
         "at 1024x1024): for final assets, text in the image (letter-perfect) and structural "
         "details. Prompt in full English sentences: medium and style, then the subject with "
@@ -56,6 +56,14 @@ server = MCPServer(
         "Community License -- commercial use only below US$1M annual revenue, every image must be "
         "reviewed by hand (or a content filter used), Krea can terminate with 30 days' notice; "
         "point this out for final assets.\n"
+        "4. moss-image-sft-int8 (MOSS-Image by OpenMOSS, 50 steps, cfg 3, Apache-2.0, ~51 s at 1 MP, "
+        "28 s with steps=25): text and layout in the image (posters, signs, graphics), free to sell "
+        "without a revenue limit. Text came out letter-perfect in every test. Describe what the "
+        "finished image looks like (medium and subject, setting and composition, light and colors), "
+        "text in quotation marks with position and typeface. Short prompts are first expanded by "
+        "MOSS's own text encoder (returned as 'caption', upsample_prompt=False switches it off); a "
+        "JSON with 'summary' and 'items' as the prompt sets the layout. The negative prompt works. "
+        "Text to image only: no reference images, no mask. Not available on the Mac.\n"
         "list_models(kind='image', detailed=True) returns 'features' for each model: which "
         "parameters have an effect, recommended sizes (sizes) and a prompt hint.\n\n"
         "SHORT PROMPTS: expand_prompt(prompt, width, height) turns a few words into a full "
@@ -63,7 +71,7 @@ server = MCPServer(
         "Measured: 'a medieval blacksmith' with Qwen-Image-2512 gave a warrior portrait; "
         "with the expanded text a whole forge with hearth, anvil, tongs and sparks. Read "
         "the result and remove invented details before generating (it gave the smith a "
-        "helmet). Not needed for flux3-klein-*: they expand internally.\n\n"
+        "helmet). Not needed for flux3-klein-* and moss-image-sft-int8: they expand internally.\n\n"
         "VIDEO -- the recommended model is LTX-2.5 (ltx25-distilled-nvfp4 on RTX 50, "
         "ltx25-distilled-int8 on older cards): picture and sound in one pass, 5 s at 1280x704 "
         "in ~93 s, at 1920x1088 in ~251 s on an RTX 5060 Ti. Prompt as one present-tense "
@@ -100,6 +108,19 @@ server = MCPServer(
         "locked-off medium shot; the framing stays exactly as in the first frame.'; 'calm, "
         "proud expression' became a grin ('stern, determined, does not smile'). Thin props "
         "(rifles, flag poles) that cross people in the start image morph into each other.\n\n"
+        "OLD PHOTOS: restore_image(image_path or image_asset_id) removes damage (repair), colorizes "
+        "(colorize) and sharpens with SeedVR2 (sharpen). repair_mode='auto' (default) lets FLUX 3's upsampler "
+        "look at the photo first and asks whether it has water stains or crack networks: yes -> 'thorough' "
+        "(redraws the whole picture; cracks, scratches, water stains and fading go, faces can change slightly "
+        "per seed, so keep batch_size=2 and compare), no -> 'gentle' (only replaces detected damage, keeps the "
+        "photo's sharpness, faces and detail exactly). It matched the expected mode on 20 of 21 test photos. "
+        "Set the mode yourself only when you know better: overall aging (water stains, crack networks, grain, "
+        "fading) -> thorough, where gentle left the damage and a user found the result 'only colorized, worse "
+        "than before'; separate damage on an otherwise good photo (dust, scratches, tears, light leaks, "
+        "writing) -> gentle, where thorough came out softer on real glass plates. The result's "
+        "meta.repair.auto says what auto chose. "
+        "Colorizing takes only the color from FLUX 3 and keeps the photo's brightness and detail; known "
+        "colors in `notes` cut the measured color error by 40 %.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -180,8 +201,8 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
     """All known models with installation status, size, VRAM requirement and license.
 
     Args:
-        kind: 'image', 'audio', 'video', '3d' or 'lora'; None = all. LoRAs carry their
-            family (which models they fit) and 'trigger' words for the prompt.
+        kind: 'image', 'audio', 'video', '3d', 'lora' or 'upscale' (SeedVR2 for restore_image);
+            None = all. LoRAs carry their family (which models they fit) and 'trigger' words for the prompt.
         detailed: Also return the description, pros and cons.
     """
     async with await _client() as c:
@@ -384,6 +405,87 @@ async def generate_image(
         "loras": loras or [],
     }
     return await _generate("/api/generate/image", payload, ctx)
+
+
+@server.tool()
+async def restore_image(
+    ctx: Context,
+    image_asset_id: str | None = None,
+    image_path: str | None = None,
+    repair: bool = True,
+    repair_mode: str = "auto",
+    colorize: bool = False,
+    sharpen: bool = False,
+    scale: float = 2.0,
+    notes: str = "",
+    batch_size: int = 2,
+    megapixels: float | None = None,
+    model_id: str | None = None,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Restores an old photo: removes damage, colorizes, sharpens -- each step can be switched on or off.
+
+    Blocks until done. Steps run in this order; times measured on an RTX 5060 Ti with FLUX 3 Klein NVFP4:
+    1. repair: FLUX 3 removes scratches, dust, cracks, stains, creases, tears and emulsion damage.
+       repair_mode='thorough' takes the whole picture from FLUX: cracks, fine scratches, water stains and
+       fading go (film grain partly stays), but faces can change with the seed -- one of two variants of a
+       1911 portrait got a wider face, so compare the variants. 'gentle' keeps the photo's detail and faces
+       at full resolution and only puts in the damage NVAI-open detects, plus FLUX's contrast and fading
+       correction. It depends on the kind of damage: overall aging (water stains, crack networks, grain,
+       fading) -> thorough; separate damage on an otherwise good photo (dust, scratches, tears, light
+       leaks) -> gentle. 'auto' (default) decides that by asking FLUX 3's upsampler, which sees the photo,
+       whether it shows water stains or crack networks (about 2.5 s; 20 of 21 test photos as expected, the
+       one miss was a sharp glass plate with dust that got thorough); meta.repair.auto holds the choice.
+       Measured on test photos with a known original (similarity at a quarter of the size): heavily aged
+       0.601 untouched, 0.648 gentle, 0.689 thorough; lightly aged 0.921, 0.932 gentle, 0.911 thorough
+       (it drew faces in a group photo differently). On real glass
+       plates and a 1945 photo with a light leak gentle kept the sharpness, thorough came out softer.
+       Works at 2 MP (capped at the photo's size); a 2-variant job took 70 s at 1 MP and 150 s at 2 MP.
+       Small faces in group photos need the 2 MP.
+    2. colorize: FLUX 3 colorizes, but only the color is taken over -- brightness, detail and resolution
+       stay those of the photo (FLUX alone smoothed the skin and changed a smile). Put known colors into
+       `notes` in English ("her dress is dark red with white dots, the car is pale turquoise"): measured
+       on a photo with known colors, the color error fell by 40 %. About 40 s per variant.
+    3. sharpen: SeedVR2 (Apache-2.0, list_models(kind='upscale')) sharpens, removes coarse grain (in a test
+       even at scale 1, which also redrew the face a little; fine noise in calm areas stayed) and enlarges to
+       photo size x `scale` (at most 16 MP): 1200x864 -> 3840x2770 in 18.5 s. It invents fine detail at
+       strong enlargement.
+
+    Args:
+        image_asset_id: The photo as an asset (from list_assets or a previous result).
+        image_path: Or a local image file (PNG, JPEG, WebP); it is uploaded first.
+        repair: Remove damage.
+        repair_mode: 'auto' (default), 'thorough' or 'gentle', see above.
+        colorize: Colorize a black-and-white or sepia photo.
+        sharpen: Sharpen and enlarge with SeedVR2 at the end.
+        scale: Only with sharpen: enlargement relative to the photo, 1-4.
+        notes: Optional English hints: colors, what to keep or remove ("remove the handwritten numbers").
+        batch_size: Variants (1-4). With repair, look at the faces at full resolution and pick.
+        megapixels: Working size of FLUX for the repair (0.5-4); None = 2.
+        model_id: Editing model; None = FLUX 3 Klein.
+        seed: For reproducible results.
+
+    Returns:
+        files, asset_ids, seed. LICENSE: FLUX 3 output (repair, colorize) falls under the FLUX Kommunity
+        License -- review before publishing; SeedVR2 is Apache-2.0.
+    """
+    if not image_asset_id and not image_path:
+        return {"ok": False, "error": "image_asset_id or image_path is required"}
+    if image_path and not image_asset_id:
+        path = Path(image_path)
+        if not path.is_file():
+            return {"ok": False, "error": f"file not found: {image_path}"}
+        async with await _client() as c:
+            r = await c.post("/api/upload", files={"file": (path.name, path.read_bytes())}, timeout=120.0)
+            if r.status_code >= 400:
+                return {"ok": False, "error": r.text[:500]}
+            image_asset_id = r.json()["id"]
+    payload = {
+        "image_asset_id": image_asset_id, "repair": repair, "repair_mode": repair_mode,
+        "colorize": colorize, "sharpen": sharpen, "scale": scale, "notes": notes,
+        "batch_size": batch_size, "megapixels": megapixels, "model_id": model_id, "seed": seed,
+    }
+    return await _generate("/api/image/restore", payload, ctx)
 
 
 @server.tool()

@@ -1,27 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type ServerEvent } from '../api'
+import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
+import { Recommendations } from '../components/Recommendations'
+import { Lightbox } from '../components/Lightbox'
 import { locale, t } from '../i18n'
 
 // Dezimalzahl im Format der gewählten Sprache (Deutsch mit Komma)
 const dec = (n: number, digits: number) =>
   n.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
-type Mode = GenKind
+// "restore" (seit 0.5.11) erzeugt nichts Neues, sondern bessert ein Foto aus: eigener Reiter, eigener Endpunkt.
+type Mode = GenKind | 'restore'
 
 const MODES: { id: Mode; label: string; icon: string }[] = [
   { id: 'image', label: t('Bild', 'Image'), icon: '▣' },
   { id: 'audio', label: 'Audio', icon: '♪' },
   { id: 'video', label: 'Video', icon: '▶' },
   { id: '3d', label: '3D', icon: '◈' },
+  { id: 'restore', label: t('Restaurieren', 'Restore'), icon: '✦' },
 ]
 
 // Video-Workflows, die ohne Startbild nicht laufen (siehe workflows.py).
 const I2V_WORKFLOWS = new Set(['wan_i2v', 'wan22_i2v', 'hunyuan15_i2v', 'kandinsky5_i2v'])
 // Diese nehmen ein Startbild, wenn eines gewählt ist, sonst Text zu Video (workflows.OPTIONAL_START_WORKFLOWS).
 const OPTIONAL_START_WORKFLOWS = new Set(['wan22_ti2v', 'ltx25', 'ltx23'])
+// Bildauswahl: so viele Bilder und Uploads zeigen und je Klick auf „Weitere laden“ dazunehmen.
+const SOURCE_PAGE = 50
 
 // Allgemeine Formate, alle rund 1 Megapixel. Das Format folgt der Silhouette: ein
 // stehender Mensch im Quadrat verliert eher Beine und bekommt weniger Pixel für die
@@ -54,6 +60,7 @@ const PLACEHOLDER: Record<Mode, string> = {
   audio: 'footsteps on gravel, close mic, dry, no music',
   video: 'a torch flickering in a dark stone corridor, slow camera push in',
   '3d': 'a weathered stone gargoyle',
+  restore: '',
 }
 
 // Was "Prompt ausbauen" je Reiter daraus macht -- steht im Tooltip des Knopfs.
@@ -66,6 +73,7 @@ const EXPAND_TIP: Record<Mode, string> = {
     'Stable Audio: sound tags (source, material, room, microphone). ACE-Step: genre, instrument and mood tags.'),
   '3d': t('Beschreibt ein einzelnes, geschlossenes Objekt ohne Boden und Schatten, so wie die 3D-Modelle es brauchen.',
     'Describes a single closed object without floor or shadow, the way the 3D models need it.'),
+  restore: '',
 }
 
 // Wie mcp_server.MESH_PROMPT_SUFFIX / MESH_NEGATIVE: was ein Bild für die Mesh-Rekonstruktion braucht.
@@ -93,6 +101,7 @@ const HINT: Record<Mode, string> = {
       + 'may stay. TRELLIS.2 and TripoSG work purely from the image — whatever is in the '
       + 'image ends up in the mesh.',
   ),
+  restore: '',
 }
 
 interface Props {
@@ -106,7 +115,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<Record<Mode, string>>({
-    image: '', audio: '', video: '', '3d': '',
+    image: '', audio: '', video: '', '3d': '', restore: '',
   })
 
   const [prompt, setPrompt] = useState('')
@@ -148,6 +157,13 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [steps, setSteps] = useState('')
   const [seed, setSeed] = useState('')
   const [batch, setBatch] = useState(1)
+  // Foto restaurieren: Schritte (Schäden, Farbe, Schärfe) und Hinweise an FLUX 3
+  const [restoreRepair, setRestoreRepair] = useState(true)
+  const [restoreMode, setRestoreMode] = useState<RestoreMode>('auto')
+  const [restoreColorize, setRestoreColorize] = useState(false)
+  const [restoreSharpen, setRestoreSharpen] = useState(false)
+  const [restoreScale, setRestoreScale] = useState(2)
+  const [restoreNotes, setRestoreNotes] = useState('')
 
   // Bild: Feineinstellung
   const [cfg, setCfg] = useState('')
@@ -194,6 +210,10 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [stage, setStage] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<Asset[]>([])
+  // Große Ansicht eines Ergebnisbildes (Index in results), siehe components/Lightbox.tsx
+  const [preview, setPreview] = useState<number | null>(null)
+  const imageResults = useMemo(() => results.filter((r) => r.kind === 'image'), [results])
+  useEffect(() => setPreview(null), [results])
   const busy = jobId !== null
 
   const jobRef = useRef<string | null>(null)
@@ -206,6 +226,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         const next = { ...cur }
         for (const m of MODES) {
           if (next[m.id]) continue
+          if (m.id === 'restore') {
+            // Wie der Server ohne eigene Wahl: FLUX 3 (destilliert) zum Bearbeiten.
+            next.restore = all.find((x) => x.kind === 'image' && x.runnable && x.workflow === 'flux3_klein')?.id ?? ''
+            continue
+          }
           next[m.id] = health?.active_models?.[m.id] ?? all.find((x) => x.kind === m.id && x.runnable)?.id ?? ''
         }
         return next
@@ -213,14 +238,30 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     })
   }, [health?.active_models, downloads.finished])
 
-  // Quellbilder für den 3D-Modus nachladen
+  // Bildauswahl (Quell-, Start-, Referenzbild, Foto): die neuesten Bilder und Uploads, mit „Weitere 50 laden“
+  // wie der Verlauf (Nutzerwunsch 25.10.2026, vorher fest 40 Bilder und 20 Uploads). Die Grenze steht in einem
+  // Ref, damit auch die Effekte unten mit der aktuellen nachladen.
+  const sourceLimit = useRef(SOURCE_PAGE)
+  const [sourceMore, setSourceMore] = useState(false)
   const loadSources = () => {
-    Promise.all([api.assets('image', 40), api.assets('upload', 20)]).then(([imgs, ups]) => {
-      const all = [...imgs, ...ups].sort((a, b) => b.created_at - a.created_at)
+    const limit = sourceLimit.current
+    Promise.all([api.assets('image', limit + 1), api.assets('upload', limit + 1)]).then(([imgs, ups]) => {
+      const merged = [...imgs, ...ups].sort((a, b) => b.created_at - a.created_at)
+      const all = merged.slice(0, limit)
+      setSourceMore(merged.length > limit)
       setSourceImages(all)
       setSourceId((cur) => cur || all[0]?.id || '')
     })
   }
+  const loadMoreSources = () => {
+    sourceLimit.current += SOURCE_PAGE
+    loadSources()
+  }
+  const moreSourcesButton = sourceMore && (
+    <button className="btn small ghost" onClick={loadMoreSources}>
+      {t(`Weitere ${SOURCE_PAGE} laden`, `Load ${SOURCE_PAGE} more`)}
+    </button>
+  )
 
   // Bilder werden überall gebraucht: als Mesh-Quelle, als Video-Startbild, als
   // Vorlage zum Überarbeiten und als ControlNet-Referenz.
@@ -270,8 +311,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     }
   }
 
+  // Restaurieren nimmt Bildmodelle, die per Referenzbild bearbeiten (FLUX 3); Stilvorlagen (Krea 2) zählen nicht.
   const available = useMemo(
-    () => models.filter((m) => m.kind === mode && m.runnable),
+    () => mode === 'restore'
+      ? models.filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0
+        && m.features?.reference_kind !== 'style')
+      : models.filter((m) => m.kind === mode && m.runnable),
     [models, mode],
   )
   const selected = available.find((m) => m.id === modelId[mode])
@@ -480,8 +525,16 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const padPreset = (left: number, top: number, right: number, bottom: number) =>
     setPad({ left, top, right, bottom })
 
+  // Schärfen beim Restaurieren: SeedVR2 (Art "upscale"), die für die Karte empfohlene Fassung zuerst.
+  const upscalers = models.filter((m) => m.kind === 'upscale' && m.runnable)
+  const upscaler = upscalers.find((m) => m.recommended) ?? upscalers[0]
+  const seedvr2 = models.find((m) => m.kind === 'upscale' && m.recommended) ?? models.find((m) => m.kind === 'upscale')
+  const restoreEdits = restoreRepair || restoreColorize
+  const restoreReady = !!sourceId && (restoreEdits ? available.length > 0 : restoreSharpen && !!upscaler)
   const canGenerate =
-    mode === '3d'
+    mode === 'restore'
+      ? restoreReady
+      : mode === '3d'
       ? !!sourceId
       : needsStart
         ? !!prompt.trim() && !!sourceId
@@ -729,6 +782,20 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           controlnet_preprocess: cnPre,
           loras: activeLoras,
         })
+      } else if (mode === 'restore') {
+        job = await api.restoreImage({
+          image_asset_id: sourceId,
+          repair: restoreRepair,
+          repair_mode: restoreMode,
+          colorize: restoreColorize,
+          sharpen: restoreSharpen && !!upscaler,
+          scale: restoreScale,
+          notes: restoreNotes,
+          batch_size: Math.min(4, batch),
+          model_id: restoreEdits ? modelId.restore || null : null,
+          upscale_model_id: restoreSharpen && upscaler ? upscaler.id : null,
+          seed: seed ? Number(seed) : null,
+        })
       } else if (mode === 'audio') {
         job = await api.generateAudio({ ...common, seconds, lyrics })
       } else if (mode === 'video') {
@@ -775,7 +842,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // ohne Startbild auskommen darf, wenn das Modell auch Text-zu-Video kann.
   const sourcePicker = (allowNone: boolean) => (
     <>
-      <h3>{mode === 'video' ? t('Startbild', 'Start image') : t('Quellbild', 'Source image')}</h3>
+      <h3>{mode === 'video' ? t('Startbild', 'Start image') : mode === 'restore' ? t('Foto', 'Photo') : t('Quellbild', 'Source image')}</h3>
       {sourceImages.length === 0 ? (
         <p className="hint warn">
           {t(
@@ -817,7 +884,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           </div>
           <div className="row-between source-actions">
             <span className="muted small">
-              {t(`${sourceImages.length} Bilder`, `${sourceImages.length} images`)}
+              {t(`${sourceImages.length} Bilder`, `${sourceImages.length} images`)} {moreSourcesButton}
             </span>
             {confirmClearSources ? (
               <span className="confirm">
@@ -846,6 +913,95 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     </>
   )
 
+  // Foto restaurieren: Quellfoto, Schritte, Hinweise. Zeiten gemessen auf der RTX 5060 Ti (25.10.2026).
+  const restoreControls = () => (
+    <>
+      {sourcePicker(false)}
+      <h3>{t('Schritte', 'Steps')}</h3>
+      <div className="restore-steps">
+        <label className="check">
+          <input type="checkbox" checked={restoreRepair} onChange={(e) => setRestoreRepair(e.target.checked)} />
+          {t('Schäden entfernen', 'Remove damage')}{' '}
+          <span className="muted small">{t('(Kratzer, Staub, Risse, Flecken)', '(scratches, dust, tears, stains)')}</span>
+        </label>
+        {restoreRepair && (
+          <div className="restore-sub">
+            <span className="seg">
+              {([
+                ['auto', t('Automatisch', 'Automatic')],
+                ['thorough', t('Gründlich', 'Thorough')],
+                ['gentle', t('Schonend', 'Gentle')],
+              ] as const).map(([id, label]) => (
+                <button key={id} className={restoreMode === id ? 'on' : ''} onClick={() => setRestoreMode(id)}>
+                  {label}
+                </button>
+              ))}
+            </span>
+            <span className="muted small">
+              {restoreMode === 'auto'
+                ? t('das Bildmodell sieht sich das Foto an: Wasserflecken oder Rissnetze → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl)',
+                  'the image model looks at the photo: water stains or crack networks → thorough, otherwise gentle (the better choice on 20 of 21 test photos)')
+                : restoreMode === 'thorough'
+                ? t('für flächige Alterung (Wasserflecken, Craquelé, Korn, Ausbleichen): rechnet das ganze Foto neu; Gesichter können sich je Variante leicht ändern',
+                  'for overall aging (water stains, crack networks, grain, fading): redraws the whole photo; faces may change slightly from variant to variant')
+                : t('für einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Streifen, Risse, Lichteinfall): ersetzt nur diese Stellen, Schärfe und Gesichter bleiben original',
+                  'for separate damage on an otherwise good photo (dust, scratches, stripes, tears, light leaks): replaces only those spots, sharpness and faces stay original')}
+            </span>
+          </div>
+        )}
+        <label className="check">
+          <input type="checkbox" checked={restoreColorize} onChange={(e) => setRestoreColorize(e.target.checked)} />
+          {t('Einfärben', 'Colorize')}{' '}
+          <span className="muted small">
+            {t('(Farbe von FLUX 3, Helligkeit und Gesichter vom Foto)', '(color from FLUX 3, brightness and faces from the photo)')}
+          </span>
+        </label>
+        <label className="check" title={upscaler ? '' : t('Braucht SeedVR2', 'Needs SeedVR2')}>
+          <input type="checkbox" checked={restoreSharpen && !!upscaler} disabled={!upscaler}
+            onChange={(e) => setRestoreSharpen(e.target.checked)} />
+          {t('Schärfen und vergrößern', 'Sharpen and enlarge')}{' '}
+          <span className="muted small">(SeedVR2)</span>
+        </label>
+        {restoreSharpen && upscaler && (
+          <div className="restore-sub">
+            <span className="seg">
+              {[1, 2, 4].map((f) => (
+                <button key={f} className={restoreScale === f ? 'on' : ''} onClick={() => setRestoreScale(f)}>{f}×</button>
+              ))}
+            </span>
+            <span className="muted small">
+              {restoreScale === 1 ? t('gleiche Größe, nur schärfen', 'same size, sharpen only')
+                : t(`${restoreScale}× so groß, höchstens 16 Megapixel`, `${restoreScale}× the size, at most 16 megapixels`)}
+            </span>
+          </div>
+        )}
+        {!upscaler && seedvr2 && (
+          <div className="restore-sub">
+            <button className="btn small" onClick={() => downloads.start(seedvr2.id).catch((e) => setError(String(e)))}>
+              {t(`⬇ SeedVR2 laden (${seedvr2.size_gb} GB) zum Schärfen`, `⬇ Download SeedVR2 (${seedvr2.size_gb} GB) for sharpening`)}
+            </button>
+          </div>
+        )}
+      </div>
+      <h3>
+        {t('Hinweise', 'Hints')} <span className="muted small">{t('optional, am besten englisch', 'optional')}</span>
+      </h3>
+      <textarea
+        value={restoreNotes}
+        onChange={(e) => setRestoreNotes(e.target.value)}
+        rows={3}
+        placeholder={t('z. B. „her dress is dark red with white dots, the car is pale turquoise“',
+          'e.g. “her dress is dark red with white dots, the car is pale turquoise”')}
+      />
+      <p className="hint small">
+        {t('Bekannte Farben treffen genauer: Bei einem Foto mit bekannten Farben sank die Farbabweichung damit um 40 %. '
+          + 'Dauer je Variante: Schäden rund 35–75 s, Einfärben rund 40 s, Schärfen 6–20 s.',
+        'Known colors come out more accurately: on a photo with known colors the color error fell by 40 %. '
+          + 'Time per variant: damage about 35–75 s, colorizing about 40 s, sharpening 6–20 s.')}
+      </p>
+    </>
+  )
+
   return (
     <div className="split">
       <section className="panel controls">
@@ -861,7 +1017,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             e.target.value = ''
           }}
         />
-        <div className="mode-switch four">
+        <div className={MODES.length === 5 ? 'mode-switch five' : 'mode-switch four'}>
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -875,7 +1031,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           ))}
         </div>
 
-        {mode === '3d' ? (
+        <Recommendations mode={mode} />
+
+        {mode === 'restore' ? restoreControls() : mode === '3d' ? (
           <>
             {textureNotice()}
             <details className="mesh-from-text" open={!!prompt.trim() || sourceImages.length === 0}>
@@ -1321,6 +1479,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   <button className="btn small ghost" onClick={() => fileInput.current?.click()}>
                     {t('Bild hochladen', 'Upload image')}
                   </button>
+                  {moreSourcesButton}
                   {refIds.length > 0 && (
                     <button className="btn small ghost" onClick={() => setRefIds([])}>
                       {t('Auswahl leeren', 'Clear selection')}
@@ -1866,36 +2025,49 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         )}
 
         <div className="row">
-          <label>
-            Steps
-            <input value={steps} onChange={(e) => setSteps(e.target.value)}
-              placeholder={mode === '3d' ? '50' : feat?.steps ? String(feat.steps) : 'auto'}
-              inputMode="numeric" />
-          </label>
+          {mode !== 'restore' && (
+            <label>
+              Steps
+              <input value={steps} onChange={(e) => setSteps(e.target.value)}
+                placeholder={mode === '3d' ? '50' : feat?.steps ? String(feat.steps) : 'auto'}
+                inputMode="numeric" />
+            </label>
+          )}
           <label>
             Seed
             <input value={seed} onChange={(e) => setSeed(e.target.value)}
               placeholder={t('zufällig', 'random')} inputMode="numeric" />
           </label>
-          {mode === 'image' && (
+          {(mode === 'image' || mode === 'restore') && (
             <label>
-              {t('Anzahl', 'Count')}
-              <input type="number" min={1} max={8} value={batch}
+              {mode === 'restore' ? t('Varianten', 'Variants') : t('Anzahl', 'Count')}
+              <input type="number" min={1} max={mode === 'restore' ? 4 : 8} value={batch}
                 onChange={(e) => setBatch(Number(e.target.value))} />
             </label>
           )}
         </div>
 
-        <button className="btn primary" onClick={generate} disabled={busy || noModel || !canGenerate}>
+        <button className="btn primary" onClick={generate}
+          disabled={busy || (mode === 'restore' ? false : noModel) || !canGenerate}>
           {busy
             ? t('Generiert…', 'Generating…')
             : mode === '3d'
               ? t('Mesh erzeugen', 'Create mesh')
-              : t('Generieren', 'Generate')}
+              : mode === 'restore'
+                ? t('Foto restaurieren', 'Restore photo')
+                : t('Generieren', 'Generate')}
           {mode !== '3d' && <kbd>{t('Strg+Enter', 'Ctrl+Enter')}</kbd>}
         </button>
 
-        {noModel && (
+        {noModel && mode === 'restore' && restoreEdits && (
+          <p className="hint warn">
+            {t('Schäden entfernen und Einfärben brauchen FLUX 3 Image Klein — unter ',
+              'Removing damage and colorizing need FLUX 3 Image Klein — download it under ')}
+            <strong>{t('Modelle', 'Models')}</strong>
+            {t(' laden.', '.')}
+          </p>
+        )}
+        {noModel && mode !== 'restore' && (
           <p className="hint warn">
             {t(
               `Kein ${modeLabel}-Modell installiert — unter `,
@@ -1936,6 +2108,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 {stage} · {Math.round(progress * 100)} %
                 {mode === 'video' && t(' · Video dauert mehrere Minuten', ' · video takes several minutes')}
                 {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
+                {mode === 'restore' && t(' · meist 1–3 Minuten', ' · usually 1–3 minutes')}
               </span>
               <button className="btn small ghost danger-text" onClick={cancelJob}>
                 {t('Abbrechen', 'Cancel')}
@@ -1950,7 +2123,15 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           <div className={results[0].kind === 'image' ? 'grid' : 'stack'}>
             {results.map((a) => (
               <figure key={a.id} className="card result">
-                <AssetView asset={a} />
+                {a.kind === 'image' ? (
+                  <div className="result-open" role="button" tabIndex={0} title={t('Groß ansehen', 'View large')}
+                    onClick={() => setPreview(imageResults.indexOf(a))}
+                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setPreview(imageResults.indexOf(a)))}>
+                    <AssetView asset={a} />
+                  </div>
+                ) : (
+                  <AssetView asset={a} />
+                )}
                 <figcaption className="muted small">
                   {a.kind === 'mesh' ? a.model_id : `seed ${String(a.meta.seed ?? '?')} · ${a.model_id}`}
                   {' · '}
@@ -1967,6 +2148,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           </div>
         ) : (
           !busy && <div className="placeholder">{t('Ergebnisse erscheinen hier.', 'Results appear here.')}</div>
+        )}
+        {preview !== null && imageResults[preview] && (
+          <Lightbox assets={imageResults} index={preview} onIndex={setPreview} onClose={() => setPreview(null)} />
         )}
       </section>
     </div>

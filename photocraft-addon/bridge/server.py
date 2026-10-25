@@ -16,7 +16,7 @@ from . import __version__, config, i18n, launcher
 from .i18n import t
 from .nvai import NVAI, NVAIError, NVAIIncompatible
 from .photocraft import NotConnected, PhotoCraft, PhotoCraftError
-from .planning import WEAK_PROMPT_WORKFLOWS, capable
+from .planning import WEAK_PROMPT_WORKFLOWS, capable, restore_capable
 from .tasks import BusyError, TaskManager
 
 log = logging.getLogger(__name__)
@@ -128,6 +128,14 @@ def _nvai_state() -> dict[str, Any]:
         downloads = nv.downloads()
     except NVAIError:
         downloads = []
+    # Restaurieren (NVAI-open ab 0.5.11) und ob SeedVR2 zum Schärfen installiert ist.
+    try:
+        restore = nv.supports_restore()
+        restore_modes = nv.restore_modes()
+        sharpen = restore and any(m.get("runnable") for m in nv.upscale_models())
+    except NVAIError:
+        restore = sharpen = False
+        restore_modes = []
     return {
         "connected": True,
         "error": None,
@@ -144,6 +152,9 @@ def _nvai_state() -> dict[str, Any]:
         "gpu": h.get("gpu"),
         "masks": masks,
         "expand": expand,
+        "restore": restore,
+        "restore_modes": restore_modes,
+        "sharpen": sharpen,
         "downloads": downloads,
         **where,
     }
@@ -189,6 +200,8 @@ def models() -> list[dict[str, Any]]:
                 # Erweitern: nur mit NVAI-open ab 0.5.4; "reference" ist nahtlos, "mask" oft mit Kante.
                 "outpaint": features.get("outpaint") if nv.supports_outpaint() else None,
                 "reference_edit": capable(m, "refine", masks) and not capable(m, "img2img", masks),
+                # Restaurieren und Einfärben: Bearbeiten per Referenzbild (FLUX 3), keine Stilvorlage.
+                "restore": restore_capable(m),
                 "weak_prompt": m.get("workflow") in WEAK_PROMPT_WORKFLOWS,
                 # Bedienhinweise aus NVAI-open (BILDMODELLE.md, Abschnitt 7).
                 "negative_prompt": bool(features.get("negative_prompt", True)),
@@ -208,7 +221,7 @@ def models() -> list[dict[str, Any]]:
 # ---------------------------------------------------------------- Aufträge
 
 class GenerateRequest(BaseModel):
-    mode: Literal["fill", "generate", "refine", "extend"]
+    mode: Literal["fill", "generate", "refine", "extend", "restore"]
     prompt: str = Field("", max_length=4000)
     negative_prompt: str = Field("", max_length=2000)
     model_id: str | None = None
@@ -225,6 +238,17 @@ class GenerateRequest(BaseModel):
     hires: bool = False
     native: bool = Field(False, description="Work at the model's native resolution (more detail, about twice the time)")
     auto_place: bool = True
+    # Mode restore (NVAI-open 0.5.11+): the prompt carries optional hints such as known colors.
+    repair: bool = Field(True, description="Restore only: remove scratches, dust, tears and stains")
+    repair_mode: Literal["auto", "thorough", "gentle"] | None = Field(
+        None, description="Restore only: auto (default) lets NVAI-open's image model check for water stains and "
+                          "crack networks and pick thorough or gentle; thorough redraws the whole photo; gentle "
+                          "only replaces the damage")
+    thorough: bool | None = Field(None, description="Restore only, older panels: true = thorough, false = gentle")
+    colorize: bool = Field(False, description="Restore only: colorize; brightness and detail stay the photo's")
+    sharpen: bool = Field(False, description="Restore only: sharpen with SeedVR2 at the end")
+    scale: float = Field(1.0, ge=1.0, le=4.0, description="Restore only, with sharpen: enlarge the whole "
+                                                          "document by this factor (not with a selection)")
 
 
 class PlaceRequest(BaseModel):

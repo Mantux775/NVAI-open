@@ -45,6 +45,11 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # Krea 2 Turbo: Werte aus ComfyUIs Vorlage image_krea2_turbo_t2i.json (destilliert, cfg 1,
     # negativer Prompt als ConditioningZeroOut, kein Shift-Knoten).
     "krea2_turbo": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
+    # MOSS-Image (OpenMOSS, 16.10.2026): Einstellung von OpenMOSS (50 Schritte, cfg 3, euler). ComfyUIs Vorlage
+    # image_moss_image_t2i.json nimmt kijais schnelle Einstellung aus PR #17095 (25 Schritte, cfg 2,5, er_sde).
+    # Gemessen 25.10.2026, gleiche Prompts und Seeds: Kistenseile durch Bohrungen 3 von 3 statt 2 von 3, Schrift
+    # beide Male buchstabengenau; 51 statt 28 s je Bild mit 1 MP. Shift 5 steckt im Modell.
+    "moss_image": {"steps": 50, "cfg": 3.0, "sampler": "euler", "scheduler": "simple"},
     # Boogu-Image 0.1: Werte aus ComfyUIs Vorlagen image_boogu_image_0_1_{turbo_t2i,edit}.json.
     # Turbo ist destilliert (4 Schritte, cfg 1, Negativ ausgenullt); Base und Edit rechnen
     # 25 Schritte mit cfg 3,5 und shift 3,16 (nur fuer die Sigmas, wie in der Vorlage).
@@ -113,9 +118,46 @@ QWEN_IMAGE_NEGATIVE = (
     "画面具有AI感。构图混乱。文字模糊，扭曲。"
 )
 
+# Negativprompt aus ComfyUIs Vorlage image_moss_image_t2i.json, dort als Empfehlung von OpenMOSS.
+MOSS_IMAGE_NEGATIVE = "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+
 # Negativprompts, die ein Workflow einsetzt, wenn keiner angegeben ist. Fuer
 # registry.features_for, damit Frontend und Claude es sehen.
-DEFAULT_NEGATIVES = {"qwen_image": QWEN_IMAGE_NEGATIVE}
+DEFAULT_NEGATIVES = {"qwen_image": QWEN_IMAGE_NEGATIVE, "moss_image": MOSS_IMAGE_NEGATIVE}
+
+# Prompt-Ausbau von MOSS-Image: Systemprompt aus ComfyUIs Vorlage image_moss_image_t2i.json, dort nach dem
+# „MOSS-Image Prompt Enhancer“-Skill von OpenMOSS geschrieben. MOSS-Image ist auf Bildbeschreibungen
+# trainiert; der Ausbau laeuft auf seinem eigenen Text-Encoder (jobs._moss_caption).
+MOSS_ENHANCER_SYSTEM = (
+    "You turn a user's image idea into one detailed caption for a text-to-image model. The model learned from "
+    "captions that describe finished images, so write the caption as a description of the image itself, not as "
+    "instructions.\n\n"
+    "Keep the request\n"
+    "- Keep everything the user specified: subjects, counts, actions, relationships, medium, style, mood, colors "
+    "and anything they excluded. Never contradict or drop it.\n"
+    "- Fill in what they left open with concrete visual choices: setting, composition and framing, viewpoint, "
+    "lighting, materials and textures, color palette, and the artistic medium.\n"
+    "- Describe only what can be seen. Leave out sounds, smells, backstory and intentions.\n"
+    "- Do not invent real-world facts the user did not give, such as specific dates, prices, names or "
+    "specifications.\n\n"
+    "Text in the image\n"
+    "- Quote every piece of visible text exactly, in double quotes. Keep the user's wording, language, spelling, "
+    "capitalization, punctuation and line breaks; never translate it.\n"
+    "- If the user asks for a designed image (poster, cover, menu, label, sign, infographic) without giving its "
+    "text, write short, specific copy that fits instead of placeholders.\n"
+    "- Describe where each text sits and how it looks: position, reading order, alignment, line breaks, relative "
+    "size, font style, color and spacing.\n"
+    "- Do not mention watermarks or artist signatures.\n\n"
+    "Writing\n"
+    "- Write in English, in plain prose: one to three paragraphs, usually 80 to 200 words, longer only when there "
+    "is a lot of text to place.\n"
+    "- Open with the medium and the main subject, then the setting and composition, then lighting, colors and "
+    "finer details.\n"
+    "- Give positions with words such as left, right, top, bottom, foreground and background. No coordinates, "
+    "lists, headings, JSON or Markdown.\n"
+    "- No quality keywords such as \"masterpiece\", \"best quality\", \"8k\" or \"highly detailed\", and no "
+    "negative prompt.\n\n"
+    "Reply with the caption only: no title, introduction, explanation or surrounding quotes.")
 
 
 def defaults_for(workflow: str) -> dict[str, Any]:
@@ -654,8 +696,10 @@ def build_flux3(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     refs = p.get("reference_images") or []
     if refs:
         ref = ids()
-        inputs: dict[str, Any] = {"positive": pos, "negative": neg, "vae": ["3", 0],
-                                  "resolution": "resize", "resolution.megapixels": 1.0}
+        # Referenzen rechnet die Vorlage mit 1 MP. Beim Restaurieren groesser (jobs.RESTORE_PIXELS),
+        # sonst sieht das Modell vom Original weniger Detail, als es ausgeben soll.
+        inputs: dict[str, Any] = {"positive": pos, "negative": neg, "vae": ["3", 0], "resolution": "resize",
+                                  "resolution.megapixels": float(p.get("reference_megapixels") or 1.0)}
         for i, name in enumerate(refs):
             load = ids()
             graph[load] = {"class_type": "LoadImage", "inputs": {"image": name}}
@@ -819,8 +863,61 @@ def outpaint_pad_graph(image: str, outpaint: list[int]) -> Graph:
     }
 
 
+def build_moss_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """MOSS-Image (OpenMOSS, 16.10.2026): Single-Stream-DiT mit 5 Mrd. Parametern im Latentraum von FLUX.2,
+    Qwen3.5-9B als Text-Encoder (CLIPLoader-Typ "moss_image"), die kleine FLUX.2-VAE (Apache-2.0).
+
+    Nachgebaut nach ComfyUIs Vorlage image_moss_image_t2i.json: CLIPTextEncode positiv und negativ,
+    EmptyFlux2LatentImage, KSampler (25 Schritte, cfg 2,5, er_sde/simple). Den Prompt-Ausbau der Vorlage
+    (TextGenerate auf demselben Text-Encoder) erledigt jobs._moss_caption vorher, damit die Beschreibung im
+    Asset steht. Skip-Layer-Guidance (Schicht 22, erste Haelfte) ist dort aus; `slg` schaltet sie ein.
+    """
+    d = defaults_for(entry["workflow"])
+    seed = _seed(p)
+    ids = _Ids()
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "moss_image", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "4": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": p.get("caption") or p["prompt"], "clip": ["2", 0]}},
+        "5": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": p.get("negative_prompt") or MOSS_IMAGE_NEGATIVE, "clip": ["2", 0]}},
+    }
+    model: Ref = ["1", 0]
+    if p.get("slg"):
+        slg = ids()
+        graph[slg] = {"class_type": "SkipLayerGuidanceDiTSimple", "inputs": {
+            "model": model, "double_layers": "", "single_layers": "22", "start_percent": 0.0, "end_percent": 0.5}}
+        model = [slg, 0]
+    _image_tail(graph, p, d, seed, "moss_image", model=model, pos=["4", 0], neg=["5", 0], vae=["3", 0],
+                latent_node="EmptyFlux2LatentImage", ids=ids)
+    return graph, seed
+
+
+def moss_caption_graph(text_encoder: str, prompt: str) -> Graph:
+    """Prompt-Ausbau von MOSS-Image wie in ComfyUIs Vorlage: TextGenerate auf dem eigenen Text-Encoder mit
+    dem Enhancer-Systemprompt von OpenMOSS (MOSS_ENHANCER_SYSTEM); PreviewAny liefert den Text zurueck."""
+    return {
+        "1": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": text_encoder, "type": "moss_image", "device": "default"}},
+        "2": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": MOSS_ENHANCER_SYSTEM}},
+        "3": {"class_type": "TextGenerate", "inputs": {
+            "clip": ["1", 0], "prompt": prompt, "max_length": 4096, "sampling_mode": "on",
+            "sampling_mode.temperature": 0.7, "sampling_mode.top_k": 64, "sampling_mode.top_p": 0.95,
+            "sampling_mode.min_p": 0.05, "sampling_mode.repetition_penalty": 1.0, "sampling_mode.seed": 0,
+            "sampling_mode.presence_penalty": 0.0, "thinking": False, "use_default_template": True,
+            "mtp": "auto", "system_prompt": ["2", 0]}},
+        "4": {"class_type": "PreviewAny", "inputs": {"source": ["3", 0]}},
+    }
+
+
 def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry["workflow"]
+    if wf == "moss_image":
+        return build_moss_image(entry, p)
     if wf in BOOGU_WORKFLOWS:
         return build_boogu(entry, p)
     if wf in HIDREAM_O1_WORKFLOWS:
@@ -1674,13 +1771,57 @@ def _build_hunyuan15(entry, p, wf, sampler, seed, width, height,
     return graph, seed
 
 
+# ---------------------------------------------------- SCHAERFEN (SeedVR2)
+
+# Farbabgleich nach dem Schaerfen (SeedVR2PostProcessing): "lab" uebertraegt die Farbe des Eingangsbildes im
+# CIELAB-Raum und laesst das neue Detail stehen -- laut Knoten die treueste Wahl; die Vorlage steht auf "none".
+SEEDVR2_COLOR = "lab"
+
+
+def seedvr2_graph(entry: dict[str, Any], image: str, width: int, height: int, seed: int,
+                  color_correction: str = SEEDVR2_COLOR) -> Graph:
+    """SeedVR2: ein Bild in einem Schritt schaerfen, entrauschen und auf width x height bringen.
+
+    Nachgebaut nach ComfyUIs Vorlage utility_seedvr2_7b_int8_upscale_image.json: erst auf die Zielgroesse
+    skalieren (lanczos; die Vorlage nimmt einen Faktor, hier die fertigen Masse), SeedVR2Preprocess polstert
+    auf Vielfache von 16, gekachelt kodieren, ein Schritt euler/simple mit cfg 1, gekachelt dekodieren,
+    SeedVR2PostProcessing schneidet die Polsterung ab und gleicht die Farbe ab. Je Lauf genau ein Bild:
+    SeedVR2 liest einen Bild-Stapel als Video (Frames), Varianten rechnet jobs._restore einzeln.
+    """
+    return {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "3": {"class_type": "LoadImage", "inputs": {"image": image}},
+        "4": {"class_type": "ImageScale", "inputs": {
+            "image": ["3", 0], "upscale_method": "lanczos", "width": int(width), "height": int(height),
+            "crop": "disabled"}},
+        "5": {"class_type": "SeedVR2Preprocess", "inputs": {"resized_images": ["4", 0]}},
+        "6": {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": ["5", 0], "vae": ["2", 0], "tile_size": 512, "overlap": 128,
+            "temporal_size": 4096, "temporal_overlap": 8}},
+        "7": {"class_type": "SeedVR2Conditioning", "inputs": {"model": ["1", 0], "vae_conditioning": ["6", 0]}},
+        "8": {"class_type": "KSampler", "inputs": {
+            "seed": int(seed), "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple",
+            "denoise": 1.0, "model": ["1", 0], "positive": ["7", 0], "negative": ["7", 1],
+            "latent_image": ["6", 0]}},
+        "9": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["8", 0], "vae": ["2", 0], "tile_size": 512, "overlap": 128,
+            "temporal_size": 4096, "temporal_overlap": 8}},
+        "10": {"class_type": "SeedVR2PostProcessing", "inputs": {
+            "images": ["9", 0], "original_resized_images": ["4", 0],
+            "color_correction_method": color_correction}},
+        "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0], "filename_prefix": "nvai_sharp"}},
+    }
+
+
 # ------------------------------------------------------------- Dispatch
 
 FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}
 BOOGU_WORKFLOWS = {"boogu", "boogu_turbo"}
 HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
 IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
-                    "qwen_image", "qwen_image_lightning", "qwen_image21", "krea2_turbo"}
+                    "qwen_image", "qwen_image_lightning", "qwen_image21", "krea2_turbo", "moss_image"}
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3", "ace_step", "ace_step_15"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
@@ -1690,6 +1831,8 @@ VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
 # Diese laufen NICHT ueber ComfyUI, sondern in eigenen Worker-Prozessen
 # (siehe nvai/mesh_workers.py). Sie haben deshalb hier bewusst keinen Graph-Builder.
 EXTERNAL_WORKFLOWS = {"triposg", "trellis2"}
+# Schaerfen beim Restaurieren: Graph aus seedvr2_graph, aufgerufen von jobs._restore.
+UPSCALE_WORKFLOWS = {"seedvr2"}
 
 
 def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
@@ -1706,6 +1849,11 @@ def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
             f"-- siehe jobs.py, Handler 'img23d'.",
             f"'{entry['id']}' runs in its own worker, not in ComfyUI "
             f"-- see jobs.py, handler 'img23d'.",
+        ))
+    if wf in UPSCALE_WORKFLOWS:
+        raise ValueError(t(
+            f"'{entry['id']}' erzeugt keine Bilder, es schaerft sie beim Restaurieren (POST /api/image/restore).",
+            f"'{entry['id']}' does not create images, it sharpens them when restoring (POST /api/image/restore).",
         ))
     raise ValueError(t(
         f"Fuer '{entry['id']}' gibt es noch keinen Workflow-Builder (workflow={wf})",

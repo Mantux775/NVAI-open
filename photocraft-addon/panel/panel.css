@@ -165,7 +165,7 @@ main {
 
 .modes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 2px;
   padding: 2px;
   background: var(--surface);
@@ -186,6 +186,8 @@ main {
   font-size: 12px;
 }
 .modes button svg { width: 20px; height: 20px; }
+/* Fünf Reiter: lange Namen („Überarbeiten“, „Restaurieren“) dürfen knapp werden, aber nicht umbrechen. */
+.modes button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modes button:hover { color: var(--text); background: var(--surface-2); }
 .modes button[aria-selected="true"] { color: var(--text); background: var(--surface-3); box-shadow: inset 0 -2px 0 var(--accent); }
 
@@ -435,3 +437,10 @@ textarea:disabled, input:disabled { opacity: 0.55; cursor: not-allowed; }
 #extend-out { color: var(--accent); font-variant-numeric: tabular-nums; }
 .warn-text { color: var(--warn); }
 #extend-field .small { display: block; margin-top: 4px; }
+
+/* Restaurieren: Schritte mit Unteroptionen */
+.restore { gap: 6px; }
+.restore-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-left: 21px; }
+.restore-note { color: var(--muted); font-size: 12px; }
+.restore-sub .seg button { padding: 3px 10px; }
+.restore .check.off { opacity: 0.55; }

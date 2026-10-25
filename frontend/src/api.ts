@@ -4,8 +4,9 @@ import { getLang, t } from './i18n'
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
-/** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. */
-export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora'
+/** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. Ebenso 'upscale'
+ * (SeedVR2): es schärft beim Restaurieren. */
+export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale'
 
 /** Eine LoRA beim Generieren: Katalog-ID (kind 'lora') und Stärke. */
 export interface LoraRef {
@@ -358,6 +359,24 @@ export interface VideoParams {
   motion_speed?: number
 }
 
+/** POST /api/image/restore (server: schemas.RestoreImageRequest). */
+/** auto (Vorgabe): der Upsampler von FLUX 3 prüft auf Wasserflecken und Rissnetze -> thorough, sonst gentle. */
+export type RestoreMode = 'auto' | 'thorough' | 'gentle'
+
+export interface RestoreParams {
+  image_asset_id: string
+  repair: boolean
+  repair_mode: RestoreMode
+  colorize: boolean
+  sharpen: boolean
+  scale: number
+  notes: string
+  batch_size: number
+  model_id?: string | null
+  upscale_model_id?: string | null
+  seed?: number | null
+}
+
 export interface Mesh3DParams {
   image_asset_id: string
   model_id?: string | null
@@ -552,6 +571,9 @@ export const api = {
     req<Job>('/api/generate/video', { method: 'POST', body: JSON.stringify(p) }),
   generate3D: (p: Mesh3DParams) =>
     req<Job>('/api/generate/3d', { method: 'POST', body: JSON.stringify(p) }),
+  /** Foto restaurieren (seit 0.5.11): Schäden entfernen, einfärben, schärfen. */
+  restoreImage: (p: RestoreParams) =>
+    req<Job>('/api/image/restore', { method: 'POST', body: JSON.stringify(p) }),
 
   /** Bild-Upload als Quelle für Bild→3D. Kein JSON — FormData. */
   upload: async (file: File) => {
@@ -567,11 +589,14 @@ export const api = {
     return (await res.json()) as Asset
   },
 
-  jobs: (limit = 50) => req<Job[]>(`/api/jobs?limit=${limit}`),
+  /** Neueste zuerst; `exclude` laesst eine Art weg (Verlauf: Downloads). */
+  jobs: (limit = 50, offset = 0, exclude?: string) =>
+    req<Job[]>(`/api/jobs?limit=${limit}&offset=${offset}${exclude ? `&exclude=${exclude}` : ''}`),
   job: (id: string) => req<Job>(`/api/jobs/${id}`),
   jobAssets: (id: string) => req<Asset[]>(`/api/jobs/${id}/assets`),
   assets: (kind?: string, limit = 100) =>
     req<Asset[]>(`/api/assets?limit=${limit}${kind ? `&kind=${kind}` : ''}`),
+  asset: (id: string) => req<Asset>(`/api/assets/${id}`),
 
   deleteAsset: (id: string) =>
     req<{ ok: boolean; freed_mb: number }>(`/api/assets/${id}`, { method: 'DELETE' }),
@@ -625,6 +650,7 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   '3d': '3D',
   controlnet: 'ControlNet',
   lora: 'LoRA',
+  upscale: t('Hochskalieren', 'Upscale'),
 }
 
 /** Anzeigenamen der LoRA-Basen (server: loras.BASES). */

@@ -150,6 +150,13 @@ MODELS = {
     "old_server": {"id": "sdxl-base", "name": "SDXL (ohne features)", "workflow": "sdxl", "runnable": True},
     "not_installed": {"id": "chroma1-hd-fp8", "name": "Chroma", "workflow": "chroma", "runnable": False,
                       "features": {"img2img": True}},
+    # Restaurieren: Krea 2 nimmt Referenzbilder nur als Stilvorlage, SeedVR2 schärft (Art „upscale“).
+    "krea2": {"id": "krea2-turbo-nvfp4", "name": "Krea 2 Turbo", "workflow": "krea2_turbo", "runnable": True,
+              "features": {"references": 2, "reference_kind": "style", "img2img": False, "mask": False}},
+    "qwen21": {"id": "qwen-image-2.1-int8", "name": "Qwen-Image 2.1", "workflow": "qwen_image21", "runnable": True,
+               "features": {"references": 10, "img2img": False, "mask": False}},
+    "seedvr2": {"id": "seedvr2-7b-nvfp4", "name": "SeedVR2 7B", "workflow": "seedvr2", "runnable": True},
+    "seedvr2_missing": {"id": "seedvr2-7b-nvfp4", "name": "SeedVR2 7B", "workflow": "seedvr2", "runnable": False},
 }
 
 
@@ -227,6 +234,35 @@ def planning_cases() -> dict[str, Any]:
     for mode, size in (("generate", (600, 560)), ("refine", (560, 600)), ("generate", (1500, 500)), ("refine", (500, 1500))):
         add_plan(mode, "A brown horse grazing on the meadow.", {}, "coreml", size, False, False)
 
+    # Restaurieren (plan_restore): Modelllisten wie unter Windows, auf dem Mac, ohne Bearbeitungsmodell und
+    # nur mit Stilvorlage; Schritte, Art des Entfernens (auch das alte `thorough`), Schärfen mit und ohne SeedVR2.
+    restores = []
+    restore_lists = {"windows": ["qwen", "flux3", "qwen21", "not_installed"], "qwen21_first": ["qwen21", "flux3"],
+                     "mac": ["flux2", "coreml"], "no_editor": ["qwen", "lightning"], "style_only": ["krea2"]}
+    restore_params = [{}, {"repair_mode": "gentle"}, {"repair_mode": "thorough", "variants": 3, "seed": 7},
+                      {"repair_mode": "bogus"}, {"thorough": True}, {"thorough": False},
+                      {"colorize": True, "variants": 9, "seed": ""}, {"repair": False, "colorize": True},
+                      {"repair": False, "colorize": False}, {"repair": False, "sharpen": True, "scale": 2},
+                      {"sharpen": True, "scale": 4}, {"sharpen": True}, {"model_id": "qwen-image-2512-nvfp4"},
+                      {"model_id": "qwen-image-2.1-int8"}, {"model_id": "flux2-klein-4b"}, {"model_id": ""}]
+    for list_name, names in restore_lists.items():
+        for params in restore_params:
+            for upscalers in (["seedvr2"], ["seedvr2_missing"], []):
+                for size, selection, doc_mode in (((1024, 738), False, "Rgb"), ((6000, 4000), False, "Gray"),
+                                                  ((632, 548), True, "Grayscale")):
+                    def run(names=names, params=params, upscalers=upscalers, size=size, selection=selection,
+                            doc_mode=doc_mode):
+                        r = planning.plan_restore("  his cap is white  ", params, [MODELS[n] for n in names],
+                                                  [MODELS[n] for n in upscalers], size, selection, doc_mode)
+                        return {"payload": r.payload, "upload_size": list(r.upload_size), "model_name": r.model_name,
+                                "enlarge": r.enlarge, "to_rgb": r.to_rgb, "warnings": [w.code for w in r.warnings]}
+
+                    restores.append({"in": {"models": names, "params": params, "upscalers": upscalers,
+                                            "region_size": list(size), "has_selection": selection,
+                                            "doc_mode": doc_mode, "prompt": "  his cap is white  "},
+                                     "out": plan_out(run)})
+    restore_capable = [{"model": name, "out": planning.restore_capable(MODELS[name])} for name in MODELS]
+
     # Ebenennamen sind sichtbar und deshalb übersetzt: beide Sprachen festhalten.
     names = []
     before = i18n.choice()
@@ -235,7 +271,8 @@ def planning_cases() -> dict[str, Any]:
         names += [{"in": {"mode": m, "prompt": p, "k": k, "n": n, "lang": lang}, "out": planning.layer_name(m, p, k, n)}
                   for m, p, k, n in [("fill", "", 0, 1), ("generate", "a " * 60, 1, 2),
                                      ("refine", "  make   it  blue ", 0, 1), ("fill", "x" * 48, 2, 4),
-                                     ("fill", "x" * 49, 0, 1)]]
+                                     ("fill", "x" * 49, 0, 1), ("restore", "", 0, 1),
+                                     ("restore", "his cap is white", 1, 2), ("extend", "", 0, 1)]]
     i18n.set_choice(before)
 
     return {"version": 1, "generated_by": "tools/export_golden.py", "models": MODELS,
@@ -248,7 +285,10 @@ def planning_cases() -> dict[str, Any]:
                           "OUTPAINT_BLUR": planning.OUTPAINT_BLUR, "OUTPAINT_MARGIN": planning.OUTPAINT_MARGIN,
                           "REFINE_PAD": planning.REFINE_PAD},
             "capable": capable, "choose_model": choose, "technique_for": technique, "region_for": regions,
-            "outpaint_region": outpaint, "plan": plans, "layer_name": names}
+            "outpaint_region": outpaint, "plan": plans, "layer_name": names,
+            "restore_capable": restore_capable, "plan_restore": restores,
+            "restore_constants": {"RESTORE_MAX_SIDE": planning.RESTORE_MAX_SIDE,
+                                  "GRAY_MODES": list(planning.GRAY_MODES)}}
 
 
 # ---------------------------------------------------------------- Sequenzen

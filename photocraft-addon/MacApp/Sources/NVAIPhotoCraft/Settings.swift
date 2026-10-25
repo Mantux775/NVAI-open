@@ -84,10 +84,19 @@ struct FormState: Codable, Equatable {
     var autoPlace = true
     var advanced = false
     var alwaysOnTop = true
+    /// Restaurieren: eigene Hinweise statt des Prompts (wie `restore.notes` im Windows-Panel), die Schritte und
+    /// die Art des Entfernens („auto“, „thorough“, „gentle“; was NVAI-open nicht kann, wird nicht angeboten).
+    var restoreNotes = ""
+    var restoreRepair = true
+    var restoreMode = "auto"
+    var restoreColorize = false
+    var restoreSharpen = false
+    var restoreScale = 2
 
     enum CodingKeys: String, CodingKey {
         case mode, prompt, negative, models, variants, strength, margin, steps, cfg, seed, native, hires,
-             autoPlace, advanced, alwaysOnTop
+             autoPlace, advanced, alwaysOnTop, restoreNotes, restoreRepair, restoreMode, restoreColorize,
+             restoreSharpen, restoreScale
     }
 
     private static let key = "panel-form"
@@ -125,12 +134,18 @@ extension FormState {
         autoPlace = value(.autoPlace, autoPlace)
         advanced = value(.advanced, advanced)
         alwaysOnTop = value(.alwaysOnTop, alwaysOnTop)
+        restoreNotes = value(.restoreNotes, restoreNotes)
+        restoreRepair = value(.restoreRepair, restoreRepair)
+        restoreMode = value(.restoreMode, restoreMode)
+        restoreColorize = value(.restoreColorize, restoreColorize)
+        restoreSharpen = value(.restoreSharpen, restoreSharpen)
+        restoreScale = [1, 2, 4].contains(value(.restoreScale, restoreScale)) ? value(.restoreScale, restoreScale) : 2
     }
 }
 
-/// Die vier Modi des Panels (Texte wie panel/panel.js).
+/// Die fünf Modi des Panels (Texte wie panel/panel.js).
 enum Mode: String, CaseIterable, Identifiable, Codable {
-    case fill, generate, refine, extend
+    case fill, generate, refine, extend, restore
 
     var id: String { rawValue }
     var label: String { Planning.modeLabel(rawValue) }
@@ -141,6 +156,7 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
         case .generate: return t("Bild generieren", "Generate image")
         case .refine: return t("Überarbeiten", "Refine")
         case .extend: return t("Erweitern", "Extend")
+        case .restore: return t("Foto restaurieren", "Restore photo")
         }
     }
 
@@ -158,6 +174,9 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
         case .extend:
             return t("Vergrößert die Arbeitsfläche und malt den neuen Rand passend zum Bild (Outpainting). Am nahtlosesten mit FLUX.2 Klein bzw. FLUX 3. Der Prompt beschreibt das ganze Bild.",
                      "Enlarges the canvas and paints the new border to match the picture (outpainting). Most seamless with FLUX.2 Klein or FLUX 3. The prompt describes the whole picture.")
+        case .restore:
+            return t("Altes Foto: Schäden entfernen, einfärben, schärfen – in der Auswahl oder im ganzen Bild. Das Ergebnis kommt als neue Ebene genau über das Original.",
+                     "Old photo: remove damage, colorize, sharpen – in the selection or the whole image. The result lands as a new layer exactly over the original.")
         }
     }
 
@@ -171,6 +190,8 @@ enum Mode: String, CaseIterable, Identifiable, Codable {
                                "How should the area change? e.g. \"as an oil painting with visible brush strokes\"")
         case .extend: return t("Was ist auf dem ganzen Bild zu sehen? Leer lassen = die Szene fortsetzen",
                                "What does the whole picture show? Leave empty = continue the scene")
+        case .restore: return t("Optional, auf Englisch: bekannte Farben oder was bleiben soll, z. B. „his cap is white with dark navy stripes“",
+                                "Optional: known colors or what must stay, e.g. \"his cap is white with dark navy stripes\"")
         }
     }
 

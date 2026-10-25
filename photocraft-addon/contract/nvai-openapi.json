@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.8",
+  "version": "0.5.11",
   "x-api-version": 1
  },
  "paths": {
@@ -1042,6 +1042,45 @@
     }
    }
   },
+  "/api/image/restore": {
+   "post": {
+    "summary": "Restore Image",
+    "description": "Foto restaurieren: Schaeden entfernen, einfaerben, schaerfen (jobs._restore).",
+    "operationId": "restore_image_api_image_restore_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RestoreImageRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/generate/audio": {
    "post": {
     "summary": "Generate Audio",
@@ -1412,6 +1451,7 @@
   "/api/jobs": {
    "get": {
     "summary": "Get Jobs",
+    "description": "Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten).",
     "operationId": "get_jobs_api_jobs_get",
     "parameters": [
      {
@@ -1432,6 +1472,22 @@
        "type": "integer",
        "default": 0,
        "title": "Offset"
+      }
+     },
+     {
+      "name": "exclude",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Exclude"
       }
      }
     ],
@@ -2041,7 +2097,8 @@
        "video",
        "3d",
        "controlnet",
-       "lora"
+       "lora",
+       "upscale"
       ],
       "title": "Kind",
       "default": "image"
@@ -2137,6 +2194,7 @@
        "image",
        "video",
        "video_sound",
+       "video_multishot",
        "video_start",
        "sfx",
        "music",
@@ -2144,7 +2202,7 @@
        "3d"
       ],
       "title": "Target",
-      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
+      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten und Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
       "default": "image"
      },
      "width": {
@@ -2262,6 +2320,12 @@
       "title": "Remove Background",
       "description": "Hintergrund automatisch freistellen, wenn kein Alphakanal da ist",
       "default": true
+     },
+     "project_front": {
+      "type": "boolean",
+      "title": "Project Front",
+      "description": "Vorderseite aus dem Bild: das freigestellte Quellbild auf die zur Kamera zeigenden, sichtbaren Flaechen projizieren, damit Schrift lesbar bleibt (seit 0.5.10). Der Rest bekommt Farben aus dem weichgezeichneten Bild (TripoSG) bzw. behaelt seine Textur (TRELLIS.2)",
+      "default": false
      },
      "resolution": {
       "type": "integer",
@@ -2800,7 +2864,7 @@
      "width": {
       "type": "integer",
       "multipleOf": 16.0,
-      "maximum": 1280.0,
+      "maximum": 1920.0,
       "minimum": 256.0,
       "title": "Width",
       "default": 832
@@ -2808,17 +2872,17 @@
      "height": {
       "type": "integer",
       "multipleOf": 16.0,
-      "maximum": 1280.0,
+      "maximum": 1920.0,
       "minimum": 256.0,
       "title": "Height",
       "default": 480
      },
      "frames": {
       "type": "integer",
-      "maximum": 201.0,
+      "maximum": 481.0,
       "minimum": 9.0,
       "title": "Frames",
-      "description": "Anzahl Frames; bei Wan 4n+1",
+      "description": "Anzahl Frames; Wan 4n+1, LTX 8n+1 (481 = 20 s bei 24 fps)",
       "default": 49
      },
      "fps": {
@@ -2885,6 +2949,93 @@
       "maxItems": 8,
       "title": "Loras",
       "description": "LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke"
+     },
+     "end_image_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "End Image Asset Id",
+      "description": "LTX-2.5: Endbild (letzter Frame); mit image_asset_id ein Uebergang"
+     },
+     "loop": {
+      "type": "boolean",
+      "title": "Loop",
+      "description": "LTX-2.5: Schleife -- das Startbild ist auch das Endbild",
+      "default": false
+     },
+     "quality": {
+      "type": "string",
+      "enum": [
+       "standard",
+       "full",
+       "dfr"
+      ],
+      "title": "Quality",
+      "description": "LTX-2.5: dfr = Diffusion Fidelity Rendering, mehr Detail, langsamer; full = Versuch, eine Stufe in voller Aufloesung (gemessen nicht durchgehend schaerfer, 56 % laenger)",
+      "default": "standard"
+     },
+     "temporal_upscale": {
+      "type": "boolean",
+      "title": "Temporal Upscale",
+      "description": "LTX-2.5 mit quality=dfr: doppelte Bildrate bei gleicher Dauer (24 -> 48 fps)",
+      "default": false
+     },
+     "auto_duration": {
+      "type": "boolean",
+      "title": "Auto Duration",
+      "description": "LTX-2.5: Laenge aus dem Prompt vorhersagen; frames gilt dann nicht",
+      "default": false
+     },
+     "audio_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Audio Asset Id",
+      "description": "LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, die Laenge auch (hoechstens 20 s)"
+     },
+     "motion_speed": {
+      "type": "number",
+      "maximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Motion Speed",
+      "description": "LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x langsamer; verlaesslich mit der Slow-Motion-LoRA",
+      "default": 1.0
+     },
+     "crf": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 51.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Crf",
+      "description": "LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und groessere Datei; leer = workflows.VIDEO_CRF"
+     },
+     "extend_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Extend Asset Id",
+      "description": "LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton angehaengt. Ergebnis: das verlaengerte Video und das neue Stueck einzeln"
      }
     },
     "type": "object",
@@ -2922,7 +3073,8 @@
        "img2video",
        "img23d",
        "download",
-       "expand_prompt"
+       "expand_prompt",
+       "restore"
       ],
       "title": "Kind"
      },
@@ -3070,6 +3222,17 @@
        }
       ],
       "title": "Size Gb"
+     },
+     "optional": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Optional"
      }
     },
     "type": "object",
@@ -3098,7 +3261,8 @@
        "video",
        "3d",
        "controlnet",
-       "lora"
+       "lora",
+       "upscale"
       ],
       "title": "Kind"
      },
@@ -3362,6 +3526,134 @@
      "time"
     ],
     "title": "ProblemReportSummary"
+   },
+   "RestoreImageRequest": {
+    "properties": {
+     "image_asset_id": {
+      "type": "string",
+      "title": "Image Asset Id",
+      "description": "Das Foto: ein hochgeladenes Bild (POST /api/upload) oder ein Bild-Asset"
+     },
+     "repair": {
+      "type": "boolean",
+      "title": "Repair",
+      "description": "Schaeden entfernen: Kratzer, Staub, Risse, Flecken, Knicke und Emulsionsschaeden. Ein Bearbeitungsmodell (FLUX 3) rechnet das Foto neu; das Ergebnis wird am Original ausgerichtet und deckt sich mit ihm",
+      "default": true
+     },
+     "repair_mode": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "thorough",
+       "gentle"
+      ],
+      "title": "Repair Mode",
+      "description": "auto (Vorgabe): der Upsampler von FLUX 3 sieht das Foto und beantwortet, ob es Wasserflecken oder Rissnetze hat; ja -> gruendlich, nein -> schonend (an 21 Testfotos 20 wie erwartet). thorough (gruendlich) fuer flaechige Alterung (Wasserflecken, Craquele, Korn, Ausbleichen): das ganze Bild kommt vom Bearbeitungsmodell; Gesichter koennen sich je Seed leicht veraendern, deshalb mehrere Varianten. gentle (schonend) fuer einzelne Schaeden auf einem sonst guten Foto (Staub, Kratzer, Risse, Lichteinfall): nur die gefundenen Schaeden werden ersetzt, Schaerfe, Gesichter und Feinzeichnung bleiben die des Fotos in voller Aufloesung",
+      "default": "auto"
+     },
+     "colorize": {
+      "type": "boolean",
+      "title": "Colorize",
+      "description": "Einfaerben. Uebernommen wird nur die Farbe des Bearbeitungsmodells; Helligkeit, Schaerfe, Gesichter und Aufloesung bleiben die des Fotos (bzw. des restaurierten)",
+      "default": false
+     },
+     "sharpen": {
+      "type": "boolean",
+      "title": "Sharpen",
+      "description": "Zum Schluss mit SeedVR2 schaerfen, entrauschen und vergroessern (Modell der Art 'upscale' in /api/models)",
+      "default": false
+     },
+     "scale": {
+      "type": "number",
+      "maximum": 4.0,
+      "minimum": 1.0,
+      "title": "Scale",
+      "description": "Nur mit sharpen: Vergroesserung gegenueber dem Foto, 1 = gleiche Groesse",
+      "default": 2.0
+     },
+     "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "title": "Notes",
+      "description": "Optional, am besten englisch: Hinweise an das Bearbeitungsmodell, etwa Farben ('her dress is dark red, the car is dark green') oder was bleiben bzw. weg soll",
+      "default": ""
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Bearbeitungsmodell fuer Schaeden und Farbe (features.references > 0); None = FLUX 3"
+     },
+     "upscale_model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upscale Model Id",
+      "description": "SeedVR2-Fassung; None = die aktive der Art 'upscale'"
+     },
+     "megapixels": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 4.0,
+        "minimum": 0.5
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Megapixels",
+      "description": "Arbeitsgroesse des Bearbeitungsmodells in Megapixeln; None = Vorgabe (jobs.RESTORE_MEGAPIXELS)"
+     },
+     "upsample_prompt": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upsample Prompt",
+      "description": "Nur FLUX 3: die Anweisung vorher vom Upsampler ausbauen lassen; None = an"
+     },
+     "batch_size": {
+      "type": "integer",
+      "maximum": 4.0,
+      "minimum": 1.0,
+      "title": "Batch Size",
+      "description": "Varianten; beim Restaurieren schwankt die Treue der Gesichter je Seed, mehrere zur Auswahl lohnen",
+      "default": 1
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     }
+    },
+    "type": "object",
+    "required": [
+     "image_asset_id"
+    ],
+    "title": "RestoreImageRequest",
+    "description": "Foto restaurieren und einfaerben (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen --\nin dieser Reihenfolge, jeder Schritt einzeln schaltbar (jobs._restore)."
    },
    "ValidationError": {
     "properties": {

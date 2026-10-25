@@ -12,6 +12,7 @@ Ein schlankes Panel-Fenster neben PhotoCraft, das die lokale Bildgenerierung von
 | **Erweitern** | Outpainting (seit 0.4.3 eigener Modus): links, oben, rechts, unten in Pixeln eingeben (oder „breiter“, „höher“, „nach unten“, „rundum“ wählen); das Add-on vergrößert die Arbeitsfläche und malt den neuen Rand passend dazu. Angeboten wird jedes Modell, das erweitern kann, FLUX 3 zuerst: im Test nahtlos, während Qwen an der alten Bildkante eine harte Naht ließ. Auf dem Mac ist es FLUX.2 Klein per Maske; dort bleibt der Übergang weicher und kann an der alten Bildkante als unscharfer Streifen sichtbar bleiben. Braucht NVAI-open ab 0.5.4 (Mac: 0.4.3). |
 | **Generieren** | Ein neues Bild in der Auswahl – oder auf der ganzen Arbeitsfläche, wenn nichts ausgewählt ist. |
 | **Überarbeiten** | Die Auswahl (oder das ganze Bild) wird neu gerechnet. Mit Qwen per Bild-zu-Bild – die *Stärke* bestimmt, wie viel sich ändert. Mit **FLUX 3** per Referenzbild: Der Prompt sagt, was sich ändert und was gleich bleibt („Replace the rope handles with iron handles; keep everything else unchanged.“). |
+| **Restaurieren** | Für alte Fotos (seit 0.4.6, braucht NVAI-open 0.5.11): **Schäden entfernen** (Kratzer, Staub, Risse, Flecken), **einfärben** und mit SeedVR2 **schärfen und vergrößern**, jeder Schritt abwählbar, für die Auswahl oder das ganze Bild. *Automatisch* (Vorgabe) lässt das Bildmodell von NVAI-open das Foto auf Wasserflecken und Rissnetze prüfen und wählt *Gründlich* oder *Schonend* (bei 20 von 21 Testfotos wie erwartet). *Gründlich* rechnet das ganze Foto mit FLUX 3 neu: Risse, feine Kratzer, Wasserflecken und Ausbleichen verschwinden, Gesichter können je Variante leicht abweichen. *Schonend* ersetzt nur die beschädigten Stellen und behält Schärfe, Gesichter und Details genau wie im Foto (Kontrast und Verblassen kommen von FLUX 3). Gewählt wird nach der Art des Schadens: flächige Alterung (Wasserflecken, Craquelé, Korn, Ausbleichen) → *Gründlich*; einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Risse, Lichteinfall) → *Schonend*. Beim Einfärben kommt nur die Farbe von FLUX 3; bekannte Farben im Prompt („her dress is dark red“) machen es genauer. Ein Graustufendokument, das eingefärbt wird, landet in einem neuen RGB-Dokument „<Name> – farbig“ mit dem Original als unterster Ebene (PhotoCraft lässt Add-ons den Farbmodus nicht ändern). Vergrößern skaliert das ganze Dokument und geht deshalb nur ohne Auswahl. Gemessen auf einer RTX 5060 Ti: zwei Varianten eines 1-MP-Fotos, schonend repariert, eingefärbt und 2× vergrößert, in rund 3 Minuten. |
 
 Jedes Ergebnis landet als **eigene Ebene mit Ebenenmaske aus der Auswahl** im Dokument – nichts
 wird zerstörend überschrieben. Bei mehreren Varianten tauscht ein Klick im Panel die Ebene aus,
@@ -108,6 +109,8 @@ Tipps (Modellwahl nach `BILDMODELLE.md` von NVAI-open):
 - Die Modelle rechnen mit rund 1 Megapixel. Sehr große Auswahlen werden entsprechend
   hochskaliert und wirken weicher – dann in Teilen füllen.
 - Während ein Auftrag erfasst oder eingefügt wird, blitzt in PhotoCraft kurz ein Hilfs-Tab auf.
+- **Restaurieren:** Kleine Zeichen, die FLUX 3 weglässt, etwa ein Bindestrich in einer Beschriftung,
+  verschwinden in beiden Arten – Schrift prüfen. An gleich hellen Kanten kann Farbe überlaufen.
 
 ## NVAI-open auf einem anderen Rechner
 

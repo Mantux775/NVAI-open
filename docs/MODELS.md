@@ -1,13 +1,13 @@
-# Image models in NVAI-open: Qwen-Image-2512, FLUX 3 Image Klein and Krea 2
+# Image models in NVAI-open: Qwen-Image-2512, FLUX 3 Image Klein, Krea 2 and MOSS-Image
 
 *Deutsch: [de/MODELLE.md](de/MODELLE.md)*
 
 A reference for projects that generate images through NVAI-open. It applies to Claude Code with
-the `nvai` MCP server as well as to your own programs using the REST API. It describes the three
+the `nvai` MCP server as well as to your own programs using the REST API. It describes the four
 image models NVAI-open recommends: what they can do, how to address them, how long they take and
 where they fail.
 
-As of October 18, 2026 (Krea 2: October 24). Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
+As of October 18, 2026 (Krea 2: October 24, MOSS-Image: October 25). Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
 All times and findings were measured there. Statements that come from the vendor are marked as
 such ("according to BFL").
 
@@ -15,27 +15,28 @@ such ("according to BFL").
 
 ## 1. At a glance
 
-| | **Qwen-Image-2512** | **FLUX 3 Image Klein** | **Krea 2 Turbo** |
-|---|---|---|---|
-| Model ID | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` | `krea2-turbo-nvfp4` |
-| Vendor | Alibaba (Qwen) | Black Forest Labs, October 2026 | Krea.ai, June 2026 |
-| Size | 20B parameters, NVFP4 | 5.6B parameters, NVFP4 | 12B parameters, NVFP4 |
-| Text encoder | Qwen2.5-VL-7B | Qwen3-VL-4B, plus a prompt upsampler (Qwen3.5-9B) | Qwen3-VL-4B (the same file as FLUX 3) |
-| Steps / CFG | 50 / 4.0 | 16 / 1 (distilled) | 8 / 1 (distilled) |
-| Negative prompt | works; empty = default from Qwen's model card | has **no** effect | has **no** effect |
-| Reference images | — | up to 10 | — |
-| Placement by box | — | yes | — |
-| Text in the image | letter-perfect | 3 of 3 error-free in testing | letter-perfect in the test |
-| Time per 1024² image | ~100 s | ~30 s for a new prompt, 13–16 s for a known one | ~20 s |
-| License | **Apache-2.0** | **FLUX Kommunity License** — revenue cap, review obligation | **Krea 2 Community License** — below US$1M revenue, review obligation |
-| Strengths | final assets, structural details, text | editing, consistent characters, layout, speed | photographic look, natural hands and faces, speed |
+| | **Qwen-Image-2512** | **FLUX 3 Image Klein** | **Krea 2 Turbo** | **MOSS-Image** |
+|---|---|---|---|---|
+| Model ID | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` | `krea2-turbo-nvfp4` | `moss-image-sft-int8` |
+| Vendor | Alibaba (Qwen) | Black Forest Labs, October 2026 | Krea.ai, June 2026 | OpenMOSS, October 2026 |
+| Size | 20B parameters, NVFP4 | 5.6B parameters, NVFP4 | 12B parameters, NVFP4 | 5B parameters, INT8 |
+| Text encoder | Qwen2.5-VL-7B | Qwen3-VL-4B, plus a prompt upsampler (Qwen3.5-9B) | Qwen3-VL-4B (the same file as FLUX 3) | Qwen3.5-9B (W4A8), expands short prompts itself |
+| Steps / CFG | 50 / 4.0 | 16 / 1 (distilled) | 8 / 1 (distilled) | 50 / 3 |
+| Negative prompt | works; empty = default from Qwen's model card | has **no** effect | has **no** effect | works; empty = the recommendation from ComfyUI's template |
+| Reference images | — | up to 10 | — | — |
+| Placement by box | — | yes | — | by JSON layout ("summary", "items"; according to OpenMOSS) |
+| Text in the image | letter-perfect | 3 of 3 error-free in testing | letter-perfect in the test | letter-perfect in every test |
+| Time per 1024² image | ~100 s | ~30 s for a new prompt, 13–16 s for a known one | ~20 s | ~51 s (25 steps ~28 s), plus ~11 s for the expansion the first time |
+| License | **Apache-2.0** | **FLUX Kommunity License** — revenue cap, review obligation | **Krea 2 Community License** — below US$1M revenue, review obligation | **Apache-2.0** |
+| Strengths | final assets, structural details, text | editing, consistent characters, layout, speed | photographic look, natural hands and faces, speed | text and layout, posters and graphics, free to sell |
 
 ## 2. Which model for what
 
 | Task | Model |
 |---|---|
 | Final asset without a template: object, figure, icon, scene | **Qwen** |
-| Text, lettering, signs | **Qwen** |
+| Text, lettering, signs | **Qwen** or **MOSS-Image** (about half the time, both Apache-2.0) |
+| Poster, graphic, layout with a lot of text | **MOSS-Image** (~51 s): describe the finished image, text in quotation marks with position and typeface |
 | Construction must be right (fastenings, hinges, handles) | **Qwen** |
 | Photographic image with little AI look, natural hands and faces | **Krea 2** (~20 s), name the framing; license only below US$1M revenue |
 | Change an existing image in a targeted way: replace a part, color, material | **FLUX 3** with the image as a reference |
@@ -45,9 +46,33 @@ such ("according to BFL").
 | Quick drafts | FLUX 3 (13–16 s), Krea 2 (~20 s) or Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
 | Historically accurate vehicles (Panzer IV, Sd.Kfz. 251 …) | **none** — see section 9 |
 | Only a few words of prompt, model without its own upsampler | first **✨ Expand prompt** (`expand_prompt`), see section 5 |
+| Restore or colorize an old photo | **Restore** tab (`restore_image`): FLUX 3 removes damage and colorizes, SeedVR2 sharpens, see "New in 0.5.11" |
 | Trying out Qwen-Image 2.1 (`qwen-image-2.1-int8`) | **non-commercial only** (Qwen Research License); editing looked overprocessed in the test |
 
 Without a `model_id`, NVAI-open uses the active image model.
+
+### New in 0.5.11
+
+**MOSS-Image** (`moss-image-sft-int8`, OpenMOSS) is the fourth recommended image model: text and layout in the image under Apache-2.0, so images can be sold without a revenue limit or review obligation. It expands short prompts into a full description with its own text encoder (Qwen3.5-9B), stored in `caption` afterwards (`upsample_prompt=False` switches that off); according to OpenMOSS a JSON with "summary" and "items" sets the layout. The default is OpenMOSS's setting with 50 steps and cfg 3. Measured with the same prompts and seeds: 51 s per 1 MP image, plus about 11 s for the expansion the first time; with the 25 steps of ComfyUI's template 28 s. Text came out letter-perfect in every image, the soldier stood in the frame with both boots, the fisherman kept his head in the frame. The crate's rope handles passed through drilled holes in three of three images with 50 steps, in two of three with 25. Text to image only (no reference images, no mask), not available on the Mac.
+
+![MOSS-Image: a poster with lettering, a crate with 25 and with 50 steps](images/moss-image-en.jpg)
+
+**Restore and colorize old photos** (`POST /api/image/restore`, MCP `restore_image`, the "Restore" tab, PhotoCraft add-on 0.4.6). Three steps, each one optional:
+
+| Step | What happens | Measured (RTX 5060 Ti) |
+|---|---|---|
+| Remove damage | FLUX 3 removes scratches, dust, tears, stains and emulsion damage; the result is aligned with the photo. **Automatic** (default) lets FLUX 3's upsampler look at the photo first and asks whether it shows water stains or crack networks: yes → Thorough, no → Gentle (as expected on 20 of 21 test photos, about 2.5 s). **Thorough** takes the whole picture from FLUX: crack networks, fine scratches, water stains and fading go, faces can change slightly from variant to variant. **Gentle** only puts the damage it detects into the photo and keeps sharpness, detail and faces at full resolution (a 1911 portrait kept its face although FLUX had changed it in one of two variants). Choose by the kind of damage: overall aging (water stains, crack networks, grain, fading) → Thorough; separate damage on an otherwise good photo (dust, scratches, tears, light leaks) → Gentle, which on real glass plates and a 1945 photo with a light leak kept the sharpness where Thorough came out softer. Similarity to the undamaged original on test photos (brightness, quarter size, 1 = identical): heavy damage 0.601 untouched, 0.648 gentle, 0.689 thorough; light damage 0.921, 0.932 and 0.911, where gentle was closest and thorough drew faces in a group photo differently | 2 variants: 70 s for a photo up to 1 MP, 150 s at the 2 MP working size; a 3.5 MP photo with colorizing 4.6 min |
+| Colorize | FLUX 3 colorizes, but only the color is taken over; brightness, detail and faces stay the photo's. FLUX alone was off by 5.4 L in brightness, the transfer by about 1 | about 40 s per variant |
+| Color hints | Known colors in "Hints" ("her dress is red with white dots …") | color error ΔE 17.5 → 10.4 (−40 %) on a photo with known colors |
+| Sharpen | SeedVR2 7B (ByteDance, Apache-2.0, new model kind "Upscale") sharpens, removes coarse grain (fine noise in calm areas stayed in the test) and enlarges up to 4× (at most 16 MP) | 1024 → 2048 in 6 s, 1200 × 864 → 3840 × 2770 in 18.5 s |
+
+The working size for removing damage is 2 MP (at most the photo's size): at 1 MP a soldier in a group photo got a different face. Limits: small marks that FLUX leaves out (a hyphen in a caption) disappear in both modes, so check lettering; film grain partly stays with thorough; color can bleed across edges of equal brightness; SeedVR2 invents fine detail at strong enlargement. FLUX 3 output falls under the FLUX Kommunity License.
+
+![Iwo Jima 1945: original and restored and colorized](images/restore-colorize.jpg)
+
+![Face: original, FLUX 3 alone, NVAI-open with only the color taken over](images/restore-face.jpg)
+
+![Grayscale, colorized, colorized with color hints, ground truth](images/colorize-hints.jpg)
 
 ### New in 0.5.10
 

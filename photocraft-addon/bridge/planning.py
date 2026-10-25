@@ -16,19 +16,22 @@ from . import imaging
 from .i18n import t
 
 # Rechenwege; „Erweitern“ (extend) rechnet wie Füllen, siehe base_mode. Die Golden-Daten decken diese ab.
+# „Restaurieren“ (restore) hat einen eigenen Auftrag in NVAI-open (plan_restore), erfasst aber wie Überarbeiten.
 BASE_MODES = ("fill", "generate", "refine")
-MODES = BASE_MODES + ("extend",)
+MODES = BASE_MODES + ("extend", "restore")
 
 
 def mode_label(mode: str) -> str:
     """Name des Modus in der gewählten Sprache (Oberfläche, Ebenenname)."""
     return {"fill": t("Füllen", "Fill"), "generate": t("Generieren", "Generate"),
-            "refine": t("Überarbeiten", "Refine"), "extend": t("Erweitern", "Extend")}.get(mode, mode)
+            "refine": t("Überarbeiten", "Refine"), "extend": t("Erweitern", "Extend"),
+            "restore": t("Restaurieren", "Restore")}.get(mode, mode)
 
 
 def base_mode(mode: str) -> str:
-    """„Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor."""
-    return "fill" if mode == "extend" else mode
+    """„Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor.
+    „Restaurieren“ erfasst wie „Überarbeiten“: die Auswahl mit etwas Rand oder das ganze Bild."""
+    return {"extend": "fill", "restore": "refine"}.get(mode, mode)
 
 
 # Leerer Prompt bei „Füllen“: die Umgebung fortsetzen, wie Photoshops Generative Fill ohne Text.
@@ -368,6 +371,110 @@ def plan(mode: str, prompt: str, params: dict[str, Any], model: dict[str, Any] |
                 technique=technique, working=(gw, gh), payload=payload, send_image=send_image,
                 send_mask=send_mask, mask_grow=grow if send_mask else 0,
                 mask_blur=blur if send_mask else 0.0, warnings=warnings)
+
+
+# ------------------------------------------------------------- Restaurieren
+
+# „Restaurieren“ (NVAI-open ab 0.5.11, POST /api/image/restore): Schäden entfernen, einfärben, schärfen.
+# Hochgeladen wird der Ausschnitt in voller Größe, höchstens mit dieser Kante: Schonend restaurieren und
+# Einfärben behalten in NVAI-open die Auflösung des Fotos, ein verkleinerter Upload verschenkte Detail.
+RESTORE_MAX_SIDE = 4096
+RESTORE_SCALES = (1, 2, 4)
+# Dokumentmodi, in denen eine eingefärbte Ebene ihre Farbe verlöre: vorher nach RGB.
+GRAY_MODES = ("gray", "grayscale", "duotone", "bitmap", "indexed")
+
+
+def restore_capable(model: dict[str, Any]) -> bool:
+    """Bearbeitet ``model`` Fotos per Referenzbild (FLUX 3)? Stilvorlagen wie Krea 2 zählen nicht."""
+    features = model.get("features") or {}
+    return int(features.get("references") or 0) > 0 and features.get("reference_kind") != "style"
+
+
+@dataclass
+class RestorePlan:
+    payload: dict[str, Any]  # Request an /api/image/restore, ohne image_asset_id
+    upload_size: tuple[int, int]
+    model_name: str
+    enlarge: float  # Dokument vor dem Einfügen um diesen Faktor vergrößern (1 = nicht)
+    to_rgb: bool  # Dokument vor dem Einfügen nach RGB (Graustufenfoto wird eingefärbt)
+    warnings: list[Warning] = field(default_factory=list)
+
+
+def _repair_mode(params: dict[str, Any]) -> str:
+    """auto (Vorgabe, seit NVAI-open 0.5.11 prüft dort das Bildmodell die Art der Schäden), thorough, gentle."""
+    if params.get("repair_mode") in ("auto", "thorough", "gentle"):
+        return params["repair_mode"]
+    if params.get("thorough") is not None:
+        return "thorough" if params["thorough"] else "gentle"
+    return "auto"
+
+
+def plan_restore(prompt: str, params: dict[str, Any], models: list[dict[str, Any]],
+                 upscalers: list[dict[str, Any]], region_size: tuple[int, int], has_selection: bool,
+                 doc_mode: str = "") -> RestorePlan:
+    """Request für „Restaurieren“ planen.
+
+    Schritte (jeder schaltbar): ``repair`` Schäden entfernen (``repair_mode`` auto/thorough/gentle, Vorgabe auto;
+    ältere Panels schicken ``thorough``),
+    ``colorize`` einfärben, ``sharpen`` mit SeedVR2 schärfen und um ``scale`` vergrößern. Vergrößert wird
+    nur ohne Auswahl, dann zusammen mit dem ganzen Dokument (``image.imageSize``). ``prompt`` geht als
+    Hinweis an FLUX 3 (Farben, was bleiben soll) und darf leer sein.
+    """
+    repair = bool(params.get("repair", True))
+    colorize = bool(params.get("colorize"))
+    sharpen = bool(params.get("sharpen"))
+    if not (repair or colorize or sharpen):
+        raise PlanError("restore_nothing", t(
+            "Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder Schärfen.",
+            "Please choose at least one step: remove damage, colorize or sharpen."))
+    warnings: list[Warning] = []
+    model: dict[str, Any] | None = None
+    if repair or colorize:
+        editors = [m for m in models if m.get("runnable", True) and restore_capable(m)]
+        wanted = params.get("model_id") or None
+        if wanted:
+            model = next((m for m in editors if m["id"] == wanted), None)
+            if model is None:
+                raise PlanError("model_incapable", t(
+                    "Das gewählte Modell bearbeitet keine Fotos – bitte FLUX 3 wählen.",
+                    "The chosen model does not edit photos – please choose FLUX 3."))
+        elif not editors:
+            raise PlanError("no_edit_model", t(
+                "Restaurieren und Einfärben brauchen FLUX 3 Image Klein in NVAI-open. Bitte dort unter "
+                "„Modelle“ laden.",
+                "Restoring and colorizing need FLUX 3 Image Klein in NVAI-open. Please download it there "
+                "under “Models”."))
+        else:
+            # Wie NVAI-open ohne eigene Wahl: FLUX 3 (destilliert) zuerst.
+            model = sorted(editors, key=lambda m: m.get("workflow") != "flux3_klein")[0]
+    if sharpen and not any(u.get("runnable", True) for u in upscalers):
+        raise PlanError("no_upscaler", t(
+            "Schärfen braucht SeedVR2: in NVAI-open unter „Modelle“ → „Hochskalieren“ laden (5,3 GB).",
+            "Sharpening needs SeedVR2: download it in NVAI-open under “Models” → “Upscale” (5.3 GB)."))
+    scale = float(params.get("scale") or 1.0) if sharpen else 1.0
+    if scale > 1 and has_selection:
+        warnings.append(Warning("restore_selection_not_enlarged", t(
+            "Mit einer Auswahl wird nur geschärft; vergrößern lässt sich nur das ganze Bild.",
+            "With a selection the area is only sharpened; only the whole image can be enlarged.")))
+        scale = 1.0
+    w, h = region_size
+    k = min(1.0, RESTORE_MAX_SIDE / max(w, h, 1))
+    payload: dict[str, Any] = {
+        "repair": repair,
+        "repair_mode": _repair_mode(params),
+        "colorize": colorize,
+        "sharpen": sharpen,
+        "scale": scale,
+        "notes": (prompt or "").strip(),
+        "batch_size": max(1, min(4, int(params.get("variants") or 1))),
+    }
+    if model is not None and params.get("model_id"):
+        payload["model_id"] = model["id"]
+    if params.get("seed") not in (None, ""):
+        payload["seed"] = params["seed"]
+    return RestorePlan(payload=payload, upload_size=(max(1, round(w * k)), max(1, round(h * k))),
+                       model_name=(model or {}).get("name") or "SeedVR2", enlarge=scale,
+                       to_rgb=colorize and (doc_mode or "").strip().lower() in GRAY_MODES, warnings=warnings)
 
 
 def layer_name(mode: str, prompt: str, k: int, n_variants: int) -> str:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import random
 import time
 import traceback
 import uuid
@@ -733,6 +734,34 @@ async def _flux3_caption(p: dict[str, Any], entry: dict[str, Any], ref_ids: list
     return {"upsampled": True, "caption": caption}
 
 
+async def _moss_caption(p: dict[str, Any], entry: dict[str, Any], ctx: JobContext) -> dict[str, Any]:
+    """MOSS-Image: den Prompt vorher von seinem eigenen Text-Encoder (Qwen3.5-9B) zur vollen Bildbeschreibung
+    ausbauen lassen, wie in ComfyUIs Vorlage (workflows.moss_caption_graph). Die Beschreibung steht danach in
+    p["caption"] und im Asset. Layout-JSON (beginnt mit "{") und upsample_prompt=False gehen unveraendert ans
+    Modell; laut ComfyUI-Anleitung wuerde der Ausbau die Boxen verwerfen. Gleiche Anfrage -> Zwischenspeicher."""
+    prompt = (p.get("prompt") or "").strip()
+    if p.get("upsample_prompt") is False or not prompt or prompt.startswith("{"):
+        return {"upsampled": False}
+    encoder = workflows._file_by_target(entry, "text_encoders")
+    cache_key = flux3_prompt.cache_key(encoder, "moss_image", prompt, [])
+    caption = flux3_prompt.cache_get(cache_key)
+    if caption is None:
+        if comfy.text_backend() is comfy.MAIN:
+            await _ensure_backend(ctx)
+        ctx.progress(0.0, t("MOSS-Image baut den Prompt aus", "MOSS-Image is expanding the prompt"))
+        texts = await comfy.run_text_workflow(workflows.moss_caption_graph(encoder, prompt))
+        caption = (texts[-1] if texts else "").strip()
+        if not caption:
+            raise RuntimeError(t(
+                "Der Prompt-Ausbau von MOSS-Image lieferte keinen Text. Ohne ihn: upsample_prompt=false und "
+                "eine volle Bildbeschreibung als Prompt.",
+                "MOSS-Image's prompt expansion returned no text. To work without it: upsample_prompt=false and "
+                "a full image description as the prompt."))
+        flux3_prompt.cache_put(cache_key, caption)
+    p["caption"] = caption
+    return {"upsampled": True, "caption": caption}
+
+
 async def _expand_other(p: dict[str, Any], upsampler: dict[str, Any], ref_images: list[str],
                         ctx: JobContext) -> str:
     """Prompt ausbauen fuer Video, Ton und 3D: derselbe Upsampler mit NVAI-opens eigenen
@@ -996,6 +1025,11 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     caption_ids = [f"fill:{p['reference_images'][0]}"] if p.get("inpaint_reference") else ref_ids
     caption_meta = (await _flux3_caption(p, entry, caption_ids, ctx)
                     if is_flux3 and not p.get("outpaint_passes") else {})
+    if wf == "moss_image":
+        # Wie bei Qwen: der empfohlene Negativprompt soll in den Asset-Metadaten stehen.
+        if not p.get("negative_prompt"):
+            p["negative_prompt"] = workflows.MOSS_IMAGE_NEGATIVE
+        caption_meta = await _moss_caption(p, entry, ctx)
 
     # ControlNet: Modelldatei aufloesen und Referenzbild bereitstellen. Beides muss
     # da sein -- sonst laesst der Builder das ControlNet stillschweigend weg.
@@ -1053,6 +1087,328 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
         "reference_asset_ids": ref_ids or None,
         **caption_meta,
     })
+
+
+# ------------------------------------------------------- Foto restaurieren
+
+# Anweisungen an das Bearbeitungsmodell; die Hinweise des Nutzers (notes) haengen hinten an.
+RESTORE_REPAIR = (
+    "Restore this old damaged photograph: remove all scratches, dust spots, cracks, stains, creases, tears "
+    "and emulsion damage, and fill damaged areas so they blend in seamlessly. Keep the composition, every "
+    "person, their faces, expressions, poses and clothing, and the original tones of the photograph exactly "
+    "the same.")
+RESTORE_COLORIZE = (
+    "Colorize this black-and-white photograph with natural, realistic colors. Keep the composition, every "
+    "person, their faces, expressions and poses and every detail exactly the same.")
+# Arbeitsgroesse des Bearbeitungsmodells (Referenzbild und Ausgabe gleich gross): so gross wie das Foto,
+# mindestens 1 MP (darauf ist FLUX 3 trainiert), hoechstens dieser Wert. Einfaerben braucht weniger: Von dort
+# kommt nur die Farbe, die Helligkeit behaelt die volle Aufloesung.
+RESTORE_MEGAPIXELS = 2.0
+COLORIZE_MEGAPIXELS = 1.0
+# Darunter hat das Modell das Bild umgebaut statt nur bereinigt: nicht verschieben, nur skalieren.
+RESTORE_MIN_SCORE = 0.5
+# Automatisch (Vorgabe): Der Upsampler von FLUX 3 (Qwen3.5-9B, sieht das Foto) beantwortet vor dem Lauf diese
+# Frage. Ja -> gruendlich, nein -> schonend. Sie fragt genau nach dem, was schonend nicht erkennt. Gemessen an
+# 21 Testfotos (25.10.2026): 20 wie erwartet (alle 8 stark gealterten ja, alle 8 leicht gealterten nein,
+# Ferrotypie ja, Baseballspieler, Iwo Jima und Flugzeugwrack nein; nur die Tauben in Paris ja, dort waere
+# schonend schaerfer gewesen). Der Wortlaut zaehlt: "Does this photograph show ...?" traf 18, "Is this photograph
+# damaged by ...?" nur 14 von 21; "OVERALL oder SEPARATE" bekam 16-mal OVERALL. Rund 2,5 s.
+RESTORE_KIND_SYSTEM = "You are an expert in restoring old photographs. Answer with one word: yes or no."
+RESTORE_KIND_QUESTION = ("Are there water stains, rings left by water, or crack networks (craquelure) in this "
+                         "photograph? Answer yes or no.")
+
+
+def _restore_model(p: dict[str, Any]) -> dict[str, Any]:
+    """Bearbeitungsmodell fuer Schaeden und Farbe: das gewaehlte, sonst FLUX 3 (destilliert) vor den
+    anderen Modellen mit Referenzbildern; Stilvorlagen (Krea 2) bearbeiten nichts."""
+    def edits(e: dict[str, Any]) -> bool:
+        f = registry.features_for(e)
+        return (f.get("references") or 0) > 0 and f.get("reference_kind") != "style"
+
+    if p.get("model_id"):
+        entry = _resolve_model({"model_id": p["model_id"]}, "image")
+        if not edits(entry):
+            raise RuntimeError(t(
+                f"'{_name(entry)}' bearbeitet keine Bilder. Restaurieren und Einfärben brauchen ein Modell mit "
+                "Referenzbildern, am besten FLUX 3.",
+                f"'{_name(entry)}' does not edit images. Restoring and colorizing need a model with reference "
+                "images, ideally FLUX 3."))
+        return entry
+    candidates = [e for e in registry.all_entries()
+                  if e.get("kind") == "image" and e.get("workflow") and registry.is_installed(e) and edits(e)]
+    if not candidates:
+        raise RuntimeError(t(
+            "Restaurieren und Einfärben brauchen ein Bearbeitungsmodell: bitte FLUX 3 Image Klein laden "
+            "(flux3-klein-nvfp4 auf RTX 50, sonst flux3-klein-int8).",
+            "Restoring and colorizing need an editing model: please download FLUX 3 Image Klein "
+            "(flux3-klein-nvfp4 on RTX 50, otherwise flux3-klein-int8)."))
+    active = registry.get_active_model("image")
+    candidates.sort(key=lambda e: (e["workflow"] != "flux3_klein", e["workflow"] not in workflows.FLUX3_WORKFLOWS,
+                                   e["id"] != active, not registry.gpu_advice(e).get("recommended")))
+    return candidates[0]
+
+
+def _restore_size(dims: tuple[int, int], megapixels: float) -> tuple[int, int]:
+    """Arbeitsformat im Seitenverhaeltnis des Fotos: Vielfache von 16, je Seite hoechstens 2048."""
+    w0, h0 = dims
+    target = min(megapixels, max(1.0, w0 * h0 / 2 ** 20)) * 2 ** 20
+    k = min((target / (w0 * h0)) ** 0.5, 2048 / max(w0, h0))
+    return max(256, round(w0 * k / 16) * 16), max(256, round(h0 * k / 16) * 16)
+
+
+async def _restore_script(target: Path, *args: Any) -> dict[str, Any]:
+    """restore_tools.py im ComfyUI-venv aufrufen (numpy, Pillow, scipy); `target` muss danach existieren."""
+    script = Path(__file__).with_name("restore_tools.py")
+    proc = await asyncio.create_subprocess_exec(
+        str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, err = await proc.communicate()
+    if proc.returncode != 0 or not target.exists():
+        raise RuntimeError(t(f"Bildbearbeitung fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
+                             f"Image processing failed: {err.decode(errors='replace')[-300:]}"))
+    return json.loads(out.decode().strip().splitlines()[-1])
+
+
+async def _restore_kind(ref: str, source_id: str, ctx: JobContext) -> dict[str, Any]:
+    """Automatisch: Fragt den Upsampler nach Wasserflecken und Rissnetzen (RESTORE_KIND_QUESTION).
+    "no" -> schonend, alles andere -> gruendlich (auch ohne Upsampler oder bei unklarer Antwort: gruendlich
+    laesst keine Schaeden stehen). Die Antwort wird je Foto zwischengespeichert."""
+    upsampler = prompt_upsampler()
+    if upsampler is None:
+        return {"auto": "thorough", "answer": None}
+    upsampler_file = workflows.file_name(upsampler)
+    cache_key = flux3_prompt.cache_key(upsampler_file, "restore_kind", RESTORE_KIND_QUESTION, [source_id])
+    answer = flux3_prompt.cache_get(cache_key)
+    if answer is None:
+        if comfy.text_backend() is comfy.MAIN:
+            await _ensure_backend(ctx)
+        graph = flux3_prompt.build_graph(upsampler_file, "i2i", RESTORE_KIND_QUESTION, [ref],
+                                         system_text=RESTORE_KIND_SYSTEM)
+        graph["3"]["inputs"]["max_length"] = 8
+        texts = await comfy.run_text_workflow(graph)
+        answer = (texts[-1] if texts else "").strip()
+        flux3_prompt.cache_put(cache_key, answer)
+    gentle = answer.lower().lstrip("\"'“„ ").startswith("no")
+    return {"auto": "gentle" if gentle else "thorough", "answer": answer[:80]}
+
+
+@register("restore")
+async def _restore(job: Job, ctx: JobContext) -> list[str]:
+    """Foto restaurieren (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen -- je Schritt schaltbar.
+
+    1. Schaeden: Das Bearbeitungsmodell (FLUX 3) rechnet das Foto mit RESTORE_REPAIR neu; restore_tools.py
+       --align rueckt das Ergebnis deckungsgleich aufs Original (FLUX gibt ein Bild nie pixelgenau wieder).
+       Gruendlich nimmt das ganze Bild vom Modell (in dessen Arbeitsgroesse). Schonend setzt --merge nur die
+       gefundenen Schaeden ins Foto in voller Aufloesung ein: Beim Baseballspieler von 1911 aenderte FLUX in
+       einer von zwei Varianten das Gesicht (breiter, anderes Laecheln); schonend blieb es das des Originals.
+       Kontrast und Verblassen kommen dabei von FLUX. Gemessen an Testfotos mit bekannter Vorlage (SSIM der
+       Helligkeit, Viertelgroesse): stark beschaedigt unbearbeitet 0,601, schonend 0,648, gruendlich 0,689 --
+       schonend liess Craquele, feine Kratzer und Wasserraender stehen (Nutzer: „schaut nur eingefaerbt aus“);
+       leicht beschaedigt 0,921 / 0,932 / 0,911 -- gruendlich zeichnete Gesichter in Gruppen anders. Es kommt auf
+       die Art des Schadens an. Automatisch (Vorgabe) fragt deshalb vorher den Upsampler nach Wasserflecken und
+       Rissnetzen (_restore_kind). Verworfen, weil sie die Art nicht trafen: die Schadflaeche von --merge (der
+       echte Baseballspieler lag mit 3,1-4,6 % zwischen leicht 0,5-0,9 und stark 5,2-10,4 %), Korn, Feindetail-
+       Anteil und -Korrelation zwischen Foto und FLUX, ein zweiter Erkennungslauf auf dem schonenden Ergebnis.
+    2. Farbe: FLUX 3 faerbt ein, uebernommen wird nur die Farbe (Lab a/b) -- auf die Helligkeit des Fotos in
+       voller Aufloesung bzw. des restaurierten Bildes. Gesichter und Detail bleiben so exakt erhalten;
+       gemessen am Baseballspieler von 1911: FLUX allein glaettete Haut und Laecheln, mit der Uebertragung
+       blieb das Gesicht das des Originals.
+    3. Schaerfen: SeedVR2 bringt jede Variante auf Foto x scale (hoechstens features.max_pixels).
+    """
+    p = job.params
+    repair, colorize, sharpen = bool(p.get("repair")), bool(p.get("colorize")), bool(p.get("sharpen"))
+    if not (repair or colorize or sharpen):
+        raise RuntimeError(t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder Schärfen.",
+                             "Please choose at least one step: remove damage, colorize or sharpen."))
+    source = db.get_asset(p["image_asset_id"])
+    src = config.ASSET_DIR / source.filename if source else None
+    dims = imagesize.size(src) if src and src.exists() else None
+    if dims is None:
+        raise RuntimeError(t("Foto nicht gefunden oder nicht lesbar (PNG, JPEG oder WebP).",
+                             "Photo not found or not readable (PNG, JPEG or WebP)."))
+    edit = _restore_model(p) if repair or colorize else None
+    sharp = _resolve_model({"model_id": p.get("upscale_model_id")}, "upscale") if sharpen else None
+    if sharp is not None and sharp.get("workflow") not in workflows.UPSCALE_WORKFLOWS:
+        raise RuntimeError(t(f"'{_name(sharp)}' ist kein Modell zum Schärfen.",
+                             f"'{_name(sharp)}' is not a model for sharpening."))
+    await _ensure_backend(ctx)
+
+    batch = int(p.get("batch_size") or 1)
+    seed = int(p["seed"]) if p.get("seed") is not None else random.randint(0, 2 ** 31 - 1)
+    notes = (p.get("notes") or "").strip()
+    # Nur Schaerfen kennt keine Varianten: SeedVR2 rechnet dasselbe Foto mit jedem Seed fast gleich.
+    if sharpen and not (repair or colorize):
+        batch = 1
+    # Laeufe fuer den Fortschrittsbalken: ein Modelllauf je Schritt, Einfaerben nach dem Restaurieren und
+    # Schaerfen je Variante.
+    runs = int(repair) + (batch if colorize and repair else int(colorize)) + (batch if sharpen else 0)
+    done = 0
+    meta: dict[str, Any] = {"restore": {"repair": repair, "colorize": colorize, "sharpen": sharpen},
+                            "source_asset_id": source.id, "source_size": list(dims)}
+    timings: dict[str, float] = {}
+
+    def progress(stage: str) -> Callable[[float, str], None]:
+        def on_progress(frac: float, step: str) -> None:
+            ctx.progress(0.02 + 0.94 * (done + frac) / runs, f"{stage} · {step}")
+        return on_progress
+
+    async def edit_run(instruction: str, ref: str, dims_ref: tuple[int, int], megapixels: float, n: int,
+                       run_seed: int, cache_id: str, stage: str) -> tuple[list[Path], dict[str, Any]]:
+        """Ein Lauf des Bearbeitungsmodells mit dem Foto als Referenz; Ergebnisse in data/assets/."""
+        width, height = _restore_size(dims_ref, megapixels)
+        prompt = f"{instruction} {notes}".strip()
+        pp: dict[str, Any] = {"prompt": prompt, "negative_prompt": "", "reference_images": [ref],
+                              "width": width, "height": height, "batch_size": n, "seed": run_seed,
+                              "reference_megapixels": round(width * height / 2 ** 20, 2),
+                              "upsample_prompt": p.get("upsample_prompt")}
+        info: dict[str, Any] = {"width": width, "height": height}
+        if edit["workflow"] in workflows.FLUX3_WORKFLOWS:
+            ctx.progress(0.02 + 0.94 * done / runs, t(f"{stage} · Upsampler baut die Anweisung aus",
+                                                      f"{stage} · upsampler is expanding the instruction"))
+            info |= await _flux3_caption(pp, edit, [cache_id], ctx)
+        graph, _ = workflows.build(edit, pp)
+        comfy.set_loaded_model(_name(edit))
+        t0 = time.time()
+        outs = await comfy.run_workflow(graph, on_progress=progress(stage), timeout=900.0)
+        if not outs:
+            raise RuntimeError(t("ComfyUI lieferte kein Bild zurück.", "ComfyUI returned no image."))
+        info["seconds"] = round(time.time() - t0, 1)
+        return outs, info
+
+    async def align(path: Path, original: Path) -> dict[str, Any]:
+        tmp = path.with_name(path.stem + "_al.png")
+        info = await _restore_script(tmp, "--align", path, original, tmp, RESTORE_MIN_SCORE)
+        tmp.replace(path)
+        return info
+
+    made: list[Path] = []          # alles, was dieser Auftrag in data/assets/ anlegt
+    current: list[Path] = []       # Ergebnis je Variante nach dem letzten Schritt
+    try:
+        # 1) Schaeden entfernen
+        if repair:
+            t0 = time.time()
+            ref = comfy.stage_input(src)
+            mode = p.get("repair_mode") or "auto"
+            kind: dict[str, Any] = {}
+            if mode == "auto":
+                ctx.progress(0.02 + 0.94 * done / runs, t("Schäden entfernen · prüft die Art der Schäden",
+                                                          "Removing damage · checking the kind of damage"))
+                kind = await _restore_kind(ref, source.id, ctx)
+            outs, info = await edit_run(RESTORE_REPAIR, ref, dims, float(p.get("megapixels") or RESTORE_MEGAPIXELS),
+                                        batch, seed, f"restore:{source.id}", t("Schäden entfernen", "Removing damage"))
+            made += outs
+            current = outs
+            info["align"] = [await align(out, src) for out in outs]
+            info["mode"] = mode
+            if kind:
+                info["auto"], info["auto_answer"] = kind["auto"], kind["answer"]
+            if kind.get("auto", mode) == "gentle":
+                # Schonend: Foto in voller Aufloesung, nur die Schaeden aus dem Ergebnis des Modells.
+                ctx.progress(0.02 + 0.94 * (done + 0.98) / runs, t("Schäden entfernen · setzt ein",
+                                                                   "Removing damage · merging"))
+                merged = []
+                for out in outs:
+                    target = config.ASSET_DIR / f"{uuid.uuid4().hex[:12]}_nvai_restored.png"
+                    made.append(target)
+                    info.setdefault("merge", []).append(await _restore_script(target, "--merge", out, src, target))
+                    merged.append(target)
+                current = merged
+            meta["repair"] = info
+            timings["repair"] = round(time.time() - t0, 1)
+            done += 1
+
+        # 2) Einfaerben: Farbe vom Modell, Helligkeit vom Foto bzw. vom restaurierten Bild
+        if colorize:
+            t0 = time.time()
+            stage = t("Einfärben", "Colorizing")
+            # Je Variante: das restaurierte Bild einzeln einfaerben; ohne Restaurieren alle Varianten in einem Lauf.
+            pairs: list[tuple[Path, Path]] = []      # (eingefaerbt, Helligkeitsquelle)
+            infos: list[dict[str, Any]] = []
+            if repair:
+                for k, base in enumerate(current):
+                    ref = comfy.stage_input(base)
+                    outs, info = await edit_run(RESTORE_COLORIZE, ref, imagesize.size(base) or dims,
+                                                COLORIZE_MEGAPIXELS, 1, seed + 101 + k, f"colorize:{ref}", stage)
+                    made += outs
+                    pairs.append((outs[0], base))
+                    infos.append(info)
+                    done += 1
+            else:
+                outs, info = await edit_run(RESTORE_COLORIZE, comfy.stage_input(src), dims, COLORIZE_MEGAPIXELS,
+                                            batch, seed, f"colorize:{source.id}", stage)
+                made += outs
+                pairs = [(out, src) for out in outs]
+                infos = [info] * len(outs)
+                done += 1
+            ctx.progress(0.02 + 0.94 * done / runs, t(f"{stage} · überträgt die Farbe",
+                                                      f"{stage} · transferring the color"))
+            results: list[Path] = []
+            for (color, base), info in zip(pairs, infos):
+                aligned = await align(color, base)
+                target = config.ASSET_DIR / f"{uuid.uuid4().hex[:12]}_nvai_color.png"
+                made.append(target)
+                transfer = await _restore_script(target, "--colorize", color, base, target)
+                info.setdefault("align", []).append(aligned)
+                info.setdefault("transfer", []).append(transfer)
+                results.append(target)
+            current = results
+            meta["colorize"] = infos if repair else infos[0]
+            timings["colorize"] = round(time.time() - t0, 1)
+
+        # 3) Schaerfen und vergroessern: auf Foto x scale, hoechstens max_pixels
+        if sharpen:
+            t0 = time.time()
+            feats = registry.features_for(sharp)
+            scale = float(p.get("scale") or feats.get("scale") or 2.0)
+            width, height = round(dims[0] * scale), round(dims[1] * scale)
+            limit = float(feats.get("max_pixels") or 16_000_000)
+            if width * height > limit:
+                k = (limit / (width * height)) ** 0.5
+                width, height = int(width * k), int(height * k)
+            stage = t("Schärfen", "Sharpening")
+            results = []
+            for k, base in enumerate(current or [src]):
+                graph = workflows.seedvr2_graph(sharp, comfy.stage_input(base), width, height, seed + 201 + k)
+                comfy.set_loaded_model(_name(sharp))
+                outs = await comfy.run_workflow(graph, on_progress=progress(stage), timeout=1800.0)
+                made += outs
+                if not outs:
+                    raise RuntimeError(t("ComfyUI lieferte kein Bild zurück.", "ComfyUI returned no image."))
+                results.append(outs[0])
+                done += 1
+            current = results
+            meta["sharpen"] = {"model_id": sharp["id"], "width": width, "height": height, "scale": scale}
+            timings["sharpen"] = round(time.time() - t0, 1)
+    except BaseException:
+        for path in made:
+            path.unlink(missing_ok=True)
+        raise
+    for path in made:
+        if path not in current:
+            path.unlink(missing_ok=True)
+
+    ctx.progress(0.99, t("speichert", "saving"))
+    # Im Verlauf soll stehen, wie restauriert wurde (bei "auto" die getroffene Wahl): gruendlich und schonend
+    # sehen verschieden aus.
+    used = (meta.get("repair") or {}).get("auto") or (meta.get("repair") or {}).get("mode")
+    repaired = {"thorough": t("gründlich restauriert", "restored thoroughly"),
+                "gentle": t("schonend restauriert", "restored gently")}.get(used, t("restauriert", "restored"))
+    steps = [name for name, on in ((repaired, repair), (t("eingefärbt", "colorized"), colorize),
+                                   (t("geschärft", "sharpened"), sharpen)) if on]
+    label = t("Foto ", "Photo ") + ", ".join(steps)
+    model = edit or sharp
+    asset_ids = []
+    for k, path in enumerate(current):
+        size = imagesize.size(path)
+        asset = db.create_asset(
+            kind="image", filename=path.name, job_id=job.id,
+            prompt=f"{label}: {notes}" if notes else label, model_id=model["id"],
+            meta={**meta, "seed": seed, "model_name": _name(model),
+                  "upscale_model_name": _name(sharp) if sharp else None, "notes": notes,
+                  "width": size[0] if size else None, "height": size[1] if size else None,
+                  "variant": k + 1, "seconds": timings})
+        asset_ids.append(asset.id)
+    return asset_ids
 
 
 @register("txt2audio")

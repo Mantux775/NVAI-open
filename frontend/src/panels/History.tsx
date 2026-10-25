@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Asset, type Job, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import { locale, t } from '../i18n'
@@ -15,9 +15,14 @@ const KIND_FILTERS = [
   { id: 'mesh', label: '3D' },
 ]
 
+/** Einträge je Seite im Verlauf. */
+const PAGE = 50
+
 export function HistoryPanel({ event }: Props) {
   const [jobs, setJobs] = useState<Job[]>([])
   const [assets, setAssets] = useState<Record<string, Asset[]>>({})
+  // Zwischenspeicher der geholten Dateien je Auftrag (load liest ihn, ohne neu zu entstehen).
+  const assetsRef = useRef<Record<string, Asset[]>>({})
   const [selected, setSelected] = useState<Asset | null>(null)
   const [filter, setFilter] = useState('all')
   const [confirmJob, setConfirmJob] = useState<string | null>(null)
@@ -38,19 +43,40 @@ export function HistoryPanel({ event }: Props) {
     })
   }
 
+  // Nutzerwunsch 25.10.2026: in 50er-Schritten laden, darunter „Weitere 50 laden“ (vorher fest die letzten
+  // 80 Aufträge samt Downloads; nach vielen Aufträgen an einem Tag fehlten die vom Vortag).
+  const [limit, setLimit] = useState(PAGE)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   const load = useCallback(async () => {
-    const js = (await api.jobs(80)).filter((j) => j.kind !== 'download')
-    setJobs(js)
-    const done = js.filter((j) => j.status === 'done' && j.asset_ids.length)
-    const pairs = await Promise.all(
-      done.map(async (j) => [j.id, await api.jobAssets(j.id)] as const),
-    )
-    setAssets(Object.fromEntries(pairs))
-  }, [])
+    const js = await api.jobs(limit + 1, 0, 'download')
+    setHasMore(js.length > limit)
+    const list = js.slice(0, limit)
+    setJobs(list)
+    // Dateien nur für Einträge holen, die neu sind oder sich geändert haben (beim Weiterblättern sonst
+    // jedes Mal für alle bis zu einige hundert Anfragen).
+    const done = list.filter((j) => j.status === 'done' && j.asset_ids.length)
+    const missing = done.filter((j) => assetsRef.current[j.id]?.length !== j.asset_ids.length)
+    const pairs = await Promise.all(missing.map(async (j) => [j.id, await api.jobAssets(j.id)] as const))
+    const next: Record<string, Asset[]> = {}
+    for (const j of done) next[j.id] = assetsRef.current[j.id] ?? []
+    for (const [id, list] of pairs) next[id] = list
+    assetsRef.current = next
+    setAssets(next)
+  }, [limit])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    setLimit((n) => n + PAGE)
+  }
+  useEffect(() => {
+    setLoadingMore(false)
+  }, [jobs])
 
   useEffect(() => {
     if (event && (event.type === 'job.done' || event.type === 'job.error')) load()
@@ -284,6 +310,17 @@ export function HistoryPanel({ event }: Props) {
           </article>
         )
       })}
+
+      {hasMore && (
+        <div className="history-more">
+          <button className="btn" onClick={loadMore} disabled={loadingMore}>
+            {loadingMore ? t('lädt …', 'loading …') : t(`Weitere ${PAGE} laden`, `Load ${PAGE} more`)}
+          </button>
+          <span className="muted small">
+            {t(`${jobs.length} Einträge geladen`, `${jobs.length} entries loaded`)}
+          </span>
+        </div>
+      )}
 
       {selected && (
         <div className="lightbox" onClick={() => setSelected(null)}>

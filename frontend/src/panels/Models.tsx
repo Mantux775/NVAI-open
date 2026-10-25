@@ -27,6 +27,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: '3d', label: '3D' },
   { id: 'controlnet', label: 'ControlNet' },
   { id: 'lora', label: 'LoRA' },
+  { id: 'upscale', label: t('Hochskalieren', 'Upscale') },
 ]
 
 // Namen der Zusatzfunktionen hinter optionalen Dateien (catalog: "optional")
@@ -421,18 +422,22 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                     </span>
                   )}
                   {m.fits_vram === 'nein' && (
+                    // Kein Warnzeichen: Das Modell läuft (Nutzer las „lädt nach“ am 25.10. als „lädt nicht“,
+                    // obwohl LTX-2.5 tags zuvor Videos gerechnet hatte).
                     <span
-                      className="badge warn"
+                      className="badge"
                       title={t(
-                        'Größer als der Grafikspeicher: ComfyUI lädt bei jedem Schritt Teile aus dem Arbeitsspeicher '
-                          + 'nach. Gemessen an einem normalen Anschluss (PCIe 4.0 x8) kostet das wenig (Krea 2 INT8 mit '
-                          + '8 GB: 13,0 statt 12,2 s mit 16 GB), an einem langsamen (PCIe 3.0 x4 am Riser) viel.',
-                        'Larger than the graphics memory: ComfyUI streams parts from system memory at every step. '
-                          + 'Measured on a normal connection (PCIe 4.0 x8) this costs little (Krea 2 INT8 with 8 GB: '
-                          + '13.0 instead of 12.2 s with 16 GB), on a slow one (PCIe 3.0 x4 on a riser) a lot.',
+                        'Läuft. Das Modell ist größer als der Grafikspeicher, deshalb holt ComfyUI bei jedem Schritt '
+                          + 'Teile aus dem Arbeitsspeicher. Gemessen an einem normalen Anschluss (PCIe 4.0 x8) kostet das '
+                          + 'wenig (Krea 2 INT8 mit 8 GB: 13,0 statt 12,2 s mit 16 GB), an einem langsamen (PCIe 3.0 x4 '
+                          + 'am Riser) viel.',
+                        'Runs. The model is larger than the graphics memory, so ComfyUI fetches parts from system '
+                          + 'memory at every step. Measured on a normal connection (PCIe 4.0 x8) this costs little '
+                          + '(Krea 2 INT8 with 8 GB: 13.0 instead of 12.2 s with 16 GB), on a slow one (PCIe 3.0 x4 on '
+                          + 'a riser) a lot.',
                       )}
                     >
-                      {t('lädt nach (größer als der Grafikspeicher)', 'streams (larger than graphics memory)')}
+                      {t('läuft mit Auslagern (größer als der Grafikspeicher)', 'runs with offloading (larger than graphics memory)')}
                     </span>
                   )}
                   {!m.workflow && <span className="badge">{t('kein Workflow', 'no workflow')}</span>}

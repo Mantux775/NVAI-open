@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "x-api-version": 1
  },
  "paths": {
@@ -1042,6 +1042,45 @@
     }
    }
   },
+  "/api/image/restore": {
+   "post": {
+    "summary": "Restore Image",
+    "description": "Foto restaurieren: Schaeden entfernen, einfaerben, schaerfen (jobs._restore).",
+    "operationId": "restore_image_api_image_restore_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RestoreImageRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/generate/audio": {
    "post": {
     "summary": "Generate Audio",
@@ -1412,6 +1451,7 @@
   "/api/jobs": {
    "get": {
     "summary": "Get Jobs",
+    "description": "Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten).",
     "operationId": "get_jobs_api_jobs_get",
     "parameters": [
      {
@@ -1432,6 +1472,22 @@
        "type": "integer",
        "default": 0,
        "title": "Offset"
+      }
+     },
+     {
+      "name": "exclude",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Exclude"
       }
      }
     ],
@@ -2041,7 +2097,8 @@
        "video",
        "3d",
        "controlnet",
-       "lora"
+       "lora",
+       "upscale"
       ],
       "title": "Kind",
       "default": "image"
@@ -3016,7 +3073,8 @@
        "img2video",
        "img23d",
        "download",
-       "expand_prompt"
+       "expand_prompt",
+       "restore"
       ],
       "title": "Kind"
      },
@@ -3203,7 +3261,8 @@
        "video",
        "3d",
        "controlnet",
-       "lora"
+       "lora",
+       "upscale"
       ],
       "title": "Kind"
      },
@@ -3467,6 +3526,134 @@
      "time"
     ],
     "title": "ProblemReportSummary"
+   },
+   "RestoreImageRequest": {
+    "properties": {
+     "image_asset_id": {
+      "type": "string",
+      "title": "Image Asset Id",
+      "description": "Das Foto: ein hochgeladenes Bild (POST /api/upload) oder ein Bild-Asset"
+     },
+     "repair": {
+      "type": "boolean",
+      "title": "Repair",
+      "description": "Schaeden entfernen: Kratzer, Staub, Risse, Flecken, Knicke und Emulsionsschaeden. Ein Bearbeitungsmodell (FLUX 3) rechnet das Foto neu; das Ergebnis wird am Original ausgerichtet und deckt sich mit ihm",
+      "default": true
+     },
+     "repair_mode": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "thorough",
+       "gentle"
+      ],
+      "title": "Repair Mode",
+      "description": "auto (Vorgabe): der Upsampler von FLUX 3 sieht das Foto und beantwortet, ob es Wasserflecken oder Rissnetze hat; ja -> gruendlich, nein -> schonend (an 21 Testfotos 20 wie erwartet). thorough (gruendlich) fuer flaechige Alterung (Wasserflecken, Craquele, Korn, Ausbleichen): das ganze Bild kommt vom Bearbeitungsmodell; Gesichter koennen sich je Seed leicht veraendern, deshalb mehrere Varianten. gentle (schonend) fuer einzelne Schaeden auf einem sonst guten Foto (Staub, Kratzer, Risse, Lichteinfall): nur die gefundenen Schaeden werden ersetzt, Schaerfe, Gesichter und Feinzeichnung bleiben die des Fotos in voller Aufloesung",
+      "default": "auto"
+     },
+     "colorize": {
+      "type": "boolean",
+      "title": "Colorize",
+      "description": "Einfaerben. Uebernommen wird nur die Farbe des Bearbeitungsmodells; Helligkeit, Schaerfe, Gesichter und Aufloesung bleiben die des Fotos (bzw. des restaurierten)",
+      "default": false
+     },
+     "sharpen": {
+      "type": "boolean",
+      "title": "Sharpen",
+      "description": "Zum Schluss mit SeedVR2 schaerfen, entrauschen und vergroessern (Modell der Art 'upscale' in /api/models)",
+      "default": false
+     },
+     "scale": {
+      "type": "number",
+      "maximum": 4.0,
+      "minimum": 1.0,
+      "title": "Scale",
+      "description": "Nur mit sharpen: Vergroesserung gegenueber dem Foto, 1 = gleiche Groesse",
+      "default": 2.0
+     },
+     "notes": {
+      "type": "string",
+      "maxLength": 2000,
+      "title": "Notes",
+      "description": "Optional, am besten englisch: Hinweise an das Bearbeitungsmodell, etwa Farben ('her dress is dark red, the car is dark green') oder was bleiben bzw. weg soll",
+      "default": ""
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Bearbeitungsmodell fuer Schaeden und Farbe (features.references > 0); None = FLUX 3"
+     },
+     "upscale_model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upscale Model Id",
+      "description": "SeedVR2-Fassung; None = die aktive der Art 'upscale'"
+     },
+     "megapixels": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 4.0,
+        "minimum": 0.5
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Megapixels",
+      "description": "Arbeitsgroesse des Bearbeitungsmodells in Megapixeln; None = Vorgabe (jobs.RESTORE_MEGAPIXELS)"
+     },
+     "upsample_prompt": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upsample Prompt",
+      "description": "Nur FLUX 3: die Anweisung vorher vom Upsampler ausbauen lassen; None = an"
+     },
+     "batch_size": {
+      "type": "integer",
+      "maximum": 4.0,
+      "minimum": 1.0,
+      "title": "Batch Size",
+      "description": "Varianten; beim Restaurieren schwankt die Treue der Gesichter je Seed, mehrere zur Auswahl lohnen",
+      "default": 1
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     }
+    },
+    "type": "object",
+    "required": [
+     "image_asset_id"
+    ],
+    "title": "RestoreImageRequest",
+    "description": "Foto restaurieren und einfaerben (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen --\nin dieser Reihenfolge, jeder Schritt einzeln schaltbar (jobs._restore)."
    },
    "ValidationError": {
     "properties": {

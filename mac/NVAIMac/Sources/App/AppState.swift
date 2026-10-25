@@ -10,6 +10,8 @@ final class AppState: ObservableObject {
     @Published var serverState: HTTPServer.State = .stopped
     @Published var jobs: [JobRecord] = []
     @Published var images: [AssetRecord] = []
+    /// Hochgeladene Bilder (Startbild, Maske, Referenz, altes Foto), neueste zuerst.
+    @Published var uploads: [AssetRecord] = []
     @Published var models: [ModelRow] = []
     @Published var activeModelID: String = Models.active.id
     @Published var modelsDirectory: URL = Settings.modelsDirectory
@@ -17,6 +19,8 @@ final class AppState: ObservableObject {
     /// Gewählter Reiter (generate, history, models, settings) – auch für `--snapshot --tab`.
     @Published var selectedTab = "generate"
     @Published var showSearch = false
+    /// „Generieren“ mit „Foto restaurieren“ öffnen (`--snapshot --tab restore`).
+    @Published var showRestore = false
     /// "auto", "en" oder "de"; die Texte liefert t() aus Lang.ui.
     @Published var language: String = Lang.setting
 
@@ -117,6 +121,7 @@ final class AppState: ObservableObject {
     func refresh() async {
         jobs = await JobQueue.shared.list(limit: 200)
         images = await AssetStore.shared.list(kind: "image", limit: 1000)
+        uploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
         // Ein beendeter Download ändert den Modellstatus.
         refreshModels()
     }

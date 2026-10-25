@@ -37,6 +37,7 @@ from .schemas import (
     GenerateVideoRequest,
     Job,
     ModelInfo,
+    RestoreImageRequest,
     VersionInfo,
 )
 
@@ -85,6 +86,10 @@ API_FEATURES = [
     "video_extend",    # generate/video: extend_asset_id (LTX-2.5 setzt ein Video samt Ton fort)
     "mesh_front",      # generate/3d: project_front (Quellbild auf die Vorderseite des Meshes)
     "style_reference", # generate/image: Referenzbilder als Stilvorlage (features.reference_kind == "style")
+    "restore",         # POST /api/image/restore: Foto restaurieren, einfaerben, schaerfen (Modellart "upscale")
+    "restore_auto",    # ... repair_mode "auto": der FLUX-3-Upsampler waehlt nach der Art der Schaeden
+    "restore_gentle",  # ... repair_mode "gentle": nur die Schaeden einsetzen (NVAI-open fuer Mac kann beides nicht)
+    "history_pages",   # GET /api/jobs?offset=&exclude=download: der Verlauf blaettert in 50er-Schritten
 ]
 
 
@@ -667,6 +672,19 @@ async def generate_image(req: GenerateImageRequest) -> Job:
     return await jobs.submit("txt2img", req.model_dump())
 
 
+@app.post("/api/image/restore", response_model=Job)
+async def restore_image(req: RestoreImageRequest) -> Job:
+    """Foto restaurieren: Schaeden entfernen, einfaerben, schaerfen (jobs._restore)."""
+    if db.get_asset(req.image_asset_id) is None:
+        raise HTTPException(404, t(f"Foto nicht gefunden: {req.image_asset_id}",
+                                   f"Photo not found: {req.image_asset_id}"))
+    if not (req.repair or req.colorize or req.sharpen):
+        raise HTTPException(422, t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder "
+                                   "Schärfen.", "Please choose at least one step: remove damage, colorize or "
+                                   "sharpen."))
+    return await jobs.submit("restore", req.model_dump())
+
+
 @app.post("/api/generate/audio", response_model=Job)
 async def generate_audio(req: GenerateAudioRequest) -> Job:
     return await jobs.submit("txt2audio", req.model_dump())
@@ -797,8 +815,9 @@ async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
 # --------------------------------------------------------------- Jobs
 
 @app.get("/api/jobs", response_model=list[Job])
-async def get_jobs(limit: int = 50, offset: int = 0) -> list[Job]:
-    return db.list_jobs(limit=limit, offset=offset)
+async def get_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None) -> list[Job]:
+    """Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten)."""
+    return db.list_jobs(limit=limit, offset=offset, exclude=exclude)
 
 
 @app.get("/api/jobs/{job_id}", response_model=Job)

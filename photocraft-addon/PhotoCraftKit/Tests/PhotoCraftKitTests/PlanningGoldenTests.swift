@@ -102,6 +102,43 @@ final class PlanningGoldenTests: XCTestCase {
         }
     }
 
+    func testRestoreCapable() {
+        let c = golden["restore_constants"]!
+        XCTAssertEqual(c["RESTORE_MAX_SIDE"]?.intValue, Planning.restoreMaxSide)
+        XCTAssertEqual(Set((c["GRAY_MODES"]?.arrayValue ?? []).compactMap(\.stringValue)), Planning.grayModes)
+        for r in golden["restore_capable"]?.arrayValue ?? [] {
+            let name = r["model"]!.stringValue!
+            XCTAssertEqual(Planning.restoreCapable(models[name]!), r["out"]!.boolValue!, name)
+        }
+    }
+
+    func testPlanRestore() {
+        let cases = golden["plan_restore"]?.arrayValue ?? []
+        XCTAssertGreaterThan(cases.count, 100)
+        for c in cases {
+            let i = c["in"]!, o = c["out"]!
+            let size = Golden.ints(i["region_size"])
+            let list = { (key: String) in (i[key]?.arrayValue ?? []).compactMap { self.models[$0.stringValue!] } }
+            do {
+                let r = try Planning.planRestore(prompt: i["prompt"]!.stringValue!, params: i["params"]!, models: list("models"),
+                                                 upscalers: list("upscalers"), regionSize: (size[0], size[1]),
+                                                 hasSelection: i["has_selection"]!.boolValue!,
+                                                 docMode: i["doc_mode"]!.stringValue!)
+                XCTAssertNil(o["error"], "Fehler erwartet: \(i)")
+                XCTAssertEqual(JSONValue.object(r.payload), o["payload"], "payload \(i)")
+                XCTAssertEqual([r.uploadSize.0, r.uploadSize.1], Golden.ints(o["upload_size"]), "upload_size \(i)")
+                XCTAssertEqual(r.modelName, o["model_name"]?.stringValue, "model_name \(i)")
+                XCTAssertEqual(r.enlarge, o["enlarge"]?.doubleValue, "enlarge \(i)")
+                XCTAssertEqual(r.toRGB, o["to_rgb"]?.boolValue, "to_rgb \(i)")
+                XCTAssertEqual(r.warnings.map(\.code), (o["warnings"]?.arrayValue ?? []).compactMap(\.stringValue), "warnings \(i)")
+            } catch let error as PlanError {
+                XCTAssertEqual(error.code, o["error"]?.stringValue, "Fehler \(i)")
+            } catch {
+                XCTFail("\(error)")
+            }
+        }
+    }
+
     func testLayerName() {
         // Ebenennamen sind sichtbar und übersetzt – die Golden-Daten halten beide Sprachen fest.
         defer { Localization.choice = "en" }

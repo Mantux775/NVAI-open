@@ -141,6 +141,8 @@ NVAI-open for Mac: Getting Started
 3. Under "Generate", enter a prompt. The first image takes longer because the model loads.
 4. Only a few words? Click "✨ Expand prompt": the text encoder of FLUX.2 Klein writes a full
    image description from them. Read it and delete what was invented; "Back to my prompt" restores yours.
+5. Old photos: under "Generate", switch to "Restore photo", pick the photo or drag it in, and choose
+   "Remove damage" and/or "Colorize". Known colors in the hints make colorizing more accurate.
 
 Language: follows the system; switch under Settings > Language (the menu bar follows after a restart).
 
@@ -168,6 +170,8 @@ NVAI-open für Mac: Erste Schritte
 4. Nur ein paar Worte? „✨ Prompt ausbauen“ klicken: Der Text-Encoder von FLUX.2 Klein schreibt
    daraus eine volle Bildbeschreibung. Lesen und Erfundenes streichen; „Zurück zum eigenen Prompt“ holt deinen
    Text zurück.
+5. Alte Fotos: unter „Generieren“ auf „Foto restaurieren“ umschalten, das Foto wählen oder hineinziehen und
+   „Schäden entfernen“ und/oder „Einfärben“ wählen. Bekannte Farben in den Hinweisen machen das Einfärben genauer.
 
 Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menüleiste folgt nach einem Neustart).
 

@@ -9,21 +9,22 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.10.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.10/NVAI-open-Setup-0.5.10.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.10/NVAI-open-0.4.5.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.11.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-Setup-0.5.11.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.6.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-0.4.6.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.10 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10))
+October 2026: NVAI-open 0.5.11 for Windows and 0.4.6 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11))
 
-- **Krea 2 with a style template:** one or two images set the way of painting, the colors and the light, the prompt sets the content
-- **3D with readable lettering:** "Take the front from the image" puts the source image onto the front of the mesh
-- **Extend a video:** LTX-2.5 continues a clip from its last frame, sound included
-- **The right format for your card:** INT8 on RTX 20/30/40, NVFP4 there only on a slow connection such as a riser
+- **Restore old photos:** remove damage, colorize, sharpen; "Automatic" picks thorough or gentle by the kind of damage. On the Mac too (thorough, without sharpening)
+- **MOSS-Image:** the fourth recommended image model, lettering and layout under Apache-2.0
+- **Recommended settings:** every tab lists what was measured
+- **Preview and history:** results open full size with a click, the history loads 50 at a time
+- **Mac:** "Generate" with model choice, an image picker with upload and drag and drop, and a large preview
 
-Neu: **Krea 2 mit Stilvorlage** (ein oder zwei Bilder geben Malweise, Farben und Licht vor), **3D mit lesbarer Schrift** (Vorderseite aus dem Bild), **Video verlängern** (LTX-2.5 setzt einen Clip samt Ton fort), **das richtige Format für die Karte** (INT8 auf RTX 20/30/40, NVFP4 dort nur an einem langsamen Anschluss). 0.5.9 brachte Krea 2 und schärfere Videos ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.9)).
+Neu: **Alte Fotos restaurieren** (Schäden entfernen, einfärben, schärfen; „Automatisch“ wählt nach der Art der Schäden, auf dem Mac gründlich und ohne Schärfen), **MOSS-Image** (Schrift und Layout unter Apache-2.0), **Empfohlene Einstellungen** in jedem Reiter, **Vorschau per Klick**, ein Verlauf, der in 50er-Schritten nachlädt, und auf dem Mac ein neues „Generieren“ mit Modellwahl, Bildauswahl samt Hochladen und Hineinziehen und großer Vorschau. 0.5.10 brachte Krea 2 mit Stilvorlage, 3D mit lesbarer Schrift und Video verlängern ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -39,10 +40,11 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 
 ### What you can do
 
-- **Images:** FLUX 3, Qwen-Image-2512, Krea 2 and many more. Edit with reference images, fill in or extend a picture.
+- **Images:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image and many more. Edit with reference images, fill in or extend a picture.
 - **Video with sound:** LTX-2.5 makes the picture and the sound in one pass, speech included, up to 20 s and 1080p.
 - **Music and sounds:** songs with vocals, instrumental music up to 5 minutes, sound effects.
 - **3D models:** from an image to a textured model for Unity, Blender or any engine.
+- **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
 - **A few words are enough:** "Expand prompt" writes the full description for you.
 - **Claude Code:** Claude creates your assets while it works on your project.
 - **No filter of its own:** uncensored models are one click away. You are responsible for what you make.
@@ -96,6 +98,10 @@ Krea 2 also takes an image as a style template: the lighthouse keeps its content
 
 ![Crate with stencilled lettering: FLUX 3 and Qwen-Image-2512](docs/images/compare-crate.jpg)
 
+MOSS-Image writes posters and signs letter-perfect, also under Apache-2.0, in about 51 s per image. With its 50 steps the crate's rope handles pass through drilled holes; with the 25 of ComfyUI's template they hung without a hold in one of three images:
+
+![MOSS-Image: a poster with lettering, a crate with 25 and with 50 steps](docs/images/moss-image-en.jpg)
+
 Editing with FLUX 3: "replace the rope handles with iron handles, keep everything else unchanged".
 
 ![Editing with a reference image in FLUX 3](docs/images/flux3-edit.jpg)
@@ -114,11 +120,30 @@ Make a picture wider or taller, and NVAI-open paints the new border to match. Or
 
 ![Fill with FLUX 3: crates removed, a seagull added](docs/images/fill-flux3.jpg)
 
+### Restore old photos
+
+Scratches, dust, tears, stains and fading go, the photo gets color if you like, and SeedVR2 sharpens and enlarges it. "Thorough" redraws the whole photo, which suits overall aging such as water stains and fading; "Gentle" only replaces the damaged spots and keeps sharpness and faces exactly as they are, which suits dust, scratches and tears on an otherwise good photo. "Automatic" (the default) lets the image model look at the photo and choose; it picked the better one on 20 of 21 test photos. Colorizing takes only the color from FLUX 3, brightness and detail stay the photo's. Known colors in the hints make it more accurate. NVAI-open for Mac (0.4.6) restores and colorizes too, always thoroughly and without sharpening. Details: [docs/MODELS.md](docs/MODELS.md#new-in-0511).
+
+![Iwo Jima 1945: original and restored and colorized](docs/images/restore-colorize.jpg)
+
 ### Expand prompt
 
 Type a few words, click "Expand prompt", and NVAI-open writes the full description: setting, materials, light, what happens. Read it, delete what you don't want, generate. Works for images, video, sounds, music and 3D.
 
 ![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded prompt](docs/images/expand-prompt.jpg)
+
+### Tips
+
+Every tab in NVAI-open has a **Recommended settings** box with what was measured. The most important ones:
+
+- **Images:** choose the size by the silhouette (standing figure 832 × 1216, vehicle 1216 × 832), write full English sentences with the style first, and make 4 images at once to pick from.
+- **Krea 2:** name the framing ("medium shot from the waist up, his whole head inside the frame"); without it the head was cut off in 3 of 3 test images.
+- **MOSS-Image:** describe the finished picture and put the text in quotation marks with position and typeface; leave it on 50 steps.
+- **Video:** name loud sounds explicitly, sounds described as soft come out almost inaudible. For a fixed shot write "Static camera, a locked-off medium shot".
+- **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
+- **Old photos:** leave it on "Automatic"; it chooses "Thorough" for overall aging (water stains, crack networks) and "Gentle" for separate damage on an otherwise good photo (dust, scratches, tears). Put known colors into the hints ("his suit is dark brown") and compare the two variants at full size.
+
+The same list with the measurements, written for Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance)
 
 ### Claude Code: your assets on request
 
@@ -139,7 +164,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 ### Mac app, PhotoCraft add-on, iOS
 
 - **Mac:** a native app for Apple Silicon with FLUX.2 Klein: generate, refine, fill, reference images, expand prompts.
-- **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it or rework it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
+- **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
 ### Requirements
@@ -189,10 +214,11 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was geht damit?
 
-- **Bilder:** FLUX 3, Qwen-Image-2512, Krea 2 und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
+- **Bilder:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache, bis 20 s und 1080p.
 - **Musik und Sounds:** Lieder mit Gesang, instrumentale Musik bis 5 Minuten, Soundeffekte.
 - **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
+- **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
 - **Claude Code:** Claude erzeugt deine Assets, während es an deinem Projekt arbeitet.
 - **Kein eigener Filter:** unzensierte Modelle sind einen Klick entfernt. Für das, was du erzeugst, bist du selbst verantwortlich.
@@ -246,6 +272,10 @@ Krea 2 nimmt auch ein Bild als Stilvorlage: Der Leuchtturm behält seinen Inhalt
 
 ![Kiste mit Schablonenschrift: FLUX 3 und Qwen-Image-2512](docs/images/compare-crate.jpg)
 
+MOSS-Image schreibt Plakate und Schilder buchstabengenau, ebenfalls unter Apache-2.0, in rund 51 s je Bild. Mit seinen 50 Schritten laufen die Seilgriffe der Kiste durch Bohrungen; mit den 25 aus ComfyUIs Vorlage hingen sie in einem von drei Bildern ohne Halt:
+
+![MOSS-Image: Plakat mit Schrift, Kiste mit 25 und mit 50 Schritten](docs/images/moss-image-de.jpg)
+
 Bearbeiten mit FLUX 3: „replace the rope handles with iron handles, keep everything else unchanged“.
 
 ![Bearbeiten mit Referenzbild in FLUX 3](docs/images/flux3-edit.jpg)
@@ -264,11 +294,30 @@ Ein Bild breiter oder höher machen, und NVAI-open malt den neuen Rand passend d
 
 ![Füllen mit FLUX 3: Kisten entfernt, Möwe hinzugefügt](docs/images/fill-flux3.jpg)
 
+### Alte Fotos restaurieren
+
+Kratzer, Staub, Risse, Flecken und Ausbleichen verschwinden, auf Wunsch bekommt das Foto Farbe, und SeedVR2 schärft und vergrößert es. „Gründlich“ rechnet das ganze Foto neu, das passt zu flächiger Alterung wie Wasserflecken und Ausbleichen; „Schonend“ ersetzt nur die beschädigten Stellen und lässt Schärfe und Gesichter genau, wie sie waren, das passt zu Staub, Kratzern und Rissen auf einem sonst guten Foto. „Automatisch“ (Vorgabe) lässt das Bildmodell das Foto ansehen und wählen; bei 20 von 21 Testfotos traf es die bessere Art. Beim Einfärben kommt nur die Farbe von FLUX 3, Helligkeit und Detail bleiben die des Fotos. Bekannte Farben in den Hinweisen machen es genauer. NVAI-open für Mac (0.4.6) restauriert und färbt ebenfalls ein, immer gründlich und ohne Schärfen. Mehr dazu: [docs/de/MODELLE.md](docs/de/MODELLE.md#neu-in-0511).
+
+![Iwo Jima 1945: Original sowie restauriert und eingefärbt](docs/images/restore-colorize-de.jpg)
+
 ### Prompt ausbauen
 
 Ein paar Worte eintippen, auf „Prompt ausbauen“ klicken, und NVAI-open schreibt die volle Beschreibung: Ort, Material, Licht, was passiert. Lesen, Ungewolltes streichen, generieren. Das geht für Bilder, Video, Sounds, Musik und 3D.
 
 ![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](docs/images/expand-prompt.jpg)
+
+### Tipps
+
+In jedem Reiter von NVAI-open stehen unter **Empfohlene Einstellungen** die gemessenen Erfahrungen. Die wichtigsten:
+
+- **Bilder:** das Format nach der Silhouette wählen (stehende Figur 832 × 1216, Fahrzeug 1216 × 832), ganze englische Sätze mit dem Stil vorn schreiben und 4 Bilder auf einmal zum Auswählen machen.
+- **Krea 2:** den Bildausschnitt nennen („medium shot from the waist up, his whole head inside the frame“); ohne fehlte im Test in 3 von 3 Bildern der Kopf.
+- **MOSS-Image:** das fertige Bild beschreiben und die Schrift in Anführungszeichen mit Ort und Schriftart angeben; bei 50 Schritten lassen.
+- **Video:** laute Geräusche ausdrücklich nennen, leise beschriebene kommen fast unhörbar. Für eine feste Einstellung „Static camera, a locked-off medium shot“ schreiben.
+- **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.
+- **Alte Fotos:** auf „Automatisch“ lassen; es wählt „Gründlich“ bei flächiger Alterung (Wasserflecken, Rissnetze) und „Schonend“ bei einzelnen Schäden auf einem sonst guten Foto (Staub, Kratzer, Risse). Bekannte Farben in die Hinweise („his suit is dark brown“) und die zwei Varianten in voller Größe vergleichen.
+
+Dieselbe Liste mit den Messwerten, geschrieben für Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance) (englisch)
 
 ### Claude Code: Assets auf Zuruf
 
@@ -289,7 +338,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 ### Mac-App, PhotoCraft-Add-on, iOS
 
 - **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen.
-- **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen oder überarbeiten, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
+- **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 
 ### Voraussetzungen

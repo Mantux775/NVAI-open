@@ -68,6 +68,7 @@ After an NVAI-open update, a running Claude Code session only sees the new tool 
 | `generate_video` | Short clip → file paths |
 | `image_to_3d` | Image asset → GLB mesh |
 | `text_to_3d` | Text → image → GLB mesh in one go |
+| `restore_image` | Old photo → repaired, colorized and/or sharpened photo (since 0.5.11) |
 | `list_assets` / `delete_asset` / `clear_history` | History |
 | `copy_asset` | Copy an asset to `Assets/Generated/` or similar |
 
@@ -82,6 +83,26 @@ All `generate_*` tools **block until done** and return absolute file paths.
 
 When a model is missing, **don't guess** — `list_models` shows size, VRAM requirement and
 license. Downloads are several GB; ask the user first.
+
+## Recommended settings at a glance
+
+The short version of everything below, as measured on an RTX 5060 Ti 16 GB. The web UI shows the same
+list per tab under **Recommended settings** (since 0.5.11); keep both in step when a new finding comes in.
+
+| Task | Recommended | Why (measured) |
+|---|---|---|
+| Final image asset, text in the image | `qwen-image-2512-nvfp4`, 50 steps, full English sentences, text in quotation marks | Letter-perfect crate lettering; rope handles drawn through drilled holes where Lightning laid them on the wood |
+| Edit an image, keep a character consistent | `flux3-klein-nvfp4` with `reference_asset_ids`; say what changes and what stays | Only the handles changed, the rest stayed; 13–30 s |
+| Photographic look | `krea2-turbo-nvfp4`, state the framing ("medium shot from the waist up, his whole head inside the frame") | Without the framing the head was cut off in 3 of 3 images, with it in 0 of 2; ~20 s |
+| Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | Text letter-perfect in every test; rope handles through drilled holes in 3 of 3 with 50 steps, 2 of 3 with 25; ~51 s |
+| Size | Standing figure 832 × 1216, vehicle 1216 × 832, object 1024² | In a square, figures lose their feet more often |
+| Choosing | `batch_size=4`, compare at full resolution | One model load instead of four; anatomy errors are a failure rate |
+| Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS |
+| Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
+| Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
+| Sound effects / songs / long instrumentals | Stable Audio Open / ACE-Step 1.5 / Stable Audio 3 Medium | Describe the sound for SFX; ACE-Step takes lyrics, BPM and key; Stable Audio 3 up to 5 min without vocals |
+| 3D source image | One object, plain background, no floor, no cast shadow; `project_front=True` for lettering | Floor and shadow become a plate under the mesh; painted lettering became a distorted relief |
+| Old photo | `restore_image` with `repair_mode="auto"` (default; picks thorough for water stains and crack networks, otherwise gentle), `batch_size=2`, known colors in `notes` | See [Old photos](#old-photos-restore-colorize-sharpen-since-0511): auto chose as expected on 20 of 21 test photos; heavily aged 0.689 thorough vs 0.648 gentle, on real glass plates gentle kept the sharpness; color hints cut the color error by 40 % |
 
 ## Run times (measured on an RTX 5060 Ti 16 GB)
 
@@ -98,6 +119,7 @@ license. Downloads are several GB; ask the user first.
 | Image 1024² / 1408², 8 steps | Krea 2 Turbo NVFP4 | ~20 s / ~37 s, first image after FLUX 3 ~41 s |
 | Image 1024² with one / two style templates | Krea 2 Turbo NVFP4 + style LoRA | ~41–48 s / ~71 s (without ~24 s) |
 | Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 INT8 (for RTX 20/30/40) | ~119 s, with loading ~132 s |
+| Image 1 MP, 50 / 25 steps (prompt expansion ~11 s extra the first time) | MOSS-Image SFT INT8 | ~51 s / ~28 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
 | Music 60 s / 20 s | ACE-Step 1.5 Turbo (8 steps, CFG 1, shift 3) | ~17 s / ~10 s |
 | Instrumental 60 s / 20 s / 300 s | Stable Audio 3 Medium (8 steps, CFG 1) | ~9–12 s / ~7 s / ~64 s |
@@ -117,13 +139,18 @@ license. Downloads are several GB; ask the user first.
 | Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
 | Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
 | Mesh with the front from the image | TripoSG | ~66 s warm, the projection itself under 1 s |
+| Restore a photo 1216 × 1600, thorough + colorize, 1 variant | FLUX 3 Klein NVFP4 | ~115 s |
+| Automatic mode: the upsampler checks the kind of damage | Qwen3.5-9B upsampler | ~2.5 s, cached per photo |
+| Restore a photo, gentle + colorize, 1 variant | FLUX 3 Klein NVFP4 | ~140 s (putting the damage in costs extra) |
+| Remove damage only, thorough, 2 variants | FLUX 3 Klein NVFP4 | ~130–150 s, measured with a game running alongside |
+| Sharpen 1200 × 864 → 3840 × 2770 / 1024² → 2048² | SeedVR2 7B NVFP4 | ~18.5 s with loading / ~6 s |
 
 The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the
 user up front instead of leaving them waiting.
 
 ## Images
 
-### Model choice: the three recommended models
+### Model choice: the four recommended models
 
 - **Qwen-Image-2512, full version `qwen-image-2512-nvfp4`** (50 steps, cfg 4) — first choice for
   **final assets**, **text in the image** and **structural details**. Crate lettering comes out
@@ -180,6 +207,19 @@ user up front instead of leaving them waiting.
   prompt (the storm turned pastel); with two templates 71 s, and the first one wins. Describe only the
   content. If the LoRA is missing, `features.missing.style_reference` says so ("Download extras"
   under "Models").
+- **MOSS-Image, `moss-image-sft-int8`** (OpenMOSS, October 2026, 5B parameters, 50 steps, cfg 3) — the
+  fourth choice since 0.5.11: **text and layout in the image** (posters, signs, graphics) under
+  **Apache-2.0**, so images can be sold without a revenue limit or review obligation. The text encoder
+  is Qwen3.5-9B (W4A8; not FLUX 3's upsampler), with the small FLUX.2 VAE (Apache-2.0). Short prompts
+  are first expanded by MOSS's own text encoder (system prompt from ComfyUI's template; the result is
+  in `caption`, `upsample_prompt=False` switches it off); a JSON with "summary" and "items" as the
+  prompt sets the layout and goes to the model without expansion. The negative prompt works. Measured
+  with the same prompts and seeds: OpenMOSS's settings (50 steps, cfg 3, euler — the default) 51 s per
+  1 MP image, plus ~11 s for the expansion the first time; ComfyUI's template (25 steps, cfg 2.5,
+  er_sde) 28 s. Text letter-perfect in every image, the soldier with both boots and the fisherman with
+  his head in the frame; crate rope handles through drilled holes in 3 of 3 with 50 steps, in 2 of 3
+  with 25. Text to image only (no reference images, no mask, no hires pass); not available on the Mac
+  (no MLX version).
 
 What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under
 `features`: whether the negative prompt works, reference images, upsampler, recommended sizes,
@@ -402,6 +442,97 @@ content, not the shape — they don't replace a ControlNet.
 - **More steps than the model default** — buys detail, not structure. Whether a figure has two
   legs is decided after a third of the steps. (A distilled version like Qwen Lightning is a
   different matter: compared with the original, it really does lose construction.)
+
+## Old photos: restore, colorize, sharpen (since 0.5.11)
+
+`restore_image(image_path=...)` (or `image_asset_id`) runs up to three steps in this order, each one
+switchable. The REST route is `POST /api/image/restore`, the web UI has the **Restore** tab, the
+PhotoCraft add-on a **Restore** mode.
+
+**1. `repair` — remove damage.** FLUX 3 Klein gets the photo as a reference with a fixed restore
+instruction (your `notes` are appended) and redraws it at 2 MP, capped at the photo's size. NVAI-open
+then aligns the result with the photo (measured correlation 0.88–0.99), so it stays congruent.
+
+- **`repair_mode="thorough"`:** the whole picture comes from FLUX. Cracks, crack networks, fine
+  scratches, water stains and fading go. Film grain partly stays, because FLUX reproduces it.
+- **`repair_mode="gentle"`:** only the damage NVAI-open detects (dust, spots, scratches, stripes,
+  tears, light leaks, writing on the print) is put into the photo at full resolution, plus FLUX's
+  contrast and fading correction. Sharpness, faces and fine detail stay exactly the photo's.
+- **Rule, by the kind of damage rather than its amount:** overall aging (water stains, crack networks,
+  grain, fading) → thorough. Separate damage on an otherwise good photo (dust, scratches, stripes,
+  tears, light leaks, writing) → gentle.
+- **`repair_mode="auto"` (default) applies that rule.** Before the FLUX run, FLUX 3's prompt upsampler
+  (Qwen3.5-9B, it sees the photo at 1 MP) answers one question, greedy decoding, about 2.5 s: *"Are there
+  water stains, rings left by water, or crack networks (craquelure) in this photograph? Answer yes or
+  no."* (system prompt: *"You are an expert in restoring old photographs. Answer with one word: yes or
+  no."*). An answer starting with "no" → gentle, anything else → thorough. The FLUX run is the same for
+  both modes, so auto costs nothing else. `meta.repair.auto` holds the choice, `meta.repair.auto_answer`
+  the answer, and the history label says "restored thoroughly" or "restored gently". On 21 test photos
+  it picked the expected mode 20 times: all 8 heavily aged ones yes, all 8 lightly aged ones no, the
+  ferrotype yes, the baseball player, Iwo Jima and the torn print no; only the pigeons in Paris (a
+  sharp glass plate with dust) got yes, where gentle would have been sharper. Live on the installed
+  version: the heavily aged portrait "Yes" → thorough, the baseball player "No. The photograph contains
+  scattered scratches, …" → gentle.
+- **The wording of that question matters.** "Does this photograph show water stains, water rings or a
+  network of fine cracks across the picture?" got 18 of 21 right, "Is this photograph damaged by water
+  stains or by a network of fine cracks?" only 14 (it said yes to clean glass plates). Asking for one
+  of two words, OVERALL or SEPARATE, got OVERALL for all 16 photos asked, and SEPARATE first still
+  missed three; a 0–10 degradation score gave 7–9 to almost everything.
+- **Measured on test photos with a known undamaged original** (8 photos generated with Krea 2 and aged
+  synthetically, both modes from the same FLUX run; structural similarity of the brightness at a
+  quarter of the size, 1 = identical): heavily aged, the damaged photo scored 0.601, gentle 0.648,
+  thorough 0.689 (thorough ahead on all four photos); lightly aged 0.921, 0.932 and 0.911: there gentle
+  was closer, and thorough drew the faces in a group photo differently and ended up below the
+  untouched photo.
+- **Seen on five real old photos (public domain):** gentle kept the sharpness and the faces on the
+  glass plates (a 1911 baseball player with emulsion damage, 1925 pigeons in Paris with dust spots), on
+  Iwo Jima 1945 with a light leak and on a 1945 print with a torn-off corner; thorough came out softer
+  or invented texture there. On an 1860 ferrotype speckled all over, thorough was cleaner.
+- **How this came about.** The first build defaulted to gentle. A user restored and colorized a
+  heavily aged portrait and found it "only looks colorized, the quality is even worse than before": the
+  water-stain ring, the grain and the faded look were all still there, now in color. Thorough removed
+  the ring and the fading and even brought back the moustache that the fading had washed out (the
+  undamaged original has it); some grain stayed. When auto cannot ask (no upsampler) or the answer is
+  unclear, it takes thorough, whose worst case (softer, a slightly changed face) is milder than
+  gentle's (the damage stays).
+- **What did not work as an automatic switch** (all measured on the same photos): the damage share that
+  gentle detects (light 0.5–0.9 %, heavy 5.2–10.4 %, but the baseball player 3.1–4.6 % and Iwo Jima
+  8.9–9.1 %, gentle better on both: it measures the amount, not the kind); film grain; how much fine
+  detail FLUX keeps and how well it correlates with the photo (FLUX reproduces grain in place); a
+  second detection pass on the gentle result (water stains and crack networks are below its
+  thresholds).
+- **Faces vary with the seed.** In one of two thorough variants a 1911 portrait got a wider face and
+  a different smile. Keep `batch_size=2` and compare the faces at full resolution; if none fits,
+  try gentle.
+- **Working size 2 MP:** at 1 MP a soldier in a group photo (Iwo Jima, 1945) got a stranger's face.
+  2 MP costs about twice the time.
+- The instruction keeps "the original tones": with "black-and-white tones" sepia turned grey. To keep
+  a sepia tone, don't write "black and white" into `notes` either.
+- Small marks that FLUX leaves out disappear in both modes (a hyphen and a comma in a caption):
+  check lettering.
+
+**2. `colorize`.** FLUX 3 colorizes at 1 MP, but only the color (Lab a/b) is taken over and laid onto
+the brightness of the photo (or of the repaired picture) at full resolution with a guided filter.
+FLUX alone smoothed the skin and changed a smile; with the transfer the face stays. Known colors in
+`notes`, in English ("his suit is dark brown, her dress is dark red with white dots"), cut the
+measured color error from ΔE 17.4–17.7 to 10.2–10.6. Without hints the colors are plausible guesses:
+the brown suit of a test portrait came out blue. Color can bleed across edges of equal brightness (a
+light cap brim in front of a light sky).
+
+**3. `sharpen` with `scale` 1–4.** SeedVR2 7B (ByteDance, Apache-2.0, `list_models(kind="upscale")`)
+sharpens and enlarges to photo size × `scale`, at most 16 MP: 1024² → 2048² in ~6 s, 1200 × 864 →
+3840 × 2770 in 18.5 s with loading. Crisp, with slightly more contrast; at strong enlargement it
+invents fine detail (feathers on pigeons). Trap for your own graphs: SeedVR2 reads a batch of images
+as one video, so NVAI-open runs the variants one by one.
+
+**Not built in, with reasons:** DDColor (Apache-2.0, 0.2 s, but it needs extra ComfyUI architectures
+and the generic upscale node tiles at 512 px, so every tile gets its own colors; in the ColorFLUX paper
+(CVPR 2026) FLUX Kontext came out ahead of DDColor); CodeFormer (not commercial) and GFPGAN need face
+detection. FireRed Image Edit 1.1 (Apache-2.0) and Mage-Flow-Edit (MIT) can restore according to their
+makers; untested, but a possible way around the FLUX license.
+
+**License:** what FLUX 3 computes (repair, colorize) falls under the FLUX Kommunity License; review
+every image before publishing. SeedVR2 output is free (Apache-2.0).
 
 ## Audio
 
@@ -710,6 +841,15 @@ a game. Tell the user that instead of passing off a raw result as a finished ass
   next image job needs a fresh model load — plan for it: generate all images first, then all
   meshes.
 - Downloads run in a **separate queue** and don't block the GPU.
+
+**Several graphics cards (since 0.5):** without a choice of your own, everything runs on the strongest
+card (memory first, then compute capability). Splitting the work brought no gain in measurements with an
+RTX 5060 Ti 16 GB plus an RTX 4060 8 GB on a PCIe 3.0 x4 riser: FLUX 3 took 29 instead of 9 s on the
+4060, Qwen-Image-2512 1095 instead of 97 s, and moving the text encoder to the second card saved
+nothing. `GET/PUT /api/gpus` assigns image models, language models (upsampler, prompt expansion) and 3D
+to a card each; with the language models on their own card, prompt expansion runs in parallel to image
+jobs (7.5–8.6 s per expansion on the 4060). Full load on both cards at once once made the 4060 drop off
+the bus (a repeat two days later with a newer driver ran clean), so ask the user before running both.
 
 ## Licenses — before using assets in a game you sell
 

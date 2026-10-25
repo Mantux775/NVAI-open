@@ -143,6 +143,32 @@ KREA2_FILES_SHARED = [
 # auf ein bis zwei Referenzbilder trainiert.
 KREA2_WITH_OPTIONAL = {"style_reference": {"references": 2, "reference_kind": "style"}}
 
+# MOSS-Image (OpenMOSS, 16.10.2026): laut OpenMOSS 1 bis 2 MP empfohlen, 0,25 bis 4 MP möglich, Seiten
+# Vielfache von 16 -- dieselben 2-MP-Formate wie bei Krea 2.
+MOSS_IMAGE_SIZES = KREA2_SIZES
+MOSS_IMAGE_PROMPT_HINT = (
+    "MOSS-Image ist auf Bildbeschreibungen trainiert: beschreiben, wie das fertige Bild aussieht, nicht was zu "
+    "tun ist. Erst Medium und Motiv, dann Ort und Aufbau, dann Licht und Farben. Schrift wörtlich in "
+    "Anführungszeichen, mit Ort, Größe und Schriftart; Zeilenumbrüche selbst setzen. Kurze Prompts baut "
+    "MOSS-Image vorher mit seinem eigenen Text-Encoder aus (abschaltbar). Layout: ein JSON mit „summary“ und "
+    "„items“ als Prompt, dann ohne Ausbau. Der Negativprompt wirkt (cfg 3)."
+)
+MOSS_IMAGE_PLACEHOLDER = (
+    "Vintage travel poster in flat gouache colors: snow-capped peaks at sunrise above a red cable car, bold "
+    "Art Deco lettering \"ALPENGLOW\" across the top and \"SINCE 1928\" in small capitals at the bottom"
+)
+MOSS_IMAGE_FILES = [
+    {"repo": "Comfy-Org/MOSS-Image", "file": "diffusion_models/moss_image_sft_int8_convrot.safetensors",
+     "target": "diffusion_models"},
+    # Standard-Qwen3.5-9B (W4A8) wie in ComfyUIs Vorlage; der Upsampler von FLUX 3 ist ein feinjustiertes
+    # Qwen3.5-9B und taugt nicht als Text-Encoder.
+    {"repo": "Comfy-Org/MOSS-Image", "file": "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors",
+     "target": "text_encoders"},
+    # Die kleine FLUX.2-VAE wie in der Vorlage: Apache-2.0 (BFLs FLUX.2-small-decoder); die große führt
+    # flux-2-swift-mlx als „FLUX.2 Non-Commercial“ -- so bleibt MOSS-Image durchgehend Apache-2.0.
+    {"repo": "Comfy-Org/MOSS-Image", "file": "vae/flux2-vae_small.safetensors", "target": "vae"},
+]
+
 QWEN21_LICENSE_WARNING = (
     "Qwen Research License: nur für Forschung und Evaluation, keine kommerzielle Nutzung — "
     "auch keine Bilder für ein verkauftes Spiel. Für Endassets Qwen-Image-2512 (Apache-2.0) "
@@ -897,6 +923,50 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar",
             "Auf RTX 50 ist die NVFP4-Fassung die schnellere Wahl",
             "Am langsamen Anschluss (PCIe 3.0 x4) langsamer als NVFP4 (RTX 4060 am Riser: 82 statt 46 s)",
+        ],
+    },
+    {
+        "id": "moss-image-sft-int8",
+        "name": "MOSS-Image SFT (INT8, 50 Schritte)",
+        "kind": "image",
+        "family": "moss_image",
+        "workflow": "moss_image",
+        "files": MOSS_IMAGE_FILES,
+        "size_gb": 13.0,
+        "model_gb": 5.41,
+        "vram_gb": 12,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Schrift und Layout im Bild, Plakate und Grafiken — frei nutzbar (Apache-2.0)",
+        "features": {
+            "hires": False, "img2img": False, "mask": False, "outpaint": None, "upsampler": True,
+            "text_rendering": True, "sizes": MOSS_IMAGE_SIZES,
+            "prompt_hint": MOSS_IMAGE_PROMPT_HINT, "placeholder": MOSS_IMAGE_PLACEHOLDER,
+        },
+        "description": (
+            "MOSS-Image von OpenMOSS (16.10.2026): ein Diffusion-Transformer mit 5 Mrd. Parametern unter "
+            "Apache-2.0, trainiert auf ausführliche Bildbeschreibungen. Text-Encoder ist Qwen3.5-9B (W4A8), dazu "
+            "kommt die kleine FLUX.2-VAE, die ebenfalls unter Apache-2.0 steht. Einen knappen Prompt baut NVAI-open "
+            "vorher mit MOSS' eigenem Text-Encoder zur vollen Beschreibung aus (Systemprompt aus ComfyUIs Vorlage, "
+            "abschaltbar); sie steht danach im Asset unter „caption“.\n\n"
+            "Gemessen auf der RTX 5060 Ti (25.10.) mit OpenMOSS' Einstellung (50 Schritte, cfg 3, Vorgabe): rund "
+            "51 s je Bild mit 1 MP, der Ausbau beim ersten Mal rund 11 s dazu; mit den 25 Schritten aus ComfyUIs "
+            "Vorlage 28 s. Die Schrift kam in allen Tests buchstabengenau („MUNITION 7,92“, das Plakat "
+            "„ALPENGLOW“ mit „SINCE 1928“), der Soldat stand mit beiden Stiefeln im Bild, der Fischer behielt "
+            "den Kopf im Bild. Mit 50 Schritten liefen die Kistenseile in drei von drei Bildern durch Bohrungen, "
+            "mit 25 Schritten in zwei von drei; einmal fehlte der Deckel (nicht im Prompt genannt).\n\n"
+            "Auf dem Mac gibt es MOSS-Image nicht (keine MLX-Fassung)."
+        ),
+        "pros": [
+            "Apache-2.0: Bilder ohne Umsatzgrenze und Prüfpflicht verkaufbar",
+            "Schrift im Bild in Englisch und Chinesisch, auch lange Texte",
+            "Layout per JSON: wo welches Objekt und welche Zeile steht",
+            "Eigener Prompt-Ausbau (abschaltbar), Negativprompt wirkt",
+        ],
+        "cons": [
+            "Nur Text zu Bild: keine Referenzbilder, kein Bearbeiten, keine Maske",
+            "Text-Encoder Qwen3.5-9B: 7,3 GB zusätzlich (nicht derselbe wie der Upsampler von FLUX 3)",
+            "Auf dem Mac nicht verfügbar (keine MLX-Fassung)",
         ],
     },
     {
@@ -2394,19 +2464,120 @@ LORA_MODELS: list[dict[str, Any]] = [
 ]
 
 
+# Schärfen und Vergrößern beim Restaurieren (seit 0.5.11, jobs._restore). SeedVR2 von ByteDance ist ein
+# Ein-Schritt-Diffusionsmodell für Bild- und Videorestaurierung; ComfyUI rechnet es nativ (Vorlage
+# utility_seedvr2_7b_int8_upscale_image.json). Es erzeugt nichts selbst, sondern bessert ein Bild nach:
+# Rauschen, Unschärfe und Korn weg, Auflösung hoch. Eigene Art "upscale", damit es nicht als Bildmodell
+# auftaucht.
+SEEDVR2_VAE = {"repo": "Comfy-Org/SeedVR2", "file": "vae/seedvr2_ema_vae_fp16.safetensors", "target": "vae"}
+SEEDVR2_LICENSE = "Apache-2.0"
+SEEDVR2_PROS = [
+    "Apache-2.0, kommerziell frei",
+    "Ein Schritt: bessert Rauschen, Korn und Unschärfe nach und vergrößert dabei",
+    "Läuft nativ in ComfyUI, ohne Erweiterung",
+]
+SEEDVR2_CONS = [
+    "Repariert keine Kratzer, Risse oder Flecken – das macht „Schäden entfernen“ mit FLUX 3",
+    "Erfindet bei starker Vergrößerung Feindetail (Haut, Stoff), das so nicht im Original war",
+]
+UPSCALE_MODELS: list[dict[str, Any]] = [
+    {
+        "id": "seedvr2-7b-nvfp4",
+        "name": "SeedVR2 7B (NVFP4, Schärfen und Vergrößern)",
+        "kind": "upscale",
+        "family": "seedvr2",
+        "workflow": "seedvr2",
+        "files": [
+            {"repo": "Comfy-Org/SeedVR2", "file": "diffusion_models/seedvr2_7b_nvfp4.safetensors",
+             "target": "diffusion_models"},
+            SEEDVR2_VAE,
+        ],
+        "size_gb": 5.3,
+        "model_gb": 4.76,
+        "vram_gb": 8,
+        "license": SEEDVR2_LICENSE,
+        "commercial_ok": True,
+        "best_for": "Alte Fotos nach dem Restaurieren schärfen, entrauschen und vergrößern",
+        "features": {"scales": [1, 2, 4], "scale": 2, "max_pixels": 16_000_000},
+        "description": (
+            "SeedVR2 von ByteDance (Apache-2.0): ein Diffusionsmodell, das Bilder und Videos in einem "
+            "einzigen Schritt restauriert. Es nimmt Rauschen, Filmkorn, Unschärfe und Kompressionsspuren "
+            "heraus und vergrößert dabei, ohne den Bildinhalt neu zu erfinden wie ein Bildgenerator.\n\n"
+            "In NVAI-open ist es der letzte Schritt von „Foto restaurieren“: Erst entfernt FLUX 3 Kratzer "
+            "und Flecken, dann färbt es auf Wunsch ein, dann schärft und vergrößert SeedVR2. Es geht auch "
+            "allein, etwa für einen kleinen, verrauschten Scan.\n\n"
+            "Die NVFP4-Fassung rechnet auf RTX 50 in Hardware; für ältere Karten gibt es INT8."
+        ),
+        "pros": SEEDVR2_PROS,
+        "cons": SEEDVR2_CONS,
+    },
+    {
+        "id": "seedvr2-7b-int8",
+        "name": "SeedVR2 7B (INT8, für RTX 20/30/40)",
+        "kind": "upscale",
+        "family": "seedvr2",
+        "workflow": "seedvr2",
+        "files": [
+            {"repo": "Comfy-Org/SeedVR2", "file": "diffusion_models/seedvr2_7b_int8_convrot.safetensors",
+             "target": "diffusion_models"},
+            SEEDVR2_VAE,
+        ],
+        "size_gb": 8.8,
+        "model_gb": 8.33,
+        "vram_gb": 11,
+        "license": SEEDVR2_LICENSE,
+        "commercial_ok": True,
+        "best_for": "SeedVR2 auf Karten ohne FP4 (RTX 20/30/40)",
+        "features": {"scales": [1, 2, 4], "scale": 2, "max_pixels": 16_000_000},
+        "description": (
+            "Dasselbe Modell wie `seedvr2-7b-nvfp4` in Comfy-Orgs INT8-Fassung (ConvRot), die ab RTX 20 "
+            "in Hardware rechnet; so steht es auch in ComfyUIs Vorlage. Auf dieser Karte ungemessen."
+        ),
+        "pros": SEEDVR2_PROS,
+        "cons": SEEDVR2_CONS + ["Auf RTX 50 ist die NVFP4-Fassung die richtige"],
+    },
+    {
+        "id": "seedvr2-3b-int8",
+        "name": "SeedVR2 3B (INT8, klein)",
+        "kind": "upscale",
+        "family": "seedvr2",
+        "workflow": "seedvr2",
+        "files": [
+            {"repo": "Comfy-Org/SeedVR2", "file": "diffusion_models/seedvr2_3b_int8_convrot.safetensors",
+             "target": "diffusion_models"},
+            SEEDVR2_VAE,
+        ],
+        "size_gb": 4.0,
+        "model_gb": 3.46,
+        "vram_gb": 6,
+        "license": SEEDVR2_LICENSE,
+        "commercial_ok": True,
+        "best_for": "SeedVR2 für Karten mit 8 GB",
+        "features": {"scales": [1, 2, 4], "scale": 2, "max_pixels": 16_000_000},
+        "description": (
+            "Die kleine Fassung mit 3 Mrd. Parametern (INT8, 3,5 GB). Laut ByteDance etwas weniger "
+            "Detail als 7B, dafür passt sie auch in 8 GB Grafikspeicher. Ungemessen."
+        ),
+        "pros": SEEDVR2_PROS,
+        "cons": SEEDVR2_CONS + ["Laut Hersteller weniger Detail als 7B"],
+    },
+]
+
+
 ALL_MODELS: list[dict[str, Any]] = (
     IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
+    + UPSCALE_MODELS
 )
 
 KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
-               "controlnet": "ControlNet"}
+               "controlnet": "ControlNet", "upscale": "Hochskalieren"}
 
 
 # Empfehlung nach Grafikkarte (registry.gpu_advice). RTX 50 rechnet NVFP4 in Hardware;
 # ältere Karten entpacken es Schicht für Schicht und sind deutlich langsamer — dort
 # INT8-Fassungen, die ab RTX 20 nativ laufen.
 # LTX-2.5 ist das empfohlene Videomodell (Nutzerwunsch 24.10.2026).
-RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "krea2-turbo-nvfp4",
-                   "ltx25-distilled-nvfp4"]
-RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-int8",
-                     "z-image-int8", "ltx25-distilled-int8"]
+RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "krea2-turbo-nvfp4", "moss-image-sft-int8",
+                   "ltx25-distilled-nvfp4", "seedvr2-7b-nvfp4"]
+RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-int8", "moss-image-sft-int8",
+                     "z-image-int8", "ltx25-distilled-int8", "seedvr2-7b-int8"]

@@ -12,6 +12,7 @@ Photoshop's "Generative Fill":
 | **Extend** | Outpainting (since 0.4.3 its own mode): enter left, top, right, bottom in pixels (or pick "wider", "taller", "downwards", "all around"); the add-on enlarges the canvas and paints the new border to match. Every model that can extend is offered, FLUX 3 first: it gave seamless transitions in testing, while Qwen left a hard edge at the old border. On the Mac it is FLUX.2 Klein with a mask; there the transition stays softer and can remain visible as a blurred strip at the old border. Needs NVAI-open 0.5.4 or later (Mac: 0.4.3). |
 | **Generate** | A new image in the selection – or on the whole canvas if nothing is selected. |
 | **Refine** | The selection (or the whole image) is re-rendered. Image-to-image models use the *strength* to set how much changes; reference-edit models such as **FLUX 3** take the prompt as an instruction: say what changes and what stays ("Replace the rope handles with iron handles; keep everything else unchanged."). |
+| **Restore** | For old photos (since 0.4.6, needs NVAI-open 0.5.11): **remove damage** (scratches, dust, tears, stains), **colorize** and **sharpen and enlarge** with SeedVR2, each step optional, for the selection or the whole image. *Automatic* (default) lets NVAI-open's image model check the photo for water stains and crack networks and picks *Thorough* or *Gentle* (as expected on 20 of 21 test photos). *Thorough* redraws the whole photo with FLUX 3: cracks, fine scratches, water stains and fading go, faces can change slightly from variant to variant. *Gentle* only replaces the damaged spots and keeps sharpness, faces and detail exactly as in the photo (contrast and fading come from FLUX 3). Choose by the kind of damage: overall aging (water stains, crack networks, grain, fading) → *Thorough*; separate damage on an otherwise good photo (dust, scratches, tears, light leaks) → *Gentle*. Colorizing takes only the color from FLUX 3; known colors in the prompt ("her dress is dark red") make it more accurate. A grayscale document that gets colorized lands in a new RGB document "<name> – color" with the original as the bottom layer (PhotoCraft does not let add-ons change the color mode). Enlarging scales the whole document, so it only works without a selection. Measured on an RTX 5060 Ti: two variants of a 1 MP photo, repaired gently, colorized and enlarged 2×, in about 3 minutes. |
 
 Every result lands in the document as **its own layer with a layer mask made from the selection** –
 nothing is overwritten destructively. With several variants, a click in the panel swaps the layer,
@@ -101,6 +102,8 @@ Tips:
 - The models work at about one megapixel. Very large selections are upscaled accordingly and look
   softer – fill them in parts.
 - While a job captures or places, a helper tab flashes briefly in PhotoCraft.
+- **Restore:** small marks that FLUX 3 leaves out, such as a hyphen in a caption, disappear in both
+  modes – check lettering. Color can bleed across edges of equal brightness.
 
 ## NVAI-open on another computer
 

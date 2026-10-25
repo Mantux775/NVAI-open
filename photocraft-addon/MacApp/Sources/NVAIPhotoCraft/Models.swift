@@ -51,6 +51,14 @@ struct NVAIState: Equatable {
     var expand = false
     /// Erweitern (`outpaint`): NVAI-open für Windows ab 0.5.4, für Mac ab 0.4.3.
     var outpaint = false
+    /// Restaurieren (`POST /api/image/restore`): NVAI-open für Windows ab 0.5.11, für Mac ab 0.4.6.
+    var restore = false
+    /// Arten des Entfernens, die der Server kennt (Windows: auto, thorough, gentle; Mac: thorough).
+    var restoreModes: [String] = []
+    /// Schärfen mit SeedVR2 ist installiert (nur NVAI-open für Windows).
+    var sharpen = false
+    /// NVAI-open für Mac (rechnet auf Apple Silicon, deutlich langsamer als eine RTX-Karte).
+    var mac = false
     /// Laufende und wartende Modell-Downloads von NVAI-open.
     var downloads: [NVAIClient.Download] = []
     var busy = false
@@ -82,6 +90,8 @@ struct ModelOption: Identifiable, Equatable {
     let placeholder: String
     /// Wie das Modell erweitert: "reference" (nahtlos), "mask" (oft harte Kante) oder nil.
     let outpaint: String?
+    /// Bearbeitet Fotos per Referenzbild (FLUX 3, FLUX.2 Klein): taugt zum Restaurieren und Einfärben.
+    let restore: Bool
 
     init(_ m: JSONValue, masks: Bool) {
         let features = m["features"] ?? [:]
@@ -101,6 +111,7 @@ struct ModelOption: Identifiable, Equatable {
         promptHint = features["prompt_hint"]?.stringValue ?? ""
         placeholder = features["placeholder"]?.stringValue ?? ""
         outpaint = features["outpaint"]?.stringValue
+        restore = Planning.restoreCapable(m)
     }
 
     func suits(_ mode: Mode) -> Bool {
@@ -108,6 +119,7 @@ struct ModelOption: Identifiable, Equatable {
         case .fill, .extend: return mask
         case .refine: return refine
         case .generate: return true
+        case .restore: return restore
         }
     }
 }
@@ -137,7 +149,14 @@ final class TaskItem: Identifiable {
 
     var title: String {
         let prompt = task.prompt.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        return prompt.isEmpty ? t("(ohne Prompt)", "(no prompt)") : prompt
+        if !prompt.isEmpty { return prompt }
+        if mode == .restore {
+            let p = task.params
+            return [(p["repair"]?.truthy ?? true) ? t("Schäden", "damage") : nil,
+                    (p["colorize"]?.truthy ?? false) ? t("Farbe", "color") : nil,
+                    (p["sharpen"]?.truthy ?? false) ? t("Schärfe", "sharpness") : nil].compactMap { $0 }.joined(separator: ", ")
+        }
+        return t("(ohne Prompt)", "(no prompt)")
     }
 
     var duration: String? {

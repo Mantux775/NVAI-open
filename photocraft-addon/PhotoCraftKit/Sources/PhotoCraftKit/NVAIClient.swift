@@ -28,6 +28,8 @@ public struct NVAIVersion: Equatable, Sendable {
     public var auth: String?
     /// Kämen Anfragen dieses Clients durch (Token passt bzw. lokal)?
     public var authorized: Bool
+    /// „macos“ bei NVAI-open für Mac; NVAI-open für Windows nennt keine Plattform.
+    public var platform: String?
 
     public init(_ json: JSONValue) throws {
         guard let version = json["version"]?.stringValue, let api = json["api"]?.intValue else {
@@ -38,6 +40,7 @@ public struct NVAIVersion: Equatable, Sendable {
         features = json["features"]?.arrayValue?.compactMap(\.stringValue) ?? []
         auth = json["auth"]?.stringValue
         authorized = json["authorized"]?.boolValue ?? true
+        platform = json["platform"]?.stringValue
     }
 }
 
@@ -178,6 +181,31 @@ public final class NVAIClient: @unchecked Sendable {
 
     public func supportsExpand() async throws -> Bool {
         try await version()?.features.contains("expand_prompt") ?? false
+    }
+
+    /// Kennt NVAI-open `POST /api/image/restore` (Foto restaurieren, einfärben, schärfen; Windows ab 0.5.11,
+    /// Mac ab 0.4.6)?
+    public func supportsRestore() async throws -> Bool {
+        try await version()?.features.contains("restore") ?? false
+    }
+
+    /// Restaurier-Arten des Servers: NVAI-open für Windows ab 0.5.11 „auto“, „thorough“ und „gentle“
+    /// (Merkmale `restore_auto`/`restore_gentle`), NVAI-open für Mac nur „thorough“.
+    public func restoreModes() async throws -> [String] {
+        let features = try await version()?.features ?? []
+        guard features.contains("restore") else { return [] }
+        return [("auto", "restore_auto"), ("thorough", nil), ("gentle", "restore_gentle")]
+            .filter { $0.1 == nil || features.contains($0.1!) }.map(\.0)
+    }
+
+    /// Modelle zum Schärfen beim Restaurieren (SeedVR2, Art „upscale“; nur NVAI-open für Windows).
+    public func upscaleModels() async throws -> [JSONValue] {
+        try await requestJSON("GET", "/api/models", query: [URLQueryItem(name: "kind", value: "upscale")]).arrayValue ?? []
+    }
+
+    /// Foto restaurieren (`Planning.planRestore` plus `image_asset_id`); Antwort ist der Auftrag.
+    public func restoreImage(_ payload: JSONValue) async throws -> JSONValue {
+        try await requestJSON("POST", "/api/image/restore", json: payload)
     }
 
     /// Knappen Prompt zur vollen Bildbeschreibung ausbauen. Das Sprachmodell lädt dafür erst; auf

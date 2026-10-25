@@ -4,28 +4,62 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject var state: AppState
     @State private var selection: String?
+    @State private var preview: AssetRecord?
+    /// Größe der Vorschaubilder und Breite der Bildvorschau rechts, über Neustarts gemerkt (Nutzerwunsch 25.10.2026).
+    @AppStorage("history.thumbSize") private var thumbSize = 150.0
+    @AppStorage("history.previewWidth") private var previewWidth = 380.0
 
     private var selected: AssetRecord? { state.images.first { $0.id == selection } }
 
     var body: some View {
-        HSplitView {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                    ForEach(state.images) { asset in
-                        AssetThumbnail(asset: asset, maxSide: 300)
-                            .frame(height: 150)
-                            .padding(3)
-                            .background(selection == asset.id ? Color.accentColor.opacity(0.35) : .clear)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            .onTapGesture { selection = asset.id }
+        VStack(spacing: 0) {
+            controls
+            Divider()
+            // HStack statt HSplitView: Die geteilte Ansicht verteilte die Breite selbst und überging den Regler.
+            HStack(spacing: 0) {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: thumbSize), spacing: 8)], spacing: 8) {
+                        ForEach(state.images) { asset in
+                            // Zwei Stufen statt jeder Reglerstellung: sonst dekodiert jede Größe neu.
+                            AssetThumbnail(asset: asset, maxSide: thumbSize > 180 ? 640 : 320)
+                                .frame(height: thumbSize)
+                                .padding(3)
+                                .background(selection == asset.id ? Color.accentColor.opacity(0.35) : .clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { preview = asset }
+                                .onTapGesture { selection = asset.id }
+                                .help(t("Doppelklick: große Vorschau", "Double-click: large preview"))
+                        }
                     }
+                    .padding(10)
                 }
-                .padding(10)
+                .frame(minWidth: 240, maxWidth: .infinity)
+                Divider()
+                detail.frame(width: previewWidth)
             }
-            .frame(minWidth: 420)
-
-            detail.frame(minWidth: 320, idealWidth: 380)
         }
+        .sheet(item: $preview) { asset in
+            PreviewSheet(assets: state.images, index: state.images.firstIndex(of: asset) ?? 0).environmentObject(state)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 14) {
+            Label(t("Vorschaubilder", "Thumbnails"), systemImage: "square.grid.2x2")
+            Slider(value: $thumbSize, in: 80...320, step: 10).frame(width: 150)
+            Text("\(Int(thumbSize)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
+            Divider().frame(height: 16)
+            Label(t("Bildvorschau", "Image preview"), systemImage: "sidebar.right")
+            Slider(value: $previewWidth, in: 280...1000, step: 20).frame(width: 150)
+            Text("\(Int(previewWidth)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 60, alignment: .leading)
+            Spacer()
+            Text(state.images.count == 1 ? t("1 Bild", "1 image") : t("\(state.images.count) Bilder", "\(state.images.count) images"))
+                .foregroundStyle(.secondary)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -33,7 +67,10 @@ struct HistoryView: View {
         if let asset = selected {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    AssetThumbnail(asset: asset, maxSide: 900)
+                    AssetThumbnail(asset: asset, maxSide: previewWidth > 600 ? 1600 : 900)
+                        .contentShape(Rectangle())
+                        .onTapGesture { preview = asset }
+                        .help(t("Klick: große Vorschau", "Click: large preview"))
                     Text(asset.prompt).textSelection(.enabled)
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
                         ForEach(metaRows(asset), id: \.0) { row in
@@ -45,6 +82,7 @@ struct HistoryView: View {
                     }
                     .font(.caption)
                     HStack {
+                        Button(t("Große Vorschau", "Large preview")) { preview = asset }
                         Button(t("Im Finder zeigen", "Show in Finder")) {
                             NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(asset.filename)])
                         }

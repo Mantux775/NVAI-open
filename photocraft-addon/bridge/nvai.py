@@ -166,6 +166,25 @@ class NVAI:
         info = self.version()
         return info is not None and "expand_prompt" in (info.get("features") or [])
 
+    def supports_restore(self) -> bool:
+        """Kennt NVAI-open ``POST /api/image/restore`` (Foto restaurieren, einfärben, schärfen; ab 0.5.11)?"""
+        info = self.version()
+        return info is not None and "restore" in (info.get("features") or [])
+
+    def restore_modes(self) -> list[str]:
+        """Restaurier-Arten des Servers: NVAI-open für Windows ab 0.5.11 „auto“, „thorough“ und „gentle“
+        (Merkmale restore_auto/restore_gentle), NVAI-open für Mac nur „thorough“."""
+        info = self.version()
+        features = (info or {}).get("features") or []
+        if "restore" not in features:
+            return []
+        return [m for m, need in (("auto", "restore_auto"), ("thorough", None), ("gentle", "restore_gentle"))
+                if need is None or need in features]
+
+    def upscale_models(self) -> list[dict[str, Any]]:
+        """Modelle zum Schärfen beim Restaurieren (SeedVR2, Art „upscale“; ab NVAI-open 0.5.11)."""
+        return self._request("GET", "/api/models", params={"kind": "upscale"})
+
     def supports_cancel_job(self) -> bool:
         """Kennt NVAI-open ``POST /api/jobs/{id}/cancel`` (ab 0.5.2: Downloads brechen sofort ab)?"""
         info = self.version()
@@ -219,6 +238,10 @@ class NVAI:
 
     def generate_image(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/api/generate/image", json=payload)
+
+    def restore_image(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Foto restaurieren: Schäden entfernen, einfärben, schärfen (``planning.plan_restore``)."""
+        return self._request("POST", "/api/image/restore", json=payload)
 
     def expand_prompt(self, prompt: str, width: int = 1024, height: int = 1024) -> dict[str, Any]:
         """Knappen Prompt zur vollen Bildbeschreibung ausbauen (FLUX-3-Upsampler, für jedes

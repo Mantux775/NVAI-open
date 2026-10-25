@@ -7,11 +7,12 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt"]
+                  "expand_prompt", "restore"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
-# deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild.
-ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora"]
+# deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
+# (SeedVR2): es schaerft beim Restaurieren, erzeugt aber selbst nichts.
+ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora", "upscale"]
 
 
 class LoraRef(BaseModel):
@@ -196,6 +197,49 @@ class GenerateVideoRequest(BaseModel):
         None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird "
                           "Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton "
                           "angehaengt. Ergebnis: das verlaengerte Video und das neue Stueck einzeln")
+
+
+class RestoreImageRequest(BaseModel):
+    """Foto restaurieren und einfaerben (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen --
+    in dieser Reihenfolge, jeder Schritt einzeln schaltbar (jobs._restore)."""
+    image_asset_id: str = Field(..., description="Das Foto: ein hochgeladenes Bild (POST /api/upload) "
+                                                 "oder ein Bild-Asset")
+    repair: bool = Field(
+        True, description="Schaeden entfernen: Kratzer, Staub, Risse, Flecken, Knicke und Emulsionsschaeden. "
+                          "Ein Bearbeitungsmodell (FLUX 3) rechnet das Foto neu; das Ergebnis wird am "
+                          "Original ausgerichtet und deckt sich mit ihm")
+    repair_mode: Literal["auto", "thorough", "gentle"] = Field(
+        "auto", description="auto (Vorgabe): der Upsampler von FLUX 3 sieht das Foto und beantwortet, ob es "
+                            "Wasserflecken oder Rissnetze hat; ja -> gruendlich, nein -> schonend (an 21 Testfotos "
+                            "20 wie erwartet). thorough (gruendlich) fuer flaechige Alterung (Wasserflecken, "
+                            "Craquele, Korn, Ausbleichen): das ganze Bild kommt vom Bearbeitungsmodell; Gesichter "
+                            "koennen sich je Seed leicht veraendern, deshalb mehrere Varianten. gentle (schonend) "
+                            "fuer einzelne Schaeden auf einem sonst guten Foto (Staub, Kratzer, Risse, "
+                            "Lichteinfall): nur die gefundenen Schaeden werden ersetzt, Schaerfe, Gesichter und "
+                            "Feinzeichnung bleiben die des Fotos in voller Aufloesung")
+    colorize: bool = Field(
+        False, description="Einfaerben. Uebernommen wird nur die Farbe des Bearbeitungsmodells; Helligkeit, "
+                           "Schaerfe, Gesichter und Aufloesung bleiben die des Fotos (bzw. des restaurierten)")
+    sharpen: bool = Field(
+        False, description="Zum Schluss mit SeedVR2 schaerfen, entrauschen und vergroessern (Modell der Art "
+                           "'upscale' in /api/models)")
+    scale: float = Field(2.0, ge=1.0, le=4.0,
+                         description="Nur mit sharpen: Vergroesserung gegenueber dem Foto, 1 = gleiche Groesse")
+    notes: str = Field(
+        "", max_length=2000,
+        description="Optional, am besten englisch: Hinweise an das Bearbeitungsmodell, etwa Farben "
+                    "('her dress is dark red, the car is dark green') oder was bleiben bzw. weg soll")
+    model_id: str | None = Field(
+        None, description="Bearbeitungsmodell fuer Schaeden und Farbe (features.references > 0); None = FLUX 3")
+    upscale_model_id: str | None = Field(None, description="SeedVR2-Fassung; None = die aktive der Art 'upscale'")
+    megapixels: float | None = Field(
+        None, ge=0.5, le=4.0, description="Arbeitsgroesse des Bearbeitungsmodells in Megapixeln; "
+                                          "None = Vorgabe (jobs.RESTORE_MEGAPIXELS)")
+    upsample_prompt: bool | None = Field(
+        None, description="Nur FLUX 3: die Anweisung vorher vom Upsampler ausbauen lassen; None = an")
+    batch_size: int = Field(1, ge=1, le=4, description="Varianten; beim Restaurieren schwankt die Treue "
+                                                       "der Gesichter je Seed, mehrere zur Auswahl lohnen")
+    seed: int | None = None
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",

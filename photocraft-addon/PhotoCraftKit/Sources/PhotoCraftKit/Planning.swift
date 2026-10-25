@@ -42,8 +42,15 @@ public enum Planning {
     /// Rechenwege (Golden-Daten); „extend“ (Erweitern) rechnet wie Füllen, siehe baseMode.
     public static let modes = ["fill", "generate", "refine"]
 
-    /// „Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor.
-    public static func baseMode(_ mode: String) -> String { mode == "extend" ? "fill" : mode }
+    /// „Erweitern“ rechnet wie „Füllen“ ohne Auswahl, nur mit vergrößerter Arbeitsfläche davor;
+    /// „Restaurieren“ erfasst wie „Überarbeiten“ (Auswahl mit Rand oder ganzes Bild).
+    public static func baseMode(_ mode: String) -> String {
+        switch mode {
+        case "extend": "fill"
+        case "restore": "refine"
+        default: mode
+        }
+    }
     /// Name des Modus in der gewählten Sprache (Oberfläche, Ebenenname).
     public static func modeLabel(_ mode: String) -> String {
         switch mode {
@@ -51,6 +58,7 @@ public enum Planning {
         case "generate": t("Generieren", "Generate")
         case "refine": t("Überarbeiten", "Refine")
         case "extend": t("Erweitern", "Extend")
+        case "restore": t("Restaurieren", "Restore")
         default: mode
         }
     }
@@ -334,6 +342,113 @@ public enum Planning {
                     workflow: workflow, technique: technique, working: (gw, gh), payload: payload,
                     sendImage: sendImage, sendMask: sendMask, maskGrow: sendMask ? grow : 0,
                     maskBlur: sendMask ? blur : 0.0, warnings: warnings)
+    }
+
+    // MARK: Restaurieren (seit 0.4.6; NVAI-open für Windows ab 0.5.11, für Mac ab 0.4.6)
+
+    /// Größte Kante, die zum Restaurieren hochgeladen wird. NVAI-open rechnet in seiner Arbeitsgröße, färbt
+    /// und setzt schonend aber in der Größe des Fotos ein.
+    public static let restoreMaxSide = 4096
+    /// Farbmodi von PhotoCraft, in denen eine eingefärbte Ebene grau bliebe.
+    public static let grayModes: Set<String> = ["gray", "grayscale", "duotone", "bitmap", "indexed"]
+
+    /// Bearbeitet das Modell Bilder per Referenz (FLUX 3, FLUX.2 Klein)? Stilvorlagen (Krea 2) nicht.
+    public static func restoreCapable(_ model: JSONValue) -> Bool {
+        let f = features(model)
+        return (f["references"]?.intValue ?? 0) > 0 && f["reference_kind"]?.stringValue != "style"
+    }
+
+    /// Art des Restaurierens: „auto“ (Vorgabe; NVAI-open für Windows wählt nach der Art der Schäden),
+    /// „thorough“ oder „gentle“. Ältere Apps schicken `thorough` als Wahrheitswert.
+    public static func repairMode(_ params: JSONValue) -> String {
+        if let mode = params["repair_mode"]?.stringValue, ["auto", "thorough", "gentle"].contains(mode) { return mode }
+        if let thorough = params["thorough"]?.boolValue { return thorough ? "thorough" : "gentle" }
+        return "auto"
+    }
+
+    /// Request an `POST /api/image/restore` (ohne die Asset-ID) und was vor dem Einfügen zu tun ist.
+    public struct RestorePlan: Equatable {
+        public var payload: [String: JSONValue]
+        /// Größe des hochgeladenen Fotos (höchstens `restoreMaxSide`).
+        public var uploadSize: (Int, Int)
+        public var modelName: String
+        /// SeedVR2 vergrößert um diesen Faktor; das Dokument wächst vorher mit (nur ohne Auswahl).
+        public var enlarge: Double
+        /// Graustufendokument wird eingefärbt: Ergebnis in ein neues RGB-Dokument.
+        public var toRGB: Bool
+        public var warnings: [PlanWarning]
+
+        public static func == (a: RestorePlan, b: RestorePlan) -> Bool {
+            a.payload == b.payload && a.uploadSize == b.uploadSize && a.modelName == b.modelName
+                && a.enlarge == b.enlarge && a.toRGB == b.toRGB && a.warnings == b.warnings
+        }
+    }
+
+    /// Wie `bridge/planning.py`, `plan_restore`: Schritte `repair` (Art `repair_mode`), `colorize`, `sharpen`
+    /// mit `scale`; `prompt` geht als Hinweis an das Bearbeitungsmodell (Farben, was bleiben soll).
+    public static func planRestore(prompt: String, params: JSONValue, models: [JSONValue], upscalers: [JSONValue],
+                                   regionSize: (Int, Int), hasSelection: Bool, docMode: String = "") throws -> RestorePlan {
+        let repair = params["repair"]?.boolValue ?? true
+        let colorize = params["colorize"]?.truthy ?? false
+        let sharpen = params["sharpen"]?.truthy ?? false
+        guard repair || colorize || sharpen else {
+            throw PlanError(code: "restore_nothing",
+                            message: t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder Schärfen.",
+                                       "Please choose at least one step: remove damage, colorize or sharpen."))
+        }
+        var warnings: [PlanWarning] = []
+        var model: JSONValue?
+        if repair || colorize {
+            let editors = models.filter { ($0["runnable"]?.truthy ?? true) && restoreCapable($0) }
+            let wanted = params["model_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+            if let wanted {
+                guard let found = editors.first(where: { $0["id"]?.stringValue == wanted }) else {
+                    throw PlanError(code: "model_incapable",
+                                    message: t("Das gewählte Modell bearbeitet keine Fotos – bitte FLUX 3 wählen.",
+                                               "The chosen model does not edit photos – please choose FLUX 3."))
+                }
+                model = found
+            } else if editors.isEmpty {
+                throw PlanError(code: "no_edit_model",
+                                message: t("Restaurieren und Einfärben brauchen FLUX 3 Image Klein in NVAI-open (auf dem Mac "
+                                            + "FLUX.2 Klein). Bitte dort unter „Modelle“ laden.",
+                                           "Restoring and colorizing need FLUX 3 Image Klein in NVAI-open (on the Mac FLUX.2 "
+                                            + "Klein). Please download it there under “Models”."))
+            } else {
+                // Wie NVAI-open ohne eigene Wahl: FLUX 3 (destilliert) zuerst.
+                model = editors.first { $0["workflow"]?.stringValue == "flux3_klein" } ?? editors[0]
+            }
+        }
+        if sharpen && !upscalers.contains(where: { $0["runnable"]?.truthy ?? true }) {
+            throw PlanError(code: "no_upscaler",
+                            message: t("Schärfen braucht SeedVR2: in NVAI-open unter „Modelle“ → „Hochskalieren“ laden (5,3 GB).",
+                                       "Sharpening needs SeedVR2: download it in NVAI-open under “Models” → “Upscale” (5.3 GB)."))
+        }
+        var scale = sharpen ? (params["scale"]?.doubleValue ?? 1.0) : 1.0
+        if scale > 1 && hasSelection {
+            warnings.append(PlanWarning(code: "restore_selection_not_enlarged",
+                                        message: t("Mit einer Auswahl wird nur geschärft; vergrößern lässt sich nur das ganze Bild.",
+                                                   "With a selection the area is only sharpened; only the whole image can be enlarged.")))
+            scale = 1.0
+        }
+        let (w, h) = regionSize
+        let k = min(1.0, Double(restoreMaxSide) / Double(max(w, h, 1)))
+        var payload: [String: JSONValue] = [
+            "repair": .bool(repair),
+            "repair_mode": .string(repairMode(params)),
+            "colorize": .bool(colorize),
+            "sharpen": .bool(sharpen),
+            "scale": .double(scale),
+            "notes": .string(prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "batch_size": .int(max(1, min(4, params["variants"]?.intValue ?? 1))),
+        ]
+        if let model, let id = params["model_id"]?.stringValue, !id.isEmpty { payload["model_id"] = model["id"] }
+        if let seed = params["seed"], !seed.isNull, seed != .string("") { payload["seed"] = seed }
+        let mode = docMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return RestorePlan(payload: payload,
+                           uploadSize: (max(1, Int((Double(w) * k).rounded())), max(1, Int((Double(h) * k).rounded()))),
+                           modelName: model?["name"]?.stringValue ?? "SeedVR2", enlarge: scale,
+                           toRGB: colorize && grayModes.contains(mode), warnings: warnings)
     }
 
     /// Name der eingefügten Ebene, etwa „NVAI-open Fill: a red barn (2)“ (Deutsch: „NVAI-open Füllen: …“).

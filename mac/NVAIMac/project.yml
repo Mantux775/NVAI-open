@@ -45,8 +45,8 @@ targets:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
-        MARKETING_VERSION: "0.4.5"
-        CURRENT_PROJECT_VERSION: "10"
+        MARKETING_VERSION: "0.4.6"
+        CURRENT_PROJECT_VERSION: "11"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

@@ -52,8 +52,12 @@ enum Outpaint {
 
     /// Zielformat: Bild plus Rand, auf 16 gerundet.
     static func size(of image: CGImage, _ e: Edges) -> (width: Int, height: Int) {
+        size(width: image.width, height: image.height, e)
+    }
+
+    static func size(width: Int, height: Int, _ e: Edges) -> (width: Int, height: Int) {
         func round16(_ v: Int) -> Int { max(256, Int((Double(v) / 16).rounded()) * 16) }
-        return (round16(image.width + e.left + e.right), round16(image.height + e.top + e.bottom))
+        return (round16(width + e.left + e.right), round16(height + e.top + e.bottom))
     }
 
     /// Das Bild auf grauer Fläche (Mittelgrau wie ComfyUIs ImagePadForOutpaint).

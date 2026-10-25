@@ -81,6 +81,7 @@ class Task:
     doc_name: str = ""
     doc_index: int = -1
     doc_size: list[int] = field(default_factory=lambda: [0, 0])
+    doc_mode: str = ""  # Farbmodus beim Start, etwa „Rgb“ oder „Gray“ (Restaurieren stellt vor dem Einfärben um)
     region: list[int] | None = None  # Ausschnitt im Dokument [x, y, w, h]
     selection: list[int] | None = None  # Auswahlgrenzen beim Start
     has_mask: bool = False
@@ -137,6 +138,9 @@ class TaskManager:
         if mode == "extend" and not planning.extend_steps(params.get("extend")):
             raise ValueError(_t("Zum Erweitern bitte angeben, wie viele Pixel links, oben, rechts oder unten dazukommen.",
                                 "To extend, please enter how many pixels to add on the left, top, right or bottom."))
+        if mode == "restore" and not any(params.get(k) for k in ("repair", "colorize", "sharpen")):
+            raise ValueError(_t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder Schärfen.",
+                                "Please choose at least one step: remove damage, colorize or sharpen."))
         with self._lock:
             if self.current and self.current.status == "running":
                 raise BusyError(_t("Es läuft bereits ein Auftrag. Bitte abwarten oder abbrechen.",
@@ -250,6 +254,9 @@ class TaskManager:
         rel = f"jobs/{t.id}"
 
         self.nv.check_compatible()
+        if t.mode == "restore":
+            self._execute_restore(t, job_dir, rel)
+            return
         masks = self.nv.supports_masks()
         mode = planning.base_mode(t.mode)
         if mode == "fill" and not masks and not (t.mode == "extend" and self.nv.supports_outpaint()):
@@ -347,6 +354,118 @@ class TaskManager:
             self._stage(t, 0.97, _t("legt das Ergebnis in PhotoCraft ab", "placing the result in PhotoCraft"))
             self.place(t, 0, replace=False)
 
+    def _execute_restore(self, t: Task, job_dir: Path, rel: str) -> None:
+        """„Restaurieren“: Ausschnitt (Auswahl mit Rand oder ganzes Bild) in voller Größe zu NVAI-open,
+        dort Schäden entfernen, einfärben, schärfen (POST /api/image/restore), Ergebnis als Ebene zurück.
+
+        NVAI-open richtet jedes Ergebnis am Foto aus; schonend bleiben Gesichter und Feinzeichnung die des Fotos.
+        Vor dem Einfügen stellt die Brücke ein Graustufendokument auf RGB, wenn eingefärbt wurde, und
+        vergrößert ohne Auswahl das ganze Dokument, wenn SeedVR2 vergrößert hat. Beides ist in PhotoCraft
+        ein eigener, rückgängig zu machender Schritt.
+        """
+        p = t.params
+        if not self.nv.supports_restore():
+            raise NVAIError(_t(
+                "Diese NVAI-open-Version kann noch keine Fotos restaurieren. Bitte NVAI-open aktualisieren (ab 0.5.11).",
+                "This NVAI-open version cannot restore photos yet. Please update NVAI-open (0.5.11 or newer)."))
+        self._stage(t, 0.02, _t("liest das Dokument", "reading the document"))
+        context, mask = self._capture(t, rel, job_dir)
+        if context is None:
+            raise PhotoCraftError(_t("Das Dokument ließ sich nicht lesen.", "The document could not be read."))
+        region = Rect.from_list(t.region or [0, 0, *t.doc_size])
+        upscalers = self.nv.upscale_models() if p.get("sharpen") else []
+        plan = planning.plan_restore(t.prompt, p, self.nv.image_models(), upscalers, (region.w, region.h),
+                                     t.selection is not None, t.doc_mode)
+        t.model_name, t.technique, t.working = plan.model_name, "restore", list(plan.upload_size)
+        t.warning = " ".join(w.message for w in plan.warnings) or None
+
+        uploads: list[str] = []
+        try:
+            self._stage(t, 0.05, _t("lädt das Foto zu NVAI-open", "uploading the photo to NVAI-open"))
+            src = imaging.flatten_for_model(context)
+            if src.size != plan.upload_size:
+                src = src.resize(plan.upload_size, Image.Resampling.LANCZOS)
+            asset = self.nv.upload(src, f"photocraft-{t.id}-context.png")
+            uploads.append(asset["id"])
+            self._stage(t, 0.08, _t("übergibt an NVAI-open", "handing over to NVAI-open"))
+            job = self.nv.restore_image({**plan.payload, "image_asset_id": asset["id"]})
+            t.nv_job = job["id"]
+            job = self._wait(t, job["id"])
+
+            if plan.to_rgb or plan.enlarge > 1:
+                self._stage(t, 0.91, _t("bereitet das Dokument vor", "preparing the document"))
+                self._prepare_document(t, plan)
+                region = Rect.from_list(t.region or [0, 0, *t.doc_size])
+            self._stage(t, 0.93, _t("holt die Ergebnisse", "fetching the results"))
+            for k, asset_id in enumerate(job.get("asset_ids") or [], start=1):
+                found = self.nv.asset(asset_id)
+                out = imaging.fit_exact(self.nv.fetch_image(found), region.w, region.h)
+                out.save(job_dir / f"result-{k}.png", "PNG", compress_level=1)
+                thumb = f"thumb-{k}.png" if mask is not None else f"thumb-{k}.jpg"
+                imaging.save_thumbnail(out, job_dir / thumb, mask=mask)
+                meta = found.get("meta") or {}
+                t.model_name = meta.get("model_name") or t.model_name
+                t.variants.append(Variant(index=k - 1, file=f"{rel}/result-{k}.png", thumb=f"{rel}/{thumb}",
+                                          seed=meta.get("seed"), asset_id=asset_id))
+        finally:
+            for asset_id in uploads:
+                try:
+                    self.nv.delete_asset(asset_id)
+                except NVAIError:
+                    pass
+
+        if not t.variants:
+            raise NVAIError(_t("NVAI-open hat kein Bild zurückgegeben.", "NVAI-open did not return an image."))
+        if p.get("auto_place", True):
+            self._stage(t, 0.97, _t("legt das Ergebnis in PhotoCraft ab", "placing the result in PhotoCraft"))
+            self.place(t, 0, replace=False)
+
+    def _prepare_document(self, t: Task, plan: planning.RestorePlan) -> None:
+        """Zieldokument für das Ergebnis herrichten: Farbe für ein Graustufenfoto und/oder um ``plan.enlarge``
+        vergrößern (SeedVR2 hat vergrößert, nur ohne Auswahl). Merkt sich Dokument und Größe, sonst fände
+        ``place`` das Ziel nicht wieder.
+
+        Ein Graustufendokument nähme die eingefärbte Ebene nur grau an, und ``image.mode.rgb`` sperrt PhotoCraft
+        für die Fernsteuerung („uses ambient filesystem paths“, das ICC-Profil darf ein Pfad sein; gemessen
+        25.10.2026). Deshalb entsteht ein neues RGB-Dokument „<Name> – farbig“ mit dem Original als unterster
+        Ebene; das Graustufendokument bleibt unverändert.
+        """
+        with self._pc_lock:
+            self.pc_busy = True
+            try:
+                index = self._find_target(t, self.pc.inspect().get("session") or {})
+                self._activate(index)
+                if plan.to_rgb:
+                    source = self.pc.document()
+                    taken = {d.get("name") for d in (self.pc.inspect().get("session") or {}).get("documents") or []}
+                    base = f"{Path(t.doc_name).stem or t.doc_name} – {_t('farbig', 'color')}"
+                    name, n = base, 2
+                    while name in taken:  # place() findet das Ziel über den Namen
+                        name, n = f"{base} ({n})", n + 1
+                    created = self.pc.execute("file.new", {
+                        "width": t.doc_size[0], "height": t.doc_size[1], "mode": "rgb",
+                        "depth": int(source.get("depth") or 8), "background": "transparent", "name": name})
+                    target = int(created["document"])
+                    empty = [layer["id"] for layer in self.pc.document().get("layers") or []]
+                    layers = [layer["id"] for layer in source.get("layers") or []]
+                    params: dict[str, Any] = {"document": target, "source": index, "layers": layers, "offset": [0, 0]}
+                    if len(layers) == 1:
+                        params["name"] = _t("Original", "Original")
+                    self.pc.execute("layer.copyToDocument", params)
+                    for layer in empty:
+                        self.pc.execute("layer.delete", {"layer": layer})
+                    t.doc_name, t.doc_index, t.doc_mode = name, target, "Rgb"
+                if plan.enlarge > 1:
+                    size = self.pc.execute("image.imageSize", {"percent": round(plan.enlarge * 100),
+                                                               "resample": "bicubic"}) or {}
+                    width = int(size.get("width") or round(t.doc_size[0] * plan.enlarge))
+                    height = int(size.get("height") or round(t.doc_size[1] * plan.enlarge))
+                    t.doc_size = [width, height]
+                    t.region = [0, 0, width, height]
+            finally:
+                self.pc_busy = False
+        self._save_meta(t)
+
     def _wait(self, t: Task, job_id: str) -> dict[str, Any]:
         unreachable_since: float | None = None
         while True:
@@ -414,6 +533,7 @@ class TaskManager:
             session = ui.get("session") or {}
             width, height = int(doc["width"]), int(doc["height"])
             t.doc_name, t.doc_index, t.doc_size = doc.get("name") or "", int(session.get("active", 0)), [width, height]
+            t.doc_mode = str(doc.get("mode") or "")
             canvas = Rect(0, 0, width, height)
             sel = Rect.from_list(doc["selectionBounds"]) if doc.get("hasSelection") and doc.get("selectionBounds") else None
             t.selection = sel.as_list() if sel else None

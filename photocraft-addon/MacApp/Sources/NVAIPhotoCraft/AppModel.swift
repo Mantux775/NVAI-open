@@ -171,6 +171,14 @@ final class AppModel {
             s.masks = (try? await nvai.supportsMasks()) ?? false
             s.expand = (try? await nvai.supportsExpand()) ?? false
             s.outpaint = (try? await nvai.supportsOutpaint()) ?? false
+            s.restore = (try? await nvai.supportsRestore()) ?? false
+            if s.restore {
+                s.restoreModes = (try? await nvai.restoreModes()) ?? []
+                // SeedVR2 nur im Modus Restaurieren nachsehen, sonst den letzten Stand behalten.
+                s.sharpen = form.mode == .restore
+                    ? ((try? await nvai.upscaleModels()) ?? []).contains { $0["runnable"]?.truthy ?? false } : nv.sharpen
+            }
+            s.mac = (try? await nvai.version())?.platform == "macos"
             s.downloads = (try? await nvai.downloads()) ?? []
             s.activeModel = health["active_models"]?["image"]?.stringValue
             s.loaded = (health["vram_loaded"]?.arrayValue ?? []).compactMap { $0["model"]?.stringValue }
@@ -228,6 +236,8 @@ final class AppModel {
     /// Beim Erweitern ein nahtloses Bearbeitungsmodell (wie Planning.chooseModel).
     var fallbackModel: ModelOption? {
         let list = suitableModels
+        // Restaurieren ohne eigene Wahl: wie NVAI-open FLUX 3 (destilliert) vor den anderen Bearbeitungsmodellen.
+        if form.mode == .restore { return list.first { $0.workflow == "flux3_klein" } ?? list.first }
         if extendByOutpaint {
             let seamless = list.filter { $0.outpaint == "reference" }
             if let first = seamless.first { return seamless.first { $0.id == nv.activeModel } ?? first }
@@ -250,6 +260,70 @@ final class AppModel {
     }
 
     var goLabel: String { form.mode.go }
+
+    // MARK: Restaurieren
+
+    /// Text im Prompt-Feld: beim Restaurieren die eigenen Hinweise (Farben, was bleiben soll), sonst der Prompt.
+    var promptText: String {
+        get { form.mode == .restore ? form.restoreNotes : form.prompt }
+        set { if form.mode == .restore { form.restoreNotes = newValue } else { form.prompt = newValue } }
+    }
+
+    /// Arten des Entfernens, die NVAI-open kann (vor dem ersten Abgleich alle drei).
+    var restoreModes: [String] { nv.restoreModes.isEmpty ? ["auto", "thorough", "gentle"] : nv.restoreModes }
+
+    /// Gewählte Art; kennt NVAI-open sie nicht (Mac: nur gründlich), gilt die erste angebotene.
+    var restoreMode: String {
+        get { restoreModes.contains(form.restoreMode) ? form.restoreMode : restoreModes[0] }
+        set { form.restoreMode = newValue }
+    }
+
+    var restoreModeNote: String {
+        switch restoreMode {
+        case "auto":
+            return t("Das Bildmodell sieht sich das Foto an: Wasserflecken oder Rissnetze → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl).",
+                     "The image model looks at the photo: water stains or crack networks → thorough, otherwise gentle (the better choice on 20 of 21 test photos).")
+        case "gentle":
+            return t("Für einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Streifen, Risse, Lichteinfall): ersetzt nur diese Stellen, Schärfe und Gesichter bleiben original.",
+                     "For separate damage on an otherwise good photo (dust, scratches, stripes, tears, light leaks): replaces only those spots, sharpness and faces stay original.")
+        default:
+            return nv.mac && restoreModes == ["thorough"]
+                ? t("NVAI-open für Mac rechnet das ganze Bild neu (schonend und automatisch gibt es nur unter Windows); Gesichter können sich je Variante leicht ändern.",
+                    "NVAI-open for Mac redraws the whole picture (gentle and automatic exist on Windows only); faces may change slightly from variant to variant.")
+                : t("Für flächige Alterung (Wasserflecken, Craquelé, Korn, Ausbleichen): rechnet das ganze Bild neu; Gesichter können sich je Variante leicht ändern.",
+                    "For overall aging (water stains, crack networks, grain, fading): redraws the whole picture; faces may change slightly from variant to variant.")
+        }
+    }
+
+    /// Zielgröße beim Vergrößern bzw. warum nur geschärft wird.
+    var restoreScaleNote: String {
+        guard let doc = pc.document else { return "" }
+        if doc.selection != nil { return t("mit Auswahl nur schärfen", "with a selection: sharpen only") }
+        let k = form.restoreScale
+        return k > 1 ? "\(doc.width) × \(doc.height) → \(doc.width * k) × \(doc.height * k)" : t("gleiche Größe, nur schärfen", "same size, sharpen only")
+    }
+
+    /// Gemessene Dauer: Windows mit FLUX 3 Klein NVFP4 und SeedVR2 auf einer RTX 5060 Ti (Restaurieren 1 MP ~35 s,
+    /// 2 MP ~75 s, Einfärben ~40–45 s, Schärfen 6–20 s je Variante), Mac mini M1 8 GB mit FLUX.2 Klein (Entfernen
+    /// ~120 s, Einfärben ~105 s je Variante, erstes Laden ~50 s; Livetest 25.10.2026).
+    var restoreTime: String? {
+        let n = min(4, max(1, form.variants))
+        let variants = n == 1 ? t("1 Variante", "1 variant") : t("\(n) Varianten", "\(n) variants")
+        if nv.mac {
+            let seconds = ((form.restoreRepair ? 120 : 0) + (form.restoreColorize ? 105 : 0)) * n
+            guard seconds > 0 else { return nil }
+            let minutes = max(1, Int((Double(seconds) / 60).rounded()))
+            return t("Dauer rund \(minutes) min für \(variants), beim ersten Mal knapp 1 min länger (gemessen auf einem Mac mini M1 mit 8 GB)",
+                     "About \(minutes) min for \(variants), close to 1 min longer the first time (measured on a Mac mini M1 with 8 GB)")
+        }
+        let sharpen = form.restoreSharpen && nv.sharpen
+        let low = ((form.restoreRepair ? 35 : 0) + (form.restoreColorize ? 40 : 0) + (sharpen ? 6 : 0)) * n
+        let high = ((form.restoreRepair ? 75 : 0) + (form.restoreColorize ? 45 : 0) + (sharpen ? 20 : 0)) * n
+        guard low > 0 else { return nil }
+        let a = max(1, Int((Double(low) / 60).rounded())), b = max(1, Int((Double(high) / 60).rounded()))
+        let span = a == b ? "\(a)" : "\(a)–\(b)"
+        return t("Dauer etwa \(span) min für \(variants)", "About \(span) min for \(variants)")
+    }
 
     var selectedModelID: String {
         get {
@@ -283,7 +357,13 @@ final class AppModel {
         return form.mode.placeholder
     }
 
-    var promptTip: String { currentModel?.promptHint.nonEmpty ?? t("Englische Prompts treffen meist genauer.", "Detailed English prompts work best.") }
+    var promptTip: String {
+        if form.mode == .restore {
+            return t("Bekannte Farben auf Englisch nennen: gemessen 40 % weniger Farbabweichung beim Einfärben.",
+                     "Name known colors: measured 40% less color error when colorizing.")
+        }
+        return currentModel?.promptHint.nonEmpty ?? t("Englische Prompts treffen meist genauer.", "Detailed English prompts work best.")
+    }
 
     var modelHints: [String] {
         var out: [String] = []
@@ -311,6 +391,20 @@ final class AppModel {
         if nv.problem != nil {
             return nv.authorized ? t("NVAI-open-Version passt nicht zur App", "NVAI-open version does not match the app")
                 : t("NVAI-open verlangt einen gültigen Token", "NVAI-open requires a valid token")
+        }
+        if form.mode == .restore {
+            if !nv.restore {
+                return t("Diese NVAI-open-Version kann noch keine Fotos restaurieren (Windows ab 0.5.11, Mac ab 0.4.6)",
+                         "This NVAI-open version cannot restore photos yet (Windows 0.5.11, Mac 0.4.6 or newer)")
+            }
+            if !form.restoreRepair && !form.restoreColorize && !(form.restoreSharpen && nv.sharpen) {
+                return t("Bitte mindestens einen Schritt wählen", "Please choose at least one step")
+            }
+            if (form.restoreRepair || form.restoreColorize) && modelsLoaded && suitableModels.isEmpty {
+                return t("Restaurieren braucht FLUX 3 Image Klein in NVAI-open (auf dem Mac FLUX.2 Klein)",
+                         "Restoring needs FLUX 3 Image Klein in NVAI-open (on the Mac FLUX.2 Klein)")
+            }
+            return nil
         }
         if noModels { return t("In NVAI-open ist kein Bildmodell installiert", "No image model is installed in NVAI-open") }
         if form.mode == .fill && !nv.masks { return t("NVAI-open kennt noch keine Masken", "NVAI-open does not know masks yet") }
@@ -353,13 +447,22 @@ final class AppModel {
         if let cfg = Double(form.cfg.trimmed.replacingOccurrences(of: ",", with: ".")) { p["cfg"] = .double(min(30, max(0, cfg))) }
         if let seed = Int(form.seed.trimmed), seed >= 0 { p["seed"] = .int(seed) }
         if extending { p["extend"] = .array(extend.map { .int(min(Planning.extendMax, max(0, $0))) }) }
+        if form.mode == .restore {
+            // Wie `RestoreRequest` der Brücke: Hinweise statt Prompt, Schritte und Art des Entfernens.
+            p["prompt"] = .string(form.restoreNotes.trimmed)
+            p["repair"] = .bool(form.restoreRepair)
+            p["repair_mode"] = .string(restoreMode)
+            p["colorize"] = .bool(form.restoreColorize)
+            p["sharpen"] = .bool(form.restoreSharpen && nv.sharpen)
+            p["scale"] = .double(Double(form.restoreScale))
+        }
         return .object(p)
     }
 
     func generate() {
         guard blocker == nil, let nvai else { return }
         message = nil
-        let task = GenerationTask(id: Self.taskID(), mode: form.mode.rawValue, prompt: form.prompt, params: params())
+        let task = GenerationTask(id: Self.taskID(), mode: form.mode.rawValue, prompt: promptText, params: params())
         extend = [0, 0, 0, 0]
         let item = TaskItem(task: task)
         current = item

@@ -27,10 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Startoptionen für Tests ohne Bildschirm (wie bei der PhotoCraft-App):
 ///
-///     NVAI-open --snapshot <png> [--tab generate|history|models|search|settings] [--report <md>] [--quit]
+///     NVAI-open --snapshot <png> [--tab generate|restore|history|models|search|settings] [--report <md>] [--quit]
 ///
 /// `--snapshot` fotografiert das eigene Fenster (cacheDisplay, keine Bildschirmfreigabe nötig),
-/// `--tab search` öffnet dazu die Modellsuche; `--report` schreibt den Messbericht.
+/// `--tab search` öffnet dazu die Modellsuche, `--tab restore` „Generieren“ mit „Foto restaurieren“;
+/// `--report` schreibt den Messbericht.
 @MainActor
 enum LaunchOptions {
     private static var args: [String] { CommandLine.arguments }
@@ -69,8 +70,9 @@ enum LaunchOptions {
         }
         if let snapshot {
             let tab = value("--tab") ?? "generate"
-            AppState.shared.selectedTab = tab == "search" ? "models" : tab
+            AppState.shared.selectedTab = tab == "search" ? "models" : tab == "restore" ? "generate" : tab
             if tab == "search" { AppState.shared.showSearch = true }
+            if tab == "restore" { AppState.shared.showRestore = true }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
             try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : 2_500_000_000)
             write(snapshot, sheet: tab == "search")

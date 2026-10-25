@@ -181,3 +181,79 @@ def test_fill_prefers_reference_fill_model_on_new_servers():
     # Technik bleibt „inpaint“: Bild und Maske gehen an NVAI-open, das Grau und Ausrichten macht der Server.
     p = plan("fill", "a seagull on the water", {"variants": 1}, flux, (1024, 768), True, False, True)
     assert p.technique == "inpaint" and p.send_image and p.send_mask
+
+
+# ------------------------------------------------------------- Restaurieren
+
+SEEDVR2 = {"id": "seedvr2-7b-nvfp4", "name": "SeedVR2 7B", "workflow": "seedvr2", "runnable": True,
+           "features": {"scales": [1, 2, 4]}}
+KREA = {"id": "krea2-turbo-nvfp4", "name": "Krea 2", "workflow": "krea2_turbo", "runnable": True,
+        "features": {"img2img": True, "references": 2, "reference_kind": "style"}}
+
+
+def test_restore_needs_a_step():
+    with pytest.raises(PlanError) as err:
+        planning.plan_restore("", {"repair": False}, MODELS, [], (800, 600), False)
+    assert err.value.code == "restore_nothing"
+
+
+def test_restore_picks_flux3_and_sends_the_photo_at_full_size():
+    p = planning.plan_restore(" her dress is red ", {"repair": True, "colorize": True, "variants": 2, "seed": 4},
+                              [QWEN, KREA, FLUX3], [], (3000, 2000), False, "Rgb")
+    assert p.model_name == "FLUX 3"
+    assert p.payload == {"repair": True, "repair_mode": "auto", "colorize": True, "sharpen": False, "scale": 1.0,
+                         "notes": "her dress is red", "batch_size": 2, "seed": 4}
+    assert p.upload_size == (3000, 2000)
+    assert (p.enlarge, p.to_rgb, p.warnings) == (1.0, False, [])
+
+
+def test_restore_mode_defaults_to_auto_and_understands_older_panels():
+    # Automatisch ist Vorgabe (NVAI-open prüft die Art der Schäden); ältere Panels schicken noch "thorough".
+    def mode(params):
+        return planning.plan_restore("", {"repair": True, **params}, MODELS, [], (800, 600), False).payload["repair_mode"]
+    assert [mode(x) for x in ({}, {"repair_mode": "gentle"}, {"repair_mode": "thorough"}, {"thorough": True},
+                              {"thorough": False}, {"repair_mode": "gentle", "thorough": True},
+                              {"repair_mode": "irgendwas"})] == ["auto", "gentle", "thorough", "thorough", "gentle",
+                                                                 "gentle", "auto"]
+
+
+def test_restore_caps_huge_scans_and_keeps_the_aspect():
+    p = planning.plan_restore("", {"repair": True}, MODELS, [], (8000, 6000), False)
+    assert p.upload_size == (planning.RESTORE_MAX_SIDE, 3072)
+
+
+def test_restore_needs_an_editing_model_but_not_for_sharpening_only():
+    with pytest.raises(PlanError) as err:
+        planning.plan_restore("", {"repair": True}, [QWEN, KREA], [SEEDVR2], (800, 600), False)
+    assert err.value.code == "no_edit_model"
+    p = planning.plan_restore("", {"repair": False, "sharpen": True, "scale": 2}, [QWEN], [SEEDVR2], (800, 600), False)
+    assert (p.model_name, p.enlarge, p.payload["scale"]) == ("SeedVR2", 2.0, 2.0)
+
+
+def test_restore_sharpen_without_seedvr2_is_explained():
+    with pytest.raises(PlanError) as err:
+        planning.plan_restore("", {"sharpen": True, "repair": False}, MODELS, [], (800, 600), False)
+    assert err.value.code == "no_upscaler"
+
+
+def test_restore_with_selection_only_sharpens_and_gray_documents_turn_rgb_for_color():
+    p = planning.plan_restore("", {"repair": True, "colorize": True, "sharpen": True, "scale": 4, "thorough": True},
+                              MODELS, [SEEDVR2], (500, 400), True, "Gray")
+    assert (p.enlarge, p.payload["scale"], p.payload["repair_mode"]) == (1.0, 1.0, "thorough")
+    assert [w.code for w in p.warnings] == ["restore_selection_not_enlarged"]
+    assert p.to_rgb
+    assert not planning.plan_restore("", {"repair": True}, MODELS, [], (500, 400), False, "Gray").to_rgb
+
+
+def test_restore_rejects_a_chosen_model_that_cannot_edit():
+    with pytest.raises(PlanError) as err:
+        planning.plan_restore("", {"repair": True, "model_id": KREA["id"]}, [KREA, FLUX3], [], (800, 600), False)
+    assert err.value.code == "model_incapable"
+    chosen = planning.plan_restore("", {"repair": True, "model_id": FLUX3["id"]}, [FLUX3], [], (800, 600), False)
+    assert chosen.payload["model_id"] == FLUX3["id"]
+
+
+def test_restore_is_its_own_mode_that_captures_like_refine():
+    assert "restore" in planning.MODES and "restore" not in planning.BASE_MODES
+    assert planning.base_mode("restore") == "refine"
+    assert layer_name("restore", "", 0, 1) == "NVAI-open Restore"

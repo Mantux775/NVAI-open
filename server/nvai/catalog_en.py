@@ -36,6 +36,13 @@ KREA2_LICENSE_WARNING = (
     "AI-generated where required by law. Krea can terminate the license with 30 days' notice."
 )
 _LICENSE_CON_KREA2 = "Community license: commercial use only below US$1 million revenue, review obligation, can be terminated"
+MOSS_IMAGE_PROMPT_HINT = (
+    "MOSS-Image was trained on image descriptions: describe what the finished image looks like, not what to "
+    "do. Medium and subject first, then setting and composition, then light and colors. Put text in quotation "
+    "marks, word for word, with position, size and typeface; set line breaks yourself. MOSS-Image expands short "
+    "prompts first with its own text encoder (can be switched off). Layout: a JSON with \"summary\" and "
+    "\"items\" as the prompt, then without expansion. The negative prompt works (cfg 3)."
+)
 QWEN21_LICENSE_WARNING = (
     "Qwen Research License: research and evaluation only, no commercial use — including no "
     "images for a game you sell. For final assets use Qwen-Image-2512 (Apache-2.0)."
@@ -425,6 +432,36 @@ EN: dict[str, dict[str, Any]] = {
             _LICENSE_CON_KREA2,
             "On RTX 50 the NVFP4 version is the faster choice",
             "On a slow connection (PCIe 3.0 x4) slower than NVFP4 (RTX 4060 on a riser: 82 instead of 46 s)",
+        ],
+    },
+    "moss-image-sft-int8": {
+        "name": "MOSS-Image SFT (INT8, 50 steps)",
+        "best_for": "Text and layout in the image, posters and graphics — free to use (Apache-2.0)",
+        "features": {"prompt_hint": MOSS_IMAGE_PROMPT_HINT},
+        "description": (
+            "MOSS-Image by OpenMOSS (16 Oct 2026): a diffusion transformer with 5 billion parameters under "
+            "Apache-2.0, trained on detailed image descriptions. The text encoder is Qwen3.5-9B (W4A8), together "
+            "with the small FLUX.2 VAE, which is Apache-2.0 as well. NVAI-open first expands a short prompt into a "
+            "full description with MOSS's own text encoder (system prompt from ComfyUI's template, can be switched "
+            "off); it is stored in the asset under \"caption\".\n\n"
+            "Measured on the RTX 5060 Ti (25 Oct) with OpenMOSS's settings (50 steps, cfg 3, the default): about "
+            "51 s per 1 MP image, plus about 11 s for the expansion the first time; with the 25 steps of ComfyUI's "
+            "template 28 s. Text came out letter-perfect in every test (\"MUNITION 7,92\", the poster \"ALPENGLOW\" "
+            "with \"SINCE 1928\"), the soldier stood in the frame with both boots, the fisherman kept his head in "
+            "the frame. With 50 steps the crate's rope handles passed through drilled holes in three of three "
+            "images, with 25 steps in two of three; once the lid was missing (not named in the prompt).\n\n"
+            "MOSS-Image is not available on the Mac (no MLX version)."
+        ),
+        "pros": [
+            "Apache-2.0: images can be sold without a revenue limit or review obligation",
+            "Text in the image in English and Chinese, long texts too",
+            "Layout as JSON: where each object and each line of text goes",
+            "Own prompt expansion (can be switched off), the negative prompt works",
+        ],
+        "cons": [
+            "Text to image only: no reference images, no editing, no mask",
+            "Qwen3.5-9B text encoder: 7.3 GB extra (not the same as FLUX 3's upsampler)",
+            "Not available on the Mac (no MLX version)",
         ],
     },
     "flux3-klein-nvfp4": {
@@ -1353,6 +1390,64 @@ EN: dict[str, dict[str, Any]] = {
             "An additional ~4.3 GB VRAM — tight on 16 GB",
             "Stricter than depth: little leeway for the model",
             "SD 3.5 only",
+        ],
+    },
+    "seedvr2-7b-nvfp4": {
+        "name": "SeedVR2 7B (NVFP4, sharpen and enlarge)",
+        "best_for": "Sharpen, denoise and enlarge old photos after restoring them",
+        "description": (
+            "SeedVR2 by ByteDance (Apache-2.0): a diffusion model that restores images and videos in a "
+            "single step. It removes noise, film grain, blur and compression artifacts and enlarges the "
+            "image, without reinventing its content the way an image generator would.\n\n"
+            "In NVAI-open it is the last step of \"Restore photo\": first FLUX 3 removes scratches and "
+            "stains, then it colorizes on request, then SeedVR2 sharpens and enlarges. It also works on its "
+            "own, for example for a small, noisy scan.\n\n"
+            "The NVFP4 version is computed in hardware on RTX 50; older cards get INT8."
+        ),
+        "pros": [
+            "Apache-2.0, free for commercial use",
+            "One step: cleans up noise, grain and blur and enlarges at the same time",
+            "Runs natively in ComfyUI, no extension needed",
+        ],
+        "cons": [
+            "Does not repair scratches, tears or stains – \"Remove damage\" with FLUX 3 does that",
+            "Invents fine detail (skin, fabric) at strong enlargement that was not in the original",
+        ],
+    },
+    "seedvr2-7b-int8": {
+        "name": "SeedVR2 7B (INT8, for RTX 20/30/40)",
+        "best_for": "SeedVR2 on cards without FP4 (RTX 20/30/40)",
+        "description": (
+            "The same model as `seedvr2-7b-nvfp4` in Comfy-Org's INT8 version (ConvRot), computed in "
+            "hardware from RTX 20 onward; ComfyUI's template uses it too. Not measured on this card."
+        ),
+        "pros": [
+            "Apache-2.0, free for commercial use",
+            "One step: cleans up noise, grain and blur and enlarges at the same time",
+            "Runs natively in ComfyUI, no extension needed",
+        ],
+        "cons": [
+            "Does not repair scratches, tears or stains – \"Remove damage\" with FLUX 3 does that",
+            "Invents fine detail (skin, fabric) at strong enlargement that was not in the original",
+            "On RTX 50 the NVFP4 version is the right one",
+        ],
+    },
+    "seedvr2-3b-int8": {
+        "name": "SeedVR2 3B (INT8, small)",
+        "best_for": "SeedVR2 for cards with 8 GB",
+        "description": (
+            "The small version with 3 billion parameters (INT8, 3.5 GB). According to ByteDance slightly "
+            "less detail than 7B, but it also fits into 8 GB of graphics memory. Not measured."
+        ),
+        "pros": [
+            "Apache-2.0, free for commercial use",
+            "One step: cleans up noise, grain and blur and enlarges at the same time",
+            "Runs natively in ComfyUI, no extension needed",
+        ],
+        "cons": [
+            "Does not repair scratches, tears or stains – \"Remove damage\" with FLUX 3 does that",
+            "Invents fine detail (skin, fabric) at strong enlargement that was not in the original",
+            "Less detail than 7B according to the manufacturer",
         ],
     },
 }

@@ -51,6 +51,16 @@ enum Panels {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    /// Ein oder mehrere Bilder zum Hochladen (Referenzen nehmen mehrere auf einmal).
+    @MainActor
+    static func chooseImages(_ title: String, multiple: Bool) -> [URL] {
+        let panel = NSOpenPanel()
+        panel.title = title
+        panel.allowedContentTypes = [.png, .jpeg, .tiff, .heic, .webP]
+        panel.allowsMultipleSelection = multiple
+        return panel.runModal() == .OK ? panel.urls : []
+    }
+
     @MainActor
     static func chooseFolder(_ title: String) -> URL? {
         let panel = NSOpenPanel()

@@ -104,9 +104,13 @@ body {
 
 .content { flex: 1; overflow: auto; padding: 18px; }
 
+/* Generieren: links die Einstellungen, rechts die Ergebnisse. Die Leiste nimmt im mittleren Fenster die Hälfte,
+   stufenlos bis 40 % im breiten (bis 1520 px Inhalt 50 %, dann 760 px fest, ab 1900 px 40 %). Nutzerwunsch 25.10.2026:
+   vorher höchstens 380 px (Felder zu eng, „Restaurieren“ passte nicht in den Reiter), danach 40 %, im mittleren Fenster
+   zu eng. minmax(0, …): Breiter Inhalt rechts (lange Dateinamen) drückt die Leiste nicht zusammen. */
 .split {
   display: grid;
-  grid-template-columns: minmax(300px, 380px) 1fr;
+  grid-template-columns: clamp(40%, 760px, 50%) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -262,6 +266,17 @@ kbd {
 
 .mode-switch.four { grid-template-columns: repeat(4, 1fr); }
 .mode-switch.four .mode { padding: 8px 2px; font-size: 13px; gap: 4px; }
+/* Gleich breit, solange Platz ist; wird es eng (halber Bildschirm), behält „Restaurieren“ seine Textbreite
+   (gemessen 930 px Fenster: 74/74/74/74/87 px statt fünfmal 77 px mit abgeschnittenem Text). */
+.mode-switch.five { grid-template-columns: repeat(5, minmax(max-content, 1fr)); }
+.mode-switch.five .mode { padding: 8px 2px; font-size: 12.5px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Foto restaurieren: Schritte mit Unteroptionen */
+.restore-steps { display: flex; flex-direction: column; gap: 6px; }
+.restore-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-left: 24px; }
+.restore-sub .seg { display: inline-flex; border: 1px solid var(--border, rgba(127,127,127,.35)); border-radius: 6px; overflow: hidden; }
+.restore-sub .seg button { border: none; border-left: 1px solid var(--border, rgba(127,127,127,.35)); background: none; color: inherit; padding: 3px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+.restore-sub .seg button:first-child { border-left: none; }
+.restore-sub .seg button.on { background: var(--accent); color: #fff; }
 
 .mode-switch {
   display: grid;
@@ -794,6 +809,28 @@ kbd {
 }
 .lora-intro summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .lora-intro p { margin: 8px 0 0; color: var(--text); line-height: 1.5; max-width: 900px; }
+
+/* Empfohlene Einstellungen je Reiter (components/Recommendations.tsx), zugeklappt unter der Reiterwahl */
+.recommend {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.recommend summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.recommend ul { margin: 6px 0 2px; padding-left: 18px; }
+.recommend li { margin: 5px 0; line-height: 1.45; }
+.recommend strong { color: var(--text); }
+
+/* Ergebnisbilder anklickbar: große Ansicht (components/Lightbox.tsx) */
+.result-open { cursor: zoom-in; border-radius: var(--radius); }
+.result-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lightbox-actions .btn:disabled { opacity: 0.35; cursor: default; }
+
+/* Verlauf: in 50er-Schritten weiterladen */
+.history-more { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 16px 0 24px; }
 
 /* Outpainting: Randbreiten und Schnellwahl */
 .outpaint .row label { min-width: 0; }

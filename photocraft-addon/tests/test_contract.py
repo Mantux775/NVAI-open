@@ -30,7 +30,7 @@ SWIFT_COPY = ROOT / "PhotoCraftKit" / "Tests" / "PhotoCraftKitTests" / "Golden" 
 
 VERSION = {"name": "NV-AI", "version": "0.2.0", "api": 1, "auth": "token", "authorized": True,
            "features": ["model_features", "mask", "references", "upsampler", "upload", "expand_prompt",
-                        "cancel_job"]}
+                        "cancel_job", "restore"]}
 
 # Alles, was bridge/nvai.py bei NVAI-open aufruft – der Test unten muss jede Zeile auslösen.
 USED = {
@@ -38,7 +38,7 @@ USED = {
     ("get", "/api/assets/{asset_id}"), ("delete", "/api/assets/{asset_id}"), ("post", "/api/upload"),
     ("post", "/api/generate/image"), ("get", "/api/jobs/{job_id}"), ("delete", "/api/jobs/{job_id}"),
     ("post", "/api/jobs/current/cancel"), ("get", "/files/{filename}"), ("post", "/api/prompt/expand"),
-    ("get", "/api/jobs"), ("post", "/api/jobs/{job_id}/cancel"),
+    ("get", "/api/jobs"), ("post", "/api/jobs/{job_id}/cancel"), ("post", "/api/image/restore"),
 }
 
 # Antwortfelder, die Brücke und Swift-Port lesen. /api/health ist bewusst untypisiert (Diagnose,
@@ -170,6 +170,20 @@ def response_problems(spec: dict[str, Any], request: httpx.Request, response: ht
 
 # ----------------------------------------------------------- NVAI-open-Attrappe
 
+def _restore_payloads() -> list[dict[str, Any]]:
+    """Requests an /api/image/restore, wie planning.plan_restore sie baut – samt Upload-id."""
+    from bridge import planning
+    flux3 = {"id": "flux3-klein-nvfp4", "name": "FLUX 3", "workflow": "flux3_klein", "runnable": True,
+             "features": {"references": 10}}
+    seedvr2 = {"id": "seedvr2-7b-nvfp4", "name": "SeedVR2", "workflow": "seedvr2", "runnable": True}
+    cases = [({"repair": True}, ""), ({"repair": True, "thorough": True, "colorize": True, "variants": 4}, "red dress"),
+             ({"repair": False, "colorize": True, "seed": 3}, ""),
+             ({"repair": True, "colorize": True, "sharpen": True, "scale": 4, "model_id": flux3["id"]}, "keep text"),
+             ({"repair": False, "sharpen": True, "scale": 2}, "")]
+    return [{**planning.plan_restore(prompt, params, [flux3], [seedvr2], (2400, 1800), False).payload,
+             "image_asset_id": "upload-1"} for params, prompt in cases]
+
+
 def _golden_payloads() -> list[dict[str, Any]]:
     """Alle Requests, die die Planung erzeugt – samt Upload-ids, wie tasks.py sie ergänzt."""
     cases = json.loads((ROOT / "golden" / "planning.json").read_text(encoding="utf-8"))["plan"]
@@ -236,7 +250,7 @@ class FakeNVAI:
             prompt = json.loads(request.content)["prompt"]
             return httpx.Response(200, json={"prompt": prompt, "expanded": f"A full description of {prompt}.",
                                              "seconds": 13.2})
-        if path == "/api/generate/image":
+        if path in ("/api/generate/image", "/api/image/restore"):
             return httpx.Response(200, json=self.jobs["job-r"])
         if path == "/api/jobs/current/cancel":
             return httpx.Response(200, json={"ok": True})
@@ -283,6 +297,12 @@ def test_planner_payloads_fit_request_schema(spec: dict[str, Any]) -> None:
     assert not problems, problems[:20]
 
 
+def test_restore_payloads_fit_request_schema(spec: dict[str, Any]) -> None:
+    schema = {"$ref": "#/components/schemas/RestoreImageRequest"}
+    problems = sorted({p for payload in _restore_payloads() for p in violations(spec, payload, schema, "payload")})
+    assert not problems, problems
+
+
 def test_client_requests_follow_contract(spec: dict[str, Any]) -> None:
     fake = FakeNVAI(spec)
     nv = NVAI("http://pc-name:8100", token="geheim", transport=httpx.MockTransport(fake))
@@ -304,6 +324,10 @@ def test_client_requests_follow_contract(spec: dict[str, Any]) -> None:
     downloads = nv.downloads()
     assert [(d["job"], d["name"], d["progress"]) for d in downloads] == [("job-dl", "FLUX 3 Klein", 0.4)]
     nv.cancel_download("job-dl")  # ab 0.5.2: POST /api/jobs/{id}/cancel
+    assert nv.supports_restore()  # ab 0.5.11: Foto restaurieren
+    nv.upscale_models()
+    for payload in _restore_payloads():
+        nv.restore_image(payload)
 
     used, problems = set(), []
     for request, response in zip(fake.requests, fake.responses):

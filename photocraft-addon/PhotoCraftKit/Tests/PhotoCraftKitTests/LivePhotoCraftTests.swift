@@ -92,6 +92,59 @@ final class LivePhotoCraftTests: XCTestCase {
         await pc.close()
     }
 
+    /// „Restaurieren“ mit NVAI-open: ein Graustufenfoto (`PHOTOCRAFT_LIVE_GRAY`, Pfad im Austauschordner) ohne
+    /// Auswahl entstauben und einfärben (eine Variante; NVAI-open für Mac rechnet gründlich, etwa 4–5 min auf einem
+    /// M1). Prüft das neue RGB-Dokument „<Name> – color“ mit dem Original als unterster Ebene und dem Ergebnis
+    /// deckungsgleich darüber; das Graustufendokument bleibt unverändert. Ergebnis als `jobs/<id>/final.png`.
+    func testRestoreGrayPhotoWithRealNVAI() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let port = env["PHOTOCRAFT_LIVE_PORT"].flatMap({ UInt16($0) }), let token = env["PHOTOCRAFT_LIVE_TOKEN"],
+              let exchangePath = env["PHOTOCRAFT_LIVE_EXCHANGE"], let image = env["PHOTOCRAFT_LIVE_GRAY"],
+              let nvaiURL = env["NVAI_LIVE_URL"].flatMap(URL.init(string:)) else {
+            throw XCTSkip("keine Testinstanz, kein Graustufenfoto oder kein NVAI-open angegeben (PHOTOCRAFT_LIVE_*, NVAI_LIVE_URL)")
+        }
+        let pc = ControlClient(port: port, tokenURL: URL(fileURLWithPath: token))
+        let nvai = NVAIClient(baseURL: nvaiURL, token: env["NVAI_LIVE_TOKEN"])
+        _ = try await pc.call("app.open", ["path": .string(image)])
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        let ui = try await pc.inspect()
+        let grayDoc = ui["session"]?["active"]?.intValue ?? 0
+        let source = try XCTUnwrap(ui["document"])
+        XCTAssertTrue(Planning.grayModes.contains((source["mode"]?.stringValue ?? "").lowercased()), "Testfoto ist grau")
+        let width = source["width"]?.intValue ?? 0, height = source["height"]?.intValue ?? 0
+
+        let wf = Workflow(pc: pc, exchange: URL(fileURLWithPath: exchangePath))
+        let t = GenerationTask(id: "live-restore-\(UUID().uuidString.prefix(8))", mode: "restore",
+                               prompt: "his cap is white with dark navy stripes",
+                               params: ["variants": 1, "repair": true, "repair_mode": "auto", "colorize": true,
+                                        "sharpen": false, "scale": 1, "seed": 7, "auto_place": true])
+        var stages: [String] = []
+        let started = Date()
+        try await wf.run(t, nvai: nvai) { _, stage in if stages.last != stage { stages.append(stage) } }
+
+        XCTAssertEqual(t.technique, "restore")
+        XCTAssertEqual(t.variants.count, 1)
+        XCTAssertTrue(t.docName.hasSuffix(" – color"), t.docName)
+        XCTAssertEqual(t.docMode, "Rgb")
+        let doc = try await pc.document()
+        XCTAssertEqual(doc["name"]?.stringValue, t.docName)
+        XCTAssertEqual(doc["mode"]?.stringValue?.lowercased(), "rgb")
+        XCTAssertEqual([doc["width"]?.intValue, doc["height"]?.intValue], [width, height])
+        let layers = doc["layers"]?.arrayValue ?? []
+        XCTAssertEqual(layers.count, 2, "Original und Ergebnis")
+        let placed = Workflow.layersByID(layers)[try XCTUnwrap(t.placedLayer)]
+        XCTAssertEqual(placed?["bounds"]?.rectValue, Rect(0, 0, width, height), "Ergebnis deckt das ganze Bild")
+        _ = try await pc.call("app.save", ["path": .string("jobs/\(t.id)/final.png")])
+        print("Restaurieren-Livetest: \(t.modelName), \(Int(Date().timeIntervalSince(started))) s, "
+              + "Stufen: \(stages.joined(separator: " → ")), Ergebnis jobs/\(t.id)/final.png")
+
+        let session = try await pc.inspect()["session"]
+        let colorDoc = session?["active"]?.intValue ?? 0
+        _ = try await pc.execute("file.close", ["document": .int(colorDoc)])
+        _ = try await pc.execute("file.close", ["document": .int(grayDoc)])
+        await pc.close()
+    }
+
     /// Ein echter Auftrag „Füllen“ mit NVAI-open (eine Variante, etwa 1–2 min GPU) – zusätzlich `NVAI_LIVE_URL`
     /// (und bei entferntem NVAI-open `NVAI_LIVE_TOKEN`). Prüft die ganze Kette wie die App: Erfassen, Hochladen,
     /// Inpainting, Einfügen mit Ebenenmaske – und dass die Uploads danach in NVAI-open gelöscht sind.

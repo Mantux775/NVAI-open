@@ -28,7 +28,7 @@ struct PanelView: View {
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                PromptEditor(text: $model.form.prompt, placeholder: model.promptPlaceholder)
+                PromptEditor(text: $model.promptText, placeholder: model.promptPlaceholder)
                 HStack(alignment: .firstTextBaseline) {
                     Text(model.promptTip).lineLimit(2).help(model.promptTip)
                     Spacer()
@@ -40,6 +40,7 @@ struct PanelView: View {
                 DownloadsRow()
                 ModelRow()
                 if model.form.mode == .extend { ExtendFields() }
+                if model.form.mode == .restore { RestoreFields() }
                 if model.showsStrength { StrengthSlider(value: $model.form.strength) }
                 DisclosureGroup(t("Erweitert", "Advanced"), isExpanded: $model.form.advanced) {
                     AdvancedFields().padding(.top, 6)
@@ -53,13 +54,14 @@ struct PanelView: View {
             }
             .padding(16)
         }
-        .frame(minWidth: 340, idealWidth: 390, minHeight: 560)
+        // 420 statt 390: Mit „Restaurieren“ hat die Modusleiste fünf Felder.
+        .frame(minWidth: 340, idealWidth: 420, minHeight: 560)
         .background(WindowLevel(floating: model.form.alwaysOnTop))
         .onChange(of: model.form) { _, form in form.save() }
     }
 
     private var wordCount: String {
-        let words = model.form.prompt.split(whereSeparator: \.isWhitespace).count
+        let words = model.promptText.split(whereSeparator: \.isWhitespace).count
         if words == 0 { return "" }
         return words == 1 ? t("1 Wort", "1 word") : t("\(words) Wörter", "\(words) words")
     }
@@ -453,6 +455,72 @@ private struct ExtendFields: View {
     }
 }
 
+/// „Restaurieren“: Schritte mit Unteroptionen (wie das Windows-Panel) und die gemessene Dauer.
+private struct RestoreFields: View {
+    @Environment(AppModel.self) private var model
+
+    static func label(_ mode: String) -> String {
+        switch mode {
+        case "auto": return t("Automatisch", "Automatic")
+        case "gentle": return t("Schonend", "Gentle")
+        default: return t("Gründlich", "Thorough")
+        }
+    }
+
+    var body: some View {
+        @Bindable var model = model
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(t("Schäden entfernen", "Remove damage"), isOn: $model.form.restoreRepair)
+            if model.form.restoreRepair {
+                VStack(alignment: .leading, spacing: 4) {
+                    if model.restoreModes.count > 1 {
+                        Picker(t("Art", "Kind"), selection: $model.restoreMode) {
+                            ForEach(model.restoreModes, id: \.self) { Text(Self.label($0)).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+                    Text(model.restoreModeNote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.leading, 20)
+            }
+            Toggle(t("Einfärben", "Colorize"), isOn: $model.form.restoreColorize)
+            Toggle(t("Schärfen und vergrößern (SeedVR2)", "Sharpen and enlarge (SeedVR2)"), isOn: $model.form.restoreSharpen)
+                .disabled(!model.nv.sharpen)
+            if model.nv.sharpen {
+                if model.form.restoreSharpen {
+                    HStack(spacing: 8) {
+                        Picker(t("Vergrößern", "Enlarge"), selection: $model.form.restoreScale) {
+                            ForEach([1, 2, 4], id: \.self) { Text(verbatim: "\($0)×").tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 132)
+                        Text(model.restoreScaleNote).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                    .padding(.leading, 20)
+                }
+            } else {
+                Text(model.nv.mac
+                     ? t("Schärfen gibt es nur in NVAI-open für Windows.", "Sharpening is only available in NVAI-open for Windows.")
+                     : t("Braucht SeedVR2: in NVAI-open unter „Modelle“ → „Hochskalieren“ laden (5,3 GB).",
+                         "Needs SeedVR2: download it in NVAI-open under “Models” → “Upscale” (5.3 GB)."))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 20)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let time = model.restoreTime {
+                Text(time).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.callout)
+    }
+}
+
 private struct StrengthSlider: View {
     @Binding var value: Double
 
@@ -481,6 +549,21 @@ private struct AdvancedFields: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var model = model
+        if model.form.mode == .restore {
+            // Restaurieren rechnet mit festen Einstellungen; einstellbar sind nur Seed und Einfügen.
+            VStack(alignment: .leading, spacing: 10) {
+                SmallField(label: "Seed", text: $model.form.seed, prompt: t("zufällig", "random")).frame(width: 140)
+                Toggle(t("Erste Variante sofort in PhotoCraft einfügen", "Place the first variant in PhotoCraft right away"),
+                       isOn: $model.form.autoPlace)
+            }
+            .font(.callout)
+        } else {
+            generalFields
+        }
+    }
+
+    @ViewBuilder private var generalFields: some View {
         @Bindable var model = model
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
@@ -574,7 +657,8 @@ private struct ExpandRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        if model.nv.usable && model.nv.expand {
+        // Beim Restaurieren sind es Hinweise, keine Bildbeschreibung – da gibt es nichts auszubauen.
+        if model.nv.usable && model.nv.expand && model.form.mode != .restore {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
                     Button { model.expandPrompt() } label: {

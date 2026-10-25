@@ -46,6 +46,13 @@ function modeTexts(mode) {
       placeholder: t("Was ist auf dem ganzen Bild zu sehen? Leer lassen = die Szene fortsetzen",
         "What does the whole picture show? Leave empty = continue the scene"),
     },
+    restore: {
+      go: t("Foto restaurieren", "Restore photo"),
+      hint: t("Entfernt Kratzer, Staub, Risse und Flecken, färbt ein und schärft – die Auswahl oder das ganze Bild. Das Ergebnis liegt deckungsgleich als Ebene über dem Original.",
+        "Removes scratches, dust, tears and stains, colorizes and sharpens – the selection or the whole image. The result lies exactly over the original as a layer."),
+      placeholder: t("Optional, am besten englisch: Farben, die du kennst, oder was bleiben soll, z. B. „her dress is dark red, the car is dark green“",
+        "Optional: colors you know or what should stay, e.g. \"her dress is dark red, the car is dark green\""),
+    },
   }[mode];
 }
 
@@ -66,13 +73,25 @@ function translateStatic() {
 }
 
 const DEFAULTS = {
-  mode: "fill", prompt: "", models: { fill: "", generate: "", refine: "", extend: "" }, variants: 2, strength: 0.5,
-  negative: "", steps: "", cfg: "", seed: "", margin: 0.35, hires: false, native: false, autoPlace: true,
-  advanced: false,
+  mode: "fill", prompt: "", models: { fill: "", generate: "", refine: "", extend: "", restore: "" }, variants: 2,
+  strength: 0.5, negative: "", steps: "", cfg: "", seed: "", margin: 0.35, hires: false, native: false,
+  autoPlace: true, advanced: false,
+  // Restaurieren: Schritte und ihre Unteroptionen (repairMode auto/thorough/gentle, scale = Vergrößerung).
+  // Frühere Fassungen speicherten „thorough“ bzw. „gentle“; unter dem neuen Namen landen auch Panels mit
+  // gespeicherten Einstellungen bei der neuen Vorgabe „automatisch“.
+  restore: { repair: true, repairMode: "auto", colorize: false, sharpen: false, scale: 2, notes: "" },
 };
+// Restaurieren hat ein eigenes Textfeld (Hinweise an FLUX 3): Ein Bildprompt aus einem anderen Modus ginge
+// sonst als Anweisung mit, etwa „a medieval blacksmith …“, und FLUX malte ihn ins Foto.
+const promptText = () => (settings.mode === "restore" ? settings.restore.notes || "" : settings.prompt);
+function storePrompt(text) {
+  if (settings.mode === "restore") settings.restore.notes = text;
+  else settings.prompt = text;
+}
 // Was ein Modell für den jeweiligen Modus können muss (Generieren können alle).
 // Erweitern: mit NVAI-open ab 0.5.4 (Mac 0.4.3) jedes Modell mit features.outpaint, sonst Masken.
-const MODE_NEEDS = { fill: "mask", refine: "refine", generate: null, extend: "mask" };
+// Restaurieren: Bearbeiten per Referenzbild (FLUX 3), von der Brücke als m.restore gemeldet.
+const MODE_NEEDS = { fill: "mask", refine: "refine", generate: null, extend: "mask", restore: "restore" };
 const defaultTip = () => t("Englische Prompts treffen meist genauer.", "Detailed English prompts work best.");
 const STORE_KEY = "nvai-photocraft-panel";
 
@@ -83,7 +102,8 @@ function loadSettings() {
   } catch {
     /* unlesbar oder gesperrt – mit Standardwerten weiter */
   }
-  return { ...DEFAULTS, ...stored, models: { ...DEFAULTS.models, ...(stored.models || {}) } };
+  return { ...DEFAULTS, ...stored, models: { ...DEFAULTS.models, ...(stored.models || {}) },
+    restore: { ...DEFAULTS.restore, ...(stored.restore || {}) } };
 }
 
 function saveSettings() {
@@ -315,14 +335,76 @@ function renderDoc() {
 
 function renderMode() {
   for (const b of $$(".modes button")) b.setAttribute("aria-selected", String(b.dataset.mode === settings.mode));
+  if ($("#prompt").value !== promptText()) {
+    $("#prompt").value = promptText();
+    renderCount();
+  }
   const mode = modeTexts(settings.mode);
   $("#mode-hint").textContent = mode.hint;
   $("#prompt").placeholder = mode.placeholder;
   $("#strength-field").hidden = settings.mode !== "refine";
   $("#margin-field").hidden = settings.mode !== "fill";
   $("#extend-field").hidden = settings.mode !== "extend";
+  // Restaurieren hat eigene Schritte; Negativprompt, Schritte, CFG, Hires und native Auflösung gelten dort nicht.
+  const restoring = settings.mode === "restore";
+  $("#restore-field").hidden = !restoring;
+  for (const id of ["#negative-field", "#steps-field", "#cfg-field", "#native-field", "#hires-field"]) $(id).hidden = restoring;
+  $(".expand-row").hidden = restoring;
   renderModels();
+  renderRestore();
   renderGo();
+}
+
+const restoreSteps = (r) => [r.repair && t("Schäden", "damage"), r.colorize && t("Farbe", "color"),
+  r.sharpen && t("Schärfe", "sharpness")].filter(Boolean);
+
+/** Restaurier-Art, die der Server kann: NVAI-open für Windows alle drei, NVAI-open für Mac nur „gründlich“
+ *  (Brücke: restore_modes). Fehlt die gewählte, gilt die erste angebotene. */
+function restoreMode() {
+  const modes = state?.nvai?.restore_modes?.length ? state.nvai.restore_modes : ["auto", "thorough", "gentle"];
+  return modes.includes(settings.restore.repairMode) ? settings.restore.repairMode : modes[0];
+}
+
+/** Schritte beim Restaurieren: Häkchen, Unteroptionen und die gemessene Dauer (RTX 5060 Ti). */
+function renderRestore() {
+  const r = { ...settings.restore, repairMode: restoreMode() };
+  const nv = state?.nvai;
+  const modes = nv?.restore_modes?.length ? nv.restore_modes : ["auto", "thorough", "gentle"];
+  for (const b of $$("#restore-mode button")) b.hidden = !modes.includes(b.dataset.mode);
+  $("#restore-repair").checked = r.repair;
+  $("#restore-colorize").checked = r.colorize;
+  const canSharpen = Boolean(nv?.sharpen);
+  const sharpen = $("#restore-sharpen");
+  sharpen.checked = r.sharpen && canSharpen;
+  sharpen.disabled = !canSharpen;
+  $("#restore-sharpen-row").classList.toggle("off", !canSharpen);
+  $("#restore-sharpen-row").title = canSharpen ? ""
+    : t("Braucht SeedVR2: in NVAI-open unter „Modelle“ → „Hochskalieren“ laden (5,3 GB).",
+      "Needs SeedVR2: download it in NVAI-open under “Models” → “Upscale” (5.3 GB).");
+  for (const b of $$("#restore-mode button")) b.setAttribute("aria-checked", String(b.dataset.mode === r.repairMode));
+  for (const b of $$("#restore-scale button")) b.setAttribute("aria-checked", String(Number(b.dataset.scale) === r.scale));
+  $("#restore-mode-row").hidden = !r.repair;
+  $("#restore-scale-row").hidden = !(r.sharpen && canSharpen);
+  $("#restore-mode-note").textContent = r.repairMode === "auto"
+    ? t("das Bildmodell sieht sich das Foto an: Wasserflecken oder Rissnetze → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl)",
+      "the image model looks at the photo: water stains or crack networks → thorough, otherwise gentle (the better choice on 20 of 21 test photos)")
+    : r.repairMode === "thorough"
+    ? t("für flächige Alterung (Wasserflecken, Craquelé, Korn, Ausbleichen): rechnet das ganze Bild neu; Gesichter können sich je Variante leicht ändern",
+      "for overall aging (water stains, crack networks, grain, fading): redraws the whole picture; faces may change slightly from variant to variant")
+    : t("für einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Streifen, Risse, Lichteinfall): ersetzt nur diese Stellen, Schärfe und Gesichter bleiben original",
+      "for separate damage on an otherwise good photo (dust, scratches, stripes, tears, light leaks): replaces only those spots, sharpness and faces stay original");
+  const doc = state?.photocraft?.document;
+  const selection = Boolean(doc?.hasSelection);
+  $("#restore-scale-note").textContent = selection ? t("mit Auswahl nur schärfen", "with a selection: sharpen only")
+    : doc && r.scale > 1 ? `${doc.width} × ${doc.height} → ${Math.round(doc.width * r.scale)} × ${Math.round(doc.height * r.scale)}`
+    : t("gleiche Größe, nur schärfen", "same size, sharpen only");
+  // Gemessen mit FLUX 3 Klein NVFP4 und SeedVR2 7B NVFP4: Restaurieren 1 MP ~35 s, 2 MP ~75 s je Variante,
+  // Einfärben ~40 s je Variante, Schärfen 6–20 s je Variante.
+  const n = settings.variants;
+  const low = (r.repair ? 35 : 0) * n + (r.colorize ? 40 : 0) * n + (r.sharpen && canSharpen ? 6 : 0) * n;
+  const high = (r.repair ? 75 : 0) * n + (r.colorize ? 45 : 0) * n + (r.sharpen && canSharpen ? 20 : 0) * n;
+  $("#restore-time").textContent = low ? t(`Dauer etwa ${Math.max(1, Math.round(low / 60))}–${Math.max(1, Math.round(high / 60))} min für ${n} Variante${n === 1 ? "" : "n"}`,
+    `About ${Math.max(1, Math.round(low / 60))}–${Math.max(1, Math.round(high / 60))} min for ${n} variant${n === 1 ? "" : "s"}`) : "";
 }
 
 // Erweitern kennt NVAI-open ab 0.5.4 (m.outpaint); dann gehen auch Bearbeitungsmodelle wie FLUX 3.
@@ -339,8 +421,10 @@ function renderModels() {
   const active = list.find((m) => m.active);
   // Ohne Wahl nimmt die Brücke das aktive Modell – oder, wenn es nicht passt, das beste passende.
   // Beim Erweitern und Füllen wählt die Brücke ohne eigene Wahl ein Bearbeitungsmodell (FLUX 3).
+  // Restaurieren: Ohne eigene Wahl nimmt NVAI-open FLUX 3 (destilliert).
   const seamless = settings.mode === "extend" ? list.filter((m) => m.outpaint === "reference")
-    : settings.mode === "fill" ? list.filter((m) => m.fill === "reference") : [];
+    : settings.mode === "fill" ? list.filter((m) => m.fill === "reference")
+    : settings.mode === "restore" ? list.filter((m) => m.workflow === "flux3_klein") : [];
   const fallback = seamless.length ? seamless.find((m) => m.active) || seamless[0]
     : active || [...list].sort((a, b) => a.weak_prompt - b.weak_prompt)[0];
   const waitingForMasks = MODE_NEEDS[settings.mode] === "mask" && state?.nvai?.connected && !state.nvai.masks;
@@ -371,8 +455,12 @@ function renderModelHints() {
   $("#mode-hint").textContent = edit ? mode.editHint : mode.hint;
   $("#prompt").placeholder = edit ? mode.editPlaceholder
     : settings.mode === "generate" && m?.placeholder ? m.placeholder : mode.placeholder;
-  $("#prompt-tip").textContent = m?.prompt_hint || defaultTip();
-  $("#prompt-tip").title = m?.prompt_hint || "";
+  const tip = settings.mode === "restore"
+    ? t("Bekannte Farben im Hinweis treffen genauer (gemessen: 40 % weniger Farbabweichung).",
+      "Known colors in the hint come out more accurately (measured: 40% less color error).")
+    : m?.prompt_hint || defaultTip();
+  $("#prompt-tip").textContent = tip;
+  $("#prompt-tip").title = tip;
   // Die Stärke gilt nur für Bild-zu-Bild; FLUX 3 bearbeitet per Referenz.
   $("#strength-field").hidden = settings.mode !== "refine" || edit;
 
@@ -414,7 +502,7 @@ function renderSliders() {
 }
 
 function renderCount() {
-  const words = settings.prompt.trim() ? settings.prompt.trim().split(/\s+/).length : 0;
+  const words = promptText().trim() ? promptText().trim().split(/\s+/).length : 0;
   $("#prompt-count").textContent = !words ? "" : words === 1 ? t("1 Wort", "1 word") : t(`${words} Wörter`, `${words} words`);
 }
 
@@ -439,6 +527,12 @@ function blocker() {
   }
   if (extending() && state?.photocraft?.document?.hasSelection) {
     return t("Zum Erweitern bitte erst die Auswahl aufheben", "To extend, please deselect first");
+  }
+  if (settings.mode === "restore") {
+    const r = settings.restore;
+    if (!nv.restore) return t("Diese NVAI-open-Version kann noch keine Fotos restaurieren (ab 0.5.11)", "This NVAI-open version cannot restore photos yet (0.5.11 or newer)");
+    if (!restoreSteps({ ...r, sharpen: r.sharpen && nv.sharpen }).length) return t("Bitte mindestens einen Schritt wählen", "Please choose at least one step");
+    if ((r.repair || r.colorize) && !currentModel) return t("Restaurieren braucht FLUX 3 in NVAI-open", "Restoring needs FLUX 3 in NVAI-open");
   }
   if (settings.mode === "generate" && !settings.prompt.trim()) return t("Bitte beschreiben, was entstehen soll", "Please describe what should be created");
   if (settings.mode === "refine" && currentModel?.reference_edit && !settings.prompt.trim()) {
@@ -496,7 +590,7 @@ function renderExpand() {
 
 function setPrompt(text) {
   $("#prompt").value = text;
-  settings.prompt = text;
+  storePrompt(text);
   saveSettings();
   renderCount();
   renderGo();
@@ -633,7 +727,8 @@ function renderHistory() {
   list.dataset.key = key;
   list.replaceChildren(
     ...items.map((task) => {
-      const title = task.prompt || (task.mode === "fill" ? t("Umgebung fortgesetzt", "Surroundings continued") : t("ohne Prompt", "no prompt"));
+      const title = task.prompt || (task.mode === "fill" ? t("Umgebung fortgesetzt", "Surroundings continued")
+        : task.mode === "restore" ? restoreSteps(task.params || {}).join(", ") : t("ohne Prompt", "no prompt"));
       const failed = task.status === "error" || task.status === "cancelled";
       const meta = task.status === "error" ? t(`Fehler: ${task.error}`, `Error: ${task.error}`) : task.status === "cancelled"
         ? t("abgebrochen", "cancelled") : `${task.mode_label} · ${clock(task.created)} · ${task.doc_name}`;
@@ -694,6 +789,7 @@ function renderAll() {
   renderDownloads();
   renderNotice();
   renderDoc();
+  if (settings.mode === "restore") renderRestore();
   renderGo();
   renderTask();
   renderHistory();
@@ -706,7 +802,7 @@ async function generate() {
   errorText = "";
   const body = {
     mode: settings.mode,
-    prompt: settings.prompt,
+    prompt: promptText(),
     negative_prompt: settings.negative,
     model_id: settings.models[settings.mode] || null,
     variants: settings.variants,
@@ -719,6 +815,12 @@ async function generate() {
     hires: settings.hires,
     native: settings.native,
     auto_place: settings.autoPlace,
+    // Restaurieren (die anderen Modi ignorieren die Felder)
+    repair: settings.restore.repair,
+    repair_mode: restoreMode(),
+    colorize: settings.restore.colorize,
+    sharpen: settings.restore.sharpen && Boolean(state?.nvai?.sharpen),
+    scale: settings.restore.scale,
   };
   try {
     const task = await api("/api/generate", { method: "POST", body: JSON.stringify(body) });
@@ -925,9 +1027,9 @@ function bind() {
   }
 
   const prompt = $("#prompt");
-  prompt.value = settings.prompt;
+  prompt.value = promptText();
   prompt.addEventListener("input", () => {
-    settings.prompt = prompt.value;
+    storePrompt(prompt.value);
     saveSettings();
     renderGo();
     renderCount();
@@ -949,6 +1051,31 @@ function bind() {
       settings.variants = Number(b.dataset.n);
       saveSettings();
       renderVariants();
+      renderRestore();
+    });
+  }
+
+  // Restaurieren: Schritte und Unteroptionen
+  for (const [id, key] of [["#restore-repair", "repair"], ["#restore-colorize", "colorize"], ["#restore-sharpen", "sharpen"]]) {
+    $(id).addEventListener("change", (e) => {
+      settings.restore[key] = e.target.checked;
+      saveSettings();
+      renderRestore();
+      renderGo();
+    });
+  }
+  for (const b of $$("#restore-mode button")) {
+    b.addEventListener("click", () => {
+      settings.restore.repairMode = b.dataset.mode;
+      saveSettings();
+      renderRestore();
+    });
+  }
+  for (const b of $$("#restore-scale button")) {
+    b.addEventListener("click", () => {
+      settings.restore.scale = Number(b.dataset.scale);
+      saveSettings();
+      renderRestore();
     });
   }
 

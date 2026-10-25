@@ -6,8 +6,10 @@ enum APIRouter {
     static let apiVersion = 1
     /// Was dieser Server von GenerateImageRequest versteht – kein „upsampler“: FLUX 3 gibt es hier nicht.
     /// „expand_prompt“: POST /api/prompt/expand wie unter Windows, hier mit dem Qwen3 von FLUX.2 Klein.
+    /// „restore“ (seit 0.4.6): POST /api/image/restore, hier gründlich und Einfärben. „restore_gentle“ und
+    /// „restore_auto“ meldet nur Windows (schonend, Wahl per Bild-Sprachmodell).
     static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
-                           "cancel_job", "outpaint"]
+                           "cancel_job", "outpaint", "restore"]
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
         // Texte (Beschreibungen, Hinweise, Fehler) in der Sprache des Clients: de → Deutsch, sonst Englisch.
@@ -42,6 +44,13 @@ enum APIRouter {
             if route("POST", "/api/generate/image") != nil {
                 let request = try ImageJobRequest.parse(req.json)
                 return .json(await JobQueue.shared.submit(request).json)
+            }
+            if route("POST", "/api/image/restore") != nil {
+                let request = try RestoreJobRequest.parse(req.json)
+                guard await AssetStore.shared.get(request.imageAssetID) != nil else {
+                    throw APIError(404, t("Unbekanntes Asset: \(request.imageAssetID)", "Unknown asset: \(request.imageAssetID)"))
+                }
+                return .json(await JobQueue.shared.submitRestore(request).json)
             }
             if route("POST", "/api/prompt/expand") != nil {
                 let prompt = (req.json?["prompt"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
