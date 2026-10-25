@@ -2,8 +2,8 @@
 
 Images, videos with sound, music and 3D models, made on your own computer. Free, private, no account, no subscription, no cloud.
 
-<p align="center"><img src="docs/images/photo-video-king.gif" width="420" alt="A generated portrait becomes a king who says his line, then the camera zooms out to the film set"></p>
-<p align="center"><sub>Made with NVAI-open: a generated portrait becomes a king who speaks, then the camera zooms out to the film set. <a href="docs/videos/photo-video-king.mp4">With sound</a></sub></p>
+<p align="center"><img src="docs/images/photo-to-video-captain.gif" width="420" alt="A generated photo becomes a ship captain in a storm who says his line"></p>
+<p align="center"><sub>Made with NVAI-open: a generated photo becomes a ship captain who speaks in a storm. <a href="docs/videos/photo-to-video-captain.mp4">With sound</a></sub></p>
 
 ## Download
 
@@ -52,7 +52,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 
 ### From a portrait to a video
 
-![A portrait, the start image from FLUX 3 and three frames of the video from LTX-2.5](docs/images/photo-video-chain.jpg)
+![A photo, the start image from FLUX 3 and two frames of the video from LTX-2.5](docs/images/photo-to-video-captain.jpg)
 
 1. **Generate → Image:** create a portrait, or use a photo of someone who agreed to it.
 2. **Generate → Video:** pick the portrait as the start image.
@@ -124,7 +124,7 @@ Make a picture wider or taller, and NVAI-open paints the new border to match. Or
 
 Scratches, dust, tears, stains and fading go, the photo gets color if you like, and SeedVR2 sharpens and enlarges it. "Thorough" redraws the whole photo, which suits overall aging such as water stains and fading; "Gentle" only replaces the damaged spots and keeps sharpness and faces exactly as they are, which suits dust, scratches and tears on an otherwise good photo. "Automatic" (the default) lets the image model look at the photo and choose; it picked the better one on 20 of 21 test photos. Colorizing takes only the color from FLUX 3, brightness and detail stay the photo's. Known colors in the hints make it more accurate. NVAI-open for Mac (0.4.6) restores and colorizes too, always thoroughly and without sharpening. Details: [docs/MODELS.md](docs/MODELS.md#new-in-0511).
 
-![Iwo Jima 1945: original and restored and colorized](docs/images/restore-colorize.jpg)
+![An aged test photo, restored and colorized by NVAI-open, next to the color original it was aged from](docs/images/restore-car.jpg)
 
 ### Expand prompt
 
@@ -226,7 +226,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Vom Porträt zum Video
 
-![Ein Porträt, das Startbild von FLUX 3 und drei Frames aus dem Video von LTX-2.5](docs/images/photo-video-chain-de.jpg)
+![Ein Foto, das Startbild von FLUX 3 und zwei Bilder aus dem Video von LTX-2.5](docs/images/photo-to-video-captain-de.jpg)
 
 1. **Generieren → Bild:** ein Porträt erzeugen oder das Foto eines Menschen nehmen, der damit einverstanden ist.
 2. **Generieren → Video:** das Porträt als Startbild wählen.
@@ -298,7 +298,7 @@ Ein Bild breiter oder höher machen, und NVAI-open malt den neuen Rand passend d
 
 Kratzer, Staub, Risse, Flecken und Ausbleichen verschwinden, auf Wunsch bekommt das Foto Farbe, und SeedVR2 schärft und vergrößert es. „Gründlich“ rechnet das ganze Foto neu, das passt zu flächiger Alterung wie Wasserflecken und Ausbleichen; „Schonend“ ersetzt nur die beschädigten Stellen und lässt Schärfe und Gesichter genau, wie sie waren, das passt zu Staub, Kratzern und Rissen auf einem sonst guten Foto. „Automatisch“ (Vorgabe) lässt das Bildmodell das Foto ansehen und wählen; bei 20 von 21 Testfotos traf es die bessere Art. Beim Einfärben kommt nur die Farbe von FLUX 3, Helligkeit und Detail bleiben die des Fotos. Bekannte Farben in den Hinweisen machen es genauer. NVAI-open für Mac (0.4.6) restauriert und färbt ebenfalls ein, immer gründlich und ohne Schärfen. Mehr dazu: [docs/de/MODELLE.md](docs/de/MODELLE.md#neu-in-0511).
 
-![Iwo Jima 1945: Original sowie restauriert und eingefärbt](docs/images/restore-colorize-de.jpg)
+![Ein gealtertes Testfoto, von NVAI-open restauriert und eingefärbt, neben der Farbvorlage, aus der es gealtert wurde](docs/images/restore-car-de.jpg)
 
 ### Prompt ausbauen
 
