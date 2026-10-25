@@ -5,7 +5,8 @@
 Referenz für Projekte, die Bilder über NVAI-open erzeugen lassen. Sie gilt für Claude Code
 mit dem MCP-Server `nvai` ebenso wie für eigene Programme über die REST-API. Beschrieben sind
 die vier Bildmodelle, die NVAI-open bevorzugt: was sie können, wie man sie anspricht, wie lange
-sie brauchen und wo sie scheitern.
+sie brauchen und wo sie scheitern. Alle vier nebeneinander, mit gleichen Prompts und Seeds (englisch):
+[../MODEL_COMPARISON.md](../MODEL_COMPARISON.md).
 
 Stand: 18. Oktober 2026 (Krea 2: 24. Oktober, MOSS-Image: 25. Oktober). Gemessen auf einer RTX 5060 Ti mit 16 GB (ComfyUI 0.41.3, PyTorch 2.11
 cu130). Alle Zeiten und Befunde sind dort gemessen. Was vom Hersteller stammt, ist als

@@ -110,7 +110,7 @@ LoRAs teach a model a style, for example a more photographic look:
 
 ![Portrait without LoRA, with Boreal and with Lenovo UltraReal](docs/images/lora-realism.jpg)
 
-More comparisons, prompt tips and test results: [docs/MODELS.md](docs/MODELS.md). All images in this README were generated with NVAI-open.
+The four recommended models side by side, with prompts and times: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md). More comparisons, prompt tips and test results: [docs/MODELS.md](docs/MODELS.md). All images in this README were generated with NVAI-open.
 
 ### Edit pictures: extend and fill
 
@@ -284,7 +284,7 @@ LoRAs bringen einem Modell einen Stil bei, zum Beispiel einen fotografischeren L
 
 ![Porträt ohne LoRA, mit Boreal und mit Lenovo UltraReal](docs/images/lora-realism.jpg)
 
-Weitere Vergleiche, Prompt-Tipps und Testergebnisse: [docs/de/MODELLE.md](docs/de/MODELLE.md). Alle Bilder in diesem README hat NVAI-open erzeugt.
+Die vier empfohlenen Modelle nebeneinander, mit Prompts und Zeiten (englisch): [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md). Weitere Vergleiche, Prompt-Tipps und Testergebnisse: [docs/de/MODELLE.md](docs/de/MODELLE.md). Alle Bilder in diesem README hat NVAI-open erzeugt.
 
 ### Bilder bearbeiten: erweitern und füllen
 

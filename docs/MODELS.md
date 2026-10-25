@@ -5,7 +5,7 @@
 A reference for projects that generate images through NVAI-open. It applies to Claude Code with
 the `nvai` MCP server as well as to your own programs using the REST API. It describes the four
 image models NVAI-open recommends: what they can do, how to address them, how long they take and
-where they fail.
+where they fail. All four side by side, with the same prompts and seeds: [MODEL_COMPARISON.md](MODEL_COMPARISON.md).
 
 As of October 18, 2026 (Krea 2: October 24, MOSS-Image: October 25). Measured on an RTX 5060 Ti 16 GB (ComfyUI 0.41.3, PyTorch 2.11 cu130).
 All times and findings were measured there. Statements that come from the vendor are marked as
