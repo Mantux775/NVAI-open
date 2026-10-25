@@ -54,6 +54,8 @@ class GenerateRequest(BaseModel):
     faces: int = Field(100_000, description="Zielanzahl Dreiecke nach Dezimierung")
     seed: int | None = None
     remove_background: bool = True
+    project_front: bool = Field(False, description="Vorderseite aus dem Bild aufs Mesh projizieren "
+                                                    "(front_projection.py), damit Schrift lesbar bleibt")
     background_mode: str = Field(
         "birefnet",
         description="birefnet (Segmentierungsmodell, sauberste Kanten) | "
@@ -440,6 +442,18 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
             print(f"[TRELLIS.2] {specks} lose Fragmente entfernt "
                   f"(Normalen neu berechnet)", flush=True)
 
+    # Vorderseite aus dem Bild (seit 0.5.10): TRELLIS.2 malt Schrift als Fantasiezeichen; die
+    # Freistellung kommt auf die sichtbaren Frontflaechen, der Rest behaelt seine Textur.
+    projection = None
+    if req.project_front and cutout_path:
+        import trimesh
+        from front_projection import project_front
+
+        loaded = trimesh.load(str(out))
+        tri = loaded.to_geometry() if isinstance(loaded, trimesh.Scene) else loaded
+        scene, projection = project_front(tri, Image.open(cutout_path))
+        scene.export(str(out), include_normals=True)
+
     return {
         "ok": True,
         "path": str(out),
@@ -454,6 +468,7 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
         "resolution": req.resolution,
         "background_mode": req.background_mode,
         "cutout_path": str(cutout_path) if cutout_path else None,
+        "front_projection": projection,
     }
 
 

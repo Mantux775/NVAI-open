@@ -114,11 +114,13 @@ in the web UI under **Models**, where each model is described with its size, VRA
 and license.
 
 - NVAI-open detects the graphics card and marks suitable models as *recommended*: on RTX 50 cards
-  Qwen-Image-2512 and FLUX 3 Image Klein in NVFP4, on RTX 20/30/40 cards FLUX 3 Image Klein
-  INT8 and Z-Image INT8.
-- Models that don't fit into the card's video memory are marked explicitly (*tight for this
-  GPU* or *too large for this GPU*). A model that doesn't fit still runs, but has to be
-  reloaded at every step and is therefore many times slower.
+  Qwen-Image-2512, FLUX 3 Image Klein, Krea 2 and LTX-2.5 in NVFP4, on RTX 20/30/40 cards their
+  INT8 versions and Z-Image INT8. On a slow connection (up to 4 GB/s, such as PCIe 3.0 x4 on a
+  riser) it recommends the NVFP4 version where only that one fits into the graphics memory.
+- Models that need more than the card's graphics memory are marked (*tight for this GPU* or
+  *streams (larger than graphics memory)*). They run anyway: ComfyUI streams parts from system
+  memory at every step. Measured on a normal connection (PCIe 4.0 x8) this cost little (Krea 2
+  INT8 with 8 GB: 13.0 instead of 12.2 s with 16 GB), on a slow one (PCIe 3.0 x4 on a riser) a lot.
 - **Search Hugging Face** on the same page finds further models. NVAI-open checks each file before
   downloading it; SDXL and SD 1.5 checkpoints can be downloaded.
 - Each image and video model is labelled *uncensored*, *partly censored*, *censored* or

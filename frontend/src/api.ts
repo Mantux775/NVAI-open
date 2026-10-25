@@ -187,6 +187,8 @@ export interface ModelFeatures {
   img2img: boolean
   /** Maske (Inpainting) und damit auch Outpainting. */
   mask: boolean
+  /** Erweitern: über ein Referenzbild (FLUX 3 u. a.), über eine Maske (Qwen) oder gar nicht. */
+  outpaint: 'reference' | 'mask' | null
   hires: boolean
   text_rendering: boolean
   /** Zusätzliche, für dieses Modell empfohlene Formate. */
@@ -207,6 +209,10 @@ export interface ModelFeatures {
   fps: number
   max_seconds: number
   missing: Record<string, string>
+  // Krea 2 (seit 0.5.10): Referenzbilder geben nur den Stil vor, freigeschaltet durch die optionale
+  // Stil-LoRA (style_reference); ohne sie steht die Quelle unter missing.style_reference.
+  reference_kind: 'style'
+  style_reference: boolean
   // LoRAs: empfohlene Stärke, wozu sie gehört, für welche Modellfamilien empfohlen, Testergebnis
   strength: number
   use: 'start_image' | 'end_image' | 'audio_input' | 'motion_speed' | 'loop'
@@ -266,6 +272,10 @@ export interface GpuInfo {
   roles: GpuRole[]
   /** Die Karte mit dem meisten Grafikspeicher (bei Gleichstand der neueren Architektur). */
   strongest?: boolean
+  /** Anschluss (seit 0.5.10): höchste Generation, ausgehandelte Breite, nutzbare GB/s */
+  pcie_gen?: number | null
+  pcie_width?: number | null
+  pcie_gbps?: number | null
 }
 
 export interface DeleteResult {
@@ -356,6 +366,8 @@ export interface Mesh3DParams {
   seed?: number | null
   faces?: number
   remove_background?: boolean
+  /** Vorderseite aus dem Bild (seit 0.5.10): Quellbild auf die sichtbare Vorderseite projizieren */
+  project_front?: boolean
   /** Nur TRELLIS.2 */
   resolution?: number
   texture_size?: number

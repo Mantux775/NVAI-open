@@ -138,6 +138,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [temporal, setTemporal] = useState(false)
   const [audioId, setAudioId] = useState('')
   const [audioAssets, setAudioAssets] = useState<Asset[]>([])
+  // Video verlängern (seit 0.5.10): ein vorhandenes Video fortsetzen, sein letzter Frame wird Startbild
+  const [extendId, setExtendId] = useState('')
+  const [videoAssets, setVideoAssets] = useState<Asset[]>([])
   const [motionSpeed, setMotionSpeed] = useState(1)
   const [multishot, setMultishot] = useState(false)
   // Person aus einem Foto (seit 0.5.8): Rolle, in der FLUX 3 die Person aus dem Startbild zeigen soll
@@ -182,6 +185,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [textureSize, setTextureSize] = useState(2048)
   const [bgMode, setBgMode] = useState<'birefnet' | 'flood' | 'alpha'>('birefnet')
   const [cleanSpecks, setCleanSpecks] = useState(true)
+  const [projectFront, setProjectFront] = useState(false)
   const [confirmClearSources, setConfirmClearSources] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -344,6 +348,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   }, [videoSizes, vidSize.label])
   useEffect(() => {
     if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
+    if (isLtx25) api.assets('video', 30).then(setVideoAssets).catch(() => setVideoAssets([]))
   }, [isLtx25, results])
   // Fehlt eine optionale Datei (eigene Freigabe auf Hugging Face), steht der Weg dorthin daneben.
   const missingNote = (name: string) => {
@@ -353,7 +358,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       <>
         {' '}{t('Fehlt noch: ', 'Not available yet: ')}
         <a href={url} target="_blank" rel="noreferrer">{t('Freigabe auf Hugging Face', 'access on Hugging Face')}</a>
-        {t(', dann LTX-2.5 unter „Modelle“ erneut laden.', ', then download LTX-2.5 again under “Models”.')}
+        {t(', dann unter „Modelle“ bei LTX-2.5 „Zusätze laden“.', ', then “Download extras” for LTX-2.5 under “Models”.')}
       </>
     )
   }
@@ -367,8 +372,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const canImg2img = feat?.img2img !== false
   const canHires = feat?.hires !== false
   // Erweitern geht über Masken (Qwen) oder über ein Referenzbild (FLUX 3 und andere
-  // Bearbeitungsmodelle; dort deutlich nahtloser).
-  const outpaintByRef = (feat?.references ?? 0) > 0
+  // Bearbeitungsmodelle; dort deutlich nahtloser). Stil-Referenzen (Krea 2) bearbeiten nichts.
+  const styleRefs = feat?.reference_kind === 'style'
+  const outpaintByRef = (feat?.references ?? 0) > 0 && feat?.outpaint === 'reference'
   const canOutpaint = (canImg2img && feat?.mask !== false) || outpaintByRef
   const outpainting = mode === 'image' && useSource && canOutpaint && outpaintOn
     && pad.left + pad.top + pad.right + pad.bottom > 0
@@ -388,7 +394,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     if (feat.upsampler) out.push({ text: t('Prompt-Upsampler', 'Prompt upsampler'), ok: true })
     if (feat.references) {
       out.push({
-        text: t(`bis ${feat.references} Referenzbilder`, `up to ${feat.references} reference images`),
+        text: feat.reference_kind === 'style'
+          ? t(`bis ${feat.references} Stil-Referenzen`, `up to ${feat.references} style references`)
+          : t(`bis ${feat.references} Referenzbilder`, `up to ${feat.references} reference images`),
         ok: true,
       })
     }
@@ -553,7 +561,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // 242–247 s bei 1920 × 1088 (mit zwei Referenzen);
   // das Gesicht trifft FLUX besser, wenn das Foto nur Kopf und Schultern zeigt.
   const refModel = models
-    .filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0)
+    .filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0
+      && m.features?.reference_kind !== 'style')
     .sort((a, b) => Number(b.recommended) - Number(a.recommended) || Number(b.family === 'flux3') - Number(a.family === 'flux3'))[0]
   const personImages = async () => {
     if (busy || !roleText.trim() || !sourceId || !refModel) return
@@ -726,16 +735,17 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         job = await api.generateVideo({
           ...common, width: vidSize.w, height: vidSize.h,
           frames: isLtx25 ? ltxFrames : frames, fps: isLtx25 ? ltxFps : fps,
-          image_asset_id: usesStart ? sourceId || null : null,
+          image_asset_id: usesStart && !(isLtx25 && extendId) ? sourceId || null : null,
           loras: activeLoras,
           ...(isLtx25 ? {
-            loop: loop && !!sourceId && quality !== 'dfr',
+            loop: loop && !!sourceId && quality !== 'dfr' && !extendId,
             end_image_asset_id: !loop && quality !== 'dfr' && endId ? endId : null,
             quality,
             temporal_upscale: quality === 'dfr' && temporal,
             auto_duration: autoDuration && !audioId,
-            audio_asset_id: audioId || null,
+            audio_asset_id: extendId ? null : audioId || null,
             motion_speed: motionSpeed,
+            extend_asset_id: extendId || null,
           } : {}),
         })
       } else {
@@ -747,6 +757,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           faces: faces ? Number(faces) : isTextured ? 100000 : -1,
           remove_background: bgMode !== 'alpha',
           background_mode: bgMode,
+          project_front: projectFront,
           ...(isTextured
             ? { resolution: 512, texture_size: textureSize, clean_specks: cleanSpecks }
             : {}),
@@ -1083,6 +1094,16 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         {mode === 'image' && selected?.warning && (
           <p className="hint small warn">{selected.warning}</p>
         )}
+        {mode === 'image' && feat?.missing?.style_reference && (
+          <p className="hint small">
+            {t('Stil-Referenz (Bilder als Stilvorlage): ', 'Style reference (images as a style template): ')}
+            <a href={feat.missing.style_reference} target="_blank" rel="noreferrer">
+              {t('Stil-LoRA von ostris', 'style LoRA by ostris')}
+            </a>
+            {t(', 0,46 GB. Laden: unter „Modelle“ bei Krea 2 „Zusätze laden“.',
+              ', 0.46 GB. To get it: “Download extras” for Krea 2 under “Models”.')}
+          </p>
+        )}
         {(mode === 'image' || mode === 'video') && (selected?.lora_bases?.length ?? 0) > 0 && (
           <details className="lora-picker">
             <summary>
@@ -1250,7 +1271,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             {maxRefs > 0 && (
               <>
                 <h3>
-                  {t('Referenzbilder', 'Reference images')}{' '}
+                  {styleRefs ? t('Stil-Referenz', 'Style reference') : t('Referenzbilder', 'Reference images')}{' '}
                   <span className="muted small">
                     {t(`— ${refIds.length} von ${maxRefs}`, `— ${refIds.length} of ${maxRefs}`)}
                   </span>
@@ -1280,14 +1301,21 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   </div>
                 )}
                 <p className="hint small">
-                  {t(
-                    'Optional. Im Prompt heißen sie „the first image“, „the second image“ … in der '
-                      + 'Reihenfolge der Nummern. Mit einem Bild wird bearbeitet: sagen, was sich ändert '
-                      + 'und was gleich bleibt. Mehrere kombinieren Figuren, Objekte und Stil.',
-                    'Optional. In the prompt they are called “the first image”, “the second image” … '
-                      + 'in the order of their numbers. With one image you edit it: say what changes '
-                      + 'and what stays the same. Several images combine figures, objects and style.',
-                  )}
+                  {styleRefs
+                    ? t(
+                      'Optional, ein oder zwei Bilder: Krea übernimmt ihren Stil (Malweise, Farben, Licht), '
+                        + 'nicht ihren Inhalt. Was zu sehen sein soll, beschreibt der Prompt.',
+                      'Optional, one or two images: Krea takes over their style (technique, colors, light), '
+                        + 'not their content. What should be in the picture is up to the prompt.',
+                    )
+                    : t(
+                      'Optional. Im Prompt heißen sie „the first image“, „the second image“ … in der '
+                        + 'Reihenfolge der Nummern. Mit einem Bild wird bearbeitet: sagen, was sich ändert '
+                        + 'und was gleich bleibt. Mehrere kombinieren Figuren, Objekte und Stil.',
+                      'Optional. In the prompt they are called “the first image”, “the second image” … '
+                        + 'in the order of their numbers. With one image you edit it: say what changes '
+                        + 'and what stays the same. Several images combine figures, objects and style.',
+                    )}
                 </p>
                 <div className="row-between source-actions">
                   <button className="btn small ghost" onClick={() => fileInput.current?.click()}>
@@ -1643,6 +1671,30 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   {!vfeat?.dfr && missingNote('dfr')}
                 </p>
 
+                <h3>
+                  {t('Video verlängern', 'Extend a video')}{' '}
+                  <span className="muted small">{t('optional', 'optional')}</span>
+                </h3>
+                <select value={extendId} onChange={(e) => setExtendId(e.target.value)}>
+                  <option value="">{t('— kein Video, neu beginnen —', '— no video, start fresh —')}</option>
+                  {videoAssets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {(a.prompt || a.filename).slice(0, 60)}
+                      {a.meta?.seconds || a.meta?.duration_s ? ` (${a.meta?.seconds ?? a.meta?.duration_s} s)` : ''}
+                    </option>
+                  ))}
+                </select>
+                {extendId && (
+                  <p className="hint small">
+                    {t('Der letzte Frame des Videos wird Startbild, Format und Bildrate kommen vom Video, das neue '
+                        + 'Stück wird samt Ton angehängt. Der Prompt beschreibt, was als Nächstes passiert; die Länge '
+                        + 'gilt für das neue Stück. Startbild, Schleife und vorgegebener Ton bleiben dabei außen vor.',
+                      'The last frame of the video becomes the start image, size and frame rate come from the video, '
+                        + 'and the new part is appended with its sound. The prompt describes what happens next; the '
+                        + 'length applies to the new part. Start image, loop and given sound are not used.')}
+                  </p>
+                )}
+
                 {vfeat?.audio_input && (
                   <>
                     <h3>
@@ -1676,8 +1728,10 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                     </select>
                     {motionSpeed < 1 && (
                       <p className="hint small">
-                        {t('Wirkt verlässlich mit der LoRA „Slow Motion Control“ (empfohlene LoRAs) und einem Startbild.',
-                          'Reliable with the “Slow Motion Control” LoRA (recommended LoRAs) and a start image.')}
+                        {t('Mit der LoRA „Slow Motion Control“ (empfohlene LoRAs) und einem Startbild. Gemessen bei '
+                            + '1080p und 5×: Gischt sank über 5 s statt in 1,5 s; ohne LoRA stand sie als milchiger Schleier.',
+                          'With the “Slow Motion Control” LoRA (recommended LoRAs) and a start image. Measured at 1080p '
+                            + 'and 5×: spray fell over 5 s instead of 1.5 s; without the LoRA it stood still as a milky veil.')}
                       </p>
                     )}
                   </>
@@ -1792,6 +1846,22 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )}
               </label>
             )}
+            <label className="check">
+              <input type="checkbox" checked={projectFront}
+                onChange={(e) => setProjectFront(e.target.checked)} />
+              {t('Vorderseite aus dem Bild übernehmen', 'Take the front from the image')}{' '}
+              <span className="muted small">
+                {isTextured
+                  ? t('— legt das Quellbild auf die sichtbare Vorderseite, damit Schrift und Aufkleber lesbar '
+                      + 'bleiben; der Rest behält die Textur von TRELLIS.2.',
+                    '— puts the source image onto the visible front so lettering and stickers stay readable; '
+                      + 'the rest keeps the TRELLIS.2 texture.')
+                  : t('— legt das Quellbild auf die sichtbare Vorderseite, damit Schrift und Aufkleber lesbar '
+                      + 'bleiben; der Rest bekommt Farben aus dem Bild.',
+                    '— puts the source image onto the visible front so lettering and stickers stay readable; '
+                      + 'the rest gets colors from the image.')}
+              </span>
+            </label>
           </>
         )}
 

@@ -34,17 +34,11 @@ def options(spec):
     return None
 
 
-problems = 0
-for entry in registry.all_entries():
-    kind = entry.get("kind")
-    if kind not in BUILDERS:
-        continue
-    p = REQUESTS[kind]()
-    try:
-        graph, _ = BUILDERS[kind](entry, p)
-    except Exception as e:  # noqa: BLE001 - z. B. Startbild nötig
-        print(f"{entry['id']}: nicht gebaut ({type(e).__name__}: {str(e)[:90]})")
-        continue
+# Zusatzwege, die ein eigener Graph sind: Krea 2 mit Stilvorlage (seit 0.5.10).
+VARIANTS = {"krea2_turbo": [("Stilvorlage", {"reference_images": ["dummy.png", "dummy2.png"]})]}
+
+
+def check(graph):
     issues = []
     for node_id, node in graph.items():
         cls = node["class_type"]
@@ -65,8 +59,25 @@ for entry in registry.all_entries():
             value = inputs[name]
             if opts and not isinstance(value, list) and value not in opts and not name.endswith(("_name", "_name1", "_name2", "_name3")) and name != "image":
                 issues.append(f"Knoten {node_id} {cls}: '{name}'={value!r} nicht erlaubt")
-    problems += len(issues)
-    print(f"{entry['id']}: {'ok' if not issues else ''}")
-    for i in issues:
-        print("   ", i)
+    return issues
+
+
+problems = 0
+for entry in registry.all_entries():
+    kind = entry.get("kind")
+    if kind not in BUILDERS:
+        continue
+    for label, extra in [("", {})] + VARIANTS.get(entry.get("workflow"), []):
+        p = REQUESTS[kind]() | extra
+        name = f"{entry['id']} ({label})" if label else entry["id"]
+        try:
+            graph, _ = BUILDERS[kind](entry, p)
+        except Exception as e:  # noqa: BLE001 - z. B. Startbild nötig
+            print(f"{name}: nicht gebaut ({type(e).__name__}: {str(e)[:90]})")
+            continue
+        issues = check(graph)
+        problems += len(issues)
+        print(f"{name}: {'ok' if not issues else ''}")
+        for i in issues:
+            print("   ", i)
 print("Probleme gesamt:", problems)

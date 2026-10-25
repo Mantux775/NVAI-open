@@ -134,7 +134,14 @@ KREA2_FILES_SHARED = [
     {"repo": "Comfy-Org/Krea-2", "file": "text_encoders/qwen3vl_4b_int8_convrot.safetensors",
      "target": "text_encoders"},
     {"repo": "Comfy-Org/Krea-2", "file": "vae/qwen_image_vae.safetensors", "target": "vae"},
+    # Stil-Referenz (ostris, Krea 2 Community License, 0,46 GB, nicht gated): optional, schaltet bis
+    # zu zwei Referenzbilder frei, deren Stil Krea übernimmt (workflows.build_krea2).
+    {"repo": "ostris/krea2_turbo_style_reference", "file": "krea2_style_reference.safetensors",
+     "target": "loras", "optional": "style_reference"},
 ]
+# Was die optionale Stil-Referenz freischaltet (registry.features_for, "with_optional"). Laut ostris
+# auf ein bis zwei Referenzbilder trainiert.
+KREA2_WITH_OPTIONAL = {"style_reference": {"references": 2, "reference_kind": "style"}}
 
 QWEN21_LICENSE_WARNING = (
     "Qwen Research License: nur für Forschung und Evaluation, keine kommerzielle Nutzung — "
@@ -457,6 +464,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
              "file": "split_files/vae/qwen_image_vae.safetensors", "target": "vae"},
         ],
         "size_gb": 24.5,
+        "model_gb": 14.9,
         "vram_gb": 14,
         "license": "Apache-2.0",
         "commercial_ok": True,
@@ -514,6 +522,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
              "file": "split_files/vae/qwen_image_vae.safetensors", "target": "vae"},
         ],
         "size_gb": 30.2,
+        "model_gb": 20.56,
         "vram_gb": 16,
         "license": "Apache-2.0",
         "commercial_ok": True,
@@ -625,6 +634,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             *FLUX3_FILES_SHARED,
         ],
         "size_gb": 20.23,
+        "model_gb": 5.28,
         "vram_gb": 12,
         "license": "FLUX Kommunity License v1.0",
         "commercial_ok": True,
@@ -704,6 +714,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             *FLUX3_FILES_SMALL,
         ],
         "size_gb": 17.75,
+        "model_gb": 5.83,
         # BFL: laeuft auf 8-GB-Karten wie der RTX 3070 -- auf 8 GB also "knapp" (gpu.fits)
         "vram_gb": 6.5,
         "license": "FLUX Kommunity License v1.0",
@@ -799,13 +810,15 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             *KREA2_FILES_SHARED,
         ],
         "size_gb": 12.8,
+        "model_gb": 7.67,
         "vram_gb": 10,
         "license": "Krea 2 Community License",
         "commercial_ok": True,
         "warning": KREA2_LICENSE_WARNING,
         "best_for": "Fotografische, ästhetische Bilder mit wenig KI-Look — dritte Wahl nach Qwen und FLUX 3",
         "features": {
-            "hires": False, "mask": False, "sizes": KREA2_SIZES,
+            "hires": False, "mask": False, "outpaint": None, "sizes": KREA2_SIZES,
+            "with_optional": KREA2_WITH_OPTIONAL,
             "prompt_hint": KREA2_PROMPT_HINT, "placeholder": KREA2_PLACEHOLDER,
         },
         "description": (
@@ -820,6 +833,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "einen Deckel nannte der Prompt nicht), die stehende Figur hat beide Stiefel im Bild. Beim alten Fischer, dessen Prompt die Hände betont, lag der Kopf in drei "
             "von drei Bildern oben außerhalb; mit „medium shot from the waist up, his whole head inside the "
             "frame“ in zwei von zwei im Bild.\n\n"
+            "Stil-Referenz (seit 0.5.10): Mit der optionalen LoRA von ostris (0,46 GB, Krea-2-Lizenz; „Zusätze laden“ unter „Modelle“ holt sie) nimmt Krea 2 ein oder zwei Bilder als Stilvorlage. Malweise, Farben und Licht kommen aus dem Bild, der Inhalt aus dem Prompt. Gemessen: ein Leuchtturm mit einer Aquarell- bzw. Holzschnitt-Vorlage deutlich in deren Stil, 41–48 statt 24 s; mit beiden Vorlagen 71 s, dabei setzte sich die erste fast ganz durch.\n\n"
             "Ausgaben von 1 bis 2 MP. Der Negativprompt wirkt nicht (cfg 1). Kreas Vorlage baut kurze "
             "Prompts vorher aus; hier übernimmt das „Prompt ausbauen“.\n\n"
             "Lizenz: Krea 2 Community License — siehe Warnhinweis."
@@ -828,6 +842,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Fotografischer Look, wenig KI-Glätte",
             "Gemessen rund 20 s je Bild (1 MP), 2 MP in 37 s",
             "Schrift im Bild buchstabengenau",
+            "Stil-Referenz mit 1–2 Bildern (optionale LoRA, 0,46 GB)",
             "8 Schritte, NVFP4 nur 7,7 GB",
             "Teilt Text-Encoder und VAE mit FLUX 3 und Qwen-Image",
         ],
@@ -835,7 +850,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar",
             "Bildausschnitt ausdrücklich nennen, sonst schneidet es ab (Fischer: Kopf 3 von 3)",
             "Negativer Prompt wirkungslos (cfg 1)",
-            "Keine Referenzbilder; zum Bearbeiten bleibt FLUX 3",
+            "Referenzbilder nur als Stilvorlage; zum Bearbeiten bleibt FLUX 3",
         ],
     },
     {
@@ -850,13 +865,15 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             *KREA2_FILES_SHARED,
         ],
         "size_gb": 18.6,
+        "model_gb": 13.49,
         "vram_gb": 16,
         "license": "Krea 2 Community License",
         "commercial_ok": True,
         "warning": KREA2_LICENSE_WARNING,
         "best_for": "Krea 2 auf Karten ohne FP4 (RTX 20/30/40)",
         "features": {
-            "hires": False, "mask": False, "sizes": KREA2_SIZES,
+            "hires": False, "mask": False, "outpaint": None, "sizes": KREA2_SIZES,
+            "with_optional": KREA2_WITH_OPTIONAL,
             "prompt_hint": KREA2_PROMPT_HINT, "placeholder": KREA2_PLACEHOLDER,
         },
         "description": (
@@ -865,10 +882,11 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "ComfyUI Teile aus dem Arbeitsspeicher nach. Die Prompt-Hinweise der NVFP4-Fassung gelten "
             "auch hier.\n\n"
             "Gemessen auf einer RTX 4060 mit 8 GB (am Riser, PCIe 3.0 x4), 1024 × 1024: erstes Bild 193 s, "
-            "danach 82 s, Bild wie mit NVFP4 (Schrift genau). Die NVFP4-Fassung brauchte auf derselben "
-            "Karte 46 s samt Laden, obwohl die 4060 FP4 nicht in Hardware rechnet: Mit 7,7 GB passt sie "
-            "in den Grafikspeicher, die INT8-Fassung mit 13,5 GB nicht. Auf Karten mit 8 GB deshalb "
-            "die NVFP4-Fassung nehmen; mit 12 oder 16 GB ungemessen.\n\n"
+            "danach 82 s, Bild wie mit NVFP4 (Schrift genau). Die NVFP4-Fassung brauchte dort 46 s samt "
+            "Laden: Sie passt mit 7,7 GB in den Grafikspeicher, die INT8-Fassung muss über den langsamen "
+            "Anschluss nachgeladen werden. An einem normalen Anschluss (PCIe 4.0 x8, RTX 40 ohne FP4 "
+            "nachgestellt) war INT8 dagegen doppelt so schnell: mit 8 GB 13 statt 25 s, mit 16 GB 12 statt "
+            "25 s. NVAI-open empfiehlt deshalb INT8 und nur am langsamen Anschluss NVFP4.\n\n"
             "Lizenz: Krea 2 Community License — siehe Warnhinweis."
         ),
         "pros": [
@@ -878,7 +896,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         "cons": [
             "Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar",
             "Auf RTX 50 ist die NVFP4-Fassung die schnellere Wahl",
-            "Auf 8 GB langsamer als NVFP4 (RTX 4060: 82 statt 46 s), weil sie nicht in den Speicher passt",
+            "Am langsamen Anschluss (PCIe 3.0 x4) langsamer als NVFP4 (RTX 4060 am Riser: 82 statt 46 s)",
         ],
     },
     {
@@ -1488,6 +1506,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             *LTX25_SHARED_FILES,
         ],
         "size_gb": 37.51,
+        "model_gb": 18.72,
         "vram_gb": 16,
         "license": "LTX-2 Community License",
         "commercial_ok": True,
@@ -1529,6 +1548,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             *LTX25_SHARED_FILES,
         ],
         "size_gb": 40.29,
+        "model_gb": 21.5,
         "vram_gb": 16,
         "license": "LTX-2 Community License",
         "commercial_ok": True,

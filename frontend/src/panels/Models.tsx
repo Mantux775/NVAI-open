@@ -29,6 +29,19 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'lora', label: 'LoRA' },
 ]
 
+// Namen der Zusatzfunktionen hinter optionalen Dateien (catalog: "optional")
+const EXTRAS: Record<string, string> = {
+  dfr: t('Höchste Qualität (DFR)', 'Best quality (DFR)'),
+  auto_duration: t('Länge automatisch', 'Automatic length'),
+  temporal_upscale: t('48 fps', '48 fps'),
+  style_reference: t('Stil-Referenz', 'Style reference'),
+}
+
+function extrasLabel(m: ModelInfo): string {
+  const names = new Set(m.files.filter((f) => f.optional && !f.installed).map((f) => f.optional as string))
+  return [...names].map((n) => EXTRAS[n] ?? n).join(', ')
+}
+
 export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [active, setActive] = useState<Record<string, string | null>>({})
@@ -409,13 +422,17 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                   )}
                   {m.fits_vram === 'nein' && (
                     <span
-                      className="badge error"
+                      className="badge warn"
                       title={t(
-                        'Passt nicht in den Videospeicher. Läuft nur mit ständigem Nachladen und ist dadurch um ein Vielfaches langsamer.',
-                        'Does not fit into video memory. Runs only with constant offloading and is therefore many times slower.',
+                        'Größer als der Grafikspeicher: ComfyUI lädt bei jedem Schritt Teile aus dem Arbeitsspeicher '
+                          + 'nach. Gemessen an einem normalen Anschluss (PCIe 4.0 x8) kostet das wenig (Krea 2 INT8 mit '
+                          + '8 GB: 13,0 statt 12,2 s mit 16 GB), an einem langsamen (PCIe 3.0 x4 am Riser) viel.',
+                        'Larger than the graphics memory: ComfyUI streams parts from system memory at every step. '
+                          + 'Measured on a normal connection (PCIe 4.0 x8) this costs little (Krea 2 INT8 with 8 GB: '
+                          + '13.0 instead of 12.2 s with 16 GB), on a slow one (PCIe 3.0 x4 on a riser) a lot.',
                       )}
                     >
-                      {t('zu groß für diese Karte', 'too large for this GPU')}
+                      {t('lädt nach (größer als der Grafikspeicher)', 'streams (larger than graphics memory)')}
                     </span>
                   )}
                   {!m.workflow && <span className="badge">{t('kein Workflow', 'no workflow')}</span>}
@@ -464,6 +481,21 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                     {!isActive && m.runnable && (
                       <button className="btn small" onClick={() => activate(m)}>
                         {t('Aktivieren', 'Activate')}
+                      </button>
+                    )}
+                    {/* Optionale Dateien (DFR, Stil-Referenz …) fehlen: nur diese nachladen (seit 0.5.10) */}
+                    {m.files.some((f) => f.optional && !f.installed) && (
+                      <button
+                        className="btn small"
+                        title={t(
+                          `Lädt nur die fehlenden Zusatzdateien: ${extrasLabel(m)}. Gesperrte Repos brauchen vorher `
+                            + 'die Freigabe auf Hugging Face.',
+                          `Downloads only the missing extra files: ${extrasLabel(m)}. Gated repos need access on `
+                            + 'Hugging Face first.',
+                        )}
+                        onClick={() => download(m)}
+                      >
+                        {t('Zusätze laden', 'Download extras')}
                       </button>
                     )}
                     {confirmDelete === m.id ? (

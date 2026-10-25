@@ -497,6 +497,7 @@ async def generate_video(
     audio_asset_id: str | None = None,
     motion_speed: float = 1.0,
     crf: float | None = None,
+    extend_asset_id: str | None = None,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
@@ -559,6 +560,11 @@ async def generate_video(
             Control LoRA and a start image.
         crf: LTX-2.5: H.264 quality of the MP4 (CRF, lower = better and larger). Empty =
             12; ComfyUI's own default of 18 gave only 6 to 13 Mbit/s at 1080p.
+        extend_asset_id: LTX-2.5: continue an existing video (asset ID of a video). Its last frame
+            becomes the start image, size and frame rate come from it, and the new part is appended
+            with its sound; the prompt describes what happens next, frames/seconds its length. The
+            result lists the extended video first, then the new part on its own. Not together with
+            image_asset_id, loop or audio_asset_id.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
@@ -567,7 +573,7 @@ async def generate_video(
         "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
-        "motion_speed": motion_speed, "crf": crf,
+        "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id,
     }
     return await _generate("/api/generate/video", payload, ctx)
 
@@ -605,6 +611,7 @@ async def image_to_3d(
     background_mode: str = "birefnet",
     clean_specks: bool = True,
     steps: int = 50,
+    project_front: bool = False,
 ) -> dict[str, Any]:
     """Creates a 3D mesh (GLB) from an existing image asset and returns its path.
 
@@ -626,12 +633,16 @@ async def image_to_3d(
         clean_specks: Remove loose mesh fragments -- the typical floating strands
             and pillars.
         steps: TripoSG only: sampling steps.
+        project_front: Put the source image onto the visible front of the mesh (planar
+            projection) so lettering and stickers stay readable; TRELLIS.2 otherwise paints
+            text as gibberish. The rest keeps its texture (TRELLIS.2) or gets colors from the
+            blurred image (TripoSG). Best for objects with a clear front (signs, crates).
     """
     payload = {
         "image_asset_id": image_asset_id, "steps": steps, "faces": faces,
         "seed": seed, "texture_size": texture_size,
         "background_mode": background_mode, "clean_specks": clean_specks,
-        "remove_background": background_mode != "alpha",
+        "remove_background": background_mode != "alpha", "project_front": project_front,
     }
     return await _generate("/api/generate/3d", payload, ctx)
 
@@ -646,6 +657,7 @@ async def text_to_3d(
     image_model_id: str | None = None,
     negative_prompt: str = "",
     auto_prompt: bool = True,
+    project_front: bool = False,
 ) -> dict[str, Any]:
     """Text to 3D mesh in one pass: first an image, then the mesh from it.
 
@@ -667,6 +679,8 @@ async def text_to_3d(
         negative_prompt: Additional exclusions (no effect with cfg-1 models).
         auto_prompt: Append the 3D-friendly additions. Only turn this off if you
             have already written the prompt fully for this purpose.
+        project_front: Put the generated image onto the visible front of the mesh, so
+            lettering stays readable (see image_to_3d).
     """
     full_prompt = f"{prompt.rstrip(' .,')}. {MESH_PROMPT_SUFFIX}" if auto_prompt else prompt
     full_negative = (
@@ -690,6 +704,7 @@ async def text_to_3d(
         "image_asset_id": assets[0]["id"], "faces": faces, "seed": seed,
         "texture_size": texture_size, "background_mode": "birefnet",
         "clean_specks": True, "remove_background": True, "steps": 50,
+        "project_front": project_front,
     }, ctx)
     if not mesh.get("ok"):
         return {"ok": False, "stage": "mesh", "error": mesh.get("error"),

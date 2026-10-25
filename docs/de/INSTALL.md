@@ -114,12 +114,14 @@ sie in der Weboberfläche unter **Modelle**; dort ist jedes Modell mit Größe, 
 Lizenz beschrieben.
 
 - NVAI-open erkennt die Grafikkarte und markiert passende Modelle als *empfohlen*: auf RTX 50
-  Qwen-Image-2512 und FLUX 3 Image Klein in NVFP4, auf RTX 20/30/40 FLUX 3 Image Klein INT8
-  und Z-Image INT8.
-- Modelle, die nicht in den Videospeicher der erkannten Karte passen, sind ausdrücklich
-  markiert („knapp für diese Karte“ bzw. „zu groß für diese Karte“). Ein Modell, das nicht
-  hineinpasst, läuft zwar, muss aber bei jedem Schritt nachgeladen werden und ist dadurch um
-  ein Vielfaches langsamer.
+  Qwen-Image-2512, FLUX 3 Image Klein, Krea 2 und LTX-2.5 in NVFP4, auf RTX 20/30/40 deren
+  INT8-Fassungen und Z-Image INT8. An einem langsamen Anschluss (bis 4 GB/s, etwa PCIe 3.0 x4 am
+  Riser) empfiehlt es die NVFP4-Fassung, wenn nur sie in den Grafikspeicher passt.
+- Modelle, die mehr als den Grafikspeicher der Karte brauchen, sind markiert („knapp für diese
+  Karte“ bzw. „lädt nach (größer als der Grafikspeicher)“). Sie laufen trotzdem: ComfyUI lädt bei
+  jedem Schritt Teile aus dem Arbeitsspeicher nach. Gemessen an einem normalen Anschluss (PCIe 4.0
+  x8) kostete das wenig (Krea 2 INT8 mit 8 GB: 13,0 statt 12,2 s mit 16 GB), an einem langsamen
+  (PCIe 3.0 x4 am Riser) viel.
 - „Auf Hugging Face suchen“ auf derselben Seite findet weitere Modelle. NVAI-open prüft jede Datei
   vor dem Laden; laden lassen sich SDXL- und SD-1.5-Checkpoints.
 - Jedes Bild- und Videomodell trägt ein Abzeichen *unzensiert*, *teilweise zensiert*,

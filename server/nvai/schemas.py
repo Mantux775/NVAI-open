@@ -192,6 +192,10 @@ class GenerateVideoRequest(BaseModel):
     crf: float | None = Field(
         None, ge=0.0, le=51.0, description="LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und "
                                             "groessere Datei; leer = workflows.VIDEO_CRF")
+    extend_asset_id: str | None = Field(
+        None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird "
+                          "Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton "
+                          "angehaengt. Ergebnis: das verlaengerte Video und das neue Stueck einzeln")
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",
@@ -258,6 +262,12 @@ class Generate3DRequest(BaseModel):
     )
     remove_background: bool = Field(
         True, description="Hintergrund automatisch freistellen, wenn kein Alphakanal da ist"
+    )
+    project_front: bool = Field(
+        False, description="Vorderseite aus dem Bild: das freigestellte Quellbild auf die zur Kamera "
+                           "zeigenden, sichtbaren Flaechen projizieren, damit Schrift lesbar bleibt "
+                           "(seit 0.5.10). Der Rest bekommt Farben aus dem weichgezeichneten Bild "
+                           "(TripoSG) bzw. behaelt seine Textur (TRELLIS.2)"
     )
     # Nur TRELLIS.2
     resolution: int = Field(

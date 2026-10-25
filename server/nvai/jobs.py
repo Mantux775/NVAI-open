@@ -925,22 +925,33 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     # FLUX 3 und Qwen-Image 2.1 bearbeiten ueber Referenzbilder, nicht ueber ein
     # angerauschtes Startbild -- dafuer sind sie trainiert. Ein Startbild wird dort
     # deshalb zur ersten Referenz.
-    by_reference = registry.features_for(entry).get("references", 0) > 0
+    feats = registry.features_for(entry)
+    by_reference = feats.get("references", 0) > 0
+    style_refs = feats.get("reference_kind") == "style"
     ref_ids = [a for a in (p.get("reference_asset_ids") or []) if a]
-    if by_reference and p.get("image_asset_id") and not ref_ids:
+    # Stil-Referenzen (Krea 2) bearbeiten nichts: Ein Startbild bleibt dort Bild-zu-Bild.
+    if by_reference and not style_refs and p.get("image_asset_id") and not ref_ids:
         ref_ids = [p.pop("image_asset_id")]
+    if ref_ids and not by_reference and "style_reference" in (feats.get("missing") or {}):
+        raise RuntimeError(t(
+            f"'{_name(entry)}' nimmt Referenzbilder als Stilvorlage erst mit der Stil-LoRA von ostris "
+            "(0,46 GB): unter „Modelle“ beim Modell „Zusätze laden“.",
+            f"'{_name(entry)}' takes reference images as a style template only with ostris' style LoRA "
+            "(0.46 GB): “Download extras” for the model under “Models”.",
+        ))
     if ref_ids and not by_reference:
         raise RuntimeError(t(
             f"Referenzbilder verarbeiten nur Modelle mit Referenzbild-Unterstuetzung (FLUX 3, "
-            f"Qwen-Image 2.1, Boogu-Image Edit, HiDream-O1), nicht '{_name(entry)}'. "
+            f"Qwen-Image 2.1, Boogu-Image Edit, HiDream-O1; Krea 2 als Stilvorlage), nicht '{_name(entry)}'. "
             "Fuer ein vorhandenes Bild als Ausgangspunkt: image_asset_id mit denoise.",
             f"Only models with reference support (FLUX 3, Qwen-Image 2.1, Boogu-Image Edit, "
-            f"HiDream-O1) process reference images, not '{_name(entry)}'. "
+            f"HiDream-O1; Krea 2 as a style template) process reference images, not '{_name(entry)}'. "
             "To start from an existing image: image_asset_id with denoise.",
         ))
-    if len(ref_ids) > flux3_prompt.MAX_REFERENCES:
-        raise RuntimeError(t(f"Hoechstens {flux3_prompt.MAX_REFERENCES} Referenzbilder.",
-                             f"At most {flux3_prompt.MAX_REFERENCES} reference images."))
+    max_refs = min(flux3_prompt.MAX_REFERENCES, feats.get("references") or flux3_prompt.MAX_REFERENCES)
+    if len(ref_ids) > max_refs:
+        raise RuntimeError(t(f"Hoechstens {max_refs} Referenzbilder.",
+                             f"At most {max_refs} reference images."))
     if ref_ids:
         p["reference_images"] = [
             _stage_image(a, t(f"Referenzbild {i + 1}", f"Reference image {i + 1}"))
@@ -1079,9 +1090,9 @@ def _check_video_options(p: dict[str, Any], entry: dict[str, Any]) -> None:
         if name in texts and not feats.get(name):
             url = missing.get(name, "")
             raise RuntimeError(texts[name] + t(
-                f". Lizenz auf {url} akzeptieren und LTX-2.5 unter „Modelle“ erneut laden "
+                f". Lizenz auf {url} akzeptieren und unter „Modelle“ bei LTX-2.5 „Zusätze laden“ "
                 "(lädt nur, was fehlt).",
-                f". Accept the license on {url} and download LTX-2.5 again under “Models” "
+                f". Accept the license on {url} and use “Download extras” for LTX-2.5 under “Models” "
                 "(only what is missing is downloaded)."))
     if p.get("temporal_upscale") and p.get("quality") != "dfr":
         raise RuntimeError(t("48 fps (zeitlich verdoppelt) gibt es nur mit „Höchste Qualität (DFR)“.",
@@ -1108,12 +1119,68 @@ def _stage_audio(asset_id: str) -> tuple[str, float | None]:
     return comfy.stage_input(src), float(seconds) if seconds else None
 
 
+async def _video_tool(*args: Any) -> dict[str, Any]:
+    """video_tools.py im ComfyUI-venv (PyAV) aufrufen, wie _align_script; liefert dessen JSON-Zeile."""
+    script = Path(__file__).with_name("video_tools.py")
+    proc = await asyncio.create_subprocess_exec(
+        str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(t(f"Videowerkzeug fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
+                             f"Video tool failed: {err.decode(errors='replace')[-300:]}"))
+    return json.loads(out.decode().strip().splitlines()[-1])
+
+
+async def _prepare_extension(job: Job, p: dict[str, Any], entry: dict[str, Any]) -> tuple[Any, Path]:
+    """Video verlaengern (seit 0.5.10): Der letzte Frame des Originals wird Startbild, Format und Bildrate
+    kommen vom Original, damit sich das neue Stueck nahtlos anfuegen laesst (_txt2video haengt es an)."""
+    if entry.get("family") != "ltx25":
+        raise RuntimeError(t("Verlängern geht mit LTX-2.5.", "Extending works with LTX-2.5."))
+    if p.get("image_asset_id") or p.get("loop") or p.get("audio_asset_id"):
+        raise RuntimeError(t(
+            "Beim Verlängern ist der letzte Frame des Videos das Startbild; ein eigenes Startbild, eine "
+            "Schleife oder ein vorgegebener Ton gehen dabei nicht.",
+            "When extending, the last frame of the video is the start image; your own start image, a loop or "
+            "a given sound cannot be used with it."))
+    source = db.get_asset(p["extend_asset_id"])
+    if source is None or source.kind != "video":
+        raise RuntimeError(t(f"Video nicht gefunden: {p['extend_asset_id']}",
+                             f"Video not found: {p['extend_asset_id']}"))
+    path = config.ASSET_DIR / source.filename
+    if not path.exists():
+        raise RuntimeError(t(f"Videodatei fehlt: {path}", f"Video file missing: {path}"))
+    info = await _video_tool("info", path)
+    if info["fps"] > 30:
+        # 48 fps entstehen nur mit DFR und zeitlicher Verdopplung; das neue Stueck muss dieselbe Rate haben.
+        if not (p.get("quality") == "dfr" and p.get("temporal_upscale")):
+            raise RuntimeError(t(
+                f"Das Video hat {info['fps']:g} fps. Mit derselben Rate fortsetzen geht nur mit „Höchste "
+                "Qualität (DFR)“ und 48 fps.",
+                f"The video has {info['fps']:g} fps. Continuing at the same rate needs “Best quality (DFR)” "
+                "with 48 fps."))
+        p["fps"] = info["fps"] / 2
+    else:
+        p["fps"] = info["fps"]
+    p["width"] = max(256, int(info["width"]) // 64 * 64)
+    p["height"] = max(256, int(info["height"]) // 64 * 64)
+    frame = config.DATA_DIR / "tmp" / f"{job.id}_last_frame.png"
+    frame.parent.mkdir(parents=True, exist_ok=True)
+    await _video_tool("last-frame", path, frame)
+    try:
+        p["start_image"] = comfy.stage_input(frame)
+    finally:
+        frame.unlink(missing_ok=True)
+    return source, path
+
+
 @register("txt2video")
 async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     p = job.params
     entry = _resolve_model(p, "video")
     wf = entry["workflow"]
     _check_video_options(p, entry)
+    extension = await _prepare_extension(job, p, entry) if p.get("extend_asset_id") else None
     fps = float(p.get("fps", 16))
     frames = workflows.normalize_frames(int(p.get("frames", 49)), wf)
 
@@ -1145,7 +1212,7 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     temporal = p.get("quality") == "dfr" and bool(p.get("temporal_upscale"))
     fps_out = fps * (2 if temporal else 1)
     frames_out = (frames - 1) * 2 + 1 if temporal else frames
-    return await _run_generation(job, ctx, "video", {
+    ids = await _run_generation(job, ctx, "video", {
         "width": p.get("width"), "height": p.get("height"),
         # Mit "Laenge automatisch" waehlt das Modell die Laenge erst im Lauf.
         "frames": None if p.get("auto_duration") else frames_out, "fps": fps_out,
@@ -1155,7 +1222,26 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         "quality": p.get("quality") or "standard", "auto_duration": bool(p.get("auto_duration")),
         "audio_asset_id": p.get("audio_asset_id"),
         "motion_speed": float(p.get("motion_speed") or 1.0),
+        "extend_asset_id": p.get("extend_asset_id"),
     })
+    if extension is None:
+        return ids
+    # Neues Stueck anfuegen: dessen erster Frame ist der letzte des Originals und faellt weg.
+    source, source_path = extension
+    segment = db.get_asset(ids[0])
+    ctx.progress(0.995, t("fügt an", "joining"))
+    out_name = f"{Path(segment.filename).stem}_extended.mp4"
+    crf = p.get("crf") if p.get("crf") is not None else workflows.VIDEO_CRF
+    joined = await _video_tool("concat", source_path, config.ASSET_DIR / segment.filename,
+                               config.ASSET_DIR / out_name, crf, 1)
+    combined = db.create_asset(
+        kind="video", filename=out_name, job_id=job.id, prompt=p.get("prompt", ""), model_id=entry["id"],
+        meta={"model_name": _name(entry), "extended_from": source.id, "segment_asset": segment.id,
+              "seconds": joined["seconds"], "frames": joined["frames"], "fps": joined["fps"],
+              "width": joined["width"], "height": joined["height"], "audio": joined["audio"],
+              "duration_s": joined["seconds"]},
+    )
+    return [combined.id, *ids]
 
 
 @register("img23d")
@@ -1216,6 +1302,7 @@ async def _img23d(job: Job, ctx: JobContext) -> list[str]:
         "output_path": str(config.ASSET_DIR / out_name),
         "seed": p.get("seed"),
         "remove_background": bool(p.get("remove_background", True)),
+        "project_front": bool(p.get("project_front")),
     }
     if entry["workflow"] == "trellis2":
         payload |= {
@@ -1272,6 +1359,7 @@ async def _img23d(job: Job, ctx: JobContext) -> list[str]:
             "specks_removed": result.get("specks_removed"),
             "background_mode": result.get("background_mode"),
             "cutout_asset": cutout_id,
+            "front_projection": result.get("front_projection"),
         },
     )
     return [mesh_asset.id]

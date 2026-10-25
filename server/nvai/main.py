@@ -82,6 +82,9 @@ API_FEATURES = [
                        # temporal_upscale, auto_duration, audio_asset_id, motion_speed (features des
                        # Modells sagen, was installiert ist); expand target video_multishot
     "recommended_loras",  # GET /api/models: LoRAs mit features.recommended_for (Empfehlungen je Familie)
+    "video_extend",    # generate/video: extend_asset_id (LTX-2.5 setzt ein Video samt Ton fort)
+    "mesh_front",      # generate/3d: project_front (Quellbild auf die Vorderseite des Meshes)
+    "style_reference", # generate/image: Referenzbilder als Stilvorlage (features.reference_kind == "style")
 ]
 
 
@@ -808,7 +811,12 @@ async def get_job(job_id: str) -> Job:
 
 @app.get("/api/jobs/{job_id}/assets", response_model=list[Asset])
 async def get_job_assets(job_id: str) -> list[Asset]:
-    return db.assets_for_job(job_id)
+    # In der Reihenfolge, die der Auftrag zurueckgab (beim Verlaengern das ganze Video vor dem neuen
+    # Stueck); was dort fehlt, wie bisher nach Anlagezeit dahinter.
+    assets = db.assets_for_job(job_id)
+    job = db.get_job(job_id)
+    order = {aid: i for i, aid in enumerate(job.asset_ids if job else [])}
+    return sorted(assets, key=lambda a: order.get(a.id, len(order)))
 
 
 # ------------------------------------------------------------- Assets

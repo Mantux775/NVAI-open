@@ -466,6 +466,13 @@ def build_krea2(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     Nachgebaut nach ComfyUIs Vorlage image_krea2_turbo_t2i.json: 8 Schritte, cfg 1, euler/simple,
     als Negativ ConditioningZeroOut des positiven Textes. Den Prompt-Ausbau der Vorlage
     (TextGenerate) uebernimmt hier "Prompt ausbauen".
+
+    Mit Referenzbildern (Stil-Referenz, seit 0.5.10) nach der Vorlage
+    image_krea2_turbo_int8_image_style_reference.json: die Stil-LoRA von ostris (1,0) hinter dem
+    Modell, ModelSamplingFlux (1,15 / 0,5), die Bilder ueber TextEncodeQwenImageEditPlus (der
+    Qwen3-VL-Encoder hat den Bildteil) und FluxKontextMultiReferenceLatentMethod
+    ("index_timestep_zero"), CFGGuider mit cfg 1, euler/simple. Ohne die optionale LoRA-Datei
+    meldet registry.features_for keine Referenzen, jobs lehnt sie dann mit Hinweis ab.
     """
     d = defaults_for(entry["workflow"])
     seed = _seed(p)
@@ -477,9 +484,44 @@ def build_krea2(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         "2": {"class_type": "CLIPLoader", "inputs": {
             "clip_name": _file_by_target(entry, "text_encoders"), "type": "krea2", "device": "default"}},
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
-        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}},
-        "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
     }
+    refs = p.get("reference_images") or []
+    if refs:
+        width, height = int(p.get("width", 1024)), int(p.get("height", 1024))
+        lora, shift, enc, method, neg = ids(), ids(), ids(), ids(), ids()
+        graph[lora] = {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["1", 0], "lora_name": _file_by_target(entry, "loras"), "strength_model": 1.0}}
+        graph[shift] = {"class_type": "ModelSamplingFlux", "inputs": {
+            "model": [lora, 0], "max_shift": 1.15, "base_shift": 0.5, "width": width, "height": height}}
+        images: dict[str, Ref] = {}
+        for i, name in enumerate(refs[:3]):
+            load = ids()
+            graph[load] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            images[f"image{i + 1}"] = [load, 0]
+        graph[enc] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {
+            "clip": ["2", 0], "prompt": p["prompt"], "vae": ["3", 0], **images}}
+        graph[method] = {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {
+            "conditioning": [enc, 0], "reference_latents_method": "index_timestep_zero"}}
+        graph[neg] = {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": [method, 0]}}
+        guider, sel, sched, noise, latent, samp, dec, save = (ids() for _ in range(8))
+        graph[guider] = {"class_type": "CFGGuider", "inputs": {
+            "model": [shift, 0], "positive": [method, 0], "negative": [neg, 0], "cfg": _pick(p, d, "cfg")}}
+        graph[sel] = {"class_type": "KSamplerSelect", "inputs": {"sampler_name": p.get("sampler") or d["sampler"]}}
+        graph[sched] = {"class_type": "BasicScheduler", "inputs": {
+            "model": [shift, 0], "scheduler": p.get("scheduler") or d["scheduler"],
+            "steps": int(_pick(p, d, "steps")), "denoise": 1.0}}
+        graph[noise] = {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}}
+        graph[latent] = {"class_type": "EmptyLatentImage", "inputs": {
+            "width": width, "height": height, "batch_size": int(p.get("batch_size", 1))}}
+        graph[samp] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": [noise, 0], "guider": [guider, 0], "sampler": [sel, 0], "sigmas": [sched, 0],
+            "latent_image": [latent, 0]}}
+        graph[dec] = {"class_type": "VAEDecode", "inputs": {"samples": [samp, 0], "vae": ["3", 0]}}
+        graph[save] = {"class_type": "SaveImage", "inputs": {"images": [dec, 0], "filename_prefix": "nvai"}}
+        return graph, seed
+
+    graph["4"] = {"class_type": "CLIPTextEncode", "inputs": {"text": p["prompt"], "clip": ["2", 0]}}
+    graph["5"] = {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}}
     pos, neg = _apply_controlnet(graph, p, ["4", 0], ["5", 0], ["3", 0], ids)
     _image_tail(graph, p, d, seed, entry["workflow"], model=["1", 0], pos=pos, neg=neg, vae=["3", 0],
                 latent_node="EmptyLatentImage", ids=ids)

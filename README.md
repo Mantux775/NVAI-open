@@ -9,21 +9,21 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.9.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.9/NVAI-open-Setup-0.5.9.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.9/NVAI-open-0.4.5.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.10.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.10/NVAI-open-Setup-0.5.10.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.10/NVAI-open-0.4.5.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.9 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.9))
+October 2026: NVAI-open 0.5.10 for Windows and 0.4.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10))
 
-- **Krea 2:** a third recommended image model, the most photographic of the three, about 20 s per image
-- **Sharper videos:** best quality (DFR) is the default once Lightricks' detail LoRA is installed and keeps faces sharp over the whole clip; 1080p comes first; twice the bitrate
-- **Qwen-Image-2512 for RTX 20/30/40** in an INT8 version
-- **History:** a click on a prompt shows it in full
+- **Krea 2 with a style template:** one or two images set the way of painting, the colors and the light, the prompt sets the content
+- **3D with readable lettering:** "Take the front from the image" puts the source image onto the front of the mesh
+- **Extend a video:** LTX-2.5 continues a clip from its last frame, sound included
+- **The right format for your card:** INT8 on RTX 20/30/40, NVFP4 there only on a slow connection such as a riser
 
-Neu: **Krea 2** als drittes empfohlenes Bildmodell (am fotografischsten, rund 20 s je Bild), **schärfere Videos** (DFR als Vorgabe, sobald das Detail-LoRA da ist, 1080p zuerst, doppelte Bitrate), **Qwen-Image-2512 für RTX 20/30/40**, im Verlauf zeigt ein Klick den ganzen Prompt.
+Neu: **Krea 2 mit Stilvorlage** (ein oder zwei Bilder geben Malweise, Farben und Licht vor), **3D mit lesbarer Schrift** (Vorderseite aus dem Bild), **Video verlängern** (LTX-2.5 setzt einen Clip samt Ton fort), **das richtige Format für die Karte** (INT8 auf RTX 20/30/40, NVFP4 dort nur an einem langsamen Anschluss). 0.5.9 brachte Krea 2 und schärfere Videos ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.9)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -61,7 +61,7 @@ Step by step with screenshots: [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md)
 
 ### Video with sound
 
-LTX-2.5 by Lightricks makes picture and sound together: speech, footsteps, wind, music. Start from a text, a start image or a start and an end image, make a seamless loop, or let the picture follow a sound you give it.
+LTX-2.5 by Lightricks makes picture and sound together: speech, footsteps, wind, music. Start from a text, a start image or a start and an end image, make a seamless loop, let the picture follow a sound you give it, or extend a clip you already have.
 
 ![A knight says "Hold the wall. They come at dawn.", four frames of a clip with sound](docs/images/ltx25-knight.jpg)
 
@@ -80,11 +80,19 @@ Generate an image of an object and turn it into a GLB model. TRELLIS.2 paints th
   <img src="docs/images/image-to-3d-turntable.gif" width="400" alt="The same crate as a textured 3D model, turning">
 </p>
 
+Lettering does not survive the mesh stage on its own. "Take the front from the image" puts the source image onto the front of the mesh:
+
+![A direction sign: source image, TripoSG mesh, with the front from the image, and its back](docs/images/front-projection.jpg)
+
 ### Images
 
 FLUX 3 Image Klein is fast and edits a picture while keeping the rest intact. Qwen-Image-2512 is best at lettering and at how things are built, and its license (Apache-2.0) allows almost anything. Krea 2 looks the most like a photo and takes about 20 s per image. Same prompt and seed:
 
 ![Explorer, full body: Qwen-Image-2512, FLUX 3 and Krea 2](docs/images/compare-krea2.jpg)
+
+Krea 2 also takes an image as a style template: the lighthouse keeps its content and takes on the watercolor or the woodcut.
+
+![Two templates made with FLUX 3, Krea 2 without and with a style template](docs/images/krea2-style-reference.jpg)
 
 ![Crate with stencilled lettering: FLUX 3 and Qwen-Image-2512](docs/images/compare-crate.jpg)
 
@@ -124,7 +132,7 @@ Then just ask: "Make a weathered wooden barrel as a 3D model and put it into Ass
 
 ### Graphics cards and uncensored models
 
-NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40. With several cards it uses the strongest one. AMD Radeon works experimentally; testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
+NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40 (on a slow connection such as a riser, NVFP4 where only that fits into the memory). With several cards it uses the strongest one. AMD Radeon works experimentally; testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
 
 NVAI-open has no content filter of its own. The model list marks every model as censored, partly censored or uncensored, and uncensored ones such as Chroma, Pony and NoobAI are one click away. More, including LoRAs from Hugging Face and Civitai, under "Models" → "Search models and LoRAs". Respect the law and each model's license; the FLUX 3 license, for example, requires a review of every image before it is published. Overview: [docs/MODELS.md](docs/MODELS.md#censored-or-uncensored)
 
@@ -203,7 +211,7 @@ Schritt für Schritt mit Screenshots: [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU
 
 ### Video mit Ton
 
-LTX-2.5 von Lightricks macht Bild und Ton zusammen: Sprache, Schritte, Wind, Musik. Starten lässt es sich mit einem Text, einem Startbild oder einem Start- und einem Endbild; es macht nahtlose Schleifen, und das Bild kann einem vorgegebenen Ton folgen.
+LTX-2.5 von Lightricks macht Bild und Ton zusammen: Sprache, Schritte, Wind, Musik. Starten lässt es sich mit einem Text, einem Startbild oder einem Start- und einem Endbild; es macht nahtlose Schleifen, das Bild kann einem vorgegebenen Ton folgen, und ein vorhandener Clip lässt sich verlängern.
 
 ![Ein Ritter sagt „Hold the wall. They come at dawn.“, vier Frames eines Clips mit Ton](docs/images/ltx25-knight-de.jpg)
 
@@ -222,11 +230,19 @@ Ein Bild eines Objekts erzeugen und daraus ein GLB-Modell machen. TRELLIS.2 malt
   <img src="docs/images/image-to-3d-turntable.gif" width="400" alt="Dieselbe Kiste als texturiertes 3D-Modell, drehend">
 </p>
 
+Schrift übersteht den Weg zum Mesh nicht von allein. „Vorderseite aus dem Bild übernehmen“ legt das Quellbild auf die Vorderseite des Meshes:
+
+![Ein Wegweiser: Quellbild, Mesh von TripoSG, mit der Vorderseite aus dem Bild und von hinten](docs/images/front-projection-de.jpg)
+
 ### Bilder
 
 FLUX 3 Image Klein ist schnell und bearbeitet ein Bild, ohne den Rest zu verändern. Qwen-Image-2512 ist am besten bei Schrift und Konstruktion, und seine Lizenz (Apache-2.0) erlaubt fast alles. Krea 2 wirkt am ehesten wie ein Foto und braucht rund 20 s je Bild. Gleicher Prompt und Seed:
 
 ![Entdeckerin, ganze Figur: Qwen-Image-2512, FLUX 3 und Krea 2](docs/images/compare-krea2.jpg)
+
+Krea 2 nimmt auch ein Bild als Stilvorlage: Der Leuchtturm behält seinen Inhalt und wird zum Aquarell oder zum Holzschnitt.
+
+![Zwei Vorlagen von FLUX 3, Krea 2 ohne und mit Stilvorlage](docs/images/krea2-style-reference-de.jpg)
 
 ![Kiste mit Schablonenschrift: FLUX 3 und Qwen-Image-2512](docs/images/compare-crate.jpg)
 
@@ -266,7 +282,7 @@ Dann einfach sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es n
 
 ### Grafikkarten und unzensierte Modelle
 
-NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40. Mit mehreren Karten rechnet die stärkste. AMD Radeon läuft experimentell; Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
+NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40 (an einem langsamen Anschluss wie einem Riser NVFP4, wenn nur das in den Speicher passt). Mit mehreren Karten rechnet die stärkste. AMD Radeon läuft experimentell; Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
 
 NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes Modell als zensiert, teilweise zensiert oder unzensiert, und unzensierte wie Chroma, Pony und NoobAI sind einen Klick entfernt. Weitere, auch LoRAs von Hugging Face und Civitai, unter „Modelle“ → „Modelle und LoRAs suchen“. Gesetze und die Lizenz des Modells gelten; die FLUX-3-Lizenz etwa verlangt, jedes Bild vor der Veröffentlichung zu prüfen. Überblick: [docs/de/MODELLE.md](docs/de/MODELLE.md#zensiert-oder-unzensiert)
 

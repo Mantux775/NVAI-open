@@ -379,6 +379,7 @@ EN: dict[str, dict[str, Any]] = {
             "boots in the frame. For the old fisherman, whose prompt stresses his hands, the head was cut off "
             "at the top in three of three images; with \"medium shot from the waist up, his whole head inside "
             "the frame\" it was in the frame in two of two.\n\n"
+            "Style reference (since 0.5.10): with ostris' optional LoRA (0.46 GB, Krea 2 license; \"Download extras\" under \"Models\" fetches it) Krea 2 takes one or two images as a style template. Technique, colors and light come from the image, the content from the prompt. Measured: a lighthouse with a watercolor or a woodcut template clearly in their style, 41–48 instead of 24 s; with both templates 71 s, and the first one dominated almost completely.\n\n"
             "Output from 1 to 2 MP. The negative prompt has no effect (cfg 1). Krea's template expands short "
             "prompts first; here \"Expand prompt\" does that.\n\n"
             "License: Krea 2 Community License — see warning."
@@ -387,6 +388,7 @@ EN: dict[str, dict[str, Any]] = {
             "Photographic look, little AI smoothness",
             "Measured about 20 s per image (1 MP), 2 MP in 37 s",
             "Letter-perfect text in the image",
+            "Style reference with 1–2 images (optional LoRA, 0.46 GB)",
             "8 steps, NVFP4 only 7.7 GB",
             "Shares text encoder and VAE with FLUX 3 and Qwen-Image",
         ],
@@ -394,7 +396,7 @@ EN: dict[str, dict[str, Any]] = {
             _LICENSE_CON_KREA2,
             "State the framing explicitly, otherwise it crops (fisherman: head cut off 3 of 3)",
             "Negative prompt has no effect (cfg 1)",
-            "No reference images; for editing, FLUX 3 remains the choice",
+            "Reference images only as a style template; for editing, FLUX 3 remains the choice",
         ],
     },
     "krea2-turbo-int8": {
@@ -408,10 +410,11 @@ EN: dict[str, dict[str, Any]] = {
             "memory ComfyUI streams parts from system memory. The prompt hints of the NVFP4 version apply "
             "here too.\n\n"
             "Measured on an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4), 1024 × 1024: 193 s for the first "
-            "image, then 82 s, the image as with NVFP4 (letter-perfect). The NVFP4 version took 46 s on the "
-            "same card including loading, although the 4060 has no FP4 units: at 7.7 GB it fits into the "
-            "graphics memory, the INT8 version at 13.5 GB does not. On 8 GB cards, use the NVFP4 version; "
-            "not measured with 12 or 16 GB.\n\n"
+            "image, then 82 s, the image as with NVFP4 (letter-perfect). The NVFP4 version took 46 s there "
+            "including loading: at 7.7 GB it fits into the graphics memory, while the INT8 version has to be "
+            "streamed over the slow connection. On a normal connection (PCIe 4.0 x8, an RTX 40 without FP4 "
+            "emulated), INT8 was twice as fast instead: 13 instead of 25 s with 8 GB, 12 instead of 25 s with "
+            "16 GB. NVAI-open therefore recommends INT8 and NVFP4 only on a slow connection.\n\n"
             "License: Krea 2 Community License — see warning."
         ),
         "pros": [
@@ -421,7 +424,7 @@ EN: dict[str, dict[str, Any]] = {
         "cons": [
             _LICENSE_CON_KREA2,
             "On RTX 50 the NVFP4 version is the faster choice",
-            "On 8 GB slower than NVFP4 (RTX 4060: 82 instead of 46 s), because it does not fit into memory",
+            "On a slow connection (PCIe 3.0 x4) slower than NVFP4 (RTX 4060 on a riser: 82 instead of 46 s)",
         ],
     },
     "flux3-klein-nvfp4": {

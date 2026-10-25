@@ -49,6 +49,40 @@ such ("according to BFL").
 
 Without a `model_id`, NVAI-open uses the active image model.
 
+### New in 0.5.10
+
+| What | Measured |
+|---|---|
+| Krea 2 with a style template | With ostris' style LoRA (0.46 GB, Krea 2 license) Krea 2 takes one or two images as a style template: the way of painting, the colors and the light come from the image, the content from the prompt. A lighthouse with a watercolor or a woodcut template came out clearly in their style, in 41–48 instead of 24 s. With both templates 71 s, and the first one almost completely won. See section 6 |
+| Front from the image (3D) | "Take the front from the image" puts the cut-out source image onto the faces of the mesh that point to the camera, so lettering and stickers stay readable. TripoSG builds painted letters only as a faint, garbled relief; with the projection "HAFEN" on a direction sign was readable. The projection itself takes under a second (the whole mesh 66 s). The direction comes from the silhouette (front +Z, overlap 0.93 against 0.68 for the back). Loose bits of the cutout such as floor remnants are dropped first; if no direction fits clearly, the front is +Z, the view TripoSG builds from the image. The rest of a TripoSG mesh gets colors from the image; a TRELLIS.2 mesh keeps its own texture there (not tested yet, TRELLIS.2 is not installed here). `project_front` in `image_to_3d` and `text_to_3d` |
+| Extend a video | LTX-2.5 continues an existing video: its last frame becomes the start image, size and frame rate come from the video, and the new part is appended with its sound. 5 s + 4 s at 1920 × 1088 gave a 9.0 s video (217 frames) in 255 s, without a visible seam. `extend_asset_id` in `generate_video` |
+| "Streams" instead of "too large" | Models larger than the graphics memory run anyway: ComfyUI streams parts from system memory at every step. On a normal connection that cost little (Krea 2 INT8 without FP4: 13.0 s with 8 GB, 12.2 s with 16 GB), so the model list no longer marks them red as "too large for this GPU" |
+| "Download extras" | Optional files of an installed model (Krea's style LoRA, LTX-2.5's detail LoRA for DFR …) now have their own button under "Models"; before, the model had to be downloaded again |
+
+![Templates made with FLUX 3, Krea 2 without and with a style template](images/krea2-style-reference.jpg)
+
+![A direction sign from TripoSG: the source image, the plain mesh, with the front from the image, and its back](images/front-projection.jpg)
+
+**Which format for which card.** Only RTX 50 computes NVFP4 in hardware, RTX 20/30/40 compute INT8. In
+0.5.9 Krea 2 NVFP4 was faster than INT8 on an RTX 4060 with 8 GB, because only the NVFP4 version fits
+into 8 GB. That card sits on a riser, though (PCIe 3.0 x4, 3.9 GB/s). To see whether this holds on a
+normal connection, the RTX 5060 Ti (PCIe 4.0 x8, 15.8 GB/s) ran without its FP4 units, so ComfyUI took
+the same path as on an RTX 40, once with its 16 GB and once with 8 GB (ComfyUI held back the rest with
+`--reserve-vram`). The absolute times are those of the 5060 Ti, what counts is the comparison. First
+image with loading / next image, 1024 × 1024:
+
+| Card | Krea 2 NVFP4 | Krea 2 INT8 | Qwen-Image-2512 NVFP4 | Qwen-Image-2512 INT8 |
+|---|---|---|---|---|
+| without FP4, 16 GB, PCIe 4.0 x8 | 29.8 / 25.0 s | 17.5 / 12.2 s | 226.9 / 214.0 s | 127.2 / 118.6 s |
+| without FP4, 8 GB, PCIe 4.0 x8 | 28.5 / 25.1 s | 17.1 / 13.0 s | 237.9 s | 158.9 s |
+| RTX 4060, 8 GB, PCIe 3.0 x4 (riser) | 46 s | 193 / 82 s | 1095 s | 653 s |
+
+INT8 was faster even where it did not fit into the graphics memory (Krea 2 INT8 is 13.5 GB). Only on
+the slow riser was NVFP4 ahead, and only where it fit and INT8 did not. NVAI-open now recommends INT8 on
+RTX 20/30/40, and NVFP4 only on a connection of up to 4 GB/s when only the NVFP4 version fits
+(`recommended` and `gpu_note` in `list_models`; with several cards, "Models → Graphics cards" shows the
+connection of each card).
+
 ### New in 0.5.9
 
 Video quality, measured on an RTX 5060 Ti with LTX-2.5 (1920 × 1088 unless stated otherwise):
@@ -80,7 +114,8 @@ each other in the video, so keep them apart in the start image and do not move t
 
 Qwen-Image-2512 now also comes in INT8 for RTX 20/30/40 (`qwen-image-2512-int8`, see section 4): on an
 RTX 4060 with 8 GB 653 instead of 1095 s with NVFP4. Krea 2 on the same card was faster with NVFP4 (46
-instead of 82 s), because 7.7 GB fit into its memory (section 6).
+instead of 82 s): only the NVFP4 version fits into its 8 GB, and the card sits on a slow riser
+connection. On a normal connection INT8 is faster (see New in 0.5.10).
 In the history, a click on a prompt shows it in full.
 
 ### New in 0.5.8
@@ -577,10 +612,11 @@ conditions don't work for you: Qwen.
   template `image_krea2_turbo_t2i.json`: 8 steps, CFG 1, sampler `euler`, scheduler `simple`.
 - Text encoder Qwen3-VL-4B, byte for byte the file FLUX 3 uses; the VAE is Qwen-Image's, also
   identical (SHA-256 compared). With one of those models installed, only the 7.7 GB of Krea itself
-  remain to download, otherwise 12.8 GB. The files come from Comfy-Org/Krea-2, which unlike Krea's
+  remain to download, otherwise 12.8 GB (plus 0.46 GB for the optional style LoRA). The files come from Comfy-Org/Krea-2, which unlike Krea's
   own repositories is not gated.
 - Output from 1 to 2 MP according to Krea. The negative prompt has no effect (CFG 1).
-- No reference images, no mask, no second pass (`hires`). For editing, FLUX 3 remains the choice.
+- No mask, no second pass (`hires`). Since 0.5.10 one or two images as a style template (optional
+  style LoRA, see below); for editing, FLUX 3 remains the choice.
 - License: Krea 2 Community License, see below.
 
 ### Compared with Qwen and FLUX 3 (measured)
@@ -619,6 +655,33 @@ and construction, then light and background; text verbatim in quotation marks. S
 detailed descriptions; expand a few words with **✨ Expand prompt** first (Krea's own template does
 the same).
 
+### Style template (since 0.5.10)
+
+With ostris' style LoRA (`ostris/krea2_turbo_style_reference`, 0.46 GB, Krea 2 Community License, not
+gated) Krea 2 takes one or two images as a style template. The way of painting, the colors and the light
+come from the image, the content from the prompt. The LoRA is optional: a new download of Krea 2 includes
+it, for an installed Krea 2 "Download extras" under "Models" fetches it. Until then `features.references`
+is 0 and `features.missing.style_reference` names the Hugging Face page. The images go into
+`reference_asset_ids` as with FLUX 3; the web interface labels them as style templates.
+
+Measured at 1024², prompt "A lighthouse on a rocky cliff above a stormy sea, waves crashing against the
+rocks below.", templates made with FLUX 3 (picture in section 2):
+
+| Run | Time | Result |
+|---|---|---|
+| without a template | 24 s | photographic, dark storm clouds |
+| watercolor template | 48 s | watercolor; the stormy sky took the pastel evening light of the template |
+| woodcut template | 41 s | woodcut in black, red and cream like the template |
+| both templates | 71 s | almost completely the first template |
+
+Describe only the content in the prompt. Light and colors come from the template even where the prompt
+says otherwise (the storm became pastel); with two templates the first one wins, so one is enough. Krea
+takes the style of the template, not its content: to change an image, FLUX 3 remains the choice.
+
+The graph follows ComfyUI's template `image_krea2_turbo_int8_image_style_reference.json`: the LoRA at
+strength 1.0, `ModelSamplingFlux` (1.15 / 0.5), the images through `TextEncodeQwenImageEditPlus` (the
+Qwen3-VL encoder has the vision part) and `FluxKontextMultiReferenceLatentMethod`, 8 steps, CFG 1.
+
 ### License: Krea 2 Community License
 
 - Commercial use only below US$1 million annual revenue, including affiliated companies.
@@ -636,8 +699,11 @@ streams parts from system memory.
 Measured on an RTX 4060 with 8 GB (on a riser, PCIe 3.0 x4), 1024 × 1024, the crate from above: 193 s for
 the first image, then 82 s, lettering exact as with NVFP4. The NVFP4 version took 46 s on the same card
 including loading, although the 4060 has no FP4 units: at 7.7 GB it fits into the graphics memory, the
-INT8 version at 13.5 GB does not. **On 8 GB cards, use the NVFP4 version.** With 12 or 16 GB not
-measured yet.
+INT8 version at 13.5 GB does not and is streamed over the slow riser (3.9 GB/s) at every step. On a
+normal connection it is the other way round: the RTX 5060 Ti without its FP4 units (PCIe 4.0 x8)
+took 13.0 instead of 25.1 s with INT8 at 8 GB and 12.2 instead of 25.0 s at 16 GB. **On RTX 20/30/40,
+use the INT8 version, NVFP4 only on a slow connection (up to 4 GB/s)**; this is what NVAI-open
+recommends (section 2, New in 0.5.10).
 
 ## 7. `generate_image` parameters
 
@@ -715,7 +781,8 @@ model. Other programs can adapt their controls to it, as the NVAI-open web UI do
 | Model files | `external/comfyui/models/{diffusion_models,text_encoders,vae,loras}` (the Windows setup uses the model folder chosen during installation) |
 
 The graphs are modeled on the templates that ship with ComfyUI: `image_qwen_Image_2512.json`,
-`image_flux3_klein_*` and `image_krea2_turbo_t2i.json`. The CLIPLoader types are `qwen_image`,
+`image_flux3_klein_*`, `image_krea2_turbo_t2i.json` and, for the style template,
+`image_krea2_turbo_int8_image_style_reference.json`. The CLIPLoader types are `qwen_image`,
 `flux3` and `krea2`, the empty latent is `EmptySD3LatentImage`, `EmptyFlux2LatentImage` or
 `EmptyLatentImage` respectively, references go through
 `ReferenceMultiLatent`, the upsampler through `TextGenerate`.

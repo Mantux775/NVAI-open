@@ -166,6 +166,8 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
       default_negative    greift, wenn keiner angegeben ist
       upsampler           baut ein Prompt-Upsampler den Prompt vorher aus (FLUX 3)
       references          wie viele Referenzbilder es nimmt (0 = keine)
+      reference_kind      "style": Referenzen geben nur den Stil vor (Krea 2); sonst wird bearbeitet
+      missing             Zusatzfunktion -> Hugging-Face-Seite, solange ihre optionalen Dateien fehlen
       bbox                Platzierung per Bounding-Box-Tabelle im Prompt
       img2img             Startbild + denoise
       mask                Inpainting mit mask_asset_id (laeuft ueber den Startbild-Pfad)
@@ -198,6 +200,17 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
         "prompt_hint": "", "placeholder": "",
     }
     merged = base | (entry.get("features") or {})
+    # Zusatzfunktionen mit optionalen Dateien (seit 0.5.10: Stil-Referenz fuer Krea 2) gelten erst,
+    # wenn die Dateien da sind; "with_optional" sagt, was sie freischalten. Fehlen sie, steht unter
+    # "missing" die Seite, von der sie kommen (Laden: das Modell unter "Modelle" erneut laden).
+    extra = merged.pop("with_optional", {})
+    for name, ok in optional_status(entry).items():
+        merged[name] = ok
+        if ok:
+            merged |= extra.get(name, {})
+        else:
+            repo = next(f["repo"] for f in entry["files"] if f.get("optional") == name)
+            merged.setdefault("missing", {})[name] = f"https://huggingface.co/{repo}"
     # Masken (Inpainting): True laeuft ueber denselben Startbild-Pfad wie Bild-zu-Bild.
     # "reference" (seit 0.5.6): Bearbeitungsmodelle wie FLUX 3 fuellen ueber ein grau markiertes
     # Referenzbild, NVAI-open richtet das Ergebnis aus (jobs._prepare_inpaint_reference). Getestet mit
@@ -380,26 +393,73 @@ def gpu_advice(entry: dict[str, Any]) -> dict[str, Any]:
     if cc is None:
         return {"recommended": False, "gpu_note": ""}
     fp4 = cc >= 10.0
-    picks = catalog.RECOMMENDED_FP4 if fp4 else catalog.RECOMMENDED_OLDER
+    picks = list(catalog.RECOMMENDED_FP4 if fp4 else catalog.RECOMMENDED_OLDER)
+    slow = not fp4 and (info.get("pcie_gbps") or 99.0) <= SLOW_PCIE_GBPS
+    swap = _slow_bus_swap(info) if slow else {}
+    picks = [swap.get(i, i) for i in picks]
     note = ""
     fmt = _precision(entry)
-    if fmt == "nvfp4" and not fp4:
-        # Gemessen 25.10. auf einer RTX 4060 mit 8 GB: Was in den Grafikspeicher passt, ist schnell
-        # (Krea 2 NVFP4 7,7 GB: 46 s, INT8 13,5 GB: 82 s); passt keine Fassung, gewinnt INT8
-        # (Qwen-Image-2512: NVFP4 1095 s, INT8 653 s).
-        note = t(f"{info['name']} hat keine FP4-Einheiten: das Modell läuft, aber langsamer als auf "
-                 "RTX 50. Gedacht sind hier die INT8-Fassungen, außer wenn nur die NVFP4-Fassung in den "
-                 "Grafikspeicher passt: Auf einer RTX 4060 mit 8 GB war Krea 2 mit NVFP4 schneller "
-                 "(46 statt 82 s), Qwen-Image-2512 mit INT8 (653 statt 1095 s).",
-                 f"{info['name']} has no FP4 units: the model runs, but slower than on RTX 50. The "
-                 "INT8 versions are meant for this card, unless only the NVFP4 version fits into the "
-                 "graphics memory: on an RTX 4060 with 8 GB, Krea 2 was faster with NVFP4 (46 instead "
-                 "of 82 s), Qwen-Image-2512 with INT8 (653 instead of 1095 s).")
+    link = f"PCIe {info.get('pcie_gen')} x{info.get('pcie_width')}, {_dec(info.get('pcie_gbps'))} GB/s"
+    link_en = f"PCIe {info.get('pcie_gen')} x{info.get('pcie_width')}, {info.get('pcie_gbps')} GB/s"
+    if fmt == "nvfp4" and not fp4 and entry["id"] in swap.values():
+        note = t(f"{info['name']} hat keine FP4-Einheiten und hängt an einem langsamen Anschluss ({link}). "
+                 "Die INT8-Fassung passt nicht in den Grafikspeicher und müsste bei jedem Schritt über den "
+                 "Anschluss nachgeladen werden; diese NVFP4-Fassung passt hinein und ist hier schneller "
+                 "(gemessen: RTX 4060 am Riser, Krea 2 46 statt 82 s).",
+                 f"{info['name']} has no FP4 units and sits on a slow connection ({link_en}). The INT8 "
+                 "version does not fit into the graphics memory and would be streamed over the connection "
+                 "at every step; this NVFP4 version fits and is faster here (measured: RTX 4060 on a "
+                 "riser, Krea 2 46 instead of 82 s).")
+    elif fmt == "nvfp4" and not fp4:
+        note = t(f"{info['name']} hat keine FP4-Einheiten: das Modell läuft, aber langsamer als auf RTX 50. "
+                 "Gedacht sind hier die INT8-Fassungen; gemessen waren sie auch dann schneller, wenn sie "
+                 "nicht ganz in den Grafikspeicher passten (Krea 2 mit 8 GB: 13 statt 25 s, "
+                 "Qwen-Image-2512 mit 16 GB: 119 statt 214 s).",
+                 f"{info['name']} has no FP4 units: the model runs, but slower than on RTX 50. The INT8 "
+                 "versions are meant for this card; measured, they were faster even when they did not fit "
+                 "completely into the graphics memory (Krea 2 with 8 GB: 13 instead of 25 s, "
+                 "Qwen-Image-2512 with 16 GB: 119 instead of 214 s).")
+    elif fmt == "int8" and entry["id"] in swap:
+        note = t(f"Passt nicht in die {_dec(info.get('vram_total_gb'))} GB von {info['name']}, und der "
+                 f"Anschluss ist langsam ({link}): Die NVFP4-Fassung ist hier schneller (gemessen: RTX 4060 "
+                 "am Riser, Krea 2 46 statt 82 s).",
+                 f"Does not fit into the {info.get('vram_total_gb')} GB of {info['name']}, and the "
+                 f"connection is slow ({link_en}): the NVFP4 version is faster here (measured: RTX 4060 on "
+                 "a riser, Krea 2 46 instead of 82 s).")
     elif fmt == "fp8" and cc < 8.9:
         note = t(f"{info['name']} hat keine FP8-Einheiten: das Modell wird hochgerechnet "
                  "und läuft langsamer.",
                  f"{info['name']} has no FP8 units: the model is upcast and runs slower.")
     return {"recommended": entry["id"] in picks, "gpu_note": note}
+
+
+# Empfehlung nach Anschluss (gemessen 25.10.2026, Karte ohne FP4-Einheiten): INT8 war schneller, auch wenn es
+# nicht ganz in den Grafikspeicher passte -- nachgestellte RTX 40 an PCIe 4.0 x8: Krea 2 mit 8 GB 13 statt
+# 25 s, Qwen-Image-2512 mit 16 GB 119 statt 214 s. Nur am langsamen Anschluss (RTX 4060 am Riser, PCIe 3.0
+# x4 = 3,9 GB/s) lohnte NVFP4, wenn nur diese Fassung in den Speicher passte (Krea 2: 46 statt 82 s); passte
+# keine, gewann INT8 (Qwen-Image-2512: 653 statt 1095 s).
+SLOW_PCIE_GBPS = 4.0
+
+
+def _dec(value: Any) -> str:
+    return str(value).replace(".", ",") if value is not None else "?"
+
+
+def _slow_bus_swap(info: dict[str, Any]) -> dict[str, str]:
+    """INT8-ID -> NVFP4-ID der Paare, bei denen nur die NVFP4-Fassung in den Grafikspeicher passt
+    (catalog: model_gb = Hauptdatei in 10^9 Byte)."""
+    vram = float(info.get("vram_total_mb") or 0) * 1024 * 1024 / 1e9
+    by_id = {e["id"]: e for e in all_entries()}
+    swap: dict[str, str] = {}
+    for old_id in catalog.RECOMMENDED_OLDER:
+        old = by_id.get(old_id)
+        if not old or not old.get("model_gb"):
+            continue
+        twin = next((by_id[i] for i in catalog.RECOMMENDED_FP4
+                     if i in by_id and by_id[i].get("family") == old.get("family")), None)
+        if twin and twin.get("model_gb") and old["model_gb"] > vram >= twin["model_gb"]:
+            swap[old_id] = twin["id"]
+    return swap
 
 
 def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:

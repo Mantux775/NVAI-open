@@ -96,6 +96,7 @@ license. Downloads are several GB; ask the user first.
 | Image 1440² / editing with a reference image | FLUX 3 Klein NVFP4 | ~26 s / ~45 s |
 | Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
 | Image 1024² / 1408², 8 steps | Krea 2 Turbo NVFP4 | ~20 s / ~37 s, first image after FLUX 3 ~41 s |
+| Image 1024² with one / two style templates | Krea 2 Turbo NVFP4 + style LoRA | ~41–48 s / ~71 s (without ~24 s) |
 | Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 INT8 (for RTX 20/30/40) | ~119 s, with loading ~132 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
 | Music 60 s / 20 s | ACE-Step 1.5 Turbo (8 steps, CFG 1, shift 3) | ~17 s / ~10 s |
@@ -110,10 +111,12 @@ license. Downloads are several GB; ask the user first.
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
 | Best quality (DFR) 1920 × 1088, 5 s | LTX-2.5 NVFP4 | ~786 s (standard path ~241 s) |
 | DFR 1280 × 704, 4 s / with 48 fps | LTX-2.5 NVFP4 | ~118 s / ~294 s |
+| Extend a video, 5 s + 4 s, 1920 × 1088 | LTX-2.5 NVFP4 | ~255 s for the new part including joining |
 | Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
 | Video 848 × 480, 49 frames | Mochi 1 preview fp8 | ~351 s with loading |
 | Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
 | Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
+| Mesh with the front from the image | TripoSG | ~66 s warm, the projection itself under 1 s |
 
 The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the
 user up front instead of leaving them waiting.
@@ -151,7 +154,9 @@ user up front instead of leaving them waiting.
 - **`flux3-klein-int8`** — the same FLUX 3 in BFL's INT8 version for cards without FP4 units
   (RTX 20/30/40, from 8 GB according to BFL). On an RTX 50 card such as the RTX 5060 Ti, the
   NVFP4 version is the right one. `list_models` marks what suits the detected card with
-  `recommended` and explains in `gpu_note` when a format does not run in hardware there.
+  `recommended` and explains in `gpu_note` when a format does not run in hardware there. On RTX
+  20/30/40 that is INT8, and NVFP4 only on a slow connection (up to 4 GB/s) where only the NVFP4
+  version fits into the graphics memory (measured, see Krea 2 below).
   `qwen-image-2512-int8` is the same for Qwen-Image-2512.
 - **Krea 2 Turbo, `krea2-turbo-nvfp4`** (Krea.ai, June 2026, 12B parameters, 8 steps, cfg 1) — the
   third choice: **photographic images with little AI look**, fast. Measured with the same prompt and
@@ -161,12 +166,20 @@ user up front instead of leaving them waiting.
   otherwise it moves what the prompt stresses into view — an old fisherman ("weathered hands") lost
   his head at the top of the frame in three of three images; with "Medium shot from the waist up, his
   whole head and face inside the frame with free space above his head." in none of two. The crate came
-  without a lid, which the prompt did not mention. No reference images, no mask, `negative_prompt` has
+  without a lid, which the prompt did not mention. No mask, `negative_prompt` has
   no effect. Text encoder (Qwen3-VL-4B) and VAE are the same files as FLUX 3's and Qwen-Image's, so
   only 7.7 GB remain to download. **Mind the license** (see Licenses): commercial use only below
-  US$1 million revenue. `krea2-turbo-int8` for RTX 20/30/40; on an RTX 4060 with 8 GB it took 193 s
-  for the first image and 82 s after that, but the NVFP4 version took only 46 s including loading
-  there (7.7 GB fit into the graphics memory, 13.5 GB do not): on 8 GB cards, use NVFP4.
+  US$1 million revenue. `krea2-turbo-int8` for RTX 20/30/40: on a normal connection it was faster
+  than NVFP4 even where it did not fit into the graphics memory (13.0 instead of 25.1 s with 8 GB).
+  Only on an RTX 4060 on a slow riser (PCIe 3.0 x4) was NVFP4 faster (46 s against 193/82 s);
+  `list_models` recommends accordingly.
+  **Style template (since 0.5.10):** with ostris' optional style LoRA (0.46 GB) Krea 2 takes one or
+  two images in `reference_asset_ids` as a style template: the way of painting, colors and light come
+  from the image, the content from the prompt. Measured: a lighthouse took a watercolor or a woodcut
+  template clearly, in 41–48 instead of 24 s; light and colors follow the template even against the
+  prompt (the storm turned pastel); with two templates 71 s, and the first one wins. Describe only the
+  content. If the LoRA is missing, `features.missing.style_reference` says so ("Download extras"
+  under "Models").
 
 What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under
 `features`: whether the negative prompt works, reference images, upsampler, recommended sizes,
@@ -463,6 +476,11 @@ Use `fps=24`, sizes from `features.sizes` (multiples of 64; 1280 × 704 is 720p)
   Control LoRA and a start image.
 - Several shots in one clip: no parameter — write every cut out in prose ("A hard cut transitions to a
   close-up of …"), 2–4 shots; `expand_prompt(target="video_multishot")` writes that form.
+- `extend_asset_id` (since 0.5.10): continue an existing video. Its last frame becomes the start image,
+  size and frame rate come from it, and the new part is appended with its sound as a new asset
+  (`meta.extended_from`). The prompt describes what happens next, `frames` the length of the new part.
+  Not together with a start image, a loop or a given sound. Measured at 1080p: 5 s + 4 s → 9.04 s in
+  255 s, no visible seam.
 
 DFR, automatic length and 48 fps need small optional files; the detail IC-LoRA for DFR sits in its own
 gated repo. If something is missing, `features.missing` names the Hugging Face page.
@@ -654,6 +672,13 @@ Two adjustments if it still goes wrong:
   soft gradients.
 - **`clean_specks=True`** (default) throws out floating fragments. It only catches loose parts —
   whatever sticks to the main body has to be prevented through the image.
+
+**Lettering and stickers: `project_front=True`** (since 0.5.10, `image_to_3d` and `text_to_3d`) puts
+the cut-out source image onto the faces that point to the camera, so lettering stays readable;
+TripoSG builds painted letters only as a garbled relief. The rest of a TripoSG mesh gets colors from
+the image, a TRELLIS.2 mesh keeps its texture there (not tested yet). Measured on a direction sign
+reading "HAFEN": readable with the projection, ~66 s for the whole mesh, the projection itself under
+1 s. Faint relief strokes of the TripoSG letters remain visible.
 
 Two models with clearly different results:
 

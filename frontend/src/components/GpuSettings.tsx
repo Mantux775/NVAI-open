@@ -117,6 +117,16 @@ export function GpuSettings() {
                   <span key={g.index} className="gpu-matrix-head">
                     {`GPU ${g.index}: ${g.name.replace(/^NVIDIA GeForce /, '')}`}
                     <span className="muted small">{`${(g.vram_total_mb / 1024).toFixed(0)} GB`}</span>
+                    {g.pcie_gen && g.pcie_width && (
+                      <span className="muted small" title={t(
+                        'Anschluss der Karte. An einem langsamen Anschluss (bis 4 GB/s, etwa PCIe 3.0 x4 am Riser) '
+                          + 'lohnt die kleinere NVFP4-Fassung, wenn nur sie in den Grafikspeicher passt.',
+                        'The card’s connection. On a slow connection (up to 4 GB/s, such as PCIe 3.0 x4 on a riser) '
+                          + 'the smaller NVFP4 version pays off when only it fits into the graphics memory.')}>
+                        {`PCIe ${g.pcie_gen}.0 x${g.pcie_width}`}
+                      </span>
+                    )}
+                    {(g.pcie_gbps ?? 99) <= 4 && <span className="badge warn">{t('langsamer Anschluss', 'slow connection')}</span>}
                     {g.strongest && <span className="badge ok">{t('stärkste', 'strongest')}</span>}
                   </span>
                 ))}

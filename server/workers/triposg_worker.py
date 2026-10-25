@@ -72,6 +72,8 @@ class GenerateRequest(BaseModel):
     seed: int | None = None
     faces: int = Field(-1, description="Zielanzahl Faces; -1 = keine Reduktion")
     remove_background: bool = Field(True, description="Hintergrund automatisch freistellen")
+    project_front: bool = Field(False, description="Vorderseite aus dem Bild aufs Mesh projizieren "
+                                                    "(front_projection.py), damit Schrift lesbar bleibt")
 
 
 def _load_pipeline() -> TripoSGPipeline:
@@ -236,7 +238,18 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
 
     out = Path(req.output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    mesh.export(str(out))
+    # Die Freistellung, die TripoSG gesehen hat, als eigene Datei: daran laesst sich nachvollziehen,
+    # was ins Mesh eingegangen ist, und die Projektion der Vorderseite nimmt genau dieses Bild.
+    cutout = out.with_name(out.stem + "_cutout.png")
+    image.save(cutout)
+    projection = None
+    if req.project_front:
+        from front_projection import project_front
+
+        scene, projection = project_front(mesh, image)
+        scene.export(str(out), include_normals=True)
+    else:
+        mesh.export(str(out))
 
     return {
         "ok": True,
@@ -245,6 +258,9 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
         "faces": int(mesh.faces.shape[0]),
         "seconds": round(time.time() - started, 1),
         "flash_decoder": HAS_DISO,
+        "cutout_path": str(cutout),
+        "textured": projection is not None,
+        "front_projection": projection,
     }
 
 

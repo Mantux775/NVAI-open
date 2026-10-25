@@ -63,7 +63,40 @@ def _nvidia() -> list[dict[str, Any]]:
         cards.append({"index": int(parts[0]), "vendor": "nvidia", "name": parts[1],
                       "vram_total_mb": total_mb, "vram_total_gb": round(total_mb / 1024, 1),
                       "compute_cap": compute_cap})
+    pcie = _nvidia_pcie(exe)
+    for card in cards:
+        card.update(pcie.get(card["index"], {"pcie_gen": None, "pcie_width": None, "pcie_gbps": None}))
     return cards
+
+
+# Nutzbare PCIe-Bandbreite je Lane in GB/s nach Generation
+_PCIE_LANE_GBPS = {1: 0.25, 2: 0.5, 3: 0.985, 4: 1.969, 5: 3.938, 6: 7.563}
+
+
+def _nvidia_pcie(exe: str) -> dict[int, dict[str, Any]]:
+    """Anschluss je Karte: hoechste moegliche Generation (die aktuelle faellt im Leerlauf auf 1) und
+    ausgehandelte Breite. Eigener Aufruf, weil aeltere Treiber die Felder womoeglich nicht kennen --
+    dann bleibt die Kartenerkennung trotzdem intakt. Gemessen 25.10.: Die RTX 4060 am Riser meldet
+    Gen 3 x4 (3,9 GB/s), die RTX 5060 Ti Gen 4 x8 (15,8 GB/s)."""
+    try:
+        out = subprocess.run(
+            [exe, "--query-gpu=index,pcie.link.gen.max,pcie.link.width.current",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=8, check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        return {}
+    info: dict[int, dict[str, Any]] = {}
+    for line in out.splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 3 or not all(p.isdigit() for p in parts[:3]):
+            continue
+        gen, width = int(parts[1]), int(parts[2])
+        gbps = _PCIE_LANE_GBPS.get(gen)
+        info[int(parts[0])] = {"pcie_gen": gen, "pcie_width": width,
+                               "pcie_gbps": round(gbps * width, 1) if gbps else None}
+    return info
 
 
 def _amd_windows() -> list[dict[str, Any]]:
@@ -319,7 +352,8 @@ def fits(need_gb: float) -> str:
 
     "ja"       laeuft mit Reserve
     "knapp"    laeuft, aber ohne Puffer -- vorher VRAM leeren
-    "nein"     Modell muss staendig nachgeladen werden, wird sehr langsam
+    "nein"     Modell wird bei jedem Schritt nachgeladen; gemessen 25.10. an PCIe 4.0 x8 kaum langsamer
+               (Krea 2 INT8 mit 8 GB 13,0 statt 12,2 s mit 16 GB), am langsamen Anschluss deutlich
     "unklar"   keine GPU erkannt
     """
     budget = budget_gb()
