@@ -195,6 +195,7 @@ enum ModelCatalog {
             "disk_gb": st.installed ? m.downloadGB : 0,
             "runnable": st.installed, "favorite": false, "fits_vram": fits(m),
             "features": features(m),
+            "lora_bases": [LoRAModel.family],
             "engine": "mlx",
         ].merging(ContentRating.apiFields(m.id)) { a, _ in a }
     }

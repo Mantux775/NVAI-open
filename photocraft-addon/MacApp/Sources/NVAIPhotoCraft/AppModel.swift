@@ -272,7 +272,7 @@ final class AppModel {
     /// Arten des Entfernens, die NVAI-open kann (vor dem ersten Abgleich alle drei).
     var restoreModes: [String] { nv.restoreModes.isEmpty ? ["auto", "thorough", "gentle"] : nv.restoreModes }
 
-    /// Gewählte Art; kennt NVAI-open sie nicht (Mac: nur gründlich), gilt die erste angebotene.
+    /// Gewählte Art; kennt NVAI-open sie nicht (Mac bis 0.4.6: nur gründlich), gilt die erste angebotene.
     var restoreMode: String {
         get { restoreModes.contains(form.restoreMode) ? form.restoreMode : restoreModes[0] }
         set { form.restoreMode = newValue }
@@ -281,8 +281,12 @@ final class AppModel {
     var restoreModeNote: String {
         switch restoreMode {
         case "auto":
-            return t("Das Bildmodell sieht sich das Foto an: Wasserflecken oder Rissnetze → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl).",
-                     "The image model looks at the photo: water stains or crack networks → thorough, otherwise gentle (the better choice on 20 of 21 test photos).")
+            // Mac ab 0.4.7: Qwen3.5 4B mit eigener Frage und Schwelle (die Windows-Frage bejahte es fast immer).
+            return nv.mac
+                ? t("Qwen3.5 4B sieht sich das Foto an: Schäden über das ganze Bild → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl, rund 20 s).",
+                    "Qwen3.5 4B looks at the photo: damage across the whole picture → thorough, otherwise gentle (the better choice on 20 of 21 test photos, about 20 s).")
+                : t("Das Bildmodell sieht sich das Foto an: Wasserflecken oder Rissnetze → gründlich, sonst schonend (bei 20 von 21 Testfotos die bessere Wahl).",
+                    "The image model looks at the photo: water stains or crack networks → thorough, otherwise gentle (the better choice on 20 of 21 test photos).")
         case "gentle":
             return t("Für einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Streifen, Risse, Lichteinfall): ersetzt nur diese Stellen, Schärfe und Gesichter bleiben original.",
                      "For separate damage on an otherwise good photo (dust, scratches, stripes, tears, light leaks): replaces only those spots, sharpness and faces stay original.")
@@ -305,12 +309,23 @@ final class AppModel {
 
     /// Gemessene Dauer: Windows mit FLUX 3 Klein NVFP4 und SeedVR2 auf einer RTX 5060 Ti (Restaurieren 1 MP ~35 s,
     /// 2 MP ~75 s, Einfärben ~40–45 s, Schärfen 6–20 s je Variante), Mac mini M1 8 GB mit FLUX.2 Klein (Entfernen
-    /// ~120 s, Einfärben ~105 s je Variante, erstes Laden ~50 s; Livetest 25.10.2026).
+    /// ~120 s, Einfärben ~105 s je Variante, erstes Laden ~50 s; Livetest 25.10.2026). Mac ab 0.4.7: „Automatisch“
+    /// fragt vorher Qwen3.5 4B (~20 s), SeedVR2 3B schärft in Kacheln von 384 px, rund 15–21 s je Kachel (Baseballspieler
+    /// 1024 × 738 → 2048 × 1476: 35 Kacheln, 525 s; 3200 × 2432: 80 Kacheln, ~28 min).
     var restoreTime: String? {
         let n = min(4, max(1, form.variants))
         let variants = n == 1 ? t("1 Variante", "1 variant") : t("\(n) Varianten", "\(n) variants")
         if nv.mac {
-            let seconds = ((form.restoreRepair ? 120 : 0) + (form.restoreColorize ? 105 : 0)) * n
+            var seconds = ((form.restoreRepair ? 120 : 0) + (form.restoreColorize ? 105 : 0)) * n
+            if form.restoreRepair && restoreMode == "auto" { seconds += 20 }
+            if form.restoreSharpen && nv.sharpen, let doc = pc.document {
+                // Zielgröße wie NVAI-open für Mac: Bild × Maßstab, höchstens 8 MP; Kacheln 384 px mit 64 px Überlappung.
+                let k = doc.selection == nil ? Double(form.restoreScale) : 1
+                var w = Double(doc.width) * k, h = Double(doc.height) * k
+                if w * h > 8_000_000 { let f = (8_000_000 / (w * h)).squareRoot(); w *= f; h *= f }
+                func tiles(_ side: Double) -> Int { side <= 384 ? 1 : Int(((side - 64) / 320).rounded(.up)) }
+                seconds += tiles(w) * tiles(h) * 20 * (form.restoreRepair || form.restoreColorize ? n : 1)
+            }
             guard seconds > 0 else { return nil }
             let minutes = max(1, Int((Double(seconds) / 60).rounded()))
             return t("Dauer rund \(minutes) min für \(variants), beim ersten Mal knapp 1 min länger (gemessen auf einem Mac mini M1 mit 8 GB)",

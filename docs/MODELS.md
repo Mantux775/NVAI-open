@@ -51,6 +51,27 @@ such ("according to BFL").
 
 Without a `model_id`, NVAI-open uses the active image model.
 
+### New in NVAI-open for Mac 0.4.7
+
+NVAI-open for Mac now restores like the Windows version and adds LoRAs and audio, all natively on Apple Silicon
+(MLX). Measured on a Mac mini M1 with 8 GB:
+
+| What | How | Measured (M1, 8 GB) |
+|---|---|---|
+| Gentle restoring | keeps the photo at full resolution and only replaces the damage, same rules as on Windows | identical to the Windows code at equal size; 1.1 s for 1216 × 1600 |
+| Automatic | Qwen3.5 4B (Apache-2.0, 3 GB) looks at the photo and decides with a calibrated threshold whether the damage covers the whole picture: then thorough, otherwise gentle | as expected on 20 of 21 test photos, about 20 s |
+| Sharpen and enlarge | SeedVR2 3B (ByteDance, Apache-2.0, 4.7 GB) in 384 px tiles with blended seams and color matching per tile | 1024 × 738 → 2× in 9 min, 1600 × 1216 → 2× in 28 min |
+| LoRAs | five Apache-2.0 LoRAs for FLUX.2 Klein: pixel art, sprite sheet, remove background, anime, consistent editing | first image after a change about 10 s longer |
+| Music and sounds | Stable Audio 3 Medium (8-bit, 3.8 GB; Stability AI Community License), up to 60 s on 8 GB | 30 s of audio in 13 s, 60 s in 23 s |
+
+Limits: FLUX.2 Klein 4B removes less damage than FLUX 3 on Windows (on a heavily aged test photo a crease and a torn
+corner stayed). SeedVR2 3B smooths faces slightly more than the 7B on Windows, but keeps them natural; Real-ESRGAN
+was faster but made old photos look waxy and was dropped. On 8 GB the models load one after another.
+
+![The same face sharpened to twice the size: original, SeedVR2 7B on Windows, SeedVR2 3B on the Mac](images/mac-sharpen-seedvr2.jpg)
+
+![FLUX.2 Klein on the Mac without and with the pixel art LoRA](images/mac-lora-pixelart.jpg)
+
 ### New in 0.5.11
 
 **MOSS-Image** (`moss-image-sft-int8`, OpenMOSS) is the fourth recommended image model: text and layout in the image under Apache-2.0, so images can be sold without a revenue limit or review obligation. It expands short prompts into a full description with its own text encoder (Qwen3.5-9B), stored in `caption` afterwards (`upsample_prompt=False` switches that off); according to OpenMOSS a JSON with "summary" and "items" sets the layout. The default is OpenMOSS's setting with 50 steps and cfg 3. Measured with the same prompts and seeds: 51 s per 1 MP image, plus about 11 s for the expansion the first time; with the 25 steps of ComfyUI's template 28 s. Text came out letter-perfect in every image, the soldier stood in the frame with both boots, the fisherman kept his head in the frame. The crate's rope handles passed through drilled holes in three of three images with 50 steps, in two of three with 25. Text to image only (no reference images, no mask), not available on the Mac.

@@ -10,21 +10,21 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.11.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-Setup-0.5.11.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.6.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-0.4.6.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.7.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-0.4.7.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.11 for Windows and 0.4.6 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11))
+October 2026: NVAI-open 0.5.11 for Windows and 0.4.7 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11))
 
-- **Restore old photos:** remove damage, colorize, sharpen; "Automatic" picks thorough or gentle by the kind of damage. On the Mac too (thorough, without sharpening)
+- **Restore old photos:** remove damage, colorize, sharpen; "Automatic" picks thorough or gentle by the kind of damage. On the Mac too, natively on Apple Silicon
 - **MOSS-Image:** the fourth recommended image model, lettering and layout under Apache-2.0
 - **Recommended settings:** every tab lists what was measured
 - **Preview and history:** results open full size with a click, the history loads 50 at a time
-- **Mac:** "Generate" with model choice, an image picker with upload and drag and drop, and a large preview
+- **Mac (0.4.7):** restoring with "Automatic", "Gentle" and sharpening (SeedVR2 3B), LoRAs for FLUX.2 Klein, music and sounds with Stable Audio 3
 
-Neu: **Alte Fotos restaurieren** (Schäden entfernen, einfärben, schärfen; „Automatisch“ wählt nach der Art der Schäden, auf dem Mac gründlich und ohne Schärfen), **MOSS-Image** (Schrift und Layout unter Apache-2.0), **Empfohlene Einstellungen** in jedem Reiter, **Vorschau per Klick**, ein Verlauf, der in 50er-Schritten nachlädt, und auf dem Mac ein neues „Generieren“ mit Modellwahl, Bildauswahl samt Hochladen und Hineinziehen und großer Vorschau. 0.5.10 brachte Krea 2 mit Stilvorlage, 3D mit lesbarer Schrift und Video verlängern ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10)).
+Neu: **Alte Fotos restaurieren** (Schäden entfernen, einfärben, schärfen; „Automatisch“ wählt nach der Art der Schäden, auch auf dem Mac), **MOSS-Image** (Schrift und Layout unter Apache-2.0), **Empfohlene Einstellungen** in jedem Reiter, **Vorschau per Klick**, ein Verlauf, der in 50er-Schritten nachlädt, und auf dem Mac (0.4.7) Restaurieren mit „Automatisch“, „Schonend“ und Schärfen (SeedVR2 3B), LoRAs für FLUX.2 Klein sowie Musik und Klänge mit Stable Audio 3. 0.5.10 brachte Krea 2 mit Stilvorlage, 3D mit lesbarer Schrift und Video verlängern ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -124,7 +124,7 @@ Make a picture wider or taller, and NVAI-open paints the new border to match. Or
 
 ### Restore old photos
 
-Scratches, dust, tears, stains and fading go, the photo gets color if you like, and SeedVR2 sharpens and enlarges it. "Thorough" redraws the whole photo, which suits overall aging such as water stains and fading; "Gentle" only replaces the damaged spots and keeps sharpness and faces exactly as they are, which suits dust, scratches and tears on an otherwise good photo. "Automatic" (the default) lets the image model look at the photo and choose; it picked the better one on 20 of 21 test photos. Colorizing takes only the color from FLUX 3, brightness and detail stay the photo's. Known colors in the hints make it more accurate. NVAI-open for Mac (0.4.6) restores and colorizes too, always thoroughly and without sharpening. Details: [docs/MODELS.md](docs/MODELS.md#new-in-0511).
+Scratches, dust, tears, stains and fading go, the photo gets color if you like, and SeedVR2 sharpens and enlarges it. "Thorough" redraws the whole photo, which suits overall aging such as water stains and fading; "Gentle" only replaces the damaged spots and keeps sharpness and faces exactly as they are, which suits dust, scratches and tears on an otherwise good photo. "Automatic" (the default) lets the image model look at the photo and choose; it picked the better one on 20 of 21 test photos. Colorizing takes only the color from FLUX 3, brightness and detail stay the photo's. Known colors in the hints make it more accurate. NVAI-open for Mac (0.4.7) does all of it natively on Apple Silicon: "Automatic" with Qwen3.5 4B, sharpening with SeedVR2 3B (on a Mac with 8 GB, doubling a 1 MP photo takes about 9 minutes). Details: [docs/MODELS.md](docs/MODELS.md#new-in-0511).
 
 ![An aged test photo, restored and colorized by NVAI-open, next to the color original it was aged from](docs/images/restore-car.jpg)
 
@@ -165,7 +165,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 
 ### Mac app, PhotoCraft add-on, iOS
 
-- **Mac:** a native app for Apple Silicon with FLUX.2 Klein: generate, refine, fill, reference images, expand prompts.
+- **Mac:** a native app for Apple Silicon with FLUX.2 Klein: generate, refine, fill, reference images, expand prompts, LoRAs, restore old photos, and music and sounds with Stable Audio 3 (30 seconds in about 13 seconds on an M1).
 - **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
@@ -300,7 +300,7 @@ Ein Bild breiter oder höher machen, und NVAI-open malt den neuen Rand passend d
 
 ### Alte Fotos restaurieren
 
-Kratzer, Staub, Risse, Flecken und Ausbleichen verschwinden, auf Wunsch bekommt das Foto Farbe, und SeedVR2 schärft und vergrößert es. „Gründlich“ rechnet das ganze Foto neu, das passt zu flächiger Alterung wie Wasserflecken und Ausbleichen; „Schonend“ ersetzt nur die beschädigten Stellen und lässt Schärfe und Gesichter genau, wie sie waren, das passt zu Staub, Kratzern und Rissen auf einem sonst guten Foto. „Automatisch“ (Vorgabe) lässt das Bildmodell das Foto ansehen und wählen; bei 20 von 21 Testfotos traf es die bessere Art. Beim Einfärben kommt nur die Farbe von FLUX 3, Helligkeit und Detail bleiben die des Fotos. Bekannte Farben in den Hinweisen machen es genauer. NVAI-open für Mac (0.4.6) restauriert und färbt ebenfalls ein, immer gründlich und ohne Schärfen. Mehr dazu: [docs/de/MODELLE.md](docs/de/MODELLE.md#neu-in-0511).
+Kratzer, Staub, Risse, Flecken und Ausbleichen verschwinden, auf Wunsch bekommt das Foto Farbe, und SeedVR2 schärft und vergrößert es. „Gründlich“ rechnet das ganze Foto neu, das passt zu flächiger Alterung wie Wasserflecken und Ausbleichen; „Schonend“ ersetzt nur die beschädigten Stellen und lässt Schärfe und Gesichter genau, wie sie waren, das passt zu Staub, Kratzern und Rissen auf einem sonst guten Foto. „Automatisch“ (Vorgabe) lässt das Bildmodell das Foto ansehen und wählen; bei 20 von 21 Testfotos traf es die bessere Art. Beim Einfärben kommt nur die Farbe von FLUX 3, Helligkeit und Detail bleiben die des Fotos. Bekannte Farben in den Hinweisen machen es genauer. NVAI-open für Mac (0.4.7) kann alles davon nativ auf Apple Silicon: „Automatisch“ mit Qwen3.5 4B, Schärfen mit SeedVR2 3B (auf einem Mac mit 8 GB dauert das Doppelte eines 1-MP-Fotos rund 9 Minuten). Mehr dazu: [docs/de/MODELLE.md](docs/de/MODELLE.md#neu-in-0511).
 
 ![Ein gealtertes Testfoto, von NVAI-open restauriert und eingefärbt, neben der Farbvorlage, aus der es gealtert wurde](docs/images/restore-car-de.jpg)
 
@@ -341,7 +341,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 
 ### Mac-App, PhotoCraft-Add-on, iOS
 
-- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen.
+- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen, LoRAs, alte Fotos restaurieren sowie Musik und Klänge mit Stable Audio 3 (30 Sekunden in rund 13 Sekunden auf einem M1).
 - **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 

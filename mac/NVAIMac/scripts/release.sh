@@ -143,6 +143,13 @@ NVAI-open for Mac: Getting Started
    image description from them. Read it and delete what was invented; "Back to my prompt" restores yours.
 5. Old photos: under "Generate", switch to "Restore photo", pick the photo or drag it in, and choose
    "Remove damage" and/or "Colorize". Known colors in the hints make colorizing more accurate.
+   "Automatic" (needs Qwen3.5 4B, 3 GB, under "Models" > Add-ons) picks thorough or gentle; "Sharpen and
+   enlarge" needs SeedVR2 3B (4.7 GB). On a Mac with 8 GB, sharpening a 1 MP photo to twice its size
+   takes about 9 minutes.
+6. LoRAs: under "Models" > LoRAs, download a style (pixel art, sprite sheet, anime, ...), tick it under
+   "Generate" > LoRAs and put its trigger word into the prompt.
+7. Music and sounds: under "Models", download Stable Audio 3 Medium (3.8 GB), then "Generate" >
+   "Music and sounds". 30 seconds take about 13 seconds on an M1.
 
 Language: follows the system; switch under Settings > Language (the menu bar follows after a restart).
 
@@ -156,7 +163,9 @@ Feedback
   "Report on GitHub". NVAI-open saves an anonymized report (no names, no prompts, no images)
   and opens a prefilled issue; drag the saved file into it.
 
-Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NVAI-open itself: MIT License.
+Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Qwen3.5 4B (Alibaba, Apache-2.0),
+SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community License: commercial use
+below US$1M annual revenue). NVAI-open itself: MIT License.
 Third-party components: see "Third-Party Notices.txt" or NVAI-open > Licenses.
 TXT
 cat > "$OUT/dmg/Erste Schritte.txt" <<'TXT'
@@ -172,6 +181,13 @@ NVAI-open für Mac: Erste Schritte
    Text zurück.
 5. Alte Fotos: unter „Generieren“ auf „Foto restaurieren“ umschalten, das Foto wählen oder hineinziehen und
    „Schäden entfernen“ und/oder „Einfärben“ wählen. Bekannte Farben in den Hinweisen machen das Einfärben genauer.
+   „Automatisch“ (braucht Qwen3.5 4B, 3 GB, unter „Modelle“ > Zusätze) wählt gründlich oder schonend;
+   „Schärfen und vergrößern“ braucht SeedVR2 3B (4,7 GB). Auf einem Mac mit 8 GB dauert das Doppelte eines
+   1-MP-Fotos rund 9 Minuten.
+6. LoRAs: unter „Modelle“ > LoRAs einen Stil laden (Pixel-Art, Sprite-Sheet, Anime …), unter „Generieren“ >
+   LoRAs anhaken und das Auslösewort in den Prompt schreiben.
+7. Musik und Klänge: unter „Modelle“ Stable Audio 3 Medium laden (3,8 GB), dann „Generieren“ >
+   „Musik und Klänge“. 30 Sekunden dauern auf einem M1 rund 13 Sekunden.
 
 Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menüleiste folgt nach einem Neustart).
 
@@ -185,7 +201,9 @@ Rückmeldung
   „Auf GitHub melden“ klicken. NVAI-open speichert einen anonymisierten Bericht (keine Namen,
   keine Prompts, keine Bilder) und öffnet ein vorausgefülltes Issue; die Datei dort hineinziehen.
 
-Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0). NVAI-open selbst: MIT-Lizenz.
+Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Qwen3.5 4B (Alibaba, Apache-2.0),
+SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community License: kommerziell bis
+1 Mio. US-$ Jahresumsatz). NVAI-open selbst: MIT-Lizenz.
 Komponenten von Dritten: siehe „Third-Party Notices.txt“ oder NVAI-open > Lizenzen.
 TXT
 cp "$ROOT/Resources/Third-Party-Notices.txt" "$OUT/dmg/Third-Party Notices.txt"

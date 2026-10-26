@@ -30,6 +30,8 @@ struct ImageJobRequest: Sendable {
     var referenceAssetIDs: [String]
     /// Outpainting: Ränder in Pixeln; Format und Prompt setzt dann JobQueue.runImage.
     var outpaint: Outpaint.Edges? = nil
+    /// LoRAs für FLUX.2 Klein (seit 0.4.7), wie unter Windows `loras=[{model_id, strength}]`.
+    var loras: [LoRAChoice] = []
     /// Der Auftrag, wie er ankam – erscheint im Job unter `params`.
     var params: JSONValue
     /// Sprache des Clients (Accept-Language) bzw. der App – für Stufen und Fehler des Jobs.
@@ -115,6 +117,32 @@ struct ImageJobRequest: Sendable {
             throw APIError(422, t("ControlNet gibt es in NVAI-open für Mac nicht.", "NVAI-open for Mac has no ControlNet."))
         }
 
+        var loras: [LoRAChoice] = []
+        if let v = o["loras"], !v.isNull {
+            guard let list = v.arrayValue else {
+                throw APIError(422, t("loras muss eine Liste sein: [{\"model_id\": …, \"strength\": …}].",
+                                      "loras must be a list: [{\"model_id\": …, \"strength\": …}]."))
+            }
+            for entry in list {
+                guard let id = entry["model_id"]?.stringValue, let lora = LoRACatalog.find(id) else {
+                    throw APIError(404, t("Unbekannte LoRA: \(entry["model_id"]?.stringValue ?? "?")",
+                                          "Unknown LoRA: \(entry["model_id"]?.stringValue ?? "?")"))
+                }
+                guard lora.installed else {
+                    throw APIError(409, t("„\(lora.name)“ ist nicht geladen. Unter „Modelle“ → LoRAs herunterladen.",
+                                          "\"\(lora.name)\" is not downloaded. Download it under \"Models\" → LoRAs."))
+                }
+                let strength = entry["strength"]?.doubleValue ?? lora.strength
+                guard (0...2).contains(strength) else {
+                    throw APIError(422, t("strength muss zwischen 0 und 2 liegen.", "strength must be between 0 and 2."))
+                }
+                if !loras.contains(where: { $0.id == id }) { loras.append(LoRAChoice(id: id, strength: strength)) }
+            }
+            guard loras.count <= 3 else {
+                throw APIError(422, t("Höchstens 3 LoRAs zugleich.", "At most 3 LoRAs at a time."))
+            }
+        }
+
         let model: AnyModel
         if let id = try string("model_id") {
             guard let found = Models.find(id) else { throw APIError(404, t("Unbekanntes Modell: \(id)", "Unknown model: \(id)")) }
@@ -141,6 +169,9 @@ struct ImageJobRequest: Sendable {
             if !refs.isEmpty {
                 throw APIError(422, t("„\(m.name)“ kann keine Referenzbilder (features.references = 0).", "\"\(m.name)\" cannot use reference images (features.references = 0)."))
             }
+            if !loras.isEmpty {
+                throw APIError(422, t("LoRAs gibt es nur für FLUX.2 Klein.", "LoRAs are only available for FLUX.2 Klein."))
+            }
             if outpaint != nil {
                 throw APIError(422, t("„\(m.name)“ kann nicht erweitern (features.outpaint = null). FLUX.2 Klein wählen.", "\"\(m.name)\" cannot extend images (features.outpaint = null). Use FLUX.2 Klein."))
             }
@@ -158,6 +189,6 @@ struct ImageJobRequest: Sendable {
         return ImageJobRequest(prompt: prompt, negativePrompt: negative, modelID: model.id, engine: model.engine,
                                width: width, height: height, steps: steps, guidance: Float(cfg),
                                seed: seed.map { UInt64($0) }, batch: batch, imageAssetID: image, denoise: denoise,
-                               maskAssetID: mask, referenceAssetIDs: refs, outpaint: outpaint, params: body)
+                               maskAssetID: mask, referenceAssetIDs: refs, outpaint: outpaint, loras: loras, params: body)
     }
 }

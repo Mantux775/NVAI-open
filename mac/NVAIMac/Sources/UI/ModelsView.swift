@@ -28,6 +28,23 @@ struct ModelsView: View {
                        + "pipelines on Hugging Face; NVAI-open checks them before downloading."))
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(coremlRows) { row in ModelCard(row: row) }
+
+                Text(t("LoRAs (FLUX.2 Klein)", "LoRAs (FLUX.2 Klein)")).font(.title2.bold()).padding(.top, 10)
+                Text(t("Kleine Zusatzgewichte für einen Stil oder eine Aufgabe, alle Apache-2.0. Beim Generieren unter "
+                       + "„LoRAs“ anhaken; das Auslösewort gehört in den Prompt.",
+                       "Small add-on weights for a style or a task, all Apache-2.0. Tick them under \"LoRAs\" when "
+                       + "generating; the trigger word goes into the prompt."))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(state.loras) { row in LoRACard(row: row) }
+
+                Text(t("Musik und Klänge", "Music and sounds")).font(.title2.bold()).padding(.top, 10)
+                AudioModelCard()
+
+                Text(t("Zusätze", "Add-ons")).font(.title2.bold()).padding(.top, 10)
+                Text(t("Keine Bildmodelle, sondern Werkzeuge für einzelne Funktionen.",
+                       "Not image models, but tools for single features."))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(state.helpers) { row in HelperCard(row: row) }
             }
             .padding(16)
         }
@@ -159,5 +176,118 @@ struct ModelCard: View {
 
     private var statusColor: Color {
         row.installed ? .green : (row.partial ? .orange : .secondary)
+    }
+}
+
+/// Ein Zusatzmodell (Qwen3.5 4B für „Automatisch“ beim Restaurieren): laden, Fortschritt, löschen.
+struct HelperCard: View {
+    @EnvironmentObject var state: AppState
+    let row: AppState.HelperRow
+
+    private var download: JobRecord? {
+        state.jobs.first { $0.downloadModelID == row.model.id && !$0.isFinished }
+    }
+    private var lastError: String? {
+        state.jobs.first { $0.downloadModelID == row.model.id }.flatMap { $0.status == "error" ? $0.error : nil }
+    }
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(row.model.name).font(.headline)
+                    Spacer()
+                    Text(row.installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
+                        .foregroundStyle(row.installed ? .green : .secondary)
+                }
+                Text(row.model.bestFor).font(.callout.bold())
+                Text(row.model.description).font(.callout)
+                Text(t(String(format: "Download %.1f GB · %@", row.model.sizeGB, row.model.license),
+                       String(format: "Download %.1f GB · %@", row.model.sizeGB, row.model.license)))
+                    .font(.caption).foregroundStyle(.secondary)
+                if let download {
+                    ProgressView(value: download.progress)
+                    HStack {
+                        Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button(t("Abbrechen", "Cancel")) {
+                            Task {
+                                _ = try? await JobQueue.shared.cancel(download.id)
+                                await state.refresh()
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(download.cancelRequested)
+                    }
+                } else if let lastError {
+                    Text(lastError).font(.caption).foregroundStyle(.red)
+                }
+                HStack {
+                    if !row.installed {
+                        Button(t("Herunterladen", "Download")) {
+                            let model = row.model
+                            Task { _ = await JobQueue.shared.submitDownload(model) }
+                        }
+                        .disabled(download != nil)
+                    } else {
+                        Button(t("Löschen", "Delete"), role: .destructive) {
+                            try? row.model.delete()
+                            state.refreshModels()
+                        }
+                    }
+                }
+            }
+            .padding(6)
+        }
+    }
+}
+
+/// Eine LoRA: laden, Fortschritt, löschen.
+struct LoRACard: View {
+    @EnvironmentObject var state: AppState
+    let row: AppState.LoRARow
+
+    private var download: JobRecord? {
+        state.jobs.first { $0.downloadModelID == row.model.id && !$0.isFinished }
+    }
+    private var lastError: String? {
+        state.jobs.first { $0.downloadModelID == row.model.id }.flatMap { $0.status == "error" ? $0.error : nil }
+    }
+
+    var body: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(row.model.name).font(.headline)
+                    Spacer()
+                    Text(row.installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
+                        .foregroundStyle(row.installed ? .green : .secondary)
+                }
+                Text(row.model.description).font(.callout)
+                Text(String(format: "%.0f MB · %@ · %@", row.model.sizeMB, row.model.license, row.model.repo))
+                    .font(.caption).foregroundStyle(.secondary)
+                if let download {
+                    ProgressView(value: download.progress)
+                    Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                } else if let lastError {
+                    Text(lastError).font(.caption).foregroundStyle(.red)
+                }
+                HStack {
+                    if !row.installed {
+                        Button(t("Herunterladen", "Download")) {
+                            let model = row.model
+                            Task { _ = await JobQueue.shared.submitDownload(model) }
+                        }
+                        .disabled(download != nil)
+                    } else {
+                        Button(t("Löschen", "Delete"), role: .destructive) {
+                            row.model.delete()
+                            state.refreshModels()
+                        }
+                    }
+                }
+            }
+            .padding(6)
+        }
     }
 }

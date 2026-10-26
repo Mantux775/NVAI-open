@@ -14,6 +14,13 @@ packages:
     # FLUX.2 Klein auf MLX (MIT), lokale Kopie von 3.1.0 mit Abbruchprüfung nach jedem Schritt
     # (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md); mlx-swift ist darin exakt gepinnt.
     path: Packages/flux-2-swift-mlx
+  SeedVR2:
+    # SeedVR2 3B auf MLX (Port MIT, Gewichte Apache-2.0), lokale Kopie des archivierten seedvr2-mlx-swift
+    # (Packages/seedvr2-mlx-swift/NVAI-OPEN-CHANGES.md); mlx-swift wie bei Flux2.
+    path: Packages/seedvr2-mlx-swift
+  StableAudio3:
+    # Stable Audio 3 Medium auf MLX (aus speech-swift, Apache-2.0; Packages/stable-audio-3-swift/NVAI-OPEN-CHANGES.md).
+    path: Packages/stable-audio-3-swift
   StableDiffusion:
     # Core ML Stable Diffusion für kleine Macs und die Modellsuche, wie in NVAILocal.
     url: https://github.com/apple/ml-stable-diffusion
@@ -36,6 +43,10 @@ targets:
         product: Flux2Core
       - package: Flux2
         product: Flux2Chains
+      - package: SeedVR2
+        product: SeedVR2MLX
+      - package: StableAudio3
+        product: StableAudio3
       - package: StableDiffusion
         product: StableDiffusion
       - package: ZIPFoundation
@@ -45,8 +56,8 @@ targets:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
-        MARKETING_VERSION: "0.4.6"
-        CURRENT_PROJECT_VERSION: "11"
+        MARKETING_VERSION: "0.4.7"
+        CURRENT_PROJECT_VERSION: "12"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

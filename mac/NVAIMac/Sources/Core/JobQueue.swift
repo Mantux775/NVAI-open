@@ -17,6 +17,8 @@ struct JobRecord: Sendable, Identifiable {
     var request: ImageJobRequest?
     /// Foto restaurieren (seit 0.4.6, `POST /api/image/restore`).
     var restore: RestoreJobRequest?
+    /// Musik oder Klang (seit 0.4.7, `POST /api/generate/audio`).
+    var audio: AudioJobRequest?
     var downloadModelID: String?
     /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
     var expandPrompt: String?
@@ -108,6 +110,27 @@ actor JobQueue {
         return job
     }
 
+    func submitAudio(_ request: AudioJobRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "txt2audio", status: "queued",
+                            stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
+                            lang: request.lang)
+        job.audio = request
+        add(job)
+        return job
+    }
+
+    /// Stable Audio 3 laden.
+    func submitAudioDownload() -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == AudioCatalog.id && !$0.isFinished }) {
+            return existing
+        }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(AudioCatalog.id)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: AudioCatalog.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
     func submitRestore(_ request: RestoreJobRequest) -> JobRecord {
         var job = JobRecord(id: AssetStore.newID("job"), kind: "restore", status: "queued",
                             stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
@@ -124,6 +147,30 @@ actor JobQueue {
         let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
                             params: .object(["model_id": .string(model.id)]),
                             createdAt: Date().timeIntervalSince1970, downloadModelID: model.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    /// LoRA laden (FLUX.2 Klein).
+    func submitDownload(_ lora: LoRAModel) -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == lora.id && !$0.isFinished }) {
+            return existing
+        }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(lora.id)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: lora.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    /// Zusatzmodell laden (Qwen3.5 für „Automatisch“ beim Restaurieren).
+    func submitDownload(_ helper: HelperModel) -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == helper.id && !$0.isFinished }) {
+            return existing
+        }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(helper.id)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: helper.id, lang: Lang.current)
         add(job)
         return job
     }
@@ -271,6 +318,9 @@ actor JobQueue {
                 try await runDownload(id, modelID: modelID)
             } else if let prompt = job.expandPrompt {
                 try await runExpand(id, prompt: prompt)
+            } else if let audio = job.audio {
+                AppLog.info("Job \(id) started: audio, \(Int(audio.seconds)) s, \(audio.steps) steps")
+                try await runAudio(id, audio)
             } else if let restore = job.restore {
                 AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
                 try await runRestore(id, restore)
@@ -327,6 +377,40 @@ actor JobQueue {
     }
 
     private func runDownload(_ id: String, modelID: String) async throws {
+        if modelID == AudioCatalog.id {
+            update(id) { $0.stage = t("lädt \(AudioCatalog.name)", "downloading \(AudioCatalog.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await AudioCatalog.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            return
+        }
+        if let lora = LoRACatalog.find(modelID) {
+            update(id) { $0.stage = t("lädt \(lora.name)", "downloading \(lora.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await lora.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            return
+        }
+        if let helper = HelperModel.find(modelID) {
+            update(id) { $0.stage = t("lädt \(helper.name)", "downloading \(helper.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await helper.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
+            return
+        }
         guard let model = Models.find(modelID) else { throw APIError(404, t("Unbekanntes Modell: \(modelID)", "Unknown model: \(modelID)")) }
         update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         let report: @Sendable (Double, String) -> Void = { fraction, message in
@@ -374,8 +458,9 @@ actor JobQueue {
             return
         }
         guard case .flux(let model) = any else { return }
-        // Nur ein Modell im Speicher: Core ML vorher freigeben.
+        // Nur ein Modell im Speicher: Core ML (und auf kleinen Macs Klang und Schärfen) vorher freigeben.
         await CoreMLEngine.shared.unload()
+        await freeHelpers()
 
         // Eingangsbilder zuerst: ein falsches Asset soll scheitern, bevor das Modell lädt.
         var image: CGImage?
@@ -418,7 +503,7 @@ actor JobQueue {
         update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         let loadStart = Date()
         let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
-        try await Flux2Engine.shared.load(model) { fraction, message in
+        try await Flux2Engine.shared.load(model, loras: req.loras) { fraction, message in
             Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
         }
         let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
@@ -498,6 +583,9 @@ actor JobQueue {
                 meta["outpaint"] = .array([e.left, e.top, e.right, e.bottom].map { .int($0) })
             }
             if !req.referenceAssetIDs.isEmpty { meta["reference_asset_ids"] = .array(req.referenceAssetIDs.map { .string($0) }) }
+            if !req.loras.isEmpty {
+                meta["loras"] = .array(req.loras.map { .object(["model_id": .string($0.id), "strength": .double($0.strength)]) })
+            }
 
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
                                                              modelID: model.id, meta: meta)
@@ -570,6 +658,67 @@ actor JobQueue {
         }
     }
 
+    /// Auf Macs bis 16 GB passt neben FLUX.2 kein weiteres Modell: Klang, SeedVR2 und Qwen3.5 freigeben.
+    private func freeHelpers() async {
+        guard SystemInfo.memoryGB <= 16 else { return }
+        await AudioEngine.shared.unload()
+        await SeedVR2Engine.shared.unload()
+        await VisionEngine.shared.unload()
+    }
+
+    // MARK: Musik und Klänge
+
+    /// Stable Audio 3 Medium (`AudioEngine`), wie unter Windows 8 Schritte mit cfg 1; WAV in die Ablage.
+    private func runAudio(_ id: String, _ req: AudioJobRequest) async throws {
+        await CoreMLEngine.shared.unload()
+        if SystemInfo.memoryGB <= 16 {
+            await Flux2Engine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+            await VisionEngine.shared.unload()
+            MemoryLog.release()
+        }
+        update(id) { $0.stage = t("lädt Stable Audio 3", "loading Stable Audio 3") }
+        let sampler = PeakMemorySampler()
+        sampler.start()
+        let loadStart = Date()
+        let wasLoaded = await AudioEngine.shared.isLoaded
+        do {
+            try await AudioEngine.shared.load()
+        } catch {
+            _ = sampler.stop()
+            throw error
+        }
+        let loadSeconds = wasLoaded ? 0 : Date().timeIntervalSince(loadStart)
+        let seed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        update(id) {
+            $0.stage = t("rechnet \(Int(req.seconds)) s Klang", "generating \(Int(req.seconds)) s of audio")
+            $0.progress = 0.1
+        }
+        let started = Date()
+        let wav: Data
+        do {
+            wav = try await AudioEngine.shared.generate(prompt: req.prompt, seconds: req.seconds, steps: req.steps,
+                                                        cfg: req.cfg, seed: seed)
+        } catch {
+            _ = sampler.stop()
+            throw error
+        }
+        let seconds = Date().timeIntervalSince(started)
+        let peak = sampler.stop()
+        MemoryLog.line("after Stable Audio 3")
+        var meta: [String: JSONValue] = [
+            "seed": .int(Int(seed)), "seconds": .double(req.seconds), "steps": .int(req.steps), "cfg": .double(req.cfg),
+            "model_name": .string(AudioCatalog.name), "workflow": .string("stable_audio_3"), "engine": .string("mlx"),
+            "sample_rate": .int(44_100), "format": .string("wav"),
+            "duration_s": .double((seconds * 10).rounded() / 10), "peak_memory_mb": .int(Int(peak)),
+            "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+        ]
+        if loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+        let asset = try await AssetStore.shared.addAudio(wav: wav, jobID: id, prompt: req.prompt, modelID: AudioCatalog.id,
+                                                         meta: meta)
+        update(id) { $0.assetIDs.append(asset.id) }
+    }
+
     // MARK: Restaurieren
 
     private func restoreProgress(_ id: String, run: Int, of count: Int, label: String, step: Int, total: Int) {
@@ -578,6 +727,15 @@ actor JobQueue {
             let inRun = total > 0 ? Double(step) / Double(total) : 0
             $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
             $0.stage = "\(label) · " + t("Schritt \(step) von \(total)", "step \(step) of \(total)")
+        }
+    }
+
+    private func sharpenProgress(_ id: String, run: Int, of count: Int, done: Int, total: Int) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            let inRun = total > 0 ? Double(done) / Double(total) : 0
+            $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
+            $0.stage = t("Schärfen · Kachel \(done) von \(total)", "Sharpening · tile \(done) of \(total)")
         }
     }
 
@@ -600,100 +758,225 @@ actor JobQueue {
     }
 
     /// Foto restaurieren, wie `jobs._restore` unter Windows: je Variante erst die Schäden (FLUX.2 Klein rechnet
-    /// das Foto mit der Anweisung neu, `RestoreTools.align` rückt es aufs Foto), dann die Farbe (FLUX.2 Klein
+    /// das Foto mit der Anweisung neu, `RestoreTools.align` rückt es aufs Foto; schonend setzt
+    /// `RestoreTools.mergeDamage` davon nur die Schäden ins Foto in voller Auflösung), dann die Farbe (FLUX.2 Klein
     /// färbt, übernommen wird nur Lab a/b auf die Helligkeit des Fotos bzw. des restaurierten Bildes). Ohne
-    /// Restaurieren behält das eingefärbte Foto seine volle Auflösung.
+    /// Restaurieren behält das eingefärbte Foto seine volle Auflösung. „auto“ fragt vorher Qwen3.5 4B nach der Art
+    /// der Schäden (`VisionEngine`), einmal je Auftrag und vor dem Laden von FLUX.2 (beide passen auf 8 GB nicht
+    /// zugleich).
     private func runRestore(_ id: String, _ req: RestoreJobRequest) async throws {
-        guard case .flux(let model)? = Models.find(req.modelID) else {
-            throw APIError(404, t("Unbekanntes Modell: \(req.modelID)", "Unknown model: \(req.modelID)"))
+        var fluxModel: CatalogModel?
+        if req.repair || req.colorize {
+            guard case .flux(let m)? = Models.find(req.modelID) else {
+                throw APIError(404, t("Unbekanntes Modell: \(req.modelID)", "Unknown model: \(req.modelID)"))
+            }
+            fluxModel = m
         }
         let photo = try await loadImage(req.imageAssetID, t("Foto", "Photo"))
         await CoreMLEngine.shared.unload()
-        update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
-        let loadStart = Date()
-        let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
-        try await Flux2Engine.shared.load(model) { fraction, message in
-            Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
+        if SystemInfo.memoryGB <= 16 { await AudioEngine.shared.unload() }
+        var kind: (mode: String, answer: String?)?
+        if req.repair && req.repairMode == "auto" {
+            if HelperModel.vision.installed {
+                update(id) { $0.stage = t("Schäden entfernen · prüft die Art der Schäden", "Removing damage · checking the kind of damage") }
+                if SystemInfo.memoryGB <= 16, await VisionEngine.shared.cachedAnswer(req.imageAssetID) == nil {
+                    await Flux2Engine.shared.unload()
+                }
+                let started = Date()
+                let r = try await VisionEngine.shared.restoreKind(photo, assetID: req.imageAssetID)
+                MemoryLog.release()
+                MemoryLog.line("after Qwen3.5")
+                kind = (r.gentle ? "gentle" : "thorough", r.answer)
+                AppLog.info("Job \(id): automatic restore picked \(kind!.mode) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s (\(r.answer))")
+            } else {
+                // Ohne Bild-Sprachmodell wie unter Windows ohne Upsampler: gründlich lässt keine Schäden stehen.
+                kind = ("thorough", nil)
+            }
         }
-        let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
-        let features = AnyModel.flux(model).features
-        let steps = features["steps"] as? Int ?? 4
-        let guidance = Float(features["cfg"] as? Double ?? 1.0)
+        let repairMode = kind?.mode ?? req.repairMode
         let baseSeed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
         let runsPerVariant = (req.repair ? 1 : 0) + (req.colorize ? 1 : 0)
-        let count = runsPerVariant * req.batch
-        func instruction(_ text: String) -> String { req.notes.isEmpty ? text : "\(text) \(req.notes)" }
-        let repairLabel = t("Schäden entfernen", "Removing damage"), colorLabel = t("Einfärben", "Colorizing")
-
-        for k in 0..<req.batch {
-            if jobs[id]?.cancelRequested == true { break }
-            let seed = baseSeed &+ UInt64(k)
-            let sampler = PeakMemorySampler()
-            sampler.start()
-            var current = photo
-            var seconds: [String: JSONValue] = [:]
-            var meta: [String: JSONValue] = [
-                "restore": .object(["repair": .bool(req.repair), "colorize": .bool(req.colorize), "sharpen": .bool(false)]),
+        // Läufe für den Fortschritt: je Variante die FLUX-Schritte, dazu das Schärfen.
+        let count = (runsPerVariant + (req.sharpen ? 1 : 0)) * req.batch
+        func baseMeta(_ seed: UInt64, _ variant: Int) -> [String: JSONValue] {
+            [
+                "restore": .object(["repair": .bool(req.repair), "colorize": .bool(req.colorize), "sharpen": .bool(req.sharpen)]),
                 "source_asset_id": .string(req.imageAssetID),
                 "source_size": .array([.int(photo.width), .int(photo.height)]),
-                "seed": .int(Int(seed)), "model_name": .string(model.name), "workflow": .string(model.workflow),
-                "engine": .string("mlx"), "notes": .string(req.notes), "variant": .int(k + 1),
+                "seed": .int(Int(seed)), "engine": .string("mlx"), "notes": .string(req.notes), "variant": .int(variant),
                 "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
             ]
-            do {
-                if req.repair {
-                    let started = Date()
-                    let size = RestoreJobRequest.workingSize(photo.width, photo.height,
-                                                             megapixels: req.megapixels ?? RestoreJobRequest.repairMegapixels)
-                    let raw = try await renderReference(id, image: photo, prompt: instruction(RestoreJobRequest.repairInstruction),
-                                                        size: size, steps: steps, guidance: guidance, seed: seed,
-                                                        run: k * runsPerVariant, of: count, label: repairLabel)
-                    let (aligned, alignment) = RestoreTools.align(raw, to: photo)
-                    current = aligned
-                    var info: [String: JSONValue] = [
-                        "mode": .string("thorough"), "width": .int(size.width), "height": .int(size.height),
-                        "align": alignment.json,
-                    ]
-                    // „auto“ trifft unter Windows ein Bild-Sprachmodell; hier sieht der Text-Encoder keine Bilder.
-                    if req.repairMode == "auto" { info["auto"] = .string("thorough"); info["auto_answer"] = .null }
-                    meta["repair"] = .object(info)
-                    seconds["repair"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
-                }
-                if req.colorize && jobs[id]?.cancelRequested != true {
-                    let started = Date()
-                    let size = RestoreJobRequest.workingSize(current.width, current.height,
-                                                             megapixels: RestoreJobRequest.colorizeMegapixels)
-                    let raw = try await renderReference(id, image: current, prompt: instruction(RestoreJobRequest.colorizeInstruction),
-                                                        size: size, steps: steps, guidance: guidance, seed: seed &+ 101,
-                                                        run: k * runsPerVariant + (req.repair ? 1 : 0), of: count,
-                                                        label: colorLabel)
-                    let (aligned, alignment) = RestoreTools.align(raw, to: current)
-                    let (colored, info) = RestoreTools.colorize(aligned, onto: current)
-                    current = colored
-                    var colorInfo = info.objectValue ?? [:]
-                    colorInfo["width"] = .int(size.width)
-                    colorInfo["height"] = .int(size.height)
-                    colorInfo["align"] = alignment.json
-                    meta["colorize"] = .object(colorInfo)
-                    seconds["colorize"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
-                }
-            } catch {
-                _ = sampler.stop()
-                throw error
+        }
+        // Ergebnis je Variante nach dem letzten Schritt; gespeichert wird erst am Ende (Schärfen kommt nach allen
+        // FLUX-Läufen, weil SeedVR2 und FLUX.2 auf 8 GB nicht zugleich passen).
+        var outputs: [(image: CGImage, meta: [String: JSONValue], seconds: [String: JSONValue], peak: Double)] = []
+
+        if let model = fluxModel {
+            update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
+            let loadStart = Date()
+            let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
+            try await Flux2Engine.shared.load(model) { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
             }
-            let peak = sampler.stop()
-            if jobs[id]?.cancelRequested == true { break }
-            meta["seconds"] = .object(seconds)
-            meta["width"] = .int(current.width)
-            meta["height"] = .int(current.height)
-            meta["peak_memory_mb"] = .int(Int(peak))
-            if k == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
-            let parts = [req.repair ? t("gründlich restauriert", "restored thoroughly") : nil,
-                         req.colorize ? t("eingefärbt", "colorized") : nil].compactMap { $0 }
-            let label = t("Foto ", "Photo ") + parts.joined(separator: ", ")
-            let asset = try await AssetStore.shared.addImage(png: try ImageFiles.pngData(current), jobID: id,
+            let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
+            MemoryLog.line("FLUX.2 loaded")
+            let features = AnyModel.flux(model).features
+            let steps = features["steps"] as? Int ?? 4
+            let guidance = Float(features["cfg"] as? Double ?? 1.0)
+            func instruction(_ text: String) -> String { req.notes.isEmpty ? text : "\(text) \(req.notes)" }
+            let repairLabel = t("Schäden entfernen", "Removing damage"), colorLabel = t("Einfärben", "Colorizing")
+
+            for k in 0..<req.batch {
+                if jobs[id]?.cancelRequested == true { break }
+                let seed = baseSeed &+ UInt64(k)
+                let sampler = PeakMemorySampler()
+                sampler.start()
+                var current = photo
+                var seconds: [String: JSONValue] = [:]
+                var meta = baseMeta(seed, k + 1)
+                meta["model_name"] = .string(model.name)
+                meta["workflow"] = .string(model.workflow)
+                do {
+                    if req.repair {
+                        let started = Date()
+                        let size = RestoreJobRequest.workingSize(photo.width, photo.height,
+                                                                 megapixels: req.megapixels ?? RestoreJobRequest.repairMegapixels)
+                        let raw = try await renderReference(id, image: photo, prompt: instruction(RestoreJobRequest.repairInstruction),
+                                                            size: size, steps: steps, guidance: guidance, seed: seed,
+                                                            run: k * runsPerVariant, of: count, label: repairLabel)
+                        let (aligned, alignment) = RestoreTools.align(raw, to: photo)
+                        current = aligned
+                        var info: [String: JSONValue] = [
+                            "mode": .string(req.repairMode), "width": .int(size.width), "height": .int(size.height),
+                            "align": alignment.json,
+                        ]
+                        if let kind { info["auto"] = .string(kind.mode); info["auto_answer"] = kind.answer.map { .string($0) } ?? .null }
+                        if repairMode == "gentle" {
+                            // Schonend: Foto in voller Auflösung, nur die Schäden aus dem Ergebnis von FLUX.2.
+                            update(id) { $0.stage = repairLabel + " · " + t("setzt ein", "merging") }
+                            let (merged, mergeInfo) = await Task.detached { RestoreTools.mergeDamage(aligned, onto: photo) }.value
+                            current = merged
+                            info["merge"] = mergeInfo
+                        }
+                        meta["repair"] = .object(info)
+                        seconds["repair"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
+                    }
+                    if req.colorize && jobs[id]?.cancelRequested != true {
+                        let started = Date()
+                        let size = RestoreJobRequest.workingSize(current.width, current.height,
+                                                                 megapixels: RestoreJobRequest.colorizeMegapixels)
+                        let raw = try await renderReference(id, image: current, prompt: instruction(RestoreJobRequest.colorizeInstruction),
+                                                            size: size, steps: steps, guidance: guidance, seed: seed &+ 101,
+                                                            run: k * runsPerVariant + (req.repair ? 1 : 0), of: count,
+                                                            label: colorLabel)
+                        let (aligned, alignment) = RestoreTools.align(raw, to: current)
+                        let (colored, info) = RestoreTools.colorize(aligned, onto: current)
+                        current = colored
+                        var colorInfo = info.objectValue ?? [:]
+                        colorInfo["width"] = .int(size.width)
+                        colorInfo["height"] = .int(size.height)
+                        colorInfo["align"] = alignment.json
+                        meta["colorize"] = .object(colorInfo)
+                        seconds["colorize"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
+                    }
+                } catch {
+                    _ = sampler.stop()
+                    throw error
+                }
+                let peak = sampler.stop()
+                MemoryLog.line("after variant \(k + 1)")
+                if jobs[id]?.cancelRequested == true { break }
+                if k == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+                outputs.append((current, meta, seconds, peak))
+            }
+        } else {
+            var meta = baseMeta(baseSeed, 1)
+            meta["model_name"] = .string(HelperModel.sharpen.name)
+            meta["workflow"] = .string("seedvr2")
+            outputs = [(photo, meta, [:], 0)]
+        }
+
+        // Schärfen und vergrößern: auf Foto × scale, höchstens sharpenMaxPixels (wie unter Windows features.max_pixels).
+        if req.sharpen && jobs[id]?.cancelRequested != true && !outputs.isEmpty {
+            guard let dir = HelperModel.sharpen.localPath else {
+                throw APIError(409, t("SeedVR2 3B ist nicht geladen (unter „Modelle“ → Zusätze).",
+                                      "SeedVR2 3B is not downloaded (under \"Models\" → Add-ons)."))
+            }
+            var w = Int((Double(photo.width) * req.scale).rounded()), h = Int((Double(photo.height) * req.scale).rounded())
+            let limit = Double(HelperModel.sharpenMaxPixels)
+            if Double(w * h) > limit {
+                let k = (limit / Double(w * h)).squareRoot()
+                w = Int(Double(w) * k)
+                h = Int(Double(h) * k)
+            }
+            let label = t("Schärfen", "Sharpening")
+            if SystemInfo.memoryGB <= 16 {
+                await Flux2Engine.shared.unload()
+                MemoryLog.release()
+            }
+            MemoryLog.line("before SeedVR2")
+            update(id) { $0.stage = label + " · " + t("lädt SeedVR2", "loading SeedVR2") }
+            let loadStart = Date()
+            let wasLoaded = await SeedVR2Engine.shared.isLoaded
+            try await SeedVR2Engine.shared.load(dir)
+            let loadSeconds = wasLoaded ? 0 : Date().timeIntervalSince(loadStart)
+            MemoryLog.line("SeedVR2 loaded")
+            for i in outputs.indices {
+                if jobs[id]?.cancelRequested == true { break }
+                let started = Date()
+                let sampler = PeakMemorySampler()
+                sampler.start()
+                let source = outputs[i].image
+                let run = runsPerVariant * req.batch + i
+                let seed = baseSeed &+ 201 &+ UInt64(i)
+                let work = Task {
+                    try await SeedVR2Engine.shared.upscale(source, width: w, height: h, seed: seed) { done, total in
+                        Task { await JobQueue.shared.sharpenProgress(id, run: run, of: count, done: done, total: total) }
+                    }
+                }
+                imageTask = work
+                if jobs[id]?.cancelRequested == true { work.cancel() }
+                let sharpened: CGImage
+                do {
+                    sharpened = try await work.value
+                } catch {
+                    imageTask = nil
+                    _ = sampler.stop()
+                    throw error
+                }
+                imageTask = nil
+                outputs[i].image = sharpened
+                var info: [String: JSONValue] = [
+                    "model_id": .string(HelperModel.sharpen.id), "width": .int(w), "height": .int(h),
+                    "scale": .double(req.scale), "tile": .int(SeedVR2Engine.tile),
+                ]
+                if i == 0 && loadSeconds >= 0.1 { info["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+                outputs[i].meta["sharpen"] = .object(info)
+                outputs[i].meta["upscale_model_name"] = .string(HelperModel.sharpen.name)
+                outputs[i].seconds["sharpen"] = .double((Date().timeIntervalSince(started) * 10).rounded() / 10)
+                outputs[i].peak = max(outputs[i].peak, sampler.stop())
+            }
+            MemoryLog.line("after SeedVR2")
+            // Auf kleinen Macs Platz machen für das nächste Bild mit FLUX.2.
+            if SystemInfo.memoryGB <= 16 { await SeedVR2Engine.shared.unload() }
+        }
+        if jobs[id]?.cancelRequested == true { return }
+
+        // Im Verlauf soll stehen, wie restauriert wurde (bei „auto“ die getroffene Wahl).
+        let repaired = repairMode == "gentle" ? t("schonend restauriert", "restored gently")
+            : t("gründlich restauriert", "restored thoroughly")
+        let parts = [req.repair ? repaired : nil, req.colorize ? t("eingefärbt", "colorized") : nil,
+                     req.sharpen ? t("geschärft", "sharpened") : nil].compactMap { $0 }
+        let label = t("Foto ", "Photo ") + parts.joined(separator: ", ")
+        for out in outputs {
+            var meta = out.meta
+            meta["seconds"] = .object(out.seconds)
+            meta["width"] = .int(out.image.width)
+            meta["height"] = .int(out.image.height)
+            meta["peak_memory_mb"] = .int(Int(out.peak))
+            let asset = try await AssetStore.shared.addImage(png: try ImageFiles.pngData(out.image), jobID: id,
                                                              prompt: req.notes.isEmpty ? label : "\(label): \(req.notes)",
-                                                             modelID: model.id, meta: meta)
+                                                             modelID: fluxModel?.id ?? HelperModel.sharpen.id, meta: meta)
             update(id) { $0.assetIDs.append(asset.id) }
         }
     }

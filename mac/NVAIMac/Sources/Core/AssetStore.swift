@@ -102,6 +102,21 @@ actor AssetStore {
         return record
     }
 
+    /// Musik oder Klang (seit 0.4.7): WAV, Art „audio“ wie unter Windows.
+    func addAudio(wav: Data, jobID: String, prompt: String, modelID: String,
+                  meta: [String: JSONValue]) throws -> AssetRecord {
+        load()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = Self.newID("ast")
+        let filename = "\(id.dropFirst(4))_nvai_audio.wav"
+        try wav.write(to: fileURL(filename), options: .atomic)
+        let record = AssetRecord(id: id, jobID: jobID, kind: "audio", filename: filename, prompt: prompt,
+                                 modelID: modelID, meta: meta, createdAt: Date().timeIntervalSince1970)
+        assets.append(record)
+        save()
+        return record
+    }
+
     func addUpload(data: Data, originalName: String) throws -> AssetRecord {
         load()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

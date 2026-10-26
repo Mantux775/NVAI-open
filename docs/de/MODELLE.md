@@ -52,6 +52,28 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 
+### Neu in NVAI-open für Mac 0.4.7
+
+NVAI-open für Mac restauriert jetzt wie die Windows-Fassung und kann dazu LoRAs und Klänge, alles nativ auf Apple
+Silicon (MLX). Gemessen auf einem Mac mini M1 mit 8 GB:
+
+| Was | Wie | Gemessen (M1, 8 GB) |
+|---|---|---|
+| Schonend restaurieren | behält das Foto in voller Auflösung und ersetzt nur die Schäden, dieselben Regeln wie unter Windows | bei gleicher Größe gleich wie der Windows-Code; 1,1 s für 1216 × 1600 |
+| Automatisch | Qwen3.5 4B (Apache-2.0, 3 GB) sieht das Foto an und entscheidet mit einer gemessenen Schwelle, ob die Schäden über das ganze Bild gehen: dann gründlich, sonst schonend | bei 20 von 21 Testfotos wie erwartet, rund 20 s |
+| Schärfen und vergrößern | SeedVR2 3B (ByteDance, Apache-2.0, 4,7 GB) in Kacheln von 384 px mit überblendeten Nähten und Farbangleich je Kachel | 1024 × 738 → 2× in 9 min, 1600 × 1216 → 2× in 28 min |
+| LoRAs | fünf LoRAs unter Apache-2.0 für FLUX.2 Klein: Pixel-Art, Sprite-Sheet, Hintergrund entfernen, Anime, gleichbleibend bearbeiten | erstes Bild nach einem Wechsel rund 10 s länger |
+| Musik und Klänge | Stable Audio 3 Medium (8 Bit, 3,8 GB; Stability AI Community License), bis 60 s auf 8 GB | 30 s Klang in 13 s, 60 s in 23 s |
+
+Grenzen: FLUX.2 Klein 4B entfernt weniger Schäden als FLUX 3 unter Windows (bei einem stark gealterten Testfoto
+blieben eine Knicklinie und eine abgerissene Ecke). SeedVR2 3B glättet Gesichter etwas stärker als 7B unter Windows,
+lässt sie aber natürlich; Real-ESRGAN war schneller, machte alte Fotos aber wachsartig und flog raus. Auf 8 GB laden die
+Modelle nacheinander.
+
+![Dasselbe Gesicht auf das Doppelte geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
+
+![FLUX.2 Klein auf dem Mac ohne und mit Pixel-Art-LoRA](../images/mac-lora-pixelart-de.jpg)
+
 ### Neu in 0.5.11
 
 **MOSS-Image** (`moss-image-sft-int8`, OpenMOSS) ist das vierte empfohlene Bildmodell: Schrift und Layout im Bild unter Apache-2.0, also ohne Umsatzgrenze und Prüfpflicht verkaufbar. Knappe Prompts baut es mit seinem eigenen Text-Encoder (Qwen3.5-9B) zur vollen Beschreibung aus, die danach unter `caption` steht (`upsample_prompt=False` schaltet das ab); ein JSON mit „summary“ und „items“ legt laut OpenMOSS das Layout fest. Vorgabe ist die Einstellung von OpenMOSS mit 50 Schritten und cfg 3. Gemessen mit gleichen Prompts und Seeds: 51 s je Bild mit 1 MP, beim ersten Mal rund 11 s für den Ausbau dazu; mit den 25 Schritten aus ComfyUIs Vorlage 28 s. Die Schrift kam in allen Bildern buchstabengenau, der Soldat stand mit beiden Stiefeln im Bild, der Fischer behielt den Kopf im Bild. Die Seilgriffe der Kiste liefen mit 50 Schritten in drei von drei Bildern durch Bohrungen, mit 25 Schritten in zwei von drei. Nur Text zu Bild (keine Referenzbilder, keine Maske), auf dem Mac nicht verfügbar.

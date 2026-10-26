@@ -6,10 +6,14 @@ enum APIRouter {
     static let apiVersion = 1
     /// Was dieser Server von GenerateImageRequest versteht – kein „upsampler“: FLUX 3 gibt es hier nicht.
     /// „expand_prompt“: POST /api/prompt/expand wie unter Windows, hier mit dem Qwen3 von FLUX.2 Klein.
-    /// „restore“ (seit 0.4.6): POST /api/image/restore, hier gründlich und Einfärben. „restore_gentle“ und
-    /// „restore_auto“ meldet nur Windows (schonend, Wahl per Bild-Sprachmodell).
-    static let features = ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
-                           "cancel_job", "outpaint", "restore"]
+    /// „restore“ (seit 0.4.6): POST /api/image/restore. „restore_gentle“ (seit 0.4.7): schonend, nur die Schäden
+    /// einsetzen. „restore_auto“ nur, wenn Qwen3.5 4B geladen ist (wählt nach der Art der Schäden); ohne das
+    /// Zusatzmodell rechnet „auto“ gründlich.
+    static var features: [String] {
+        ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
+         "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras"]
+            + (HelperModel.vision.installed ? ["restore_auto"] : [])
+    }
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
         // Texte (Beschreibungen, Hinweise, Fehler) in der Sprache des Clients: de → Deutsch, sonst Englisch.
@@ -59,9 +63,13 @@ enum APIRouter {
                 return .json(["prompt": prompt, "expanded": result.expanded,
                               "seconds": (result.seconds * 10).rounded() / 10])
             }
+            if route("POST", "/api/generate/audio") != nil {
+                let request = try AudioJobRequest.parse(req.json)
+                return .json(await JobQueue.shared.submitAudio(request).json)
+            }
             if let c = route("POST", "/api/generate/:kind") {
-                throw APIError(404, t("NVAI-open für Mac erzeugt nur Bilder (\(c[0]) gibt es hier nicht).",
-                                      "NVAI-open for Mac only generates images (\(c[0]) is not available here)."))
+                throw APIError(404, t("NVAI-open für Mac erzeugt Bilder und Klänge (\(c[0]) gibt es hier nicht).",
+                                      "NVAI-open for Mac generates images and audio (\(c[0]) is not available here)."))
             }
             if route("GET", "/api/jobs") != nil {
                 let limit = Int(req.query["limit"] ?? "") ?? 100
@@ -161,7 +169,8 @@ enum APIRouter {
             "gpu": ["name": SystemInfo.chip, "vram_total_mb": SystemInfo.memoryMB, "vram_free_mb": NSNull(),
                     "unified_memory": true],
             "active_models": ["image": active.installed ? active.id as Any : NSNull(),
-                              "audio": NSNull(), "video": NSNull(), "3d": NSNull()],
+                              "audio": AudioCatalog.installed ? AudioCatalog.id as Any : NSNull(),
+                              "video": NSNull(), "3d": NSNull()],
             "queue_depth": await queue.queueDepth,
             "current_job": await queue.currentJobID ?? NSNull(),
             "download_queue_depth": await queue.downloadDepth,
@@ -174,13 +183,20 @@ enum APIRouter {
         ]
     }
 
+    /// Bildmodelle (Art „image“) und Zusatzmodelle (eigene Art, etwa „vlm“); ohne `kind` alle.
     static func models(kind: String?) -> [[String: Any]] {
-        guard kind == nil || kind == "image" || kind == "" else { return [] }
-        return Models.all.map(\.info)
+        let kind = kind.flatMap { $0.isEmpty ? nil : $0 }
+        let images = kind == nil || kind == "image" ? Models.all.map(\.info) : []
+        let loras = kind == nil || kind == "lora" ? LoRACatalog.all.map(\.info) : []
+        let audio = kind == nil || kind == "audio" ? [AudioCatalog.info] : []
+        return images + loras + audio + HelperModel.allCases.filter { kind == nil || $0.kind == kind }.map(\.info)
     }
 
     static func download(_ req: HTTPRequest) async throws -> HTTPResponse {
         if let id = req.json?["model_id"]?.stringValue {
+            if let helper = HelperModel.find(id) { return .json(await JobQueue.shared.submitDownload(helper).json) }
+            if let lora = LoRACatalog.find(id) { return .json(await JobQueue.shared.submitDownload(lora).json) }
+            if id == AudioCatalog.id { return .json(await JobQueue.shared.submitAudioDownload().json) }
             guard let model = Models.find(id) else { throw APIError(404, t("Unbekanntes Modell: \(id)", "Unknown model: \(id)")) }
             return .json(await JobQueue.shared.submitDownload(model).json)
         }
@@ -277,7 +293,8 @@ enum APIRouter {
         guard let data = try? Data(contentsOf: url) else { throw APIError(404, t("Datei nicht gefunden", "File not found")) }
         let ext = url.pathExtension.lowercased()
         let type = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
-                    "tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic"][ext] ?? "application/octet-stream"
+                    "tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic", "wav": "audio/wav",
+                    "mp3": "audio/mpeg", "m4a": "audio/mp4"][ext] ?? "application/octet-stream"
         return .file(data, contentType: type)
     }
 }

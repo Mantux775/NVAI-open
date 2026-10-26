@@ -12,6 +12,10 @@ final class AppState: ObservableObject {
     @Published var images: [AssetRecord] = []
     /// Hochgeladene Bilder (Startbild, Maske, Referenz, altes Foto), neueste zuerst.
     @Published var uploads: [AssetRecord] = []
+    /// Erzeugte Musik und Klänge (seit 0.4.7), neueste zuerst.
+    @Published var audios: [AssetRecord] = []
+    /// Stable Audio 3 geladen?
+    @Published var audioInstalled = AudioCatalog.installed
     @Published var models: [ModelRow] = []
     @Published var activeModelID: String = Models.active.id
     @Published var modelsDirectory: URL = Settings.modelsDirectory
@@ -21,8 +25,27 @@ final class AppState: ObservableObject {
     @Published var showSearch = false
     /// „Generieren“ mit „Foto restaurieren“ öffnen (`--snapshot --tab restore`).
     @Published var showRestore = false
+    /// „Generieren“ mit „Musik und Klänge“ öffnen (`--snapshot --tab audio`).
+    @Published var showAudio = false
     /// "auto", "en" oder "de"; die Texte liefert t() aus Lang.ui.
     @Published var language: String = Lang.setting
+
+    /// Zusatzmodelle (Qwen3.5 4B für „Automatisch“ beim Restaurieren) mit Ladestand.
+    @Published var helpers: [HelperRow] = []
+    /// LoRAs für FLUX.2 Klein mit Ladestand.
+    @Published var loras: [LoRARow] = []
+
+    struct LoRARow: Identifiable, Equatable {
+        let model: LoRAModel
+        let installed: Bool
+        var id: String { model.id }
+    }
+
+    struct HelperRow: Identifiable, Equatable {
+        let model: HelperModel
+        let installed: Bool
+        var id: String { model.id }
+    }
 
     struct ModelRow: Identifiable, Equatable {
         let model: AnyModel
@@ -122,6 +145,7 @@ final class AppState: ObservableObject {
         jobs = await JobQueue.shared.list(limit: 200)
         images = await AssetStore.shared.list(kind: "image", limit: 1000)
         uploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
+        audios = await AssetStore.shared.list(kind: "audio", limit: 500)
         // Ein beendeter Download ändert den Modellstatus.
         refreshModels()
     }
@@ -129,6 +153,12 @@ final class AppState: ObservableObject {
     func refreshModels() {
         let rows = Models.all.map { ModelRow(model: $0, installed: $0.installed, partial: $0.partiallyInstalled) }
         if rows != models { models = rows }
+        let helperRows = HelperModel.allCases.map { HelperRow(model: $0, installed: $0.installed) }
+        if helperRows != helpers { helpers = helperRows }
+        let loraRows = LoRACatalog.all.map { LoRARow(model: $0, installed: $0.installed) }
+        if loraRows != loras { loras = loraRows }
+        let audioOK = AudioCatalog.installed
+        if audioOK != audioInstalled { audioInstalled = audioOK }
         activeModelID = Models.active.id
     }
 

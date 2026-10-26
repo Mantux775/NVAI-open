@@ -44,6 +44,8 @@ actor Flux2Engine {
 
     private var pipeline: Flux2Pipeline?
     private var loadedModelID: String?
+    /// LoRAs, die im geladenen Transformer stecken (das Paket verrechnet sie beim Laden fest).
+    private var loadedLoRAs: [LoRAChoice] = []
 
     /// Beide Register zeigen auf denselben Ordner, wie in der CLI des Pakets.
     nonisolated static func configureModelsDirectory(_ url: URL) {
@@ -55,9 +57,11 @@ actor Flux2Engine {
 
     func currentModelID() -> String? { loadedModelID }
 
-    /// Lädt fehlende Dateien von Hugging Face und das Modell in den Speicher.
-    func load(_ model: CatalogModel, progress: @escaping @Sendable (Double, String) -> Void) async throws {
-        if loadedModelID == model.id, pipeline != nil { return }
+    /// Lädt fehlende Dateien von Hugging Face und das Modell in den Speicher, mit diesen LoRAs verrechnet. Eine
+    /// andere LoRA-Auswahl lädt den Transformer neu (verrechnete Gewichte lassen sich nicht wieder abziehen).
+    func load(_ model: CatalogModel, loras: [LoRAChoice] = [],
+              progress: @escaping @Sendable (Double, String) -> Void) async throws {
+        if loadedModelID == model.id, pipeline != nil, loadedLoRAs == loras { return }
         await unload()
         let p = Flux2Pipeline(
             model: .klein4B,
@@ -67,9 +71,14 @@ actor Flux2Engine {
         if SystemInfo.memoryGB <= 16 {
             p.memoryProfile = .conservative
         }
+        for choice in loras {
+            guard let lora = LoRACatalog.find(choice.id), lora.installed else { continue }
+            try p.loadLoRA(LoRAConfig(filePath: lora.localURL.path, scale: Float(choice.strength)))
+        }
         try await p.loadModels(progressCallback: progress)
         pipeline = p
         loadedModelID = model.id
+        loadedLoRAs = loras
     }
 
     func unload() async {
@@ -78,6 +87,7 @@ actor Flux2Engine {
         }
         pipeline = nil
         loadedModelID = nil
+        loadedLoRAs = []
     }
 
     /// „Prompt ausbauen“: Qwen3-4B, der Text-Encoder von FLUX.2 Klein, schreibt aus ein paar Worten

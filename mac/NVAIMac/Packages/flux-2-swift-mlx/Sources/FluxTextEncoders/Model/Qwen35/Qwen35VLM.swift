@@ -223,6 +223,34 @@ public class Qwen35VLM {
     // MARK: - Private
 
     /// Build token sequence for N images + text prompt
+    /// NVAI-open: log-probabilities of the first answer token for each of `candidates` (e.g. "yes", "no"), without
+    /// generating. One prefill per question; the images are encoded once. Lets a yes/no question use a calibrated
+    /// threshold instead of the greedy answer.
+    public func firstTokenLogProbs(
+        images: [CGImage], questions: [(system: String?, prompt: String)],
+        enableThinking: Bool = false, candidates: [String]
+    ) -> [[String: Float]] {
+        let imageResults = encodeImages(images)
+        let counts = imageResults.map { $0.numTokens }
+        let ids = candidates.map { tokenizer.encode(text: $0).first ?? 0 }
+        return questions.map { question in
+            let tokens = buildTokenSequence(prompt: question.prompt, systemPrompt: question.system,
+                                            enableThinking: enableThinking, imageTokenCounts: counts)
+            let inputIds = MLXArray(tokens.map { Int32($0) }).reshaped([1, tokens.count])
+            let embed = buildInputEmbeddings(inputIds: inputIds, imageEmbeddingsList: imageResults)
+            let cache = languageModel.createCache()
+            let logits = languageModel.forward(inputIds, cache: cache, inputEmbeddings: embed)
+            let last = logits[0, -1].asType(.float32)
+            let logp = last - logSumExp(last, axis: -1)
+            eval(logp)
+            let values = logp.asArray(Float.self)
+            Memory.clearCache()
+            var out: [String: Float] = [:]
+            for (candidate, id) in zip(candidates, ids) where id >= 0 && id < values.count { out[candidate] = values[id] }
+            return out
+        }
+    }
+
     private func buildTokenSequence(prompt: String, systemPrompt: String? = nil, enableThinking: Bool = true, imageTokenCounts: [Int]) -> [Int] {
         let sysMsg = systemPrompt ?? "You are a helpful assistant."
         var formatted = "<|im_start|>system\n\(sysMsg)<|im_end|>\n"

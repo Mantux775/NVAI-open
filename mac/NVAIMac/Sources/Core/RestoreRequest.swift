@@ -1,15 +1,19 @@
 import Foundation
 
 /// Foto restaurieren (`POST /api/image/restore`, seit 0.4.6): dieselben Felder wie `RestoreImageRequest` unter
-/// Windows. Der Mac kann davon gründlich restaurieren und einfärben, beides mit FLUX.2 Klein. Schonend
-/// (`gentle`) und Schärfen (SeedVR2) gibt es nur unter Windows; „auto“ rechnet hier gründlich, denn die Wahl
-/// trifft unter Windows ein Bild-Sprachmodell, und der Text-Encoder von FLUX.2 Klein sieht keine Bilder.
+/// Windows. Schäden entfernen und Einfärben rechnet FLUX.2 Klein. Seit 0.4.7 auch schonend (`gentle`,
+/// `RestoreTools.mergeDamage`) und automatisch (`auto`, Vorgabe): Qwen3.5 4B wählt nach der Art der Schäden
+/// (`VisionEngine`); ohne dieses Zusatzmodell rechnet „auto“ gründlich, wie unter Windows ohne Upsampler.
+/// Schärfen (`sharpen`, `scale` 1–4) rechnet SeedVR2 3B (`SeedVR2Engine`).
 struct RestoreJobRequest: Sendable {
     var imageAssetID: String
     var repair: Bool
     var repairMode: String
     var colorize: Bool
+    var sharpen = false
+    var scale = 2.0
     var notes: String
+    /// FLUX.2-Modell für Schäden und Farbe; leer, wenn nur geschärft wird.
     var modelID: String
     var megapixels: Double?
     var batch: Int
@@ -40,29 +44,37 @@ struct RestoreJobRequest: Sendable {
         guard let image = o["image_asset_id"]?.stringValue, !image.isEmpty else {
             throw APIError(422, t("Das Feld image_asset_id fehlt.", "The field image_asset_id is missing."))
         }
-        let repair = flag("repair", true), colorize = flag("colorize", false)
-        if flag("sharpen", false) {
-            throw APIError(422, t("Schärfen braucht SeedVR2 und gibt es nur in NVAI-open für Windows.",
-                                  "Sharpening needs SeedVR2 and is only available in NVAI-open for Windows."))
+        let repair = flag("repair", true), colorize = flag("colorize", false), sharpen = flag("sharpen", false)
+        guard repair || colorize || sharpen else {
+            throw APIError(422, t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder Schärfen.",
+                                  "Please choose at least one step: remove damage, colorize or sharpen."))
         }
-        guard repair || colorize else {
-            throw APIError(422, t("Bitte mindestens einen Schritt wählen: Schäden entfernen oder Einfärben.",
-                                  "Please choose at least one step: remove damage or colorize."))
+        var scale = 2.0
+        if sharpen {
+            if let id = o["upscale_model_id"]?.stringValue, !id.isEmpty, id != HelperModel.sharpen.id {
+                throw APIError(404, t("Unbekanntes Modell zum Schärfen: \(id)", "Unknown model for sharpening: \(id)"))
+            }
+            guard HelperModel.sharpen.installed else {
+                throw APIError(409, t("Schärfen braucht SeedVR2 3B (4,7 GB). Bitte unter „Modelle“ → Zusätze laden.",
+                                      "Sharpening needs SeedVR2 3B (4.7 GB). Please download it under \"Models\" → Add-ons."))
+            }
+            if let v = o["scale"], !v.isNull {
+                guard let k = v.doubleValue, (1...4).contains(k) else {
+                    throw APIError(422, t("scale muss zwischen 1 und 4 liegen.", "scale must be between 1 and 4."))
+                }
+                scale = k
+            }
         }
         let mode = o["repair_mode"]?.stringValue ?? "auto"
         guard ["auto", "thorough", "gentle"].contains(mode) else {
             throw APIError(422, t("repair_mode muss auto, thorough oder gentle sein.", "repair_mode must be auto, thorough or gentle."))
         }
-        if repair && mode == "gentle" {
-            throw APIError(422, t("Schonend restaurieren gibt es nur in NVAI-open für Windows; auf dem Mac rechnet NVAI-open "
-                                  + "gründlich (repair_mode thorough oder auto).",
-                                  "Gentle restoring is only available in NVAI-open for Windows; on the Mac NVAI-open restores "
-                                  + "thoroughly (repair_mode thorough or auto)."))
-        }
         let notes = (o["notes"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard notes.count <= 2000 else { throw APIError(422, t("notes ist zu lang (höchstens 2000 Zeichen).", "notes is too long (at most 2000 characters).")) }
-        let batch = o["batch_size"]?.intValue ?? 1
+        var batch = o["batch_size"]?.intValue ?? 1
         guard (1...4).contains(batch) else { throw APIError(422, t("batch_size muss zwischen 1 und 4 liegen.", "batch_size must be between 1 and 4.")) }
+        // Nur Schärfen kennt keine Varianten (wie unter Windows): SeedVR2 rechnet dasselbe Foto fast gleich.
+        if !(repair || colorize) { batch = 1 }
         var megapixels: Double?
         if let v = o["megapixels"], !v.isNull {
             guard let mp = v.doubleValue, (0.5...4).contains(mp) else {
@@ -73,6 +85,12 @@ struct RestoreJobRequest: Sendable {
         let seed = o["seed"]?.intValue
         if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
 
+        let seedValue = seed.map { UInt64($0) }
+        guard repair || colorize else {
+            return RestoreJobRequest(imageAssetID: image, repair: false, repairMode: mode, colorize: false, sharpen: true,
+                                     scale: scale, notes: notes, modelID: "", megapixels: megapixels, batch: 1,
+                                     seed: seedValue, params: body)
+        }
         // Bearbeitet wird mit einem Modell, das Referenzbilder nimmt: FLUX.2 Klein (Core ML kann das nicht).
         let model: CatalogModel
         if let id = o["model_id"]?.stringValue, !id.isEmpty {
@@ -94,9 +112,9 @@ struct RestoreJobRequest: Sendable {
             throw APIError(409, t("„\(model.name)“ ist nicht geladen. In NVAI-open unter „Modelle“ herunterladen.",
                                   "\"\(model.name)\" is not downloaded. Download it in NVAI-open under \"Models\"."))
         }
-        return RestoreJobRequest(imageAssetID: image, repair: repair, repairMode: mode, colorize: colorize, notes: notes,
-                                 modelID: model.id, megapixels: megapixels, batch: batch, seed: seed.map { UInt64($0) },
-                                 params: body)
+        return RestoreJobRequest(imageAssetID: image, repair: repair, repairMode: mode, colorize: colorize,
+                                 sharpen: sharpen, scale: scale, notes: notes, modelID: model.id, megapixels: megapixels,
+                                 batch: batch, seed: seedValue, params: body)
     }
 
     /// Arbeitsformat im Seitenverhältnis des Fotos: Vielfache von 16, höchstens das Foto selbst (mindestens

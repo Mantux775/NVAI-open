@@ -74,6 +74,23 @@ for pin in sorted(pins, key=lambda p: p["identity"]):
                 vendored.append((sub.name, classify(sub_text), sub_text))
     entries.append((folder_name, version, classify(text), location, text, notices, vendored))
 
+# Local copies under Packages/ (not in Package.resolved): name, version, origin, folder.
+LOCAL = [
+    ("flux-2-swift-mlx", "3.1.0 (local copy)", "https://github.com/VincentGourbin/flux-2-swift-mlx",
+     "Packages/flux-2-swift-mlx"),
+    ("seedvr2-mlx-swift", "1dfa161 (local copy)", "https://github.com/xocialize/seedvr2-mlx-swift",
+     "Packages/seedvr2-mlx-swift"),
+    ("speech-swift (Stable Audio 3)", "cbad3be (local copy)", "https://github.com/soniqo/speech-swift",
+     "Packages/stable-audio-3-swift"),
+]
+for name, version, location, folder in LOCAL:
+    licenses = files_in(Path(folder), LICENSE_NAMES)
+    if not licenses:
+        raise SystemExit(f"No license file in {folder}")
+    text = read(licenses[0])
+    entries.append((name, version, classify(text), location, text, [read(n) for n in files_in(Path(folder), NOTICE_NAMES)], []))
+entries.sort(key=lambda e: e[0].lower())
+
 rule = "-" * 78
 out = [
     "NVAI-open for Mac - Third-Party Notices",
