@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 import httpx
 
-from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report
+from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio
 from .i18n import t
 from . import gpu as gpu_info
 from .schemas import (
@@ -90,6 +90,7 @@ API_FEATURES = [
     "restore_auto",    # ... repair_mode "auto": der FLUX-3-Upsampler waehlt nach der Art der Schaeden
     "restore_gentle",  # ... repair_mode "gentle": nur die Schaeden einsetzen (NVAI-open fuer Mac kann beides nicht)
     "history_pages",   # GET /api/jobs?offset=&exclude=download: der Verlauf blaettert in 50er-Schritten
+    "studio",          # /api/studio/*: Projekte mit Komposition (Szenen, Marker) und Schnitt, Befehle, Export
 ]
 
 
@@ -288,9 +289,10 @@ async def health() -> dict[str, Any]:
             "vram_free_mb": round(d.get("vram_free", 0) / 1024 / 1024),
         }
     elif card:
-        # Backend aus: Gesamtspeicher kennen wir trotzdem, den freien nicht.
+        # Backend aus: Gesamtspeicher kennen wir trotzdem, den belegten liest nvidia-smi (AMD: unbekannt)
+        used_mb = (await asyncio.to_thread(gpu_info.usage)).get(card.get("index", 0))
         gpu = {"name": card["name"], "vram_total_mb": card["vram_total_mb"],
-               "vram_free_mb": None}
+               "vram_free_mb": card["vram_total_mb"] - used_mb if used_mb is not None else None}
 
     # Was liegt tatsaechlich im VRAM? ComfyUI verraet das nicht ueber die API,
     # deshalb fuehrt comfy.py selbst Buch; die Mesh-Worker melden es direkt.
@@ -859,6 +861,7 @@ async def delete_asset(asset_id: str) -> dict[str, Any]:
     ok, freed = db.delete_asset(asset_id)
     if not ok:
         raise HTTPException(404, t("Asset nicht gefunden", "Asset not found"))
+    jobs.publish({"type": "assets.changed"})  # Material im Studio, Verlauf
     return {"ok": True, "freed_mb": round(freed / 1024 / 1024, 2)}
 
 
@@ -870,6 +873,7 @@ async def delete_job(job_id: str) -> dict[str, Any]:
     ok, count, freed = db.delete_job(job_id)
     if not ok:
         raise HTTPException(404, t("Job nicht gefunden", "Job not found"))
+    jobs.publish({"type": "assets.changed"})
     return {"ok": True, "assets": count, "freed_mb": round(freed / 1024 / 1024, 2)}
 
 
@@ -885,6 +889,7 @@ async def clear_history(kind: str | None = None) -> dict[str, Any]:
         if running and running.kind != "download":
             raise HTTPException(409, t("Es läuft gerade eine Generierung – bitte abwarten.", "A generation is running – please wait."))
     n_jobs, n_assets, freed = db.clear_history(kind)
+    jobs.publish({"type": "assets.changed"})
     return {
         "ok": True, "jobs": n_jobs, "assets": n_assets,
         "freed_mb": round(freed / 1024 / 1024, 2),
@@ -900,7 +905,93 @@ async def upload(file: UploadFile) -> Asset:
     dest = config.ASSET_DIR / name
     with dest.open("wb") as fh:
         shutil.copyfileobj(file.file, fh)
-    return db.create_asset(kind="upload", filename=name, meta={"original_name": file.filename})
+    asset = db.create_asset(kind="upload", filename=name, meta={"original_name": file.filename})
+    jobs.publish({"type": "assets.changed"})
+    if suffix.lower() in studio.NO_BROWSER:
+        asyncio.create_task(studio.make_preview(asset.id))  # MKV, MOV, AVI …: Vorschau für den Browser
+    return asset
+
+
+@app.post("/api/assets/{asset_id}/preview")
+async def asset_preview(asset_id: str) -> dict[str, Any]:
+    """Vorschau (H.264) für ein Video, das der Browser nicht abspielt, im Hintergrund erstellen; fertig meldet
+    der Live-Feed assets.changed."""
+    if db.get_asset(asset_id) is None:
+        raise HTTPException(404, t("Asset nicht gefunden", "Asset not found"))
+    asyncio.create_task(studio.make_preview(asset_id))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------- Studio
+
+@app.exception_handler(studio.StudioError)
+async def _studio_error(request: Any, exc: studio.StudioError) -> JSONResponse:
+    return JSONResponse({"detail": str(exc)}, status_code=404 if isinstance(exc, studio.NotFound) else 422)
+
+
+@app.get("/api/studio/projects")
+async def studio_projects() -> list[dict[str, Any]]:
+    return await asyncio.to_thread(studio.list_projects)
+
+
+@app.post("/api/studio/projects")
+async def studio_create(body: dict[str, Any]) -> dict[str, Any]:
+    fps = body.get("fps") or [24, 1]
+    p = await asyncio.to_thread(studio.create, str(body.get("name", "")), int(body.get("width", 1920)),
+                                int(body.get("height", 1080)), (int(fps[0]), int(fps[1])))
+    return studio.view(p)
+
+
+@app.get("/api/studio/projects/{pid}")
+async def studio_get(pid: str, format: str = "full") -> dict[str, Any]:
+    """Das Projekt; fertige Erzeugungsauftraege sind dabei schon als Takes eingetragen. format=summary: kompakt,
+    Zeiten in Sekunden (fuer MCP)."""
+    p = await asyncio.to_thread(studio.refresh, pid)
+    return studio.summary(p) if format == "summary" else studio.view(p)
+
+
+@app.delete("/api/studio/projects/{pid}")
+async def studio_delete(pid: str) -> dict[str, Any]:
+    await asyncio.to_thread(studio.delete, pid)
+    return {"ok": True}
+
+
+@app.post("/api/studio/projects/{pid}/command")
+async def studio_command(pid: str, body: dict[str, Any], format: str = "full") -> dict[str, Any]:
+    """Ein Befehl wie in GET /api/studio/commands, etwa {"command": "clip.razor", "params": {"at_s": 4.5}}."""
+    p, result = await asyncio.to_thread(studio.apply, pid, str(body.get("command", "")), body.get("params") or {})
+    return {"project": studio.summary(p) if format == "summary" else studio.view(p), "result": result}
+
+
+@app.post("/api/studio/projects/{pid}/undo")
+async def studio_undo(pid: str) -> dict[str, Any]:
+    return studio.view(await asyncio.to_thread(studio.undo, pid))
+
+
+@app.post("/api/studio/projects/{pid}/redo")
+async def studio_redo(pid: str) -> dict[str, Any]:
+    return studio.view(await asyncio.to_thread(studio.redo, pid))
+
+
+@app.post("/api/studio/projects/{pid}/generate")
+async def studio_generate(pid: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Auftraege fuer die genannten Szenen (scene_ids), sonst fuer alle ohne Take."""
+    return await studio.generate(pid, (body or {}).get("scene_ids"))
+
+
+@app.post("/api/studio/projects/{pid}/export", response_model=Job)
+async def studio_export(pid: str, body: dict[str, Any] | None = None) -> Job:
+    return await studio.export(pid, str((body or {}).get("preset", "youtube-1080p")))
+
+
+@app.get("/api/studio/commands")
+async def studio_commands() -> list[dict[str, str]]:
+    return [{"command": name, "help": studio.HELP[name]} for name in studio.COMMANDS]
+
+
+@app.get("/api/studio/presets")
+async def studio_presets() -> list[dict[str, Any]]:
+    return studio.presets()
 
 
 # ---------------------------------------------------------- Live-Feed

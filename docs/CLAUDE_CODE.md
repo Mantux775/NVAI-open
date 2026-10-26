@@ -71,6 +71,7 @@ After an NVAI-open update, a running Claude Code session only sees the new tool 
 | `restore_image` | Old photo → repaired, colorized and/or sharpened photo (since 0.5.11) |
 | `list_assets` / `delete_asset` / `clear_history` | History |
 | `copy_asset` | Copy an asset to `Assets/Generated/` or similar |
+| `studio_*` | Studio projects: compose scenes, generate them, conform, cut and export a whole video (since 0.5.13, see [Studio](#studio-whole-videos-from-scenes-since-0513)) |
 
 All `generate_*` tools **block until done** and return absolute file paths.
 
@@ -100,7 +101,9 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS |
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
 | Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
-| Sound effects / songs / long instrumentals | Stable Audio Open / ACE-Step 1.5 / Stable Audio 3 Medium | Describe the sound for SFX; ACE-Step takes lyrics, BPM and key; Stable Audio 3 up to 5 min without vocals |
+| Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join, conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
+| Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
+| Sound effects / instrumental music | Stable Audio Open / Stable Audio 3 Medium | Describe the sound for SFX; Stable Audio 3 up to 5 min, one sentence with BPM, no vocals (ACE-Step was removed in 0.5.13) |
 | 3D source image | One object, plain background, no floor, no cast shadow; `project_front=True` for lettering | Floor and shadow become a plate under the mesh; painted lettering became a distorted relief |
 | Old photo | `restore_image` with `repair_mode="auto"` (default; picks thorough for water stains and crack networks, otherwise gentle), `batch_size=2`, known colors in `notes` | See [Old photos](#old-photos-restore-colorize-sharpen-since-0511): auto chose as expected on 20 of 21 test photos; heavily aged 0.689 thorough vs 0.648 gentle, on real glass plates gentle kept the sharpness; color hints cut the color error by 40 % |
 
@@ -121,7 +124,6 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 INT8 (for RTX 20/30/40) | ~119 s, with loading ~132 s |
 | Image 1 MP, 50 / 25 steps (prompt expansion ~11 s extra the first time) | MOSS-Image SFT INT8 | ~51 s / ~28 s |
 | Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
-| Music 60 s / 20 s | ACE-Step 1.5 Turbo (8 steps, CFG 1, shift 3) | ~17 s / ~10 s |
 | Instrumental 60 s / 20 s / 300 s | Stable Audio 3 Medium (8 steps, CFG 1) | ~9–12 s / ~7 s / ~64 s |
 | Video 832×480, 25 frames | Wan 2.1 T2V 1.3B | ~120 s |
 | Image 1728 × 2304 (4 MP) | HiDream-O1 Dev fp8 | ~41 s, first run ~87 s |
@@ -561,19 +563,11 @@ Three different models — adapt the prompt style to the model:
 
 Up to 47 s. For loops, generate generously and let the user trim.
 
-**ACE-Step** → music with structure and vocals. **Genre tags**, comma-separated, plus optional
-`lyrics`:
-
-```
-prompt: "epic orchestral, choir, war drums, cinematic, minor key"
-lyrics: ""            # empty = instrumental
-```
-
-**ACE-Step 1.5** takes tempo, time signature and key directly: `bpm`, `time_signature` ("2" =
-2/4, "3", "4", "6" = 6/8) and `key_scale` ("Bb major", "A minor"). Without them 120 BPM, 4/4 and
-C major apply. A march: 120 BPM, "2", "Bb major". Since 0.5.7 NVAI-open runs it like ComfyUI's
-template (8 steps, CFG 1, shift 3); before it used 12 steps and CFG 2 without shift, which
-sounded harsh and compressed.
+**ACE-Step (v1 and 1.5) was removed in 0.5.13**: its results were consistently poor in practice. Our graph matched ComfyUI's
+template `audio_ace_step_1_5_checkpoint`; ComfyUI 0.42.1 also ships ACE-Step 1.5 XL templates (about 20 GB with the 4B
+planning model), untested here. There is no model for songs with vocals now; `music` as an expand target stays for older
+clients and means Stable Audio 3, and `lyrics`, `bpm`, `time_signature` and `key_scale` are still accepted but have no
+effect.
 
 **Stable Audio 3 Medium** (since 0.5.7) → instrumental music up to 5 minutes, no vocals (a choir
 only without words). Write the prompt as **one sentence**: genre with the main instruments,
@@ -588,9 +582,8 @@ prompt: "A dark orchestral war theme with low brass, taiko drums and a wordless 
 Measured: 300 s in 64 s, but the 16 GB card was almost full (60 s: 9.7 GB).
 
 **Levels:** since 0.5.7 every audio output goes through NVAI-open's own limiter before it is saved
-(ceiling −1 dBFS). ACE-Step is lowered by 3 dB first: its raw output peaks up to +5.7 dBFS, and
-the MP3 encoder used to cut everything above 0 dB off hard. Measured with the limiter: ACE-Step
-−14 to −17 LUFS, Stable Audio 3 −12 to −15 LUFS, true peak at most +0.2 dBTP (MP3 overshoot).
+(ceiling −1 dBFS). Measured with the limiter: Stable Audio 3 −12 to −15 LUFS, true peak −0.5 to
+−0.8 dBTP (what is left above −1 dB is MP3 overshoot).
 Normalize before putting a track into a video (ffmpeg `loudnorm`, −14 LUFS).
 
 `seconds` controls the length (up to 300). Short SFX: 3–8 s. Music: 30–120 s.
@@ -766,6 +759,105 @@ Rules that make the difference:
 details). That costs a model switch in the middle of the run — expect considerably more time than
 with text-to-video, and tell the user beforehand.
 
+## Studio: whole videos from scenes (since 0.5.13)
+
+A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four
+lanes, `video` (video clips or still images), `voice`, `music` and `sfx`, plus markers that say what goes
+where. The **edit** holds the real clips on the tracks V1, V2 (above V1), A1 and A2, with in and out
+points, gain and dissolves. The web UI (tab "Studio") uses the same commands as the MCP tools, so the
+user sees every change live and can undo it. User guide with screenshots: [STUDIO.md](STUDIO.md).
+
+| Tool | Purpose |
+|---|---|
+| `studio_projects` | Projects, newest first |
+| `studio_create(name, width, height, fps)` | New project, returned in compact form (times in seconds) |
+| `studio_get(project_id)` | Scenes with status (`empty`, `waiting`, `running`, `done`, `error`) and take, markers, clips, length. Finished jobs are already entered as takes |
+| `studio_command(project_id, command, params)` | One command; the tool's description lists them all: `scene.add/update/delete/take`, `marker.add/update/delete`, `edit.conform`, `clip.add/move/trim/razor/delete/update`, `project.update` |
+| `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; with `wait` it blocks until all are finished, chained ones included |
+| `studio_export(project_id, preset)` | Renders the edit, returns the MP4 path |
+
+Workflow:
+
+1. `studio_create`, then one `scene.add` per shot. Write each video prompt like for `generate_video`
+   (one present-tense paragraph: shot, light, action, camera, sound). Add `marker.add` with
+   `kind="chain"` where two shots must join seamlessly and `kind="transition"` for dissolves.
+2. `studio_generate(wait=True)`, then look at the takes and regenerate the scenes that missed with
+   `studio_generate(scene_ids=[...])`.
+3. `edit.conform`, cuts with `clip.razor`, `clip.trim`, `clip.delete`, then `studio_export`.
+4. Markers of kind `ai` that are not done are tasks the user left for you: carry them out, then
+   `marker.update` with `done=true`.
+
+Times are seconds with the suffix `_s` (`start_s`, `duration_s`, `at_s`, `in_s`, `to_s`) or ticks
+(254 016 000 000 per second, as in FilmCraft, which divides every frame and sample rate).
+
+How a scene becomes a job:
+
+- **Video:** LTX-2.5 with frames = 8n+1 from the length at 24 fps, 1280 × 704 (projects below 1900 px)
+  or 1920 × 1088; other video models 832 × 480 at 16 fps. `params` in the scene pass on seed, steps,
+  LoRAs, `quality`, `motion_speed` and an end image.
+- **Still image:** about 1 MP in the project's aspect ratio (1360 × 768 in a 1280 × 720 project).
+- **Music and sound:** the scene's length (up to 300 s), lyrics from the scene.
+- **Voice:** no text-to-speech yet; the job fails with a hint. Add a recorded audio file as a take
+  (`scene.take` with `asset_id`).
+- **Chain:** a video scene with `chain_from`, or starting at a `chain` marker (± 0.5 s), gets the last
+  frame of the earlier scene as its start image. If that scene is generated in the same run, the
+  chained one has the status `waiting` and is submitted as soon as its source is done; if the source
+  fails, the chained scene gets an error instead of waiting forever.
+- **Order in the GPU queue:** sound first, then still images, then videos grouped by model, chained
+  scenes last. A chained clip then runs right after its source without LTX-2.5 being unloaded for an
+  image or audio model in between.
+
+Export presets: `youtube-1080p` (H.264, 24 Mbit/s), `youtube-2160p` (H.265, 40 Mbit/s),
+`shorts-1080x1920`, `av1-1080p`, `project` (H.264 in the project's size), `master` (FFV1 in MKV, sound as
+float PCM, pixel-exact) and `prores` (ProRes 4444 in MOV, 24-bit sound, for editing software). The
+encoder is chosen by trying one frame: NVENC, AMF, Quick Sync, then software. The sound of all clips is
+mixed, set to −14 LUFS (BS.1770) and limited at −2.5 dBFS (−1 dBFS for PCM). The export runs in its own
+queue next to generation. Browsers cannot play FFV1 or ProRes, so those exports get an H.264 preview
+written in the same pass (`meta.preview`); uploaded MKV, MOV or AVI files get one in the background.
+
+**HQ 1080p is the default** (the user's focus): new projects are 1920 × 1080, video scenes run LTX-2.5 at
+1920 × 1088 with "Best quality (DFR)" when the detail IC-LoRA is installed (project setting
+`video_quality`, `project.update` with `dfr` or `standard`; 5 s at 1080p: 786 instead of 241 s; say so
+before generating many scenes). The export crops the 8 extra rows instead of rescaling: a clip whose
+aspect ratio is within 5 % of the project's fills the frame, others are letterboxed.
+
+**Every generated video also has a lossless copy** (see [Lossless copy](#lossless-copy-of-every-video-since-0513)),
+and the Studio reads from it for the export and for chain start images. Measured: a YouTube 1080p export
+from the MP4 reached 37.7 dB PSNR against the original, from the lossless copy 42.3 dB at 12 Mbit/s and
+42.8 dB at 24 Mbit/s; 4:2:0 color itself caps at 43.9 dB, so more bitrate buys almost nothing.
+
+The media bin in the web UI lists everything from the History; deleting an asset there or with
+`delete_asset` drops it from the scenes' takes, clips whose file is gone are marked `missing` (the export
+then refuses with a message). Assets that lie as a clip in the open edit cannot be deleted from the bin.
+
+Measured on an RTX 5060 Ti 16 GB, everything through the MCP tools: four scenes (two LTX-2.5 clips of
+3 s at 1280 × 704, the second one chained, a Krea 2 still image, 9 s of music with Stable Audio 3) in
+270 s together, in this order: the music 62 s including the backend start, the still image 27 s, the
+first clip 99 s including loading LTX-2.5, the chained clip 78 s right after it (with the old order,
+LTX-2.5 was reloaded before the chained clip and it took 98 s). Conform made 4 clips and 1 dissolve; the
+export of 9 s at 1280 × 720 from the lossless copies took 5.9 s with NVENC, −14.0 LUFS, true peak
+−2.5 dBTP. In the exported video the chained clip starts with the same knight in the same pose: the two
+frames at the cut differ no more than neighbouring frames inside the first clip (22.1 against 21.0 dB
+PSNR).
+
+Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours in
+720p and 8.5 hours in 1080p. Still images with music and voice are much cheaper. Not there yet: voice
+(text-to-speech), titles, subtitles, camera moves on still images, OpenTimelineIO.
+
+## Lossless copy of every video (since 0.5.13)
+
+Every video model also writes the frames losslessly: FFV1 in MKV, 8-bit RGB, every frame a keyframe, sound
+as 32-bit float PCM taken before the limiter. The MP4 stays the file for previews, browsers and Unity; the
+copy is the source for editing. `generate_video` returns it in `lossless_files`; `master=False` skips it
+when only the MP4 is needed. In the History each video asset carries it as `meta.master`
+(`/files/<name>`); deleting the asset deletes it too, and extending a video joins the copies losslessly.
+
+Measured (RTX 5060 Ti, LTX-2.5, 5 s): 161.7 MB at 1080p next to a 10.5 MB MP4 (about 32 MB per second),
+78.4 MB at 720p (16 MB/s); written at 76 frames/s, round trip frame- and sample-exact. The MP4 (CRF 12,
+4:2:0) against the copy: 41.3 dB PSNR, hardly visible. What it buys is the chain: the Studio's YouTube
+export made from the copy reached 42.3 instead of 37.7 dB at the same file size, and a chain start image
+taken from the copy is pixel-exact (from the MP4: 41.0 dB).
+
 ## Image to 3D
 
 Two stages: first generate a suitable image, then run `image_to_3d` on it. TripoSG comes with
@@ -892,7 +984,7 @@ computes with its own HIP kernels on RDNA3 and RDNA4.
   AI labeling where the law requires it; Krea can terminate the license with 30 days' notice. The
   files come from Comfy-Org/Krea-2 (not gated). Without these conditions: **Qwen-Image-2512**
   (Apache-2.0).
-- Unproblematic: SDXL, FLUX schnell, ACE-Step (1.5: MIT, v1: Apache-2.0), Wan (all variants), Chroma, TripoSG, TRELLIS.2.
+- Unproblematic: SDXL, FLUX schnell, Wan (all variants), Chroma, TripoSG, TRELLIS.2.
 
 `list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)
 with `content_note` and `content_source`. NVAI-open itself has no content filter.

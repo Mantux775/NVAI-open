@@ -214,7 +214,8 @@ end;
 { Switches for install-runtime.ps1: which optional environments to set up. }
 function RuntimeSwitches(Param: String): String;
 begin
-  Result := '';
+  { The console speaks the language of the setup, the Repair shortcut too (install-runtime.ps1 -Lang). }
+  Result := ' -Lang ' + ActiveLanguage;
   if WizardIsComponentSelected('mesh3d') then
     Result := Result + ' -With3D';
 #if WithAddon == "1"

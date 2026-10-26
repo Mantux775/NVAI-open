@@ -69,8 +69,8 @@ const EXPAND_TIP: Record<Mode, string> = {
     'Turns “a medieval blacksmith” into a whole forge: hearth, anvil, sparks, light.'),
   video: t('Ergänzt Bewegung, Kamerafahrt, Ort und Licht; bei LTX-2.5 auch den Ton, mit Startbild nur die Bewegung.',
     'Adds motion, camera move, setting and light; with LTX-2.5 also the sound, with a start image only the motion.'),
-  audio: t('Stable Audio: Klang-Tags (Quelle, Material, Raum, Mikrofon). ACE-Step: Genre-, Instrument- und Stimmungs-Tags.',
-    'Stable Audio: sound tags (source, material, room, microphone). ACE-Step: genre, instrument and mood tags.'),
+  audio: t('Stable Audio: Klang-Tags (Quelle, Material, Raum, Mikrofon). Stable Audio 3: ein Satz mit Gattung, Instrumenten, Stimmung und BPM.',
+    'Stable Audio: sound tags (source, material, room, microphone). Stable Audio 3: one sentence with genre, instruments, mood and BPM.'),
   '3d': t('Beschreibt ein einzelnes, geschlossenes Objekt ohne Boden und Schatten, so wie die 3D-Modelle es brauchen.',
     'Describes a single closed object without floor or shadow, the way the 3D models need it.'),
   restore: '',
@@ -86,8 +86,8 @@ const MESH_NEGATIVE = 'cast shadow, drop shadow, floor, ground plane, table surf
 const HINT: Record<Mode, string> = {
   image: '',
   audio: t(
-    'Stable Audio: Klang beschreiben (SFX). ACE-Step: Genre-Tags, kommagetrennt.',
-    'Stable Audio: describe the sound (SFX). ACE-Step: genre tags, comma-separated.',
+    'Stable Audio: Klang beschreiben (SFX). Stable Audio 3: Musik in einem Satz, ohne Gesang.',
+    'Stable Audio: describe the sound (SFX). Stable Audio 3: music in one sentence, no vocals.',
   ),
   video: t(
     'Bewegung mitbeschreiben — je genauer, desto stabiler der Clip.',
@@ -120,7 +120,6 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
 
   const [prompt, setPrompt] = useState('')
   const [negative, setNegative] = useState('')
-  const [lyrics, setLyrics] = useState('')
   const [seconds, setSeconds] = useState(10)
   const [imgSize, setImgSize] = useState(IMAGE_SIZES[0])
   const [vidSize, setVidSize] = useState(VIDEO_SIZES[0])
@@ -151,6 +150,22 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [extendId, setExtendId] = useState('')
   const [videoAssets, setVideoAssets] = useState<Asset[]>([])
   const [motionSpeed, setMotionSpeed] = useState(1)
+  // Verlustfreie Kopie jedes Videos (FFV1/MKV) für Schnitt und Studio-Export; kostet Platz, deshalb abschaltbar
+  const [master, setMasterState] = useState(() => {
+    try {
+      return localStorage.getItem('nvai-video-master') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const setMaster = (on: boolean) => {
+    setMasterState(on)
+    try {
+      localStorage.setItem('nvai-video-master', on ? '1' : '0')
+    } catch {
+      /* privates Fenster */
+    }
+  }
   const [multishot, setMultishot] = useState(false)
   // Person aus einem Foto (seit 0.5.8): Rolle, in der FLUX 3 die Person aus dem Startbild zeigen soll
   const [roleText, setRoleText] = useState('')
@@ -322,7 +337,6 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const selected = available.find((m) => m.id === modelId[mode])
   const noModel = available.length === 0
   const modeLabel = MODES.find((m) => m.id === mode)?.label ?? ''
-  const isAce = selected?.family?.startsWith('ace') ?? false
   // TRELLIS.2 liefert PBR-Texturen; TripoSG nur Geometrie.
   const isTextured = selected?.workflow === 'trellis2'
   // Skip Layer Guidance und die SD3-ControlNets gelten nur für diese Familie.
@@ -549,7 +563,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const expandTarget: ExpandTarget =
     mode === 'image' ? 'image'
       : mode === '3d' ? '3d'
-        : mode === 'audio' ? (selected?.family === 'stable_audio3' ? 'music_sa3' : isAce ? 'music' : 'sfx')
+        : mode === 'audio' ? (selected?.family === 'stable_audio3' ? 'music_sa3' : 'sfx')
           : isLtx25 && multishot ? 'video_multishot'
             : usesStart && sourceId ? 'video_start'
               : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
@@ -810,13 +824,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           seed: seed ? Number(seed) : null,
         })
       } else if (mode === 'audio') {
-        job = await api.generateAudio({ ...common, seconds, lyrics })
+        job = await api.generateAudio({ ...common, seconds })
       } else if (mode === 'video') {
         job = await api.generateVideo({
           ...common, width: vidSize.w, height: vidSize.h,
           frames: isLtx25 ? ltxFrames : frames, fps: isLtx25 ? ltxFps : fps,
           image_asset_id: usesStart && !(isLtx25 && extendId) ? sourceId || null : null,
           loras: activeLoras,
+          master,
           ...(isLtx25 ? {
             loop: loop && !!sourceId && quality !== 'dfr' && !extendId,
             end_image_asset_id: !loop && quality !== 'dfr' && endId ? endId : null,
@@ -1188,7 +1203,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )}
               </>
             )}
-            <h3>{mode === 'audio' && isAce ? t('Genre-Tags', 'Genre tags') : 'Prompt'}</h3>
+            <h3>Prompt</h3>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -1199,18 +1214,6 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
               }}
             />
             {expandRow()}
-
-            {mode === 'audio' && isAce && (
-              <>
-                <h3>{t('Songtext (leer = instrumental)', 'Lyrics (empty = instrumental)')}</h3>
-                <textarea
-                  value={lyrics}
-                  onChange={(e) => setLyrics(e.target.value)}
-                  rows={3}
-                  placeholder="[verse]&#10;Steel and shadow, dawn is breaking…"
-                />
-              </>
-            )}
 
             <h3>{t('Negativ', 'Negative')}</h3>
             <textarea
@@ -1939,6 +1942,15 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 </p>
               </>
             )}
+
+            <label className="check">
+              <input type="checkbox" checked={master} onChange={(e) => setMaster(e.target.checked)} />
+              {t('Verlustfreie Kopie für den Schnitt (MKV)', 'Lossless copy for editing (MKV)')}
+            </label>
+            <p className="hint small">
+              {t('Speichert das Video zusätzlich Bild für Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus: gemessen 42,3 statt 37,7 dB PSNR beim YouTube-Export, Anschluss-Startbilder pixelgenau. Kostet Platz: rund 32 MB je Sekunde bei 1080p, 16 MB bei 720p (5 s 1080p: 162 statt 10 MB).',
+                'Also stores the video frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it: measured 42.3 instead of 37.7 dB PSNR for the YouTube export, chain start images pixel-exact. Costs space: about 32 MB per second at 1080p, 16 MB at 720p (5 s at 1080p: 162 instead of 10 MB).')}
+            </p>
           </>
         )}
 

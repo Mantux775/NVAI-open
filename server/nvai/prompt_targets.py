@@ -5,7 +5,7 @@ Fuer Bilder nimmt NVAI-open BFLs eigene Systemprompts des FLUX-3-Upsamplers
 von BFL feinjustiert, Apache-2.0) mit den Systemprompts unten. Sie sind NVAI-opens eigene
 und folgen den Prompt-Regeln der jeweiligen Modelle: Wan und LTX wollen eine fliessende
 Beschreibung mit Bewegung und Kamera, LTX-2.5 zusaetzlich den Ton; Stable Audio den
-Klang statt Musik; ACE-Step kommagetrennte Genre-Tags; die 3D-Modelle ein einzelnes
+Klang statt Musik; Stable Audio 3 einen Satz mit BPM; die 3D-Modelle ein einzelnes
 Objekt ohne Boden und Schatten, weil das Bild das Mesh vollstaendig bestimmt.
 
 Auch Bilder ohne Referenzbild und Boxen laufen seit 0.5.4 hier durch ("image"): BFLs
@@ -20,6 +20,8 @@ from __future__ import annotations
 import re
 
 TARGETS = ("image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music", "music_sa3", "3d")
+# „music“ war das Ziel für ACE-Step (am 26.10.2026 entfernt); es bleibt für ältere Clients und meint jetzt Stable Audio 3
+ALIASES = {"music": "music_sa3"}
 
 _COMMON = (
     "Output only the finished prompt in English, no heading, no quotation marks, no "
@@ -94,14 +96,6 @@ SYSTEM: dict[str, str] = {
         "low groaning creak, stone dungeon reverb, close mic, no music. End with 'no music' "
         "unless the idea asks for music. " + _COMMON
     ),
-    "music": (
-        "You turn a short idea into tags for a music model (ACE-Step). Output a single line "
-        "of 8 to 16 comma-separated lowercase tags, no sentences: genre and subgenre, the "
-        "lead instruments, mood, energy, tempo feel, era or region if it fits, and the vocal "
-        "type (male vocals, female vocals, choir) or 'instrumental' if the idea has no "
-        "singing. Example: epic orchestral, choir, war drums, brass, cinematic, minor key, "
-        "slow build, dark, heroic, instrumental. " + _COMMON
-    ),
     # Stable Audio 3 ist auf einen fliessenden Satz plus "BPM: X. Length: Y seconds" trainiert
     # (Systemprompt der ComfyUI-Vorlage audio_stable_audio_3_medium). Die Laenge haengt der
     # Graph selbst an, passend zur eingestellten Dauer (workflows, stable_audio_3).
@@ -140,7 +134,6 @@ WITH_IMAGE = {"video_start"}
 FORMAT = {
     "sfx": ("Output one line of 6 to 12 comma-separated lowercase sound tags, no sentences, "
             "only what can be heard, ending with 'no music'."),
-    "music": "Output one line of 8 to 16 comma-separated lowercase tags, no sentences.",
     "music_sa3": ("Output one sentence of 25 to 50 words about what can be heard only, then "
                   "'BPM: <number>.' and nothing else."),
     "video_start": ("Write 25 to 50 words that describe only the motion and the camera. Do not "
@@ -241,7 +234,7 @@ def clean(target: str, text: str) -> str:
         out = rest[:1].upper() + rest[1:]
     if target == "music_sa3":
         return music_sa3(out)
-    if target in ("sfx", "music"):
+    if target == "sfx":
         # Schreibt das Modell doch Prosa, haengt es die Tag-Zeile oft in Anfuehrungszeichen an.
         tags = [m for m in re.findall(r'["“]([^"”]{20,})["”]', out) if m.count(",") >= 3]
         if tags:

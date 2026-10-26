@@ -16,14 +16,14 @@ Install, open, download a model under "Models", generate. The setup brings every
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.12 for Windows and 0.4.8 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.12))
+October 2026: NVAI-open 0.5.13 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.13)), the Mac stays at 0.4.8
 
-- **AMD Radeon:** PyTorch with ROCm 10; the setup recognizes the card and installs its kernels, on a Radeon RX 9000 NVAI-open recommends the FP8 and bf16 versions (experimental, testers welcome)
-- **Hugging Face:** the model cards show whether the license for FLUX 3 and LTX-2.5 is accepted, with an [illustrated guide](docs/HUGGINGFACE.md)
-- **NVIDIA:** PyTorch 2.14.1 with CUDA 13.0, with the same results as before
-- **Mac (0.4.8):** Z-Image Turbo, video with LTX-Video 2B from text or a start image, a model search for images and videos that says what runs on your Mac, and your own folder for the assets
+- **Studio:** a full-screen editor for whole videos, with scenes and prompts, markers, real cuts and an export with your graphics card's encoder ([guide](docs/STUDIO.md))
+- **Lossless copy of every AI video:** the Studio edits and exports from it, so only the export compresses (42.3 instead of 37.7 dB PSNR for a YouTube export)
+- **Export:** YouTube 1080p at 24 Mbit/s, a lossless master (MKV) and ProRes 4444, with a preview in the browser
+- **ACE-Step removed:** music comes from Stable Audio 3 Medium (instrumental, up to 5 minutes)
 
-Neu: **AMD Radeon** mit ROCm 10 (das Setup erkennt die Karte und holt ihre Kernel, auf einer Radeon RX 9000 empfiehlt NVAI-open die FP8- und bf16-Fassungen; experimentell, Tester willkommen), die Modellkarten zeigen, ob die **Hugging-Face-Lizenz** für FLUX 3 und LTX-2.5 angenommen ist ([bebilderte Anleitung](docs/de/HUGGINGFACE.md)), **NVIDIA** mit PyTorch 2.14.1 und CUDA 13.0 bei gleichen Ergebnissen, und auf dem Mac (0.4.8) **Z-Image Turbo**, **Video mit LTX-Video 2B** aus Text oder einem Startbild, eine **Modellsuche** für Bilder und Videos, die sagt, was auf deinem Mac läuft, und ein eigener Ordner für die Assets. 0.5.11 brachte das Restaurieren alter Fotos und MOSS-Image ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11)).
+Neu: das **Studio**, ein Schnittplatz über den ganzen Bildschirm für ganze Videos mit Szenen und Prompts, Markern, echten Schnitten und einem Export mit dem Encoder deiner Grafikkarte ([Anleitung](docs/de/STUDIO.md)); von jedem KI-Video eine **verlustfreie Kopie**, aus der das Studio schneidet und exportiert (42,3 statt 37,7 dB PSNR bei einem YouTube-Export); **Export** als YouTube 1080p mit 24 Mbit/s, verlustfreier Master (MKV) und ProRes 4444, mit Vorschau im Browser; **ACE-Step** ist raus, Musik kommt von Stable Audio 3 Medium (instrumental, bis 5 Minuten). 0.5.12 brachte AMD Radeon und auf dem Mac Z-Image Turbo und Video ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.12)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -41,7 +41,8 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 
 - **Images:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image and many more. Edit with reference images, fill in or extend a picture.
 - **Video with sound:** LTX-2.5 makes the picture and the sound in one pass, speech included, up to 20 s and 1080p.
-- **Music and sounds:** songs with vocals, instrumental music up to 5 minutes, sound effects.
+- **Studio:** compose a whole video from scenes, cut it and export it with your graphics card's encoder.
+- **Music and sounds:** instrumental music up to 5 minutes, sound effects.
 - **3D models:** from an image to a textured model for Unity, Blender or any engine.
 - **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
 - **A few words are enough:** "Expand prompt" writes the full description for you.
@@ -59,6 +60,20 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 4. **Prompt:** describe what moves, what the camera does and what the person says. LTX-2.5 makes the video with speech and sound.
 
 Step by step with screenshots: [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md)
+
+### Studio: whole videos from scenes
+
+A full-screen editor for whole videos. At the top you compose: scenes with a prompt on lanes for picture, voice, music and sound, plus markers that say what goes where. At the bottom you edit the real clips: cut, trim, dissolve, set the volume. "Generate scenes" makes every clip, still image and piece of music with your local models, "Conform" puts the takes into the edit, and the export uses the video encoder of your graphics card at YouTube loudness.
+
+![The Studio: media on the left, the monitor in the middle, the project settings on the right, the composition and the edit below](docs/images/studio.jpg)
+
+- **Markers:** a chain marker makes a clip start with the last frame of the one before it, so two shots join seamlessly; transition markers add dissolves; an AI task marker leaves Claude a note in the timeline.
+- **Media:** everything you generated, as a compact list with search. Click a file to play it in the monitor, drag it onto a track, delete it right there.
+- **High-quality 1080p:** video scenes run in the best LTX-2.5 quality, every AI video is also kept losslessly, and only the export compresses: measured 42.3 instead of 37.7 dB PSNR for a YouTube export.
+- **Export:** YouTube 1080p and 4K, Shorts, AV1, a lossless master (MKV) or ProRes 4444 for other editing software.
+- **Claude Code** builds the whole video for you over MCP while you watch it in the Studio.
+
+Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
 ### Video with sound
 
@@ -140,7 +155,7 @@ Every tab in NVAI-open has a **Recommended settings** box with what was measured
 - **Images:** choose the size by the silhouette (standing figure 832 × 1216, vehicle 1216 × 832), write full English sentences with the style first, and make 4 images at once to pick from.
 - **Krea 2:** name the framing ("medium shot from the waist up, his whole head inside the frame"); without it the head was cut off in 3 of 3 test images.
 - **MOSS-Image:** describe the finished picture and put the text in quotation marks with position and typeface; leave it on 50 steps.
-- **Video:** name loud sounds explicitly, sounds described as soft come out almost inaudible. For a fixed shot write "Static camera, a locked-off medium shot".
+- **Video:** name loud sounds explicitly, sounds described as soft come out almost inaudible. For a fixed shot write "Static camera, a locked-off medium shot". Leave "Lossless copy for editing" on if you cut the clips later; it costs about 32 MB per second at 1080p.
 - **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
 - **FLUX 3 and LTX-2.5:** accept the license on Hugging Face and store a read token under "Models"; the model card shows whether access works. Step by step: [docs/HUGGINGFACE.md](docs/HUGGINGFACE.md)
 - **Old photos:** leave it on "Automatic"; it chooses "Thorough" for overall aging (water stains, crack networks) and "Gentle" for separate damage on an otherwise good photo (dust, scratches, tears). Put known colors into the hints ("his suit is dark brown") and compare the two variants at full size.
@@ -189,6 +204,7 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 - [docs/INSTALL.md](docs/INSTALL.md): installing, building from source, the PhotoCraft add-on
 - [docs/MODELS.md](docs/MODELS.md): the models in detail, prompt tips, test results
 - [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md): from a photo to a video, step by step
+- [docs/STUDIO.md](docs/STUDIO.md): the Studio, whole videos from scenes
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NVAI-open from Claude Code
 - [photocraft-addon/](photocraft-addon/): source of the PhotoCraft add-on
 
@@ -218,7 +234,8 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 - **Bilder:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache, bis 20 s und 1080p.
-- **Musik und Sounds:** Lieder mit Gesang, instrumentale Musik bis 5 Minuten, Soundeffekte.
+- **Studio:** ein ganzes Video aus Szenen komponieren, schneiden und mit dem Encoder der Grafikkarte exportieren.
+- **Musik und Sounds:** instrumentale Musik bis 5 Minuten, Soundeffekte.
 - **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
 - **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
@@ -236,6 +253,20 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 4. **Prompt:** beschreiben, was sich bewegt, was die Kamera macht und was die Person sagt. LTX-2.5 macht daraus das Video mit Sprache und Ton.
 
 Schritt für Schritt mit Screenshots: [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md)
+
+### Studio: ganze Videos aus Szenen
+
+Ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Oben komponierst du: Szenen mit Prompt auf Bahnen für Bild, Sprecher, Musik und Klang, dazu Marker, die sagen, was wohin kommt. Unten schneidest du die echten Clips: schneiden, trimmen, überblenden, Lautstärke. „Szenen erzeugen“ macht alle Clips, Standbilder und Musikstücke mit deinen lokalen Modellen, „Übernehmen“ legt die Takes in den Schnitt, und der Export nutzt den Video-Encoder deiner Grafikkarte, in der Lautheit von YouTube.
+
+![Das Studio: links das Material, in der Mitte der Monitor, rechts die Projekteinstellungen, unten Komposition und Schnitt](docs/images/studio-de.jpg)
+
+- **Marker:** Ein Anschluss-Marker lässt einen Clip mit dem letzten Bild des vorigen beginnen, so gehen zwei Einstellungen nahtlos ineinander über; Übergang-Marker setzen Überblendungen; ein KI-Auftrag hinterlässt Claude eine Notiz in der Zeitleiste.
+- **Material:** alles, was du erzeugt hast, als kompakte Liste mit Suche. Ein Klick spielt die Datei im Monitor ab, auf eine Spur gezogen wird sie zum Clip, gelöscht wird sie direkt dort.
+- **Hochwertiges 1080p:** Videoszenen laufen in der höchsten Qualität von LTX-2.5, jedes KI-Video wird zusätzlich verlustfrei aufbewahrt, und komprimiert wird erst beim Export: gemessen 42,3 statt 37,7 dB PSNR bei einem YouTube-Export.
+- **Export:** YouTube 1080p und 4K, Shorts, AV1, ein verlustfreier Master (MKV) oder ProRes 4444 für andere Schnittprogramme.
+- **Claude Code** baut dir das ganze Video per MCP, während du im Studio zusiehst.
+
+Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
 ### Video mit Ton
 
@@ -317,7 +348,7 @@ In jedem Reiter von NVAI-open stehen unter **Empfohlene Einstellungen** die geme
 - **Bilder:** das Format nach der Silhouette wählen (stehende Figur 832 × 1216, Fahrzeug 1216 × 832), ganze englische Sätze mit dem Stil vorn schreiben und 4 Bilder auf einmal zum Auswählen machen.
 - **Krea 2:** den Bildausschnitt nennen („medium shot from the waist up, his whole head inside the frame“); ohne fehlte im Test in 3 von 3 Bildern der Kopf.
 - **MOSS-Image:** das fertige Bild beschreiben und die Schrift in Anführungszeichen mit Ort und Schriftart angeben; bei 50 Schritten lassen.
-- **Video:** laute Geräusche ausdrücklich nennen, leise beschriebene kommen fast unhörbar. Für eine feste Einstellung „Static camera, a locked-off medium shot“ schreiben.
+- **Video:** laute Geräusche ausdrücklich nennen, leise beschriebene kommen fast unhörbar. Für eine feste Einstellung „Static camera, a locked-off medium shot“ schreiben. „Verlustfreie Kopie für den Schnitt“ anlassen, wenn du die Clips später schneidest; kostet rund 32 MB je Sekunde bei 1080p.
 - **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.
 - **FLUX 3 und LTX-2.5:** die Lizenz auf Hugging Face annehmen und unter „Modelle“ einen Token mit Leserecht eintragen; die Modellkarte zeigt, ob der Zugriff klappt. Schritt für Schritt: [docs/de/HUGGINGFACE.md](docs/de/HUGGINGFACE.md)
 - **Alte Fotos:** auf „Automatisch“ lassen; es wählt „Gründlich“ bei flächiger Alterung (Wasserflecken, Rissnetze) und „Schonend“ bei einzelnen Schäden auf einem sonst guten Foto (Staub, Kratzer, Risse). Bekannte Farben in die Hinweise („his suit is dark brown“) und die zwei Varianten in voller Größe vergleichen.
@@ -366,5 +397,6 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 - [docs/de/INSTALL.md](docs/de/INSTALL.md): Installation, Bauen aus dem Quelltext, PhotoCraft-Add-on
 - [docs/de/MODELLE.md](docs/de/MODELLE.md): die Modelle im Detail, Prompt-Tipps, Testergebnisse
 - [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md): vom Foto zum Video, Schritt für Schritt
+- [docs/de/STUDIO.md](docs/de/STUDIO.md): das Studio, ganze Videos aus Szenen
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NVAI-open aus Claude Code nutzen (englisch)
 - [photocraft-addon/](photocraft-addon/): Quelltext des PhotoCraft-Add-ons

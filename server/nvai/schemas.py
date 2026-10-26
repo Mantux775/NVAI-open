@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt", "restore"]
+                  "expand_prompt", "restore", "studio_export"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
@@ -128,15 +128,15 @@ class GenerateImageRequest(BaseModel):
 
 
 class GenerateAudioRequest(BaseModel):
-    prompt: str = Field(..., description="Klangbeschreibung (SFX) oder Genre-Tags (Musik)")
+    prompt: str = Field(..., description="Klangbeschreibung (SFX) oder ein Satz zur Musik (Stable Audio 3)")
     negative_prompt: str = Field("", description="Was vermieden werden soll")
-    lyrics: str = Field("", description="Nur ACE-Step: Songtext. Leer = instrumental")
+    lyrics: str = Field("", description="Ohne Wirkung seit 0.5.13 (ACE-Step entfernt); bleibt für ältere Clients")
     model_id: str | None = None
     seconds: float = Field(10.0, gt=0, le=300, description="Laenge in Sekunden")
     steps: int | None = Field(None, ge=1, le=200)
     cfg: float | None = Field(None, ge=0.0, le=30.0)
     seed: int | None = None
-    # Nur ACE-Step 1.5
+    # Ohne Wirkung seit 0.5.13 (waren für ACE-Step 1.5); bleiben für ältere Clients
     bpm: int | None = Field(None, ge=40, le=240)
     time_signature: Literal["2", "3", "4", "6"] | None = Field(
         None, description="Time signature: 2 = 2/4, 3 = 3/4, 4 = 4/4, 6 = 6/8. Empty = 4/4")
@@ -193,6 +193,9 @@ class GenerateVideoRequest(BaseModel):
     crf: float | None = Field(
         None, ge=0.0, le=51.0, description="LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und "
                                             "groessere Datei; leer = workflows.VIDEO_CRF")
+    master: bool = Field(
+        True, description="Zusaetzlich verlustfrei speichern (FFV1 in MKV, Ton als Float-PCM, meta.master am "
+                          "Asset): Ausgangsmaterial fuer Schnitt und Studio-Export ohne Kompressionsverlust")
     extend_asset_id: str | None = Field(
         None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird "
                           "Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton "
@@ -253,7 +256,7 @@ class ExpandPromptRequest(BaseModel):
         description="Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound "
                     "(LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten "
                     "und Ton), video_start (nur Bewegung, liest das Startbild in "
-                    "reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), "
+                    "reference_asset_ids mit), sfx (Stable Audio), music (wie music_sa3), "
                     "3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
     )
     width: int = Field(1024, ge=256, le=2048, multiple_of=8,

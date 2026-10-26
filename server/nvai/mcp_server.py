@@ -126,6 +126,12 @@ server = MCPServer(
         "meta.repair.auto says what auto chose. "
         "Colorizing takes only the color from FLUX 3 and keeps the photo's brightness and detail; known "
         "colors in `notes` cut the measured color error by 40 %.\n\n"
+        "STUDIO: studio_* tools build a whole video in a project with two timelines: a composition of scenes "
+        "(prompt, model, duration on the lanes video/voice/music/sfx) with markers, and an edit with real clips "
+        "on V1/V2/A1/A2. Add one scene per shot, studio_generate(wait=True), check the takes, edit.conform, then "
+        "studio_export. Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
+        "done. Ten minutes made only of LTX-2.5 clips take about 3 hours at 720p on an RTX 5060 Ti; still images "
+        "(about 20 s each) are much cheaper for narrated explainer videos.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -187,6 +193,12 @@ async def _generate(path: str, payload: dict[str, Any], ctx: Context) -> dict[st
         "seed": meta.get("seed"),
         "model_id": first.get("model_id"),
     }
+    # Verlustfreie Kopien der Videos (FFV1/MKV, meta.master): Ausgangsmaterial fuer Schnitt und Export
+    masters = [a["meta"]["master"] for a in assets if (a.get("meta") or {}).get("master")]
+    if masters:
+        from . import config
+
+        out["lossless_files"] = [str(config.ASSET_DIR / name) for name in masters]
     # FLUX 3: die Bildbeschreibung, die der Upsampler aus dem Prompt gemacht hat. Stimmt
     # am Bild etwas nicht, zeigt sie, ob es schon in der Beschreibung fehlte.
     if meta.get("caption"):
@@ -523,7 +535,7 @@ async def expand_prompt(
             'video_sound' (LTX-2.5: also describes the sound), 'video_multishot' (LTX-2.5:
             2-4 shots in one clip, every cut written out, sound across the cuts), 'video_start' (image to
             video: motion only, reads the start image), 'sfx' (Stable Audio: sound
-            tags), 'music' (ACE-Step genre tags), 'music_sa3' (Stable Audio 3: one
+            tags), 'music_sa3' (Stable Audio 3: one
             sentence plus BPM, wordless choir at most; the length is added on generating)
             or '3d' (an image prompt for one object without floor or shadow, then
             image_to_3d). Measured 3-12 s each.
@@ -546,39 +558,29 @@ async def generate_audio(
     prompt: str,
     ctx: Context,
     seconds: float = 10.0,
-    lyrics: str = "",
     negative_prompt: str = "",
     model_id: str | None = None,
     seed: int | None = None,
-    bpm: int | None = None,
-    time_signature: str | None = None,
-    key_scale: str | None = None,
 ) -> dict[str, Any]:
     """Generates audio locally on the GPU and returns the file paths.
 
     Depending on the active model: Stable Audio Open for sound effects and ambience
-    (describe the sound, e.g. "footsteps on gravel, close mic"), ACE-Step for
-    music with vocals or choir (genre tags, e.g. "epic orchestral, choir, drums"),
-    stable-audio-3-medium for instrumental music up to a few minutes (no vocals; one
-    sentence: genre with main instruments, layers and percussion creating a mood, then
-    "BPM: 100. Length: 60 seconds").
+    (describe the sound, e.g. "footsteps on gravel, close mic"), stable-audio-3-medium for
+    instrumental music up to 5 minutes (no vocals; one sentence: genre with main instruments,
+    layers and percussion creating a mood, then "BPM: 100."; the length is added). NVAI-open
+    has no model for songs with vocals: ACE-Step was removed in 0.5.13 (its results
+    were consistently poor).
 
     Args:
-        prompt: Sound description (SFX), genre tags (ACE-Step) or one descriptive sentence
-            (Stable Audio 3).
-        seconds: Length in seconds. Stable Audio Open can do up to 47 s.
-        lyrics: ACE-Step only: song lyrics. Empty = instrumental.
+        prompt: Sound description (SFX) or one descriptive sentence (Stable Audio 3).
+        seconds: Length in seconds. Stable Audio Open can do up to 47 s, Stable Audio 3 up to 300 s.
         negative_prompt: What to avoid.
         model_id: Force a model; otherwise the active audio model.
         seed: For reproducible results.
-        bpm: ACE-Step 1.5 only: tempo, 40-240. Default 120.
-        time_signature: ACE-Step 1.5 only: "2" (2/4), "3" (3/4), "4" (4/4) or "6" (6/8). Default "4".
-        key_scale: ACE-Step 1.5 only: key such as "Bb major" or "A minor". Default "C major".
     """
     payload = {
-        "prompt": prompt, "negative_prompt": negative_prompt, "lyrics": lyrics,
+        "prompt": prompt, "negative_prompt": negative_prompt,
         "seconds": seconds, "model_id": model_id, "seed": seed,
-        "bpm": bpm, "time_signature": time_signature, "key_scale": key_scale,
     }
     return await _generate("/api/generate/audio", payload, ctx)
 
@@ -605,6 +607,7 @@ async def generate_video(
     motion_speed: float = 1.0,
     crf: float | None = None,
     extend_asset_id: str | None = None,
+    master: bool = True,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
@@ -672,6 +675,10 @@ async def generate_video(
             with its sound; the prompt describes what happens next, frames/seconds its length. The
             result lists the extended video first, then the new part on its own. Not together with
             image_asset_id, loop or audio_asset_id.
+        master: Also store the video losslessly (FFV1 in MKV, sound as float PCM); its path comes back
+            in 'lossless_files'. Use it for editing and exporting: measured, a YouTube export made from it
+            reached 42.3 instead of 37.7 dB PSNR. Costs about 32 MB per second at 1080p, 16 MB at 720p;
+            False saves the space when only the MP4 is needed (e.g. straight into Unity).
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
@@ -680,7 +687,7 @@ async def generate_video(
         "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
-        "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id,
+        "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id, "master": master,
     }
     return await _generate("/api/generate/video", payload, ctx)
 
@@ -912,6 +919,147 @@ async def copy_asset(asset_id: str, destination: str) -> dict[str, Any]:
     shutil.copy2(src, dest)
     return {"ok": True, "path": str(dest)}
 
+
+# ------------------------------------------------------------------------------------------- Studio
+
+
+@server.tool()
+async def studio_projects() -> list[dict[str, Any]]:
+    """Studio projects (newest first): id, name, number of scenes and clips, length of the edit in seconds."""
+    async with await _client() as c:
+        return (await c.get("/api/studio/projects")).json()
+
+
+@server.tool()
+async def studio_create(name: str, width: int = 1920, height: int = 1080, fps: int = 24) -> dict[str, Any]:
+    """Creates a Studio project and returns it in compact form (times in seconds).
+
+    A project has two timelines. The COMPOSITION holds scenes (a prompt, a model, a duration) on four lanes:
+    'video' (video clips or still images), 'voice', 'music', 'sfx', plus markers that say what goes where. The EDIT
+    holds the real clips on tracks V1, V2 (above V1), A1, A2. Typical flow: studio_create -> one scene.add per
+    shot -> studio_generate(wait=True) -> check the takes -> edit.conform -> markers / cuts -> studio_export.
+
+    Args:
+        name: Project name.
+        width, height: Frame size, e.g. 1920 x 1080 (YouTube) or 1080 x 1920 (Shorts).
+        fps: Frame rate of the edit (24 matches LTX-2.5).
+    """
+    async with await _client() as c:
+        r = await c.post("/api/studio/projects", json={"name": name, "width": width, "height": height, "fps": [fps, 1]})
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:300]}
+        pid = r.json()["id"]
+        return (await c.get(f"/api/studio/projects/{pid}", params={"format": "summary"})).json()
+
+
+@server.tool()
+async def studio_get(project_id: str) -> dict[str, Any]:
+    """A Studio project in compact form: scenes (status empty/running/done/error, take, error), markers (kind,
+    name, comment, params, done), clips (track, start_s, end_s, transition) and the edit length. Finished
+    generation jobs are already entered as takes. Markers of kind 'ai' that are not done are tasks the user left
+    for you: carry them out, then set them done with marker.update."""
+    async with await _client() as c:
+        r = await c.get(f"/api/studio/projects/{project_id}", params={"format": "summary"})
+        return r.json() if r.status_code < 400 else {"ok": False, "error": r.text[:300]}
+
+
+@server.tool()
+async def studio_command(project_id: str, command: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Runs one Studio command (the same the web interface uses; undo is available there). Times as seconds with
+    the suffix _s (start_s, duration_s, at_s, in_s, to_s) or in ticks (254 016 000 000 per second).
+
+    Commands:
+      scene.add     lane (video|voice|music|sfx), prompt, title, kind (video|image|audio), model_id, start_s
+                    (default: end of the lane), duration_s (default 5), params (seed, width, height ...)
+      scene.update  id + any of title, prompt, kind, model_id, lane, chain_from (scene id whose last frame becomes
+                    the start image), lyrics, params, start_s, duration_s
+      scene.delete  id
+      scene.take    id, asset_id: choose a take or add any asset as a take
+      marker.add    at_s, kind (place|transition|chain|audio|ai|note), name, comment, duration_s, params
+                    (place: scene_id, track; transition: seconds; audio: scene_id)
+      marker.update id + fields, done (true when an 'ai' task is finished); marker.delete id
+      edit.conform  puts the chosen takes into the edit, swaps regenerated media into linked clips, applies the
+                    place/transition/audio markers
+      clip.add      track (V1|V2|A1|A2), asset_id, start_s, in_s, duration_s (overwrites what lies below)
+      clip.move     id, start_s, track;  clip.trim id + edge (start|end) + to_s, or in_s/out_s
+      clip.razor    at_s, track (all tracks if omitted);  clip.delete ids, ripple
+      clip.update   id, gain_db, muted, transition ({kind: 'dissolve', duration_s} or null)
+      project.update name, width, height, fps
+
+    Args:
+        project_id: From studio_projects or studio_create.
+        command: One of the commands above.
+        params: The command's parameters.
+    """
+    async with await _client() as c:
+        r = await c.post(f"/api/studio/projects/{project_id}/command", params={"format": "summary"},
+                         json={"command": command, "params": params or {}})
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:400]}
+        body = r.json()
+        return {"ok": True, "result": body["result"], "project": body["project"]}
+
+
+@server.tool()
+async def studio_generate(project_id: str, scene_ids: list[str] | None = None, wait: bool = True,
+                          ctx: Context | None = None) -> dict[str, Any]:
+    """Generates scenes with the existing models: video scenes with the active video model (LTX-2.5: frames from
+    the duration at 24 fps, 1280 x 704 or 1920 x 1088 depending on the project), still images with the active image
+    model, music and sound with the active audio model. Without scene_ids it generates every scene without a take.
+    A scene with chain_from (or behind a 'chain' marker) starts with the last frame of the earlier scene: if that one
+    is generated in the same run, the chained scene has status 'waiting' and follows automatically. The voice lane
+    has no text-to-speech yet: add an audio file as a take instead.
+
+    Args:
+        project_id: The project.
+        scene_ids: Scenes to generate (again); None = all without a take.
+        wait: Block until all scenes are finished, chained ones included (video takes about 60-250 s per clip on an
+            RTX 5060 Ti).
+    """
+    async with await _client() as c:
+        r = await c.post(f"/api/studio/projects/{project_id}/generate", json={"scene_ids": scene_ids} if scene_ids else {})
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:400]}
+        out = r.json()
+        ids = set(out["jobs"]) | set(out.get("waiting", {}))
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 3600.0
+        while True:
+            project = (await c.get(f"/api/studio/projects/{project_id}", params={"format": "summary"})).json()
+            busy = [s for s in project["scenes"] if s["id"] in ids and s["status"] in ("running", "waiting")]
+            if not wait or not busy or loop.time() > deadline:
+                break
+            if ctx:
+                await ctx.report_progress(len(ids) - len(busy), len(ids))
+            await asyncio.sleep(POLL_INTERVAL * 3)
+    errors = dict(out["errors"])
+    errors.update({s["id"]: s["error"] for s in project["scenes"] if s["id"] in ids and s["status"] == "error"})
+    return {"ok": not errors, "jobs": out["jobs"], "waiting": out.get("waiting", {}), "errors": errors,
+            "project": project}
+
+
+@server.tool()
+async def studio_export(project_id: str, preset: str = "youtube-1080p", ctx: Context | None = None) -> dict[str, Any]:
+    """Renders the edit to a video file and returns its path. Uses the hardware encoder when there is one (NVENC on
+    NVIDIA, AMF on AMD, QSV on Intel), software otherwise; the sound is mixed and set to -14 LUFS.
+
+    Args:
+        project_id: The project.
+        preset: youtube-1080p (H.264), youtube-2160p (H.265), shorts-1080x1920, av1-1080p, project (H.264 in the
+            project's size).
+    """
+    async with await _client() as c:
+        r = await c.post(f"/api/studio/projects/{project_id}/export", json={"preset": preset})
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:400]}
+        job = r.json()
+    result = await _wait_for_job(job["id"], ctx)
+    if result["status"] != "done":
+        return {"ok": False, "error": result.get("error") or result["status"]}
+    async with await _client() as c:
+        assets = (await c.get(f"/api/jobs/{job['id']}/assets")).json()
+    return {"ok": True, "files": _asset_paths(assets), "asset_ids": [a["id"] for a in assets],
+            "meta": assets[0].get("meta", {}) if assets else {}}
 
 def main() -> None:
     server.run()

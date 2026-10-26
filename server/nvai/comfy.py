@@ -29,6 +29,9 @@ ProgressCb = Callable[[float, str], None]
 
 # Unter diesen Schluesseln liefert ComfyUI Ergebnisdateien -- je nach Save-Node.
 OUTPUT_KEYS = ("images", "audio", "video", "gifs", "3d", "model_file", "result")
+# Verlustfreie Master (NVAISaveMaster, comfy_nodes/nvai_video.py) melden sich unter eigenem Schluessel: Sie
+# gehoeren zum MP4 und werden kein eigenes Asset.
+MASTER_KEY = "nvai_master"
 
 # Dateiendung -> Asset-Typ fuer die Library.
 EXT_KIND = {
@@ -340,11 +343,37 @@ async def run_workflow(
     workflow: dict[str, Any],
     on_progress: ProgressCb | None = None,
     timeout: float = 900.0,
+    masters: list[Path] | None = None,
 ) -> list[Path]:
     """Schickt einen Graphen an ComfyUI, verfolgt den Fortschritt und kopiert die
-    Ergebnisse nach data/assets/. Gibt die lokalen Pfade zurueck."""
+    Ergebnisse nach data/assets/. Gibt die lokalen Pfade zurueck; verlustfreie Master
+    landen in `masters` (in derselben Reihenfolge wie die Videos)."""
     files, _ = await _execute(workflow, on_progress, timeout, MAIN.url)
-    return await _collect(files)
+    paths = await _collect([f for f in files if not f.get("master")])
+    extra = [f for f in files if f.get("master")]
+    if extra and masters is not None:
+        # verschieben statt kopieren: ein Master hat bei 1080p einige hundert MB
+        masters.extend(await _collect(extra, move=True))
+    return paths
+
+
+_nodes_seen: set[str] = set()
+
+
+async def has_node(name: str) -> bool:
+    """Kennt das laufende ComfyUI diesen Knoten? Eigene Knoten (comfy_nodes) kommen erst mit einem Neustart dazu."""
+    key = f"{MAIN.url}|{name}"
+    if key in _nodes_seen:
+        return True
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            r = await c.get(f"{MAIN.url}/object_info/{name}")
+        known = r.status_code == 200 and name in r.json()
+    except (httpx.HTTPError, ValueError):
+        return False
+    if known:
+        _nodes_seen.add(key)
+    return known
 
 
 async def run_text_workflow(workflow: dict[str, Any], timeout: float = 600.0) -> list[str]:
@@ -444,6 +473,9 @@ def _files_from_output(node_output: dict[str, Any]) -> list[dict[str, Any]]:
         for item in node_output.get(key) or []:
             if isinstance(item, dict) and "filename" in item:
                 found.append(item)
+    for item in node_output.get(MASTER_KEY) or []:
+        if isinstance(item, dict) and "filename" in item:
+            found.append({**item, "master": True})
     return found
 
 
@@ -462,8 +494,8 @@ async def _outputs_from_history(prompt_id: str, base_url: str) -> tuple[list[dic
     return files, texts
 
 
-async def _collect(images: list[dict[str, Any]]) -> list[Path]:
-    """Holt die Dateien aus ComfyUI und legt sie in data/assets/ ab."""
+async def _collect(images: list[dict[str, Any]], move: bool = False) -> list[Path]:
+    """Holt die Dateien aus ComfyUI und legt sie in data/assets/ ab (mit move verschoben statt kopiert)."""
     config.ensure_dirs()
     paths: list[Path] = []
     async with httpx.AsyncClient(timeout=120.0) as c:
@@ -473,7 +505,7 @@ async def _collect(images: list[dict[str, Any]]) -> list[Path]:
             src = config.COMFY_ROOT / "output" / (img.get("subfolder") or "") / img["filename"]
             dest = config.ASSET_DIR / f"{uuid.uuid4().hex[:12]}_{img['filename']}"
             if src.exists():
-                shutil.copy2(src, dest)
+                (shutil.move if move else shutil.copy2)(src, dest)
             else:
                 r = await c.get(
                     f"{config.COMFY_URL}/view",

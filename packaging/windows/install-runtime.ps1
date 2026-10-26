@@ -3,7 +3,7 @@
   Called by the setup after copying the files; also runs on its own as "Repair NVAI-open".
 
     install-runtime.ps1 -App <install folder> -DataDir <data folder> [-With3D] [-WithAddon] [-Gpu auto|nvidia|amd]
-                       [-Rocm auto|10.0|7.2]
+                       [-Rocm auto|10.0|7.2] [-Lang de|en]
 
   Everything comes from the pinned package lists in locks\ (with sha256 hashes): the same
   versions that were tested. NVIDIA: PyTorch with CUDA 13 (comfyui.lock). AMD Radeon
@@ -14,8 +14,9 @@
   AMD's Windows support matrix and in ComfyUI's own AMD package (comfyui-rocm72.lock).
   3D is skipped on AMD because TripoSG needs CUDA. uv fetches Python itself as a standalone build into <App>\python,
   nothing has to be preinstalled. Log: <DataDir>\install.log
-  Messages follow the Windows display language (German or English). ASCII only: Windows
-  PowerShell 5.1 reads scripts without BOM as ANSI.
+  Messages are German or English: the language chosen in the setup (-Lang; the setup and the "Repair" shortcut
+  pass it), otherwise the Windows display language. ASCII only: Windows PowerShell 5.1 reads scripts without BOM
+  as ANSI.
 #>
 param(
     [Parameter(Mandatory)] [string]$App,
@@ -23,11 +24,12 @@ param(
     [switch]$WithAddon,
     [switch]$With3D,
     [ValidateSet("auto", "nvidia", "amd")] [string]$Gpu = "auto",
-    [ValidateSet("auto", "10.0", "7.2")] [string]$Rocm = "auto"
+    [ValidateSet("auto", "10.0", "7.2")] [string]$Rocm = "auto",
+    [ValidateSet("", "de", "en")] [string]$Lang = ""
 )
 $ErrorActionPreference = "Stop"
 $PythonVersion = "3.12.13"
-$German = (Get-UICulture).TwoLetterISOLanguageName -eq "de"
+$German = if ($Lang) { $Lang -eq "de" } else { (Get-UICulture).TwoLetterISOLanguageName -eq "de" }
 function L($de, $en) { if ($German) { $de } else { $en } }
 
 New-Item -ItemType Directory -Force $DataDir | Out-Null
@@ -124,7 +126,9 @@ function Test-Torch($py) {
 function Uv {
     # Out-Host: otherwise uv's stdout ends up in the return value of New-Venv.
     & $uv @args | Out-Host
-    if ($LASTEXITCODE -ne 0) { throw "uv $($args[0]) $($args[1]) failed (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) {
+        throw (L "uv $($args[0]) $($args[1]) ist fehlgeschlagen (Exit $LASTEXITCODE)." "uv $($args[0]) $($args[1]) failed (exit $LASTEXITCODE).")
+    }
 }
 
 function New-Venv($dir, $lock, [string[]]$extra = @()) {

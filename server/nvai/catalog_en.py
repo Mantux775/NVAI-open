@@ -80,7 +80,7 @@ _LTX25_WAYS = (
     "• Best quality (DFR, Diffusion Fidelity Rendering): detail keyframes and a detail IC-LoRA, "
     "optionally at 48 fps.\n"
     "• Automatic length: a small extra head estimates the duration from the described action.\n"
-    "• Given sound: an existing sound, such as music from ACE-Step, stays as it is and the picture "
+    "• Given sound: an existing sound, such as music from Stable Audio 3, stays as it is and the picture "
     "follows it.\n"
     "• Several shots (multi-shot): write the cuts out in the prompt.\n"
     "• Slow motion: together with Lightricks' Slow Motion LoRA.\n"
@@ -840,44 +840,6 @@ EN: dict[str, dict[str, Any]] = {
             "Community License with a USD 1 million revenue cap; the text encoder (T5Gemma) is under the Gemma terms",
             "Long pieces need a lot of graphics memory: 300 s almost filled 16 GB (60 s: 9.7 GB)",
             "New in NVAI-open, not much experience yet",
-        ],
-    },
-    "ace-step-v1-3.5b": {
-        "best_for": "Complete pieces of music including vocals",
-        "description": (
-            "Generates complete songs from genre tags and optional lyrics — with sung "
-            "vocals. For title music, battle themes or a tavern with a bard's song. "
-            "Control works via tags (\"epic orchestral, choir, drums\") plus a lyrics "
-            "field. Apache-2.0 makes it commercially safe."
-        ),
-        "pros": [
-            "Generates structured music with vocals — unique in this selection",
-            "Apache-2.0: no revenue cap, no license worries",
-            "Pieces several minutes long are possible",
-            "Tag control is very handy for game moods",
-        ],
-        "cons": [
-            "Vocals often sound artificial, pronunciation is shaky",
-            "~9 GB VRAM and much slower than Stable Audio",
-            "Overkill for short SFX",
-        ],
-    },
-    "ace-step-1.5-turbo": {
-        "best_for": "Better music quality than v1, with more control",
-        "description": (
-            "Successor to ACE-Step v1 with cleaner musicality and many more controls: "
-            "BPM, key, time signature and language are direct parameters instead of hints "
-            "in the prompt. The Turbo variant needs fewer steps than the base model."
-        ),
-        "pros": [
-            "Audibly better than v1 in instrumentation and structure",
-            "BPM/key/time signature directly controllable — important for adaptive game music",
-            "MIT",
-        ],
-        "cons": [
-            "11 GB VRAM: tight alongside an image model",
-            "9.3 GB download",
-            "Newer and less proven than v1",
         ],
     },
     # ------------------------------------------------------------ VIDEO

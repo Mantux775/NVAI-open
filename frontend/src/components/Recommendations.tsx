@@ -84,13 +84,6 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
-      head: t('Lieder mit Gesang: ACE-Step 1.5', 'Songs with vocals: ACE-Step 1.5'),
-      text: t(
-        'Genre-Tags plus Liedtext (leer = instrumental); Tempo, Takt und Tonart direkt einstellen. 60 s in rund 17 s.',
-        'Genre tags plus lyrics (empty = instrumental); set tempo, time signature and key directly. 60 s in about 17 s.',
-      ),
-    },
-    {
       head: t('Instrumental bis 5 Minuten: Stable Audio 3', 'Instrumentals up to 5 minutes: Stable Audio 3'),
       text: t(
         'Ein Satz mit Gattung, Instrumenten und Stimmung, dann „BPM: 100.“; kein Gesang. 60 s in rund 10 s.',
@@ -143,6 +136,15 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       text: t(
         'Details bleiben über die ganze Länge, kostet rund das Dreifache (1080p, 5 s: 786 statt 241 s).',
         'Detail holds over the whole length, costs about three times as long (1080p, 5 s: 786 instead of 241 s).',
+      ),
+    },
+    {
+      head: t('Verlustfreie Kopie anlassen', 'Keep the lossless copy on'),
+      text: t(
+        'Der YouTube-Export im Studio hatte daraus 42,3 statt 37,7 dB PSNR (aus dem MP4), Anschluss-Startbilder '
+          + 'sind pixelgenau. Kostet rund 32 MB je Sekunde bei 1080p.',
+        'The Studio’s YouTube export reached 42.3 instead of 37.7 dB PSNR from it (from the MP4), chain start '
+          + 'images are pixel-exact. Costs about 32 MB per second at 1080p.',
       ),
     },
     {

@@ -1421,66 +1421,6 @@ AUDIO_MODELS: list[dict[str, Any]] = [
             "Neu in NVAI-open, noch wenig erprobt",
         ],
     },
-    {
-        "id": "ace-step-v1-3.5b",
-        "name": "ACE-Step v1 3.5B",
-        "kind": "audio",
-        "family": "ace",
-        "workflow": "ace_step",
-        "files": [{"repo": "Comfy-Org/ACE-Step_ComfyUI_repackaged",
-                   "file": "all_in_one/ace_step_v1_3.5b.safetensors", "target": "checkpoints"}],
-        "size_gb": 7.17,
-        "vram_gb": 9,
-        "license": "Apache-2.0",
-        "commercial_ok": True,
-        "best_for": "Vollständige Musikstücke inklusive Gesang",
-        "description": (
-            "Erzeugt komplette Songs aus Genre-Tags und optionalem Songtext — mit gesungenen "
-            "Vocals. Für Titelmusik, Kampfthemen oder eine Taverne mit Barden-Song. Die "
-            "Steuerung läuft über Tags (\"epic orchestral, choir, drums\") plus Lyrics-Feld. "
-            "Apache-2.0 macht es kommerziell unbedenklich."
-        ),
-        "pros": [
-            "Erzeugt strukturierte Musik mit Gesang — einzigartig in dieser Auswahl",
-            "Apache-2.0: keine Umsatzgrenze, keine Lizenzsorgen",
-            "Minutenlange Stücke möglich",
-            "Tag-Steuerung ist für Spiel-Stimmungen sehr praktisch",
-        ],
-        "cons": [
-            "Gesang klingt oft künstlich, Aussprache wackelt",
-            "~9 GB VRAM und deutlich langsamer als Stable Audio",
-            "Für kurze SFX überdimensioniert",
-        ],
-    },
-    {
-        "id": "ace-step-1.5-turbo",
-        "name": "ACE-Step 1.5 Turbo (all-in-one)",
-        "kind": "audio",
-        "family": "ace15",
-        "workflow": "ace_step_15",
-        "files": [{"repo": "Comfy-Org/ace_step_1.5_ComfyUI_files",
-                   "file": "checkpoints/ace_step_1.5_turbo_aio.safetensors", "target": "checkpoints"}],
-        "size_gb": 9.34,
-        "vram_gb": 11,
-        "license": "MIT",
-        "commercial_ok": True,
-        "best_for": "Bessere Musikqualität als v1, mit mehr Steuerung",
-        "description": (
-            "Nachfolger von ACE-Step v1 mit sauberer Musikalität und deutlich mehr "
-            "Stellschrauben: BPM, Tonart, Taktart und Sprache sind direkte Parameter statt "
-            "Prompt-Andeutungen. Die Turbo-Variante braucht weniger Steps als das Basismodell."
-        ),
-        "pros": [
-            "Hörbar besser als v1 bei Instrumentierung und Struktur",
-            "BPM/Tonart/Taktart direkt steuerbar — wichtig für adaptive Spielmusik",
-            "MIT",
-        ],
-        "cons": [
-            "11 GB VRAM: neben einem Bildmodell wird es eng",
-            "9,3 GB Download",
-            "Neuer und weniger erprobt als v1",
-        ],
-    },
 ]
 
 # --------------------------------------------------------------- VIDEO
@@ -1552,7 +1492,7 @@ LTX25_WAYS = (
     "• Höchste Qualität (DFR, Diffusion Fidelity Rendering): Detail-Keyframes und ein "
     "Detail-IC-LoRA, auf Wunsch mit 48 fps.\n"
     "• Länge automatisch: Ein Zusatzkopf schätzt die Dauer aus der beschriebenen Handlung.\n"
-    "• Ton vorgeben: ein vorhandener Ton, etwa Musik aus ACE-Step, bleibt unverändert, das Bild "
+    "• Ton vorgeben: ein vorhandener Ton, etwa Musik aus Stable Audio 3, bleibt unverändert, das Bild "
     "richtet sich danach.\n"
     "• Mehrere Einstellungen (Multishot): Schnitte im Prompt ausschreiben.\n"
     "• Zeitlupe: zusammen mit der Slow-Motion-LoRA von Lightricks.\n"

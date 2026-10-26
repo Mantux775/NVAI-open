@@ -52,6 +52,29 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 
+### Neu in 0.5.13
+
+**Studio:** ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Szenen mit Prompt auf Bahnen für Bild,
+Sprecher, Musik und Klang, Marker, die sagen, was wohin kommt (ein Anschluss-Marker lässt einen Clip mit dem letzten
+Bild des vorigen beginnen), ein Schnitt mit echten Schnitten und Überblendungen und ein Export mit dem Encoder der
+Grafikkarte auf −14 LUFS. Claude Code steuert es mit sechs `studio_*`-Werkzeugen. Schritt für Schritt:
+[STUDIO.md](STUDIO.md).
+
+**Verlustfreie Kopie jedes KI-Videos:** Neben dem MP4 schreibt jedes Videomodell die Bilder zusätzlich verlustfrei
+(FFV1 in MKV, Ton als Float-PCM). Das Studio exportiert daraus und nimmt Anschluss-Startbilder daraus. Gemessen mit
+LTX-2.5 in 1080p: rund 32 MB je Sekunde (das MP4 2 MB); ein YouTube-Export aus dem MP4 kam gegen das Original auf
+37,7 dB PSNR, aus der Kopie auf 42,3 dB bei gleicher Bitrate. „Verlustfreie Kopie für den Schnitt“ unter
+„Generieren → Video“ schaltet sie ab.
+
+![Derselbe Ausschnitt: das Original, ein YouTube-Export aus dem MP4 und einer aus der verlustfreien Kopie](../images/lossless-export-de.jpg)
+
+**YouTube 1080p mit 24 Mbit/s** statt 12: 42,8 statt 42,3 dB; 40 Mbit/s brachten 43,0 dB, und die Farbe in 4:2:0
+kommt selbst ohne Kompression nicht über 43,9 dB. Neue Exportformate: ein verlustfreier Master (MKV, FFV1) und
+ProRes 4444 (MOV); beide spielt kein Browser, deshalb bekommen sie eine H.264-Vorschau.
+
+**ACE-Step entfernt:** Seine Musik war in der Praxis durchweg schlecht. Musik kommt jetzt von Stable Audio 3 Medium
+(instrumental, bis 5 Minuten); singen kann vorerst kein Modell.
+
 ### Neu in NVAI-open für Mac 0.4.8
 
 **Z-Image Turbo** (Tongyi-MAI, Apache-2.0) ist das dritte Bildmodell der Mac-Fassung neben FLUX.2 Klein und Core ML:
@@ -576,8 +599,8 @@ aber jede Lücke: Er setzte dem Schmied auch einen Eisenhelm auf. Den Text also 
 Seit 0.5.3 sitzt der Knopf auch in den Reitern **Video**, **Audio** und **3D** (Windows). Derselbe
 Upsampler folgt dann NVAI-opens eigenen Anweisungen (`target` in der API): Bei Video ergänzt er
 Bewegung, eine Kamerafahrt, Ort und Licht, bei LTX-2.5 auch das Hörbare, mit Startbild nur die
-Bewegung. Für Stable Audio schreibt er Klang-Tags (Quelle, Material, Raum, Mikrofon), für ACE-Step
-Genre-, Instrument- und Stimmungs-Tags. Im 3D-Reiter erzeugt „Objekt aus Text“ zuerst mit dem
+Bewegung. Für Stable Audio schreibt er Klang-Tags (Quelle, Material, Raum, Mikrofon), für Stable Audio 3
+einen Satz mit Gattung, Instrumenten, Stimmung und BPM. Im 3D-Reiter erzeugt „Objekt aus Text“ zuerst mit dem
 aktiven Bildmodell ein Quellbild: ein geschlossenes Objekt ohne Boden und Schatten. Gemessen auf
 der RTX 5060 Ti: 3–12 s je Prompt. Das Modell ist auf Bildbeschreibungen trainiert; Klang-Tags
 beginnen manchmal trotzdem mit einem ganzen Satz.

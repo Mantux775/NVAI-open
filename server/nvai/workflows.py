@@ -66,10 +66,6 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "stable_audio": {"steps": 50, "cfg": 5.0, "sampler": "dpmpp_3m_sde_gpu", "scheduler": "exponential"},
     # Wie ComfyUIs Vorlage audio_stable_audio_3_medium: destilliert, 8 Schritte, CFG 1, lcm.
     "stable_audio_3": {"steps": 8, "cfg": 1.0, "sampler": "lcm", "scheduler": "simple"},
-    "ace_step":   {"steps": 50, "cfg": 5.0, "sampler": "euler",    "scheduler": "simple"},
-    # Wie ComfyUIs Vorlage audio_ace_step_1_5_checkpoint (Turbo, destilliert): 8 Schritte, CFG 1, shift 3.
-    # Vorher 12/2,0 ohne shift: harter, uebersteuerter Klang, Spitzen bis +1 dB (Nutzer: "furchtbar").
-    "ace_step_15": {"steps": 8, "cfg": 1.0, "sampler": "euler",   "scheduler": "simple", "shift": 3.0},
     "wan_t2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan22_ti2v": {"steps": 30, "cfg": 5.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan_i2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
@@ -957,8 +953,6 @@ def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 
 # --------------------------------------------------------------- AUDIO
 
-# Absenkung der ACE-Step-1.5-Ausgabe in dB (AudioAdjustVolume nimmt ganze Zahlen), Nutzerwunsch 23.10.
-ACE15_GAIN_DB = -3
 # Spitzenbegrenzer vor jedem Speichern (NVAIAudioLimiter, nvai/comfy_nodes/nvai_audio.py). Gemessen an
 # ACE-Step (rohe Spitzen bis +5,7 dBFS): nach -3 dB griff er bei -1 dB nur 4 % der Zeit um mehr als 1 dB
 # ein; ohne die Absenkung bei -1,5 dB 30 % (Blaskapelle), das presst hoerbar.
@@ -1053,70 +1047,6 @@ def _audio_graph(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
             "7": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["6", 0], "vae": ["1", 2]}},
             "8": {"class_type": "SaveAudioMP3",
                   "inputs": {"audio": ["7", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
-        }
-        return graph, seed
-
-    if wf == "ace_step":
-        # ACE-Step trennt Genre-Tags von Songtext; leere Lyrics = instrumental.
-        graph = {
-            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
-            "2": {"class_type": "TextEncodeAceStepAudio", "inputs": {
-                "clip": ["1", 1], "tags": p["prompt"],
-                "lyrics": p.get("lyrics", ""), "lyrics_strength": 1.0,
-            }},
-            "3": {"class_type": "TextEncodeAceStepAudio", "inputs": {
-                "clip": ["1", 1], "tags": p.get("negative_prompt", ""),
-                "lyrics": "", "lyrics_strength": 1.0,
-            }},
-            "4": {"class_type": "EmptyAceStepLatentAudio",
-                  "inputs": {"seconds": seconds, "batch_size": 1}},
-            "5": {"class_type": "KSampler", "inputs": {
-                **common_sampler,
-                "model": ["1", 0], "positive": ["2", 0], "negative": ["3", 0],
-                "latent_image": ["4", 0],
-            }},
-            "6": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
-            "7": {"class_type": "SaveAudioMP3",
-                  "inputs": {"audio": ["6", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
-        }
-        return graph, seed
-
-    if wf == "ace_step_15":
-        enc: dict[str, Any] = {
-            "clip": ["1", 1], "tags": p["prompt"], "lyrics": p.get("lyrics", ""),
-            "seed": seed, "duration": seconds, "language": p.get("language", "en"),
-            # ComfyUI ab 0.41 lehnt den Knoten ohne Tempo, Taktart und Tonart ab
-            # ("required_input_missing"); ohne Angabe gelten die Vorgaben des Knotens.
-            "bpm": int(p.get("bpm") or 120),
-            "timesignature": str(p.get("time_signature") or "4"),
-            "keyscale": p.get("key_scale") or "C major",
-            # cfg_scale lenkt das Sprachmodell, das die Audio-Codes plant -- nicht den Sampler.
-            # Die Vorlage nimmt 2, unabhaengig vom Sampler-CFG.
-            "generate_audio_codes": True, "cfg_scale": 2.0,
-            "temperature": 0.85, "top_p": 0.9, "top_k": 0, "min_p": 0.0,
-        }
-        graph = {
-            "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
-            "2": {"class_type": "TextEncodeAceStepAudio1.5", "inputs": enc},
-            "3": {"class_type": "TextEncodeAceStepAudio1.5", "inputs": {
-                **enc, "tags": p.get("negative_prompt", ""), "lyrics": "",
-            }},
-            "4": {"class_type": "EmptyAceStep1.5LatentAudio",
-                  "inputs": {"seconds": seconds, "batch_size": 1}},
-            "8": {"class_type": "ModelSamplingAuraFlow",
-                  "inputs": {"model": ["1", 0], "shift": d.get("shift", 3.0)}},
-            "5": {"class_type": "KSampler", "inputs": {
-                **common_sampler,
-                "model": ["8", 0], "positive": ["2", 0], "negative": ["3", 0],
-                "latent_image": ["4", 0],
-            }},
-            "6": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
-            # ACE-Step mischt so laut, dass die Spitzen ueber 0 dBFS liegen (gemessen True Peak bis
-            # +2,3 dBFS, -10,2 LUFS) und beim Abspielen uebersteuern: 3 dB leiser speichern.
-            "9": {"class_type": "AudioAdjustVolume",
-                  "inputs": {"audio": ["6", 0], "volume": ACE15_GAIN_DB}},
-            "7": {"class_type": "SaveAudioMP3",
-                  "inputs": {"audio": ["9", 0], "filename_prefix": "nvai_audio", "quality": "V0"}},
         }
         return graph, seed
 
@@ -1823,7 +1753,8 @@ HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
 IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
                     "qwen_image", "qwen_image_lightning", "qwen_image21", "krea2_turbo", "moss_image"}
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
-AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3", "ace_step", "ace_step_15"}
+# ACE-Step (v1 und 1.5) am 26.10.2026 entfernt, Nutzer: „es ist einfach immer schlecht“
+AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3"}
 VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
                    "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25", "ltx23",
                    "kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v", "mochi"}
@@ -1835,6 +1766,36 @@ EXTERNAL_WORKFLOWS = {"triposg", "trellis2"}
 UPSCALE_WORKFLOWS = {"seedvr2"}
 
 
+# Verlustfreier Master neben jedem gespeicherten Video (NVAISaveMaster, nvai/comfy_nodes/nvai_video.py; Nutzer
+# 26.10.2026: "dass die ki erstellten videos unkomprimiert sind"). Abschaltbar je Auftrag mit master=False.
+MASTER_NODE = "NVAISaveMaster"
+MASTER_PREFIX = "nvai_master"
+
+
+def add_master(graph: Graph) -> Graph:
+    """Haengt an jedes SaveVideo und SaveWEBM einen NVAISaveMaster mit denselben Bildern und derselben Bildrate.
+    Der Ton kommt von vor dem Limiter: Float-PCM uebersteuert nicht, der Master behaelt die Modellausgabe."""
+    for node_id, node in list(graph.items()):
+        inputs = node.get("inputs", {})
+        if node.get("class_type") == "SaveVideo":
+            create = graph.get(str((inputs.get("video") or [None])[0]))
+            if not create or create.get("class_type") != "CreateVideo":
+                continue
+            master = {"images": create["inputs"]["images"], "fps": create["inputs"]["fps"]}
+            audio = create["inputs"].get("audio")
+            if audio is not None:
+                source = graph.get(str(audio[0]))
+                if source and source.get("class_type") == "NVAIAudioLimiter":
+                    audio = source["inputs"]["audio"]
+                master["audio"] = audio
+        elif node.get("class_type") == "SaveWEBM":
+            master = {"images": inputs["images"], "fps": inputs["fps"]}
+        else:
+            continue
+        graph[f"master_{node_id}"] = {"class_type": MASTER_NODE, "inputs": {**master, "filename_prefix": MASTER_PREFIX}}
+    return graph
+
+
 def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry.get("workflow")
     if wf in IMAGE_WORKFLOWS:
@@ -1842,7 +1803,8 @@ def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     if wf in AUDIO_WORKFLOWS:
         return build_audio(entry, p)
     if wf in VIDEO_WORKFLOWS:
-        return build_video(entry, p)
+        graph, seed = build_video(entry, p)
+        return (add_master(graph) if p.get("master", True) else graph), seed
     if wf in EXTERNAL_WORKFLOWS:
         raise ValueError(t(
             f"'{entry['id']}' laeuft in einem eigenen Worker, nicht in ComfyUI "

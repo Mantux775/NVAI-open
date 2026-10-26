@@ -51,6 +51,28 @@ such ("according to BFL").
 
 Without a `model_id`, NVAI-open uses the active image model.
 
+### New in 0.5.13
+
+**Studio:** a full-screen editor for whole videos. Scenes with a prompt on lanes for picture, voice, music and sound,
+markers that say what goes where (a chain marker starts a clip with the last frame of the one before it), an edit with
+real cuts and dissolves, and an export with the graphics card's encoder at −14 LUFS. Claude Code drives it with six
+`studio_*` tools. Step by step: [STUDIO.md](STUDIO.md).
+
+**Lossless copy of every AI video:** next to the MP4, every video model also writes the frames losslessly (FFV1 in MKV,
+sound as float PCM). The Studio exports and takes chain start images from it. Measured with LTX-2.5 at 1080p: the
+copy needs about 32 MB per second (the MP4 2 MB); a YouTube export made from the MP4 reached 37.7 dB PSNR against the
+original, made from the copy 42.3 dB at the same bitrate. "Lossless copy for editing" under "Generate → Video" turns it
+off.
+
+![The same detail: the original, a YouTube export from the MP4 and one from the lossless copy](images/lossless-export.jpg)
+
+**YouTube 1080p at 24 Mbit/s** instead of 12: 42.8 instead of 42.3 dB; 40 Mbit/s gave 43.0 dB, and 4:2:0 color itself
+caps at 43.9 dB. New export formats: a lossless master (MKV, FFV1) and ProRes 4444 (MOV); browsers cannot play either,
+so both get an H.264 preview.
+
+**ACE-Step removed:** its music was consistently poor in practice. Music now comes from Stable Audio 3 Medium
+(instrumental, up to 5 minutes); no model sings for now.
+
 ### New in NVAI-open for Mac 0.4.8
 
 **Z-Image Turbo** (Tongyi-MAI, Apache-2.0) is the third image model of the Mac version next to FLUX.2 Klein and
@@ -567,7 +589,7 @@ Since 0.5.3 the button is also on the **Video**, **Audio** and **3D** tabs (Wind
 upsampler then follows NVAI-open's own instructions (`target` in the API): for video it adds motion,
 one camera move, setting and light; with LTX-2.5 also what can be heard; with a start image only
 the motion. For Stable Audio it writes sound tags (source, material, room, microphone), for
-ACE-Step genre, instrument and mood tags. On the 3D tab, "Object from text" first creates a
+Stable Audio 3 one sentence with genre, instruments, mood and BPM. On the 3D tab, "Object from text" first creates a
 source image with the active image model: one closed object without floor or shadow. Measured
 on the RTX 5060 Ti: 3–12 s per prompt. The model is trained on image descriptions; sound tags
 sometimes still start with a full sentence.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, connectEvents, type Health, type ServerEvent } from './api'
+import { api, connectEvents, type Health, type ServerEvent, type StudioChangedEvent } from './api'
 import { GpuChip } from './components/GpuChip'
 import { ReportDialog } from './components/ReportDialog'
 import { useDownloads } from './downloads'
@@ -7,13 +7,15 @@ import { getLang, setLang, t, type Lang } from './i18n'
 import { GeneratePanel } from './panels/Generate'
 import { HistoryPanel } from './panels/History'
 import { ModelsPanel } from './panels/Models'
+import { StudioPanel } from './panels/Studio'
 
-type Tab = 'generate' | 'history' | 'models'
+type Tab = 'generate' | 'studio' | 'history' | 'models'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'generate', label: t('Generieren', 'Generate') },
   { id: 'history', label: t('Verlauf', 'History') },
   { id: 'models', label: t('Modelle', 'Models') },
+  { id: 'studio', label: t('Studio', 'Studio') },
 ]
 
 // Sprachnamen stehen in ihrer eigenen Sprache, damit man sie in jeder Einstellung findet.
@@ -26,6 +28,10 @@ export function App() {
   const [tab, setTab] = useState<Tab>('generate')
   const [health, setHealth] = useState<Health | null>(null)
   const [events, setEvents] = useState<ServerEvent | null>(null)
+  // Eigener Platz: Studio speichert oft, das darf ein job.done im gemeinsamen Platz nicht verdrängen
+  const [studioEvent, setStudioEvent] = useState<StudioChangedEvent | null>(null)
+  // Material gelöscht oder hochgeladen: zählt hoch, das Studio lädt seine Medienleiste neu
+  const [assetsVersion, setAssetsVersion] = useState(0)
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -52,7 +58,9 @@ export function App() {
   // Ein WS-Abo fuer die ganze App; die Panels bekommen das letzte Event durchgereicht.
   useEffect(() => {
     return connectEvents((e) => {
-      if (e.type !== 'ping') setEvents(e)
+      if (e.type === 'studio.changed') setStudioEvent(e)
+      else if (e.type === 'assets.changed') setAssetsVersion((v) => v + 1)
+      else if (e.type !== 'ping') setEvents(e)
     })
   }, [])
 
@@ -66,11 +74,13 @@ export function App() {
     }
   }
 
-  const usedGb = health?.gpu
-    ? (health.gpu.vram_total_mb - health.gpu.vram_free_mb) / 1024
+  // Ohne Angabe (AMD bei ausgeschaltetem Backend) nicht „voll“ anzeigen
+  const freeMb = health?.gpu?.vram_free_mb
+  const usedGb = health?.gpu && freeMb != null
+    ? (health.gpu.vram_total_mb - freeMb) / 1024
     : 0
   const totalGb = health?.gpu ? health.gpu.vram_total_mb / 1024 : 0
-  const vram = health?.gpu ? `${usedGb.toFixed(1)} / ${totalGb.toFixed(0)} GB` : '–'
+  const vram = health?.gpu ? `${freeMb != null ? usedGb.toFixed(1) : '–'} / ${totalGb.toFixed(0)} GB` : '–'
   const vramPct = totalGb > 0 ? Math.min(100, (usedGb / totalGb) * 100) : 0
   const multiGpu = (health?.gpus?.length ?? 0) > 1
   const loaded = [
@@ -271,12 +281,13 @@ export function App() {
         </div>
       )}
 
-      <main className="content">
+      <main className={tab === 'studio' ? 'content studio-mode' : 'content'}>
         {tab === 'generate' && (
           <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
         )}
         {tab === 'history' && <HistoryPanel event={events} />}
         {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} />}
+        {tab === 'studio' && <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} />}
       </main>
     </div>
   )

@@ -2,7 +2,8 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.12"
+  "version": "0.5.13",
+  "x-api-version": 1
  },
  "paths": {
   "/api/version": {
@@ -1877,6 +1878,513 @@
     }
    }
   },
+  "/api/assets/{asset_id}/preview": {
+   "post": {
+    "summary": "Asset Preview",
+    "description": "Vorschau (H.264) für ein Video, das der Browser nicht abspielt, im Hintergrund erstellen; fertig meldet\nder Live-Feed assets.changed.",
+    "operationId": "asset_preview_api_assets__asset_id__preview_post",
+    "parameters": [
+     {
+      "name": "asset_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Asset Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Asset Preview Api Assets  Asset Id  Preview Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects": {
+   "get": {
+    "summary": "Studio Projects",
+    "operationId": "studio_projects_api_studio_projects_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array",
+         "title": "Response Studio Projects Api Studio Projects Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "post": {
+    "summary": "Studio Create",
+    "operationId": "studio_create_api_studio_projects_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Studio Create Api Studio Projects Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}": {
+   "get": {
+    "summary": "Studio Get",
+    "description": "Das Projekt; fertige Erzeugungsauftraege sind dabei schon als Takes eingetragen. format=summary: kompakt,\nZeiten in Sekunden (fuer MCP).",
+    "operationId": "studio_get_api_studio_projects__pid__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "full",
+       "title": "Format"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Get Api Studio Projects  Pid  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Studio Delete",
+    "operationId": "studio_delete_api_studio_projects__pid__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Delete Api Studio Projects  Pid  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/command": {
+   "post": {
+    "summary": "Studio Command",
+    "description": "Ein Befehl wie in GET /api/studio/commands, etwa {\"command\": \"clip.razor\", \"params\": {\"at_s\": 4.5}}.",
+    "operationId": "studio_command_api_studio_projects__pid__command_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "full",
+       "title": "Format"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Command Api Studio Projects  Pid  Command Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/undo": {
+   "post": {
+    "summary": "Studio Undo",
+    "operationId": "studio_undo_api_studio_projects__pid__undo_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Undo Api Studio Projects  Pid  Undo Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/redo": {
+   "post": {
+    "summary": "Studio Redo",
+    "operationId": "studio_redo_api_studio_projects__pid__redo_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Redo Api Studio Projects  Pid  Redo Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/generate": {
+   "post": {
+    "summary": "Studio Generate",
+    "description": "Auftraege fuer die genannten Szenen (scene_ids), sonst fuer alle ohne Take.",
+    "operationId": "studio_generate_api_studio_projects__pid__generate_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "type": "object",
+          "additionalProperties": true
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Generate Api Studio Projects  Pid  Generate Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/export": {
+   "post": {
+    "summary": "Studio Export",
+    "operationId": "studio_export_api_studio_projects__pid__export_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "type": "object",
+          "additionalProperties": true
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/commands": {
+   "get": {
+    "summary": "Studio Commands",
+    "operationId": "studio_commands_api_studio_commands_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "additionalProperties": {
+           "type": "string"
+          },
+          "type": "object"
+         },
+         "type": "array",
+         "title": "Response Studio Commands Api Studio Commands Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/presets": {
+   "get": {
+    "summary": "Studio Presets",
+    "operationId": "studio_presets_api_studio_presets_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array",
+         "title": "Response Studio Presets Api Studio Presets Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/files/{filename}": {
    "get": {
     "summary": "Serve File",
@@ -2201,7 +2709,7 @@
        "3d"
       ],
       "title": "Target",
-      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten und Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (ACE-Step-Tags), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
+      "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten und Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (wie music_sa3), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
       "default": "image"
      },
      "width": {
@@ -2377,7 +2885,7 @@
      "prompt": {
       "type": "string",
       "title": "Prompt",
-      "description": "Klangbeschreibung (SFX) oder Genre-Tags (Musik)"
+      "description": "Klangbeschreibung (SFX) oder ein Satz zur Musik (Stable Audio 3)"
      },
      "negative_prompt": {
       "type": "string",
@@ -2388,7 +2896,7 @@
      "lyrics": {
       "type": "string",
       "title": "Lyrics",
-      "description": "Nur ACE-Step: Songtext. Leer = instrumental",
+      "description": "Ohne Wirkung seit 0.5.13 (ACE-Step entfernt); bleibt für ältere Clients",
       "default": ""
      },
      "model_id": {
@@ -3024,6 +3532,12 @@
       "title": "Crf",
       "description": "LTX-2.5: H.264-Qualitaet des MP4 (CRF), kleiner = besser und groessere Datei; leer = workflows.VIDEO_CRF"
      },
+     "master": {
+      "type": "boolean",
+      "title": "Master",
+      "description": "Zusaetzlich verlustfrei speichern (FFV1 in MKV, Ton als Float-PCM, meta.master am Asset): Ausgangsmaterial fuer Schnitt und Studio-Export ohne Kompressionsverlust",
+      "default": true
+     },
      "extend_asset_id": {
       "anyOf": [
        {
@@ -3073,7 +3587,8 @@
        "img23d",
        "download",
        "expand_prompt",
-       "restore"
+       "restore",
+       "studio_export"
       ],
       "title": "Kind"
      },
@@ -3515,6 +4030,11 @@
      "driver": {
       "type": "string",
       "title": "Driver"
+     },
+     "torch": {
+      "type": "string",
+      "title": "Torch",
+      "default": "?"
      },
      "last_error": {
       "anyOf": [

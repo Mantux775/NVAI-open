@@ -214,12 +214,31 @@ def _unlink(filename: str) -> int:
         return 0
 
 
+def _asset_files(asset: Asset) -> list[str]:
+    """Die Datei eines Assets und, bei Videos, sein verlustfreier Master (meta.master) und seine Vorschau
+    (meta.preview)."""
+    meta = asset.meta or {}
+    return [asset.filename] + [meta[k] for k in ("master", "preview") if meta.get(k)]
+
+
+def update_asset_meta(asset_id: str, changes: dict[str, Any]) -> Asset | None:
+    """Angaben eines Assets ergänzen (z. B. meta.preview, wenn die Vorschau fertig ist)."""
+    asset = get_asset(asset_id)
+    if asset is None:
+        return None
+    meta = {**(asset.meta or {}), **changes}
+    with _lock:
+        _c().execute("UPDATE assets SET meta = ? WHERE id = ?", (json.dumps(meta), asset_id))
+        _c().commit()
+    return get_asset(asset_id)
+
+
 def delete_asset(asset_id: str) -> tuple[bool, int]:
     """Loescht ein einzelnes Asset samt Datei."""
     asset = get_asset(asset_id)
     if asset is None:
         return False, 0
-    freed = _unlink(asset.filename)
+    freed = sum(_unlink(f) for f in _asset_files(asset))
     with _lock:
         _c().execute("DELETE FROM assets WHERE id = ?", (asset_id,))
         _c().commit()
@@ -243,7 +262,7 @@ def delete_job(job_id: str) -> tuple[bool, int, int]:
     if job is None:
         return False, 0, 0
     assets = assets_for_job(job_id)
-    freed = sum(_unlink(a.filename) for a in assets)
+    freed = sum(_unlink(f) for a in assets for f in _asset_files(a))
     with _lock:
         _c().execute("DELETE FROM assets WHERE job_id = ?", (job_id,))
         _c().execute("DELETE FROM jobs WHERE id = ?", (job_id,))
@@ -279,10 +298,10 @@ def clear_history(kind: str | None = None) -> tuple[int, int, int]:
     if not kind:
         with _lock:
             orphans = _c().execute(
-                "SELECT id, filename FROM assets WHERE job_id IS NULL"
+                "SELECT * FROM assets WHERE job_id IS NULL"
             ).fetchall()
         for row in orphans:
-            freed += _unlink(row["filename"])
+            freed += sum(_unlink(f) for f in _asset_files(_row_to_asset(row)))
             assets_deleted += 1
         with _lock:
             _c().execute("DELETE FROM assets WHERE job_id IS NULL")

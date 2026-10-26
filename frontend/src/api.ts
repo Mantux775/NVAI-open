@@ -227,7 +227,7 @@ export interface ModelFeatures {
 export interface Health {
   ok: boolean
   comfy_running: boolean
-  gpu: { name: string; vram_total_mb: number; vram_free_mb: number } | null
+  gpu: { name: string; vram_total_mb: number; vram_free_mb: number | null } | null
   active_models: Record<GenKind, string | null>
   queue_depth: number
   current_job: string | null
@@ -329,13 +329,11 @@ export interface ImageParams {
 export interface AudioParams {
   prompt: string
   negative_prompt?: string
-  lyrics?: string
   model_id?: string | null
   seconds?: number
   steps?: number | null
   cfg?: number | null
   seed?: number | null
-  bpm?: number | null
 }
 
 export interface VideoParams {
@@ -360,6 +358,8 @@ export interface VideoParams {
   auto_duration?: boolean
   audio_asset_id?: string | null
   motion_speed?: number
+  /** verlustfreie Kopie (FFV1/MKV) neben dem MP4, Vorgabe an */
+  master?: boolean
 }
 
 /** POST /api/image/restore (server: schemas.RestoreImageRequest). */
@@ -601,6 +601,30 @@ export const api = {
     req<Asset[]>(`/api/assets?limit=${limit}${kind ? `&kind=${kind}` : ''}`),
   asset: (id: string) => req<Asset>(`/api/assets/${id}`),
 
+  // Studio (seit 0.6): Projekte mit Komposition und Schnitt; jede Änderung ist ein Befehl.
+  studioProjects: () => req<StudioProjectInfo[]>('/api/studio/projects'),
+  studioCreate: (name: string, width = 1920, height = 1080, fps: [number, number] = [24, 1]) =>
+    req<StudioProject>('/api/studio/projects', { method: 'POST', body: JSON.stringify({ name, width, height, fps }) }),
+  studioProject: (id: string) => req<StudioProject>(`/api/studio/projects/${id}`),
+  studioDelete: (id: string) => req<{ ok: boolean }>(`/api/studio/projects/${id}`, { method: 'DELETE' }),
+  studioCommand: (id: string, command: string, params: Record<string, unknown> = {}) =>
+    req<{ project: StudioProject; result: any }>(`/api/studio/projects/${id}/command`, {
+      method: 'POST',
+      body: JSON.stringify({ command, params }),
+    }),
+  studioUndo: (id: string) => req<StudioProject>(`/api/studio/projects/${id}/undo`, { method: 'POST' }),
+  studioRedo: (id: string) => req<StudioProject>(`/api/studio/projects/${id}/redo`, { method: 'POST' }),
+  studioGenerate: (id: string, scene_ids?: string[]) =>
+    req<{ jobs: Record<string, string>; waiting: Record<string, string>; errors: Record<string, string> }>(`/api/studio/projects/${id}/generate`, {
+      method: 'POST',
+      body: JSON.stringify(scene_ids ? { scene_ids } : {}),
+    }),
+  studioExport: (id: string, preset: string) =>
+    req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
+  studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),
+
+  /** H.264-Vorschau für ein Video, das der Browser nicht abspielt (MKV, MOV …); fertig meldet assets.changed */
+  assetPreview: (id: string) => req<{ ok: boolean }>(`/api/assets/${id}/preview`, { method: 'POST' }),
   deleteAsset: (id: string) =>
     req<{ ok: boolean; freed_mb: number }>(`/api/assets/${id}`, { method: 'DELETE' }),
   deleteJob: (id: string) =>
@@ -620,6 +644,11 @@ export type ServerEvent =
   | { type: 'job.done'; job_id: string; asset_ids: string[] }
   | { type: 'job.error'; job_id: string; error: string }
   | { type: 'job.cancelled'; job_id: string }
+  | StudioChangedEvent
+  | { type: 'assets.changed' }
+
+/** Ein Studio-Projekt wurde gespeichert (Befehl, Claude per MCP, fertiger Auftrag, startender Anschluss). */
+export type StudioChangedEvent = { type: 'studio.changed'; project_id: string; updated_at: number | null }
 
 /** Reconnectender WebSocket auf den Job-Event-Feed. */
 export function connectEvents(onEvent: (e: ServerEvent) => void): () => void {
@@ -669,4 +698,97 @@ export const LORA_BASE_LABEL: Record<string, string> = {
   'wan-14b': 'Wan 14B (2.1, 2.2 A14B)',
   ltx2: 'LTX-2 / 2.3',
   ltxv: 'LTX-Video 0.9',
+}
+
+// ------------------------------------------------------------------------------------------- Studio
+
+/** Zeit in Ticks wie bei FilmCraft: 254 016 000 000 je Sekunde (teilt jede Bild- und Abtastrate). */
+export const TPS = 254_016_000_000
+
+export type StudioLane = 'video' | 'voice' | 'music' | 'sfx'
+export type StudioMarkerKind = 'place' | 'transition' | 'chain' | 'audio' | 'ai' | 'note'
+
+export interface StudioScene {
+  id: string
+  lane: StudioLane
+  start: number
+  duration: number
+  title: string
+  prompt: string
+  kind: 'video' | 'image' | 'audio'
+  model_id: string | null
+  lyrics: string
+  params: Record<string, any>
+  chain_from: string | null
+  /** Anschluss kommt aus einem Marker (nur angezeigt, nicht gespeichert) */
+  chain_marker?: string
+  /** Wartet auf die Vorlage, die im selben Lauf entsteht */
+  waiting_for?: string
+  takes: string[]
+  take: string | null
+  jobs: string[]
+  error: string | null
+  status: 'empty' | 'waiting' | 'running' | 'done' | 'error'
+}
+
+export interface StudioMarker {
+  id: string
+  at: number
+  duration: number
+  kind: StudioMarkerKind
+  name: string
+  comment: string
+  color: string
+  params: Record<string, any>
+  done: boolean
+}
+
+export interface StudioClip {
+  /** Datei gelöscht (nur in der Ansicht) */
+  missing?: boolean
+  id: string
+  track: string
+  asset_id: string
+  scene_id: string | null
+  start: number
+  in: number
+  out: number
+  gain_db: number
+  muted: boolean
+  transition: { kind: string; duration: number } | null
+}
+
+export interface StudioMedia {
+  kind: 'video' | 'image' | 'audio'
+  duration: number | null
+  audio?: boolean
+  width?: number
+  height?: number
+}
+
+export interface StudioProject {
+  id: string
+  name: string
+  settings: { width: number; height: number; fps: [number, number]; sample_rate: number; video_quality?: 'dfr' | 'standard' }
+  scenes: StudioScene[]
+  markers: StudioMarker[]
+  tracks: { id: string; kind: 'video' | 'audio' }[]
+  clips: StudioClip[]
+  media: Record<string, StudioMedia>
+  /** Adresse und Art aller verwendeten Assets (Takes und Clips) */
+  assets: Record<string, { url: string; kind: string; prompt: string; preview?: string }>
+  tps: number
+  edit_duration: number
+  composition_duration: number
+  history: { undo: number; redo: number }
+  updated_at: number
+}
+
+export interface StudioProjectInfo {
+  id: string
+  name: string
+  updated_at: number
+  scenes: number
+  clips: number
+  duration_s: number
 }

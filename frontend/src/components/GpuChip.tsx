@@ -9,7 +9,7 @@ const ROLE_LABEL: Record<GpuRole, string> = {
 }
 
 export const GPU_ROLES: { id: GpuRole; label: string; hint: string }[] = [
-  { id: 'image', label: t('Bilder, Video, Audio', 'Images, video, audio'), hint: t('FLUX 3, Qwen, Wan, LTX, ACE-Step', 'FLUX 3, Qwen, Wan, LTX, ACE-Step') },
+  { id: 'image', label: t('Bilder, Video, Audio', 'Images, video, audio'), hint: t('FLUX 3, Qwen, Wan, LTX, Stable Audio', 'FLUX 3, Qwen, Wan, LTX, Stable Audio') },
   { id: 'text', label: t('Sprachmodelle', 'Language models'), hint: t('Prompt-Upsampler, „Prompt ausbauen“', 'prompt upsampler, “Expand prompt”') },
   { id: 'mesh', label: '3D', hint: 'TripoSG, TRELLIS.2' },
 ]

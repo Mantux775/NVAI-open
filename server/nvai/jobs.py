@@ -33,8 +33,11 @@ _io_queue: asyncio.Queue[str] | None = None
 # Experimentell seit 0.5: Liegen die Sprachmodelle auf einer eigenen Karte, laufen
 # Textjobs ("Prompt ausbauen") in einer eigenen Schlange neben den Bildjobs.
 _text_queue: asyncio.Queue[str] | None = None
+# Studio-Export: eigene Warteschlange, weil er Hardware-Encoder und CPU nutzt und neben dem Erzeugen laufen soll.
+_render_queue: asyncio.Queue[str] | None = None
 _workers: list[asyncio.Task] = []
 _subscribers: set[asyncio.Queue] = set()
+_loop: asyncio.AbstractEventLoop | None = None
 _handlers: dict[str, Handler] = {}
 _current_job_id: str | None = None
 _current_download_id: str | None = None
@@ -49,6 +52,7 @@ _job_lang: dict[str, str] = {}
 
 IO_KINDS = {"download"}
 TEXT_KINDS = {"expand_prompt"}
+RENDER_KINDS = {"studio_export"}
 
 
 class JobContext:
@@ -94,6 +98,21 @@ def _publish(event: dict[str, Any]) -> None:
             q.put_nowait(event)
 
 
+def publish(event: dict[str, Any]) -> None:
+    """Ereignis an alle Abonnenten, auch aus einem Arbeits-Thread: asyncio.Queue ist nicht thread-sicher."""
+    loop = _loop
+    if loop is None or loop.is_closed():
+        return
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+    if running is loop:
+        _publish(event)
+    else:
+        loop.call_soon_threadsafe(_publish, event)
+
+
 def subscribe() -> asyncio.Queue:
     q: asyncio.Queue = asyncio.Queue(maxsize=200)
     _subscribers.add(q)
@@ -107,6 +126,8 @@ def unsubscribe(q: asyncio.Queue) -> None:
 def _queue_for(kind: str) -> asyncio.Queue[str]:
     if kind in TEXT_KINDS and gpu.separate_text_backend() and _text_queue is not None:
         return _text_queue
+    if kind in RENDER_KINDS and _render_queue is not None:
+        return _render_queue
     q = _io_queue if kind in IO_KINDS else _gpu_queue
     assert q is not None, t("jobs.start() wurde nicht aufgerufen", "jobs.start() was not called")
     return q
@@ -171,6 +192,8 @@ def _set_current(job_kind: str, job_id: str | None) -> None:
     global _current_job_id, _current_download_id
     if job_kind in TEXT_KINDS and gpu.separate_text_backend():
         return  # laeuft auf der Textkarte, blockiert die Bildkarte nicht
+    if job_kind in RENDER_KINDS:
+        return  # Export laeuft neben den GPU-Jobs (Hardware-Encoder, CPU)
     if job_kind in IO_KINDS:
         _current_download_id = job_id
     else:
@@ -314,10 +337,13 @@ async def _requeue_orphans() -> None:
 
 
 async def start() -> None:
-    global _gpu_queue, _io_queue, _text_queue
+    global _gpu_queue, _io_queue, _text_queue, _render_queue, _loop
+    _loop = asyncio.get_running_loop()
     _gpu_queue = asyncio.Queue()
     _io_queue = asyncio.Queue()
     _text_queue = asyncio.Queue()
+    _render_queue = asyncio.Queue()
+    _workers.append(asyncio.create_task(_worker_loop(_render_queue, "render"), name="nvai-render-worker"))
     _workers.append(asyncio.create_task(_worker_loop(_text_queue, "text"), name="nvai-text-worker"))
     _workers.append(asyncio.create_task(_worker_loop(_gpu_queue, "gpu"), name="nvai-gpu-worker"))
     _workers.append(asyncio.create_task(_worker_loop(_io_queue, "io"), name="nvai-io-worker"))
@@ -416,6 +442,9 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     p = job.params
     entry = _resolve_model(p, kind)
     await _ensure_backend(ctx)
+    if kind == "video" and p.get("master", True) and not await comfy.has_node(workflows.MASTER_NODE):
+        # ComfyUI lief schon, bevor der Knoten dazukam: diesmal nur das MP4, ab dem naechsten Start mit Master
+        p = {**p, "master": False}
 
     graph, seed = workflows.build(entry, p)
     lora_files = _resolve_loras(p, entry)
@@ -433,6 +462,7 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     # Video braucht deutlich mehr Luft: Wan 2.2 A14B laedt mitten im Lauf den
     # zweiten Experten nach, das allein kostet Minuten.
     timeout = 3600.0 if kind == "video" else 900.0
+    masters: list[Path] = []
     if p.get("outpaint_passes"):
         paths, outpaint_meta = await _outpaint_passes(ctx, entry, p, lora_files, seed)
         extra_meta = {**extra_meta, **outpaint_meta}
@@ -440,7 +470,7 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
         paths, fill_meta = await _inpaint_by_reference(entry, p, graph, lora_files, seed, on_progress)
         extra_meta = {**extra_meta, **fill_meta}
     else:
-        paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout)
+        paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout, masters=masters)
     ctx.progress(0.99, t("speichert", "saving"))
 
     if not paths:
@@ -449,24 +479,34 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
 
     d = workflows.defaults_for(entry["workflow"])
     asset_ids = []
-    for path in paths:
+    for i, path in enumerate(paths):
+        meta = {
+            "seed": seed,
+            "steps": p.get("steps") or d["steps"],
+            "cfg": p.get("cfg") if p.get("cfg") is not None else d["cfg"],
+            "negative_prompt": p.get("negative_prompt", ""),
+            "model_name": _name(entry),
+            **extra_meta,
+        }
+        if i < len(masters) and comfy.kind_for(path) == "video":
+            meta["master"] = masters[i].name  # verlustfreie Fassung (FFV1/MKV) neben dem MP4
         asset = db.create_asset(
             kind=comfy.kind_for(path),
             filename=path.name,
             job_id=job.id,
             prompt=p.get("prompt", ""),
             model_id=entry["id"],
-            meta={
-                "seed": seed,
-                "steps": p.get("steps") or d["steps"],
-                "cfg": p.get("cfg") if p.get("cfg") is not None else d["cfg"],
-                "negative_prompt": p.get("negative_prompt", ""),
-                "model_name": _name(entry),
-                **extra_meta,
-            },
+            meta=meta,
         )
         asset_ids.append(asset.id)
     return asset_ids
+
+
+def master_path(asset: Any) -> Path | None:
+    """Der verlustfreie Master eines Video-Assets, wenn es einen gibt (meta.master)."""
+    name = (asset.meta or {}).get("master") if asset is not None else None
+    path = config.ASSET_DIR / name if name else None
+    return path if path is not None and path.exists() else None
 
 
 # Reserve beim Erweitern (Anteil der Bildseite) und Mindest-Korrelation, darunter wird neu gerechnet.
@@ -766,7 +806,7 @@ async def _expand_other(p: dict[str, Any], upsampler: dict[str, Any], ref_images
                         ctx: JobContext) -> str:
     """Prompt ausbauen fuer Video, Ton und 3D: derselbe Upsampler mit NVAI-opens eigenen
     Systemprompts (prompt_targets.py)."""
-    target = p["target"]
+    target = prompt_targets.ALIASES.get(p["target"], p["target"])
     upsampler_file = workflows.file_name(upsampler)
     system = prompt_targets.SYSTEM[target]
     user = prompt_targets.user_text(target, p["prompt"])
@@ -1522,7 +1562,8 @@ async def _prepare_extension(job: Job, p: dict[str, Any], entry: dict[str, Any])
     p["height"] = max(256, int(info["height"]) // 64 * 64)
     frame = config.DATA_DIR / "tmp" / f"{job.id}_last_frame.png"
     frame.parent.mkdir(parents=True, exist_ok=True)
-    await _video_tool("last-frame", path, frame)
+    # Startbild aus dem verlustfreien Master, sonst wanderten die H.264-Fehler ins neue Stueck
+    await _video_tool("last-frame", master_path(source) or path, frame)
     try:
         p["start_image"] = comfy.stage_input(frame)
     finally:
@@ -1590,12 +1631,18 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     crf = p.get("crf") if p.get("crf") is not None else workflows.VIDEO_CRF
     joined = await _video_tool("concat", source_path, config.ASSET_DIR / segment.filename,
                                config.ASSET_DIR / out_name, crf, 1)
+    meta = {"model_name": _name(entry), "extended_from": source.id, "segment_asset": segment.id,
+            "seconds": joined["seconds"], "frames": joined["frames"], "fps": joined["fps"],
+            "width": joined["width"], "height": joined["height"], "audio": joined["audio"],
+            "duration_s": joined["seconds"]}
+    first_master, second_master = master_path(source), master_path(segment)
+    if first_master and second_master:
+        master_name = f"{Path(segment.filename).stem}_extended_master.mkv"
+        await _video_tool("concat-master", first_master, second_master, config.ASSET_DIR / master_name, 1)
+        meta["master"] = master_name
     combined = db.create_asset(
         kind="video", filename=out_name, job_id=job.id, prompt=p.get("prompt", ""), model_id=entry["id"],
-        meta={"model_name": _name(entry), "extended_from": source.id, "segment_asset": segment.id,
-              "seconds": joined["seconds"], "frames": joined["frames"], "fps": joined["fps"],
-              "width": joined["width"], "height": joined["height"], "audio": joined["audio"],
-              "duration_s": joined["seconds"]},
+        meta=meta,
     )
     return [combined.id, *ids]
 
