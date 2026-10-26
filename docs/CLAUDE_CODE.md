@@ -102,6 +102,7 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
 | Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
 | Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join, conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
+| Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
 | Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
 | Sound effects / instrumental music | Stable Audio Open / Stable Audio 3 Medium | Describe the sound for SFX; Stable Audio 3 up to 5 min, one sentence with BPM, no vocals (ACE-Step was removed in 0.5.13) |
 | 3D source image | One object, plain background, no floor, no cast shadow; `project_front=True` for lettering | Floor and shadow become a plate under the mesh; painted lettering became a distorted relief |
@@ -134,6 +135,7 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Video with sound 1920 × 1088, 5 s / multishot 1280 × 704, 8 s | LTX-2.5 NVFP4 | ~251 s / ~170 s |
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
 | Best quality (DFR) 1920 × 1088, 5 s | LTX-2.5 NVFP4 | ~786 s (standard path ~241 s) |
+| From a start image, 1920 × 1088: 6 s DFR / 4 s standard (Studio scenes) | LTX-2.5 NVFP4 | ~1519 s / ~249 s |
 | DFR 1280 × 704, 4 s / with 48 fps | LTX-2.5 NVFP4 | ~118 s / ~294 s |
 | Extend a video, 5 s + 4 s, 1920 × 1088 | LTX-2.5 NVFP4 | ~255 s for the new part including joining |
 | Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
@@ -773,7 +775,7 @@ user sees every change live and can undo it. User guide with screenshots: [STUDI
 | `studio_create(name, width, height, fps)` | New project, returned in compact form (times in seconds) |
 | `studio_get(project_id)` | Scenes with status (`empty`, `waiting`, `running`, `done`, `error`) and take, markers, clips, length. Finished jobs are already entered as takes |
 | `studio_command(project_id, command, params)` | One command; the tool's description lists them all: `scene.add/update/delete/take`, `marker.add/update/delete`, `edit.conform`, `clip.add/move/trim/razor/delete/update`, `project.update` |
-| `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; with `wait` it blocks until all are finished, chained ones included |
+| `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; with `wait` it blocks until all are finished, chained ones included, for at most an hour. For long runs (several DFR scenes) use `wait=False` and poll `studio_get` |
 | `studio_export(project_id, preset)` | Renders the edit, returns the MP4 path |
 
 Workflow:
@@ -843,6 +845,50 @@ PSNR).
 Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours in
 720p and 8.5 hours in 1080p. Still images with music and voice are much cheaper. Not there yet: voice
 (text-to-speech), titles, subtitles, camera moves on still images, OpenTimelineIO.
+
+### Recipe: an explainer video with a presenter
+
+How a 30-second tutorial in the style of an animated explainer was built entirely through the MCP tools
+(October 2026, RTX 5060 Ti 16 GB): a cartoon presenter who speaks at the start and at the end, three title
+cards, three illustrating shots and music underneath. What carried over:
+
+1. **Make the start images first, then the scenes.** LTX-2.5 invents a new face in every text-to-video
+   scene, so a character who appears more than once needs start images. Make them with `generate_image`
+   and `flux3-klein-nvfp4` in the video size (`width=1920, height=1088`, `batch_size=4`), style first
+   ("3D animated film still in the style of a modern Pixar movie, …"), and pick at full resolution. For
+   further shots of the same person pass the chosen one as `reference_asset_ids` ("The woman from the
+   first image, with exactly the same face, glasses, curly hair and dark green hoodie, … medium close-up
+   …"): 4 of 4 variants kept face, glasses, hair, clothing and room. Give each video scene its image as
+   `params.image_asset_id`; the scene prompt then only describes motion, speech and sound.
+2. **Speech comes from LTX-2.5.** Put the line in quotation marks with the voice ("says in a warm, cheerful,
+   clear female voice: "…""), and add "Static camera, a locked-off shot; the framing stays exactly as in
+   the first frame." A line of 15 words filled a 6 s shot to the last frame, so stay below 2.5 words per
+   second and give the person something to do after the line ("Then she smiles and nods once."). Keep product names out of the spoken line: how
+   the model pronounces an acronym is a gamble. Show the name instead (on a monitor in the start image, on a
+   title card). You cannot hear the take: check that speech is there (the 300–3400 Hz band rises clearly
+   above the room tone while the person talks) and ask the user to listen to the wording.
+3. **Choose the quality per scene.** `params.quality` overrides the project's `video_quality`: `"dfr"` for
+   the shots with a face and speech, `"standard"` for the illustrating shots. Measured here at
+   1920 × 1088 from a start image: a 6 s DFR shot took 1519 s (25 min; its first DFR step alone took 6½ min
+   while LTX-2.5 with the detail IC-LoRA was loaded into the 16 GB card), a 4 s standard shot 249 s.
+4. **Title cards are image scenes.** `kind: "image"` with `qwen-image-2512-nvfp4` and
+   `params: {"width": 1664, "height": 928}` (Qwen's native 16:9), the text in quotation marks: "A bright 3D
+   cartoon title card in the style of an animated movie, centered composition. Big glossy rounded 3D letters
+   in white with a lime green outline read "1. Write your scenes" … nothing else written anywhere." 3 of 3
+   came out letter-perfect, 188–201 s each (50 steps). The export fills the 16:9 frame with them.
+5. **Music is a scene on the `music` lane** with `stable-audio-3-medium`, one sentence with instruments,
+   mood and tempo ("Playful warm orchestral pop underscore for an animated short with pizzicato strings,
+   glockenspiel, light marimba, soft brushed drums and a bouncy upright bass, cheerful and curious like a
+   cartoon tutorial. BPM: 112."): 30 s in 12.5 s. After `edit.conform` the music lies on A2; lower it under
+   the speech with `clip.update` and `gain_db` (the tutorial used −9 dB).
+6. **Say how long it takes, then let it run.** Add up the times above before you start (two DFR shots
+   with speech make up most of it) and tell the user. The queue runs sound, title cards and videos in that
+   order. Use `studio_generate(wait=False)` and poll `studio_get` every few seconds; finished scenes show up
+   as takes, and the user can watch them arrive in the Studio tab.
+7. **Check before conforming.** Look at three frames of every video take at full resolution (start, middle,
+   end). For a scene that missed, set a new seed with `scene.update` (`params.seed`) and run
+   `studio_generate(scene_ids=[…])`: the new take becomes the scene's take, the old one stays in its list and
+   `scene.take` switches back if it was better. Then `edit.conform` and `studio_export`.
 
 ## Lossless copy of every video (since 0.5.13)
 
