@@ -388,7 +388,7 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
   bekommt die Datei? Noch nicht geprüft.
 - Panel schwebt per `NSWindow.Level.floating` über PhotoCraft (MacApp). Offen: Fokus ohne PhotoCraft
   zu deaktivieren (`NSPanel` mit `.nonactivatingPanel`).
-- Lokale Mac-NVAI-open: „NVAI-open für Mac“ (Bundle-ID `com.noerr.nvai.mac`) ist ein eigenes Projekt der
+- Lokale Mac-NVAI-open: „NVAI-open für Mac“ (Bundle-ID `io.github.mantux775.nvai.mac`) ist ein eigenes Projekt der
   NVAI-open-Seite. Es rechnet mit FLUX.2 Klein 4B über MLX (Workflow `flux2_klein`) und bietet
   denselben Vertrag auf 127.0.0.1:8100. Qwen und FLUX 3 gibt es dort vorerst nicht. Die
   `features`:
@@ -411,7 +411,7 @@ zusammengefassten Leerzeichen, über 48 Zeichen auf 47 + „…“ gekürzt; bei
   FLUX.2 Klein 4B, 1024×1024, 4 Schritte, NVAI-open 117,7 s, Speicherspitze 7,9 GB, alle Prüfungen
   grün (`testFillWithRealNVAI`).
 - Weitergabe: eine DMG mit beiden Apps, Developer ID und notarisiert. Die NVAI-open-Seite signiert
-  und notarisiert. Die App hat die Bundle-ID `com.noerr.nvai.photocraft`. `build-app.sh --sign
+  und notarisiert. Die App hat die Bundle-ID `io.github.mantux775.nvai.photocraft`. `build-app.sh --sign
   "<Identität>"` signiert mit Hardened Runtime und Zeitstempel, ohne Identität ad hoc. Ad hoc ist
   gemessen (`flags=0x10002(adhoc,runtime)`, Selbsttest und Fenster laufen). Der Weg mit Developer ID
   ist mangels Zertifikat noch ungeprüft. Entitlements sind nicht nötig.

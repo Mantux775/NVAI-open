@@ -1,7 +1,8 @@
 NVAI-open für Windows – Erste Schritte
 ==================================
 
-NVAI-open erzeugt Bilder, Audio und Video lokal auf deiner NVIDIA-Grafikkarte.
+NVAI-open erzeugt Bilder, Audio und Video lokal auf deiner Grafikkarte
+(NVIDIA; AMD Radeon experimentell).
 Bedient wird es im Browser unter http://127.0.0.1:8100.
 
 Voraussetzungen
@@ -9,6 +10,8 @@ Voraussetzungen
 - Windows 10 (2004 oder neuer) oder Windows 11, 64 Bit
 - NVIDIA-Grafikkarte, empfohlen ab 12 GB Grafikspeicher, mit aktuellem Treiber
   (https://www.nvidia.com/drivers). Das Setup prüft das.
+- oder AMD Radeon RX 6000, 7000 oder 9000 (experimentell) mit aktuellem Treiber
+  (AMD Software: Adrenalin Edition). 3D-Modelle brauchen eine NVIDIA-Karte.
 - Internet beim Einrichten (rund 3 GB) und für jedes Modell (5 bis 30 GB)
 - Freier Speicher: rund 10 GB für das Programm, dazu Platz für die Modelle
 
@@ -32,16 +35,28 @@ Loslegen
 
 „NVAI-open beenden“ im Startmenü fährt alles herunter und gibt die Grafikkarte frei.
 
-FLUX 3 Image Klein
-------------------
-Dieses Modell liegt bei Black Forest Labs hinter einer Lizenzbestätigung.
-Dafür brauchst du ein kostenloses Konto bei https://huggingface.co:
-1. Auf https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy die
-   Lizenz bestätigen.
-2. Unter https://huggingface.co/settings/tokens einen Token (Lesen) anlegen.
-3. Den Token in NVAI-open eintragen.
-Lizenz: kommerziell nur unter 5 Mio. US-$ Jahresumsatz, jedes Bild vor der
-Veröffentlichung prüfen.
+FLUX 3 und LTX-2.5: Hugging-Face-Konto
+--------------------------------------
+FLUX 3 Image Klein (Bild) und LTX-2.5 (Video mit Ton) liegen auf Hugging Face
+hinter einer Lizenzbestätigung. Dafür brauchst du ein kostenloses Konto bei
+https://huggingface.co:
+1. Angemeldet auf der Modellseite die Lizenz annehmen:
+   https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy
+   https://huggingface.co/Lightricks/LTX-2.5
+2. Unter https://huggingface.co/settings/tokens einen Token (Read) anlegen.
+3. Den Token in NVAI-open unter „Modelle“ im Kasten „Hugging Face“ eintragen.
+Die Modellkarte zeigt danach, ob der Zugriff klappt. Anleitung mit Bildern:
+https://github.com/Mantux775/NVAI-open/blob/main/docs/de/HUGGINGFACE.md
+Lizenzen: FLUX 3 kommerziell nur unter 5 Mio. US-$ Jahresumsatz, jedes Bild vor
+der Veröffentlichung prüfen; LTX-2.5 kostenlos unter 10 Mio. US-$ Jahresumsatz.
+
+AMD Radeon (experimentell)
+--------------------------
+Das Setup richtet PyTorch 2.13 mit ROCm 10 ein (AMDs Pakete für Windows). Rechnet
+die Karte damit nicht, nimmt es ROCm 7.2.1. Unter „Modelle“ zeigt der Filter
+„Für deine Karte“ die passenden Fassungen (FP8 oder bf16 statt NVFP4, das nur
+RTX 50 in Hardware rechnet). Auf AMD ist noch wenig gemessen: Rückmeldungen über
+„Problem melden“ (oben rechts in NVAI-open) helfen.
 
 3D-Modelle (falls mitinstalliert)
 ---------------------------------

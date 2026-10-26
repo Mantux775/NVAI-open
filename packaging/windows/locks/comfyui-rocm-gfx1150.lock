@@ -1,0 +1,8 @@
+# Kernel fuer gfx1150 zu comfyui-rocm.lock (ROCm 10.0.0, PyTorch 2.13.0). Erzeugt von
+# tools\make_rocm_locks.py; installiert mit --no-deps --require-hashes.
+amd-torch-device-gfx1150 @ https://stable.repo.amd.com/rocm/pytorch/whl-next/amd-torch-device-gfx1150/amd_torch_device_gfx1150-2.13.0%2Brocm10.0.0-cp312-cp312-win_amd64.whl \
+    --hash=sha256:49dfbdf3ac3aebe786de26534f9f79e333a638448292470f112f3f52230240e6
+amd-torchvision-device-gfx1150 @ https://stable.repo.amd.com/rocm/pytorch/whl-next/amd-torchvision-device-gfx1150/amd_torchvision_device_gfx1150-0.28.0%2Brocm10.0.0-cp312-cp312-win_amd64.whl \
+    --hash=sha256:dcfe83f8130a151fed430602eccd64382c857d19c268aa9607a0c0b8559df0d9
+rocm-sdk-device-gfx1150 @ https://stable.repo.amd.com/rocm/core/whl-next/rocm-sdk-device-gfx1150/rocm_sdk_device_gfx1150-10.0.0-py3-none-win_amd64.whl \
+    --hash=sha256:22c19fcee580102cdc2f9379edf056643843c86ac6312dcf34d8ed21964c2cc4

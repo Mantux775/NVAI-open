@@ -2,13 +2,44 @@ import SwiftUI
 
 struct ModelsView: View {
     @EnvironmentObject var state: AppState
+    /// Nur die Empfehlungen für diesen Mac zeigen (wie „Für deine Karte“ unter Windows, Nutzerwunsch 26.10.2026).
+    @AppStorage("models.recommendedOnly") private var recommendedOnly = false
 
-    private var fluxRows: [AppState.ModelRow] { state.models.filter { $0.model.engine == "mlx" } }
-    private var coremlRows: [AppState.ModelRow] { state.models.filter { $0.model.engine == "coreml" } }
+    private func visible(_ id: String, installed: Bool) -> Bool {
+        !recommendedOnly || installed || MacRecommendations.isRecommended(id)
+    }
+    private var fluxRows: [AppState.ModelRow] { state.models.filter { $0.model.engine == "mlx" && visible($0.id, installed: $0.installed) } }
+    private var zimageRows: [AppState.ModelRow] { state.models.filter { $0.model.engine == "zimage" && visible($0.id, installed: $0.installed) } }
+    private var coremlRows: [AppState.ModelRow] { state.models.filter { $0.model.engine == "coreml" && visible($0.id, installed: $0.installed) } }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                // Ganz oben und gut sichtbar (Nutzerwunsch 26.10.2026).
+                GroupBox {
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass").font(.title2).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t("Weitere Modelle suchen", "Find more models")).font(.headline)
+                            Text(t("Auf Hugging Face; NVAI-open prüft jeden Treffer vor dem Laden.",
+                                   "On Hugging Face; NVAI-open checks every result before downloading."))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(t("Suchen …", "Search …")) { state.showSearch = true }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                    }
+                    .padding(6)
+                }
+                HStack {
+                    Toggle(t("Nur Empfehlungen für diesen Mac", "Only recommendations for this Mac"), isOn: $recommendedOnly)
+                    Spacer()
+                    Text(t("Dieser Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB Arbeitsspeicher",
+                           "This Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB memory"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+
                 Text("FLUX.2 Klein (MLX)").font(.title2.bold())
                 Text(t("Das Hauptmodell: Generieren, Überarbeiten, Füllen mit Maske, Referenzbilder. Modellordner: ",
                        "The main model: generate, refine, masked fills, reference images. Model folder: ")
@@ -16,12 +47,17 @@ struct ModelsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(fluxRows) { row in ModelCard(row: row) }
 
-                HStack {
-                    Text("Stable Diffusion (Core ML)").font(.title2.bold())
-                    Spacer()
-                    Button(t("Weitere Modelle suchen …", "Find more models …")) { state.showSearch = true }
+                Text("Z-Image Turbo (MLX)").font(.title2.bold()).padding(.top, 10)
+                Text(t("Ein zweites Bildmodell für Text zu Bild: fotorealistisch und gut mit Schrift, 8 Schritte. Auf Macs "
+                       + "bis 16 GB laden Text-Encoder und Bildmodell nacheinander.",
+                       "A second image model for text to image: photorealistic and good with lettering, 8 steps. On Macs "
+                       + "with up to 16 GB the text encoder and the image model load one after another."))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(zimageRows) { row in ModelCard(row: row) }
+
+                if !coremlRows.isEmpty || !recommendedOnly {
+                    Text("Stable Diffusion (Core ML)").font(.title2.bold()).padding(.top, 10)
                 }
-                .padding(.top, 10)
                 Text(t("Kleinere Modelle mit festem Format, laufen auch auf 8 GB. Weitere fertig konvertierte "
                        + "Pipelines findet die Suche auf Hugging Face; NVAI-open prüft sie vor dem Laden.",
                        "Smaller models with a fixed size that also run on 8 GB. The search finds more converted "
@@ -37,14 +73,21 @@ struct ModelsView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(state.loras) { row in LoRACard(row: row) }
 
-                Text(t("Musik und Klänge", "Music and sounds")).font(.title2.bold()).padding(.top, 10)
-                AudioModelCard()
+                if visible(AudioCatalog.id, installed: state.audioInstalled) {
+                    Text(t("Musik und Klänge", "Music and sounds")).font(.title2.bold()).padding(.top, 10)
+                    AudioModelCard()
+                }
+
+                if visible(VideoCatalog.id, installed: state.videoInstalled) {
+                    Text(t("Video", "Video")).font(.title2.bold()).padding(.top, 10)
+                    VideoModelCard()
+                }
 
                 Text(t("Zusätze", "Add-ons")).font(.title2.bold()).padding(.top, 10)
                 Text(t("Keine Bildmodelle, sondern Werkzeuge für einzelne Funktionen.",
                        "Not image models, but tools for single features."))
                     .font(.caption).foregroundStyle(.secondary)
-                ForEach(state.helpers) { row in HelperCard(row: row) }
+                ForEach(state.helpers.filter { visible($0.id, installed: $0.installed) }) { row in HelperCard(row: row) }
             }
             .padding(16)
         }
@@ -70,12 +113,18 @@ struct ModelCard: View {
         switch row.model {
         case .flux(let m): return m.description
         case .coreml(let m): return m.noteText
+        case .zimage(let m): return m.description
         }
     }
 
     private var details: String {
         switch row.model {
         case .flux(let m):
+            return t(String(format: "Download %.1f GB · ab %d GB Arbeitsspeicher, empfohlen %d GB · Apache-2.0",
+                            m.downloadGB, m.minRAMGB, m.recommendedRAMGB),
+                     String(format: "Download %.1f GB · %d GB of memory or more, %d GB recommended · Apache-2.0",
+                            m.downloadGB, m.minRAMGB, m.recommendedRAMGB))
+        case .zimage(let m):
             return t(String(format: "Download %.1f GB · ab %d GB Arbeitsspeicher, empfohlen %d GB · Apache-2.0",
                             m.downloadGB, m.minRAMGB, m.recommendedRAMGB),
                      String(format: "Download %.1f GB · %d GB of memory or more, %d GB recommended · Apache-2.0",
@@ -91,6 +140,7 @@ struct ModelCard: View {
     private var warning: String {
         switch row.model {
         case .flux(let m): return ModelCatalog.warning(m)
+        case .zimage(let m): return ZImageCatalog.warning(m)
         case .coreml(let m):
             return CoreMLCatalog.fits(m) == "nein"
                 ? t("Braucht mehr Arbeitsspeicher, als dieser Mac hat.", "Needs more memory than this Mac has.") : ""
@@ -107,6 +157,7 @@ struct ModelCard: View {
                         .overlay(Capsule().stroke(.secondary.opacity(0.5)))
                         .foregroundStyle(.secondary)
                         .help(ContentRating.help(row.model.id))
+                    FitBadges(fit: row.model.fits, recommended: MacRecommendations.isRecommended(row.model.id))
                     if state.activeModelID == row.model.id {
                         Text(t("aktiv", "active")).font(.caption.bold()).padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.accentColor.opacity(0.25)).clipShape(Capsule())
@@ -144,6 +195,15 @@ struct ModelCard: View {
                     }
                     if row.installed && state.activeModelID != row.model.id {
                         Button(t("Als aktives Modell", "Make active")) { state.setActiveModel(row.model.id) }
+                    }
+                    if case .zimage(let m) = row.model, row.installed {
+                        Button(t("Löschen", "Delete"), role: .destructive) {
+                            Task {
+                                await ZImageEngine.shared.unload()
+                                m.delete()
+                                state.refreshModels()
+                            }
+                        }
                     }
                     if case .coreml(let m) = row.model {
                         if row.installed {
@@ -196,6 +256,8 @@ struct HelperCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(row.model.name).font(.headline)
+                    FitBadges(fit: MacFit.of(needGB: MacFit.helperNeedGB(row.model)),
+                              recommended: MacRecommendations.isRecommended(row.model.id))
                     Spacer()
                     Text(row.installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
                         .foregroundStyle(row.installed ? .green : .secondary)

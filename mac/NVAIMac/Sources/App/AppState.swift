@@ -16,17 +16,29 @@ final class AppState: ObservableObject {
     @Published var audios: [AssetRecord] = []
     /// Stable Audio 3 geladen?
     @Published var audioInstalled = AudioCatalog.installed
+    /// Videos (seit 0.4.8, LTX-Video 2B) und ob das Modell geladen ist; dazu der Bild-Encoder fürs Startbild.
+    @Published var videos: [AssetRecord] = []
+    @Published var videoInstalled = VideoCatalog.installed
+    @Published var videoEncoderInstalled = VideoCatalog.encoderInstalled
     @Published var models: [ModelRow] = []
     @Published var activeModelID: String = Models.active.id
     @Published var modelsDirectory: URL = Settings.modelsDirectory
+    /// Ablage der erzeugten Dateien (seit 0.4.8 wählbar).
+    @Published var assetsDirectory: URL = Settings.assetsDirectory
     @Published var port: UInt16 = Settings.serverPort
     /// Gewählter Reiter (generate, history, models, settings) – auch für `--snapshot --tab`.
     @Published var selectedTab = "generate"
     @Published var showSearch = false
+    /// `--snapshot --tab search --search-kind video --search-query ltx`: so öffnet sich die Modellsuche.
+    var searchPreset: (art: HuggingFace.Art, query: String)?
     /// „Generieren“ mit „Foto restaurieren“ öffnen (`--snapshot --tab restore`).
     @Published var showRestore = false
     /// „Generieren“ mit „Musik und Klänge“ öffnen (`--snapshot --tab audio`).
     @Published var showAudio = false
+    /// „Generieren“ mit „Video“ öffnen (`--snapshot --tab video`).
+    @Published var showVideo = false
+    /// `--snapshot --tab player`: Verlauf öffnen und dieses Video abspielen (Prüfung des Players ohne Klick).
+    @Published var snapshotPlayVideo: AssetRecord?
     /// "auto", "en" oder "de"; die Texte liefert t() aus Lang.ui.
     @Published var language: String = Lang.setting
 
@@ -116,6 +128,33 @@ final class AppState: ObservableObject {
         refreshModels()
     }
 
+    /// Ablage wechseln (seit 0.4.8). Gibt die Meldung für die Einstellungen zurück.
+    func changeAssetsDirectory(_ url: URL, move: Bool) async -> String {
+        do {
+            let result = try await AssetStore.shared.relocate(to: url, move: move)
+            assetsDirectory = Settings.assetsDirectory
+            Thumbnails.clear()
+            await refresh()
+            AppLog.info("Assets folder changed (move \(move)): \(result.moved) moved, \(result.failed) stayed, "
+                        + "\(result.merged) already there")
+            var text = move
+                ? t("Umgezogen: \(result.moved) Dateien.", "Moved: \(result.moved) files.")
+                : t("Neue Dateien landen jetzt hier; die bisherigen bleiben im alten Ordner.",
+                    "New files go here now; the previous ones stay in the old folder.")
+            if result.failed > 0 {
+                text += t(" \(result.failed) blieben im alten Ordner (Name schon vergeben oder nicht verschiebbar).",
+                          " \(result.failed) stayed in the old folder (name already taken or not movable).")
+            }
+            if result.merged > 0 {
+                text += t(" Im neuen Ordner lagen schon \(result.merged) Dateien von NVAI-open; der Verlauf zeigt beide.",
+                          " The new folder already held \(result.merged) NVAI-open files; the history shows both.")
+            }
+            return text
+        } catch {
+            return t("Nicht gewechselt: ", "Not changed: ") + error.localizedDescription
+        }
+    }
+
     /// Sprache umstellen: alle Ansichten beobachten AppState und zeichnen sich neu.
     func setLanguage(_ value: String) {
         Lang.setting = value
@@ -146,6 +185,7 @@ final class AppState: ObservableObject {
         images = await AssetStore.shared.list(kind: "image", limit: 1000)
         uploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
         audios = await AssetStore.shared.list(kind: "audio", limit: 500)
+        videos = await AssetStore.shared.list(kind: "video", limit: 500)
         // Ein beendeter Download ändert den Modellstatus.
         refreshModels()
     }
@@ -159,6 +199,10 @@ final class AppState: ObservableObject {
         if loraRows != loras { loras = loraRows }
         let audioOK = AudioCatalog.installed
         if audioOK != audioInstalled { audioInstalled = audioOK }
+        let videoOK = VideoCatalog.installed
+        if videoOK != videoInstalled { videoInstalled = videoOK }
+        let encoderOK = VideoCatalog.encoderInstalled
+        if encoderOK != videoEncoderInstalled { videoEncoderInstalled = encoderOK }
         activeModelID = Models.active.id
     }
 

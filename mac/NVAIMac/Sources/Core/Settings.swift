@@ -11,7 +11,25 @@ enum Settings {
         return base.appendingPathComponent("NV-AI", isDirectory: true)
     }
 
-    static var assetsDirectory: URL { appSupport.appendingPathComponent("assets", isDirectory: true) }
+    static var defaultAssetsDirectory: URL { appSupport.appendingPathComponent("assets", isDirectory: true) }
+
+    /// Ablage der erzeugten Dateien samt Verlauf (index.json). Seit 0.4.8 wählbar (Nutzerwunsch 26.10.2026), sonst
+    /// ~/Library/Application Support/NV-AI/assets. Wechseln über `AssetStore.relocate`, das die Dateien mitnimmt.
+    static var assetsDirectory: URL {
+        get {
+            if let path = defaults.string(forKey: "assetsDirectory"), !path.isEmpty {
+                return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+            }
+            return defaultAssetsDirectory
+        }
+        set {
+            if newValue.standardizedFileURL.path == defaultAssetsDirectory.standardizedFileURL.path {
+                defaults.removeObject(forKey: "assetsDirectory")
+            } else {
+                defaults.set(newValue.standardizedFileURL.path, forKey: "assetsDirectory")
+            }
+        }
+    }
 
     /// Wo die Modelle liegen. Der Ordner muss „models“ heißen: swift-transformers legt den
     /// Text-Encoder unter <Basis>/models/<Repo> ab und nimmt dafür den Elternordner als Basis.

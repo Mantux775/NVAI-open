@@ -106,6 +106,17 @@ def _driver() -> str:
     return f"AMD {cards[0]['driver']}" if cards else "?"
 
 
+def _torch_version() -> str:
+    """PyTorch im ComfyUI-venv laut dist-info, ohne Import: zeigt die CUDA- oder ROCm-Fassung (2.14.1+cu130,
+    2.13.0+rocm…). Steht sonst nur am Anfang von comfyui.log, der nach vielen Aufträgen aus dem Bericht fällt."""
+    venv = config.COMFY_ROOT / ".venv"
+    for site in [venv / "Lib" / "site-packages", *venv.glob("lib/python*/site-packages")]:
+        found = sorted(site.glob("torch-*.dist-info"))
+        if found:
+            return found[-1].name[len("torch-"):-len(".dist-info")]
+    return "?"
+
+
 def _ram_gb() -> str:
     try:
         if sys.platform == "win32":
@@ -137,7 +148,9 @@ def build(description: str) -> dict[str, Any]:
     utc = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))
     offset = time.strftime("%z", time.localtime(now))
     gpus = gpu.list_gpus()
-    gpu_text = "; ".join(f"GPU {g['index']}: {g['name']} ({g.get('vram_total_gb', '?')} GB)" for g in gpus) or "none found"
+    gpu_text = "; ".join(f"GPU {g['index']}: {g['name']} ({g.get('vram_total_gb', '?')} GB"
+                         + (f", {g['arch']}" if g.get("arch") else "") + ")" for g in gpus) or "none found"
+    torch_version = _torch_version()
     jobs = db.list_jobs(limit=25)
     last_error = next((j.error for j in jobs if j.status == "error" and j.error), None)
 
@@ -160,6 +173,7 @@ def build(description: str) -> dict[str, Any]:
         f"Graphics:     {gpu_text}",
         f"Vendor:       {gpu.vendor() or '?'}",
         f"Driver:       {_driver()}",
+        f"PyTorch:      {torch_version}",
     ]
     if len(gpus) > 1:
         out.append(f"Assignment:   {gpu.assignment()} (separate text backend: {gpu.separate_text_backend()})")
@@ -198,6 +212,7 @@ def build(description: str) -> dict[str, Any]:
             "os": platform.platform(),
             "graphics": anonymize(gpu_text),
             "driver": _driver(),
+            "torch": torch_version,
             "last_error": anonymize(last_error.strip())[:600] if last_error else None,
             "time": f"{local} (UTC{offset[:3]}:{offset[3:]})",
         },

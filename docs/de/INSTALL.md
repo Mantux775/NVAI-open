@@ -29,7 +29,7 @@ den eigenen Benutzer und braucht keine Adminrechte.
 |---|---|
 | **Windows** | Windows 10 (2004 oder neuer) oder Windows 11, 64 Bit |
 | **Grafikkarte** | NVIDIA oder AMD Radeon (experimentell, siehe unten); ab 8 GB VRAM sinnvoll, 12–16 GB komfortabel |
-| **Treiber** | NVIDIA: ab 580.88 (Zweig R580, den PyTorch mit CUDA 13 braucht): https://www.nvidia.com/drivers. AMD: ab 26.2.2 |
+| **Treiber** | NVIDIA: ab 580.88 (Zweig R580, den PyTorch mit CUDA 13 braucht): https://www.nvidia.com/drivers. AMD: aktueller Treiber (AMD Software: Adrenalin Edition), mindestens 26.2.2 |
 | **Internet** | rund 3 GB beim Einrichten (vor allem PyTorch), dazu 5–30 GB pro Modell |
 | **Platte** | rund 10 GB für das Programm, dazu Platz für die Modelle |
 
@@ -38,9 +38,18 @@ der Treiber zu alt ist. Ohne NVIDIA-Karte lässt sich NVAI-open installieren, er
 
 ### Experimentell (seit 0.5): AMD Radeon und mehrere Grafikkarten
 
-- **AMD Radeon:** Das Setup erkennt eine Radeon (und keine NVIDIA-Karte) und installiert PyTorch
-  mit ROCm 7.2.1 von AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, beide
-  mit Hashes). Nötig ist der AMD-Treiber 26.2.2 oder neuer. 3D wird auf AMD übersprungen.
+- **AMD Radeon:** Das Setup erkennt eine Radeon (und keine NVIDIA-Karte) und installiert seit 0.5.12
+  PyTorch 2.13 mit ROCm 10.0 aus AMDs Mehrarchitektur-Paketen, wie es ComfyUIs README beschreibt:
+  `locks\comfyui-amd-base.lock`, `locks\comfyui-rocm.lock` und die Kernel der erkannten Karte
+  (`locks\comfyui-rocm-<gfx>.lock`, etwa gfx1201 für eine Radeon RX 9070 XT), jede Datei mit fester
+  Adresse und Hash. Danach prüft eine kleine bf16-Rechnung auf der Karte das Ergebnis; scheitert sie
+  (etwa mit altem Treiber), nimmt das Setup PyTorch 2.9.1 mit ROCm 7.2.1 (`locks\comfyui-rocm72.lock`,
+  Treiber ab 26.2.2). `install-runtime.ps1 -Rocm 10.0|7.2` erzwingt eine der beiden. Die Radeon im
+  Ryzen-Prozessor bleibt außen vor, wenn eine eigene Radeon-Karte steckt. Unter „Modelle“ zeigt der
+  Filter „Für deine Karte“ die passenden Fassungen: auf einer Radeon RX 9000 mit 16 GB FP8 und bf16
+  (FP8 rechnet dort in Hardware, NVFP4 nicht), auf anderen Radeons INT8. 3D wird auf AMD übersprungen.
+  Gemessen ist auf einer echten Radeon noch nichts: Rückmeldungen in
+  [#2](https://github.com/Mantux775/NVAI-open/issues/2) helfen.
   „NVAI-open reparieren“ erkennt die Karte erneut; `install-runtime.ps1 -Gpu amd|nvidia` erzwingt
   eine Seite.
 - **Mehrere NVIDIA-Karten:** Unter „Modelle“ → „Grafikkarten“ für Bildmodelle, Sprachmodelle und
@@ -95,17 +104,22 @@ es dort „NVAI-open reparieren“, „Erste Schritte“ und mit dem Add-on „N
 
 Für Claude Code siehe [CLAUDE_CODE.md](../CLAUDE_CODE.md) (englisch).
 
-### FLUX 3 Image Klein (Zugang zu Hugging Face)
+### FLUX 3 und LTX-2.5 (Zugang zu Hugging Face)
 
-Dieses Modell liegt bei Black Forest Labs hinter einer Lizenzbestätigung. Dafür braucht es ein
-kostenloses Konto bei https://huggingface.co:
+Black Forest Labs (FLUX 3 Image Klein) und Lightricks (LTX-2.5) legen diese Modelle hinter eine
+Lizenzbestätigung. Dafür braucht es ein kostenloses Konto bei https://huggingface.co:
 
-1. Auf https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy die Lizenz bestätigen.
-2. Unter https://huggingface.co/settings/tokens einen Token (Lesen) anlegen.
-3. Den Token in NVAI-open unter **Modelle** eintragen.
+1. Auf https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy und
+   https://huggingface.co/Lightricks/LTX-2.5 die Lizenz annehmen.
+2. Unter https://huggingface.co/settings/tokens einen Token (Read) anlegen.
+3. Den Token in NVAI-open unter **Modelle** im Kasten „Hugging Face“ eintragen.
 
-Lizenz: kommerziell nur unter 5 Mio. US-$ Jahresumsatz, jedes Bild vor der Veröffentlichung
-prüfen. Einzelheiten in [MODELLE.md](MODELLE.md).
+Seit 0.5.12 zeigt die Karte jedes solchen Modells, ob der hinterlegte Token schon Zugriff hat.
+Schritt für Schritt mit Bildern: [HUGGINGFACE.md](HUGGINGFACE.md).
+
+Lizenzen: FLUX 3 kommerziell nur unter 5 Mio. US-$ Jahresumsatz, jedes Bild vor der
+Veröffentlichung prüfen; LTX-2.5 kostenlos unter 10 Mio. US-$ Jahresumsatz. Einzelheiten in
+[MODELLE.md](MODELLE.md).
 
 ### Modelle
 
@@ -290,6 +304,11 @@ lauscht nur auf `127.0.0.1:8100`; das PhotoCraft-Add-on und eigene Skripte errei
 |---|---|---|---|
 | MLX (`flux-2-swift-mlx` 3.1.0, MIT) | FLUX.2 Klein 4B, 4 Bit oder 8 Bit (Apache-2.0) | Generieren, Bild-zu-Bild (`denoise`), Füllen mit Maske, bis 3 Referenzbilder | 4 Bit ab 8 GB, 8 Bit ab 24 GB |
 | Core ML (`ml-stable-diffusion`) | Stable Diffusion 1.5/2.1/SDXL als fertige Core-ML-Pipelines, dazu Treffer aus der Suche | Generieren, Bild-zu-Bild (mit VAE-Encoder), negativer Prompt; festes Format | ab 8 GB |
+| MLX (`z-image-swift`, MIT) | Z-Image Turbo, 4 Bit plus 0,28 GB bf16-Schichten (Apache-2.0) | Text zu Bild, 8 Schritte | 1 MP ab 8 GB, sonst bis 1536² |
+| MLX (eigener Port `ltxv-swift`) | LTX-Video 2B 0.9.8 distilled (LTX-Video Open Weights License) | Text oder Startbild zu Video, 24 Bilder je Sekunde, ohne Ton | ab 8 GB (bis 768 × 512 × 97 Bilder) |
+
+Die Modellsuche unter „Modelle“ hat „Bilder“ und „Videos“. Sie lädt Core-ML-Pipelines und sagt bei jedem anderen
+Treffer, ob er auf diesem Mac läuft: als Katalogmodell, (noch) nicht eingebaut oder zu groß.
 
 Gemessen auf einem Mac mini (M1, 8 GB), FLUX.2 Klein 4B, 4 Bit, 4 Schritte:
 

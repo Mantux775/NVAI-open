@@ -633,6 +633,7 @@ kbd {
 }
 .link-button { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
 .hf-token { margin-bottom: 10px; }
+.hf-token > p:first-child { margin-top: 0; }
 .hf-catalog { border: 1px solid var(--border, #2a2f36); border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
 .hf-catalog .hf-file { margin-left: 0; }
 .hf-toggle { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
@@ -837,4 +838,10 @@ kbd {
 .outpaint-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 
 /* Links in Hinweistexten: Standardblau war auf dem dunklen Grund kaum lesbar. */
-.hint a { color: var(--accent); }
+.hint a, .hf-token a, .gated-notice a { color: var(--accent); }
+
+/* Lizenz auf Hugging Face nötig (gesperrte Repos), seit 0.5.12 */
+.gated-notice { border: 1px solid #ffab6b55; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+.gated-notice.ok { border-color: #6bcf8c55; }
+.gated-notice p { margin: 4px 0; }
+.gated-notice ul { margin: 2px 0 4px 18px; padding: 0; }

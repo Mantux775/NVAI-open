@@ -1,14 +1,17 @@
 import Foundation
 
-/// Ein Bildmodell, gleich mit welcher Engine: FLUX.2 Klein über MLX oder Stable Diffusion über Core ML.
+/// Ein Bildmodell, gleich mit welcher Engine: FLUX.2 Klein über MLX, Stable Diffusion über Core ML oder
+/// Z-Image Turbo über MLX (seit 0.4.7).
 enum AnyModel: Identifiable, Equatable {
     case flux(CatalogModel)
     case coreml(CoreMLModel)
+    case zimage(ZImageModel)
 
     var id: String {
         switch self {
         case .flux(let m): return m.id
         case .coreml(let m): return m.id
+        case .zimage(let m): return m.id
         }
     }
 
@@ -16,6 +19,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return m.name
         case .coreml(let m): return m.name
+        case .zimage(let m): return m.name
         }
     }
 
@@ -23,6 +27,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return m.workflow
         case .coreml(let m): return m.workflow
+        case .zimage(let m): return m.workflow
         }
     }
 
@@ -30,6 +35,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux: return "mlx"
         case .coreml: return "coreml"
+        case .zimage: return "zimage"
         }
     }
 
@@ -37,13 +43,14 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return ModelCatalog.status(m).installed
         case .coreml(let m): return CoreMLCatalog.isInstalled(m)
+        case .zimage(let m): return m.installed
         }
     }
 
     var partiallyInstalled: Bool {
         switch self {
         case .flux(let m): return ModelCatalog.status(m).partial
-        case .coreml: return false
+        case .coreml, .zimage: return false
         }
     }
 
@@ -51,6 +58,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return ModelCatalog.fits(m)
         case .coreml(let m): return CoreMLCatalog.fits(m)
+        case .zimage(let m): return ZImageCatalog.fits(m)
         }
     }
 
@@ -58,6 +66,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return m.downloadGB
         case .coreml(let m): return m.sizeGb
+        case .zimage(let m): return m.downloadGB
         }
     }
 
@@ -65,6 +74,7 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return ModelCatalog.info(m)
         case .coreml(let m): return CoreMLCatalog.info(m)
+        case .zimage(let m): return ZImageCatalog.info(m)
         }
     }
 
@@ -72,19 +82,22 @@ enum AnyModel: Identifiable, Equatable {
         switch self {
         case .flux(let m): return ModelCatalog.features(m)
         case .coreml(let m): return CoreMLCatalog.features(m)
+        case .zimage(let m): return ZImageCatalog.features(m)
         }
     }
 }
 
 enum Models {
     static var all: [AnyModel] {
-        ModelCatalog.all.map { AnyModel.flux($0) } + CoreMLCatalog.all.map { AnyModel.coreml($0) }
+        ModelCatalog.all.map { AnyModel.flux($0) } + ZImageCatalog.all.map { AnyModel.zimage($0) }
+            + CoreMLCatalog.all.map { AnyModel.coreml($0) }
     }
 
     static func find(_ id: String?) -> AnyModel? {
         guard let id else { return nil }
         if let m = ModelCatalog.model(id) { return .flux(m) }
         if let m = CoreMLCatalog.model(id) { return .coreml(m) }
+        if let m = ZImageCatalog.model(id) { return .zimage(m) }
         return nil
     }
 

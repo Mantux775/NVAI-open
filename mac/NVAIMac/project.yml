@@ -4,7 +4,7 @@
 # und die übersetzt nur Xcode (dazu die Metal Toolchain: xcodebuild -downloadComponent MetalToolchain).
 name: NVAIMac
 options:
-  bundleIdPrefix: com.noerr
+  bundleIdPrefix: io.github.mantux775
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -21,6 +21,13 @@ packages:
   StableAudio3:
     # Stable Audio 3 Medium auf MLX (aus speech-swift, Apache-2.0; Packages/stable-audio-3-swift/NVAI-OPEN-CHANGES.md).
     path: Packages/stable-audio-3-swift
+  ZImage:
+    # Z-Image Turbo auf MLX (Port MIT, Modell Apache-2.0), lokale Kopie von z-image-swift
+    # (Packages/z-image-swift/NVAI-OPEN-CHANGES.md).
+    path: Packages/z-image-swift
+  LTXV:
+    # LTX-Video 2B (0.9.8 distilled) auf MLX, eigener Port für NVAI-open nach Lightricks/LTX-Video (Apache-2.0).
+    path: Packages/ltxv-swift
   StableDiffusion:
     # Core ML Stable Diffusion für kleine Macs und die Modellsuche, wie in NVAILocal.
     url: https://github.com/apple/ml-stable-diffusion
@@ -47,17 +54,24 @@ targets:
         product: SeedVR2MLX
       - package: StableAudio3
         product: StableAudio3
+      - package: ZImage
+        product: ZImage
+      - package: LTXV
+        product: LTXV
       - package: StableDiffusion
         product: StableDiffusion
       - package: ZIPFoundation
         product: ZIPFoundation
+      # AVKit ausdrücklich: mit dem macOS-27-SDK band die App sonst nur `_AVKit_SwiftUI` ein, und auf macOS 26.6
+      # fehlte zur Laufzeit AVPlayerView (Absturz beim Abspielen, 0.4.8 Build 13).
+      - sdk: AVKit.framework
     settings:
       base:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
-        PRODUCT_BUNDLE_IDENTIFIER: com.noerr.nvai.mac
-        MARKETING_VERSION: "0.4.7"
-        CURRENT_PROJECT_VERSION: "12"
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.mantux775.nvai.mac
+        MARKETING_VERSION: "0.4.8"
+        CURRENT_PROJECT_VERSION: "17"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

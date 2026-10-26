@@ -234,6 +234,19 @@ the user first.
 NVFP4 needs PyTorch **cu130** in the ComfyUI venv (`setup_comfyui.ps1` installs it); with cu128
 everything is three to five times slower, because ComfyUI then disables its fast NVFP4 kernels.
 FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.42.1).
+Since 0.5.12 the ComfyUI venv uses PyTorch 2.14.1 + cu130 and torchvision 0.29.1 (what ComfyUI's own package for
+0.42.1 ships; before: 2.11.0), without torchaudio, which nothing imports. Measured against 2.11.0 with fixed seeds:
+expanded prompts and upsampler captions word for word the same, images 51–57 dB PSNR apart (numeric noise). MOSS-Image
+was 30 dB apart: the same poster with the same lettering, but a small island appeared on the horizon, so the same seed
+can change small details after such an update. Restoring with sharpening (34 dB) and LTX-2.5 frames (33–35 dB) looked
+the same. Run times were the same (one run each), FLUX 3 with a new prompt 30.5 instead of 33.6 s; the full function
+test passed 39 of 39.
+comfy-kitchen stays at ComfyUI's pin (0.2.39): 0.2.40 broke Qwen3.5 text generation with ComfyUI 0.42.1 (MOSS-Image
+"gated_delta_decode_deferred launch rejected", the FLUX 3 upsampler never stopped).
+The CUDA 13.2 build of the same PyTorch (cu132) was measured against cu130 with driver 621.01: the same time per step
+(FLUX 3 0.510/0.518 s, Qwen-Image 1.780/1.770 s, LTX-2.5 1.26/1.26 s) and bit-identical images, video frames and
+texts, so NVAI-open stays on cu130 like ComfyUI's own package. The driver update from 610.62 to 621.01 changed neither
+speed nor results either.
 
 ### Prompts for Qwen, FLUX 3 and Krea 2
 
@@ -851,6 +864,15 @@ to a card each; with the language models on their own card, prompt expansion run
 jobs (7.5–8.6 s per expansion on the 4060). Full load on both cards at once once made the 4060 drop off
 the bus (a repeat two days later with a newer driver ran clean), so ask the user before running both.
 
+**AMD Radeon (experimental, since 0.5.12 with ROCm 10):** the setup installs PyTorch 2.13 with ROCm 10.0
+(AMD's multi-architecture packages, as in ComfyUI's README) and falls back to ROCm 7.2.1 if a test
+computation on the card fails. Nothing is measured on a real Radeon yet. Do not use the `-nvfp4` ids there:
+`list_models` marks the matching versions as `recommended` and explains the others in `gpu_note` — on a
+Radeon RX 9000 with 16 GB `qwen-image-2512-fp8`, `flux3-klein-bf16`, `krea2-turbo-fp8`,
+`moss-image-sft-bf16`, `z-image`, `ltx25-distilled-int8` and `seedvr2-7b-fp8`; on other Radeons the INT8
+versions. 3D needs an NVIDIA card. Prompt expansion uses FLUX 3's W4A8 upsampler, which comfy-kitchen
+computes with its own HIP kernels on RDNA3 and RDNA4.
+
 ## Licenses — before using assets in a game you sell
 
 `list_models` returns `commercial_ok`. Critical cases:
@@ -888,6 +910,9 @@ advice; the original license text is authoritative.
 - **Timeout while starting the backend** → `GET /api/backend/log` (or `?worker=triposg`) shows
   the real reason.
 - **Job stays `queued`** → A GPU job is already running. Downloads don't block.
+- **`No access to … the repo is gated`** → The license of that Hugging Face repo is not accepted yet, or
+  with a different account than the stored token's. Retrying does not help: point the user to the
+  illustrated guide ([HUGGINGFACE.md](HUGGINGFACE.md)); the model card shows when access works.
 
 ## Getting assets into the game
 

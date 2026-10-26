@@ -95,6 +95,16 @@ enum ModelCatalog {
         ModelRegistry.TransformerVariant.variant(for: .klein4B, quantization: m.transformer)
     }
 
+    /// Hugging-Face-Repos, aus denen die Kataloge laden: FLUX.2 Klein, Z-Image, LTX-Video. Die Modellsuche sagt nur
+    /// bei genau diesen „läuft (Katalog)“, bei anderen Fassungen derselben Familie nicht.
+    static var sourceRepos: Set<String> {
+        var repos = Set(all.map { transformerVariant($0).huggingFaceRepo.lowercased() })
+        repos.formUnion(ZImageCatalog.all.map { $0.repo.lowercased() })
+        repos.insert(ZImageModel.preciseRepo.lowercased())
+        repos.insert(VideoCatalog.ltxRepo.lowercased())
+        return repos
+    }
+
     static func status(_ m: CatalogModel) -> Status {
         // Der Text-Encoder nimmt jede schon geladene Qwen3-4B-Fassung (8 Bit bevorzugt).
         let encoder = TextEncoderModelDownloader.isQwen3ModelDownloaded(variant: .qwen3_4B_4bit)

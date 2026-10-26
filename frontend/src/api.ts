@@ -94,6 +94,9 @@ export interface ModelInfo {
   lora_bases?: string[]
   trigger?: string
   source_url?: string
+  /** Gesperrte Hugging-Face-Repos des Modells und je Repo, ob der hinterlegte Token Zugriff hat. */
+  gated_repos?: string[]
+  gated_access?: Record<string, 'granted' | 'missing' | 'no_token' | 'unknown'>
 }
 
 /** Ein Treffer der Hugging-Face-Suche (GET /api/models/search). */
@@ -260,7 +263,7 @@ export interface ProblemReport {
   filename: string
   text: string
   created_at: number
-  summary: { version: string; os: string; graphics: string; driver: string; last_error: string | null; time: string }
+  summary: { version: string; os: string; graphics: string; driver: string; torch?: string; last_error: string | null; time: string }
   issues_url: string
 }
 

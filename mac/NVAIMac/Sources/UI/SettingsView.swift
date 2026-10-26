@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State private var problemText = ""
     @State private var problem: ProblemReport.Result?
     @State private var problemMessage: String?
+    @State private var assetsMessage: String?
+    @State private var relocating = false
 
     var body: some View {
         Form {
@@ -57,6 +59,29 @@ struct SettingsView: View {
                        "Each model is 5 to 11 GB. An external drive works too; the folder is then called \"models\"."))
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section(t("Erzeugte Dateien", "Generated files")) {
+                Text(state.assetsDirectory.path).textSelection(.enabled)
+                HStack {
+                    Button(t("Ordner wählen …", "Choose folder …")) {
+                        if let url = Panels.chooseFolder(t("Ordner für die erzeugten Dateien wählen",
+                                                           "Choose a folder for the generated files")) {
+                            switchAssets(to: url)
+                        }
+                    }
+                    Button(t("Im Finder zeigen", "Show in Finder")) { NSWorkspace.shared.open(state.assetsDirectory) }
+                    if state.assetsDirectory.standardizedFileURL.path != Settings.defaultAssetsDirectory.standardizedFileURL.path {
+                        Button(t("Standardordner", "Default folder")) { switchAssets(to: Settings.defaultAssetsDirectory) }
+                    }
+                }
+                .disabled(relocating || state.runningJob != nil)
+                if relocating { ProgressView().controlSize(.small) }
+                if let assetsMessage { Text(assetsMessage).font(.caption) }
+                Text(t("Bilder, Videos, Klänge und hochgeladene Bilder samt Verlauf. Beim Wechsel fragt NVAI-open, ob die "
+                       + "bisherigen Dateien mitkommen. Während ein Auftrag läuft, lässt sich der Ordner nicht wechseln.",
+                       "Images, videos, sounds and uploaded pictures, with their history. When you switch, NVAI-open asks "
+                       + "whether the existing files move along. The folder cannot change while a job is running."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(t("Problem melden", "Report a problem")) {
                 TextEditor(text: $problemText)
                     .frame(minHeight: 70)
@@ -101,6 +126,35 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { portText = String(state.port) }
+    }
+
+    /// Ablage wechseln: fragt, ob die bisherigen Dateien mitkommen (sind keine da, gleich).
+    private func switchAssets(to url: URL) {
+        Task {
+            let summary = await AssetStore.shared.summary()
+            var move = true
+            if summary.count > 0 {
+                let size = ByteCountFormatter.string(fromByteCount: summary.bytes, countStyle: .file)
+                let alert = NSAlert()
+                alert.messageText = t("Bisherige Dateien mitnehmen?", "Move the existing files?")
+                alert.informativeText = t(
+                    "\(summary.count) Dateien (\(size)) samt Verlauf in den neuen Ordner verschieben?\n\(url.path)\n\n"
+                        + "Ohne Mitnehmen bleiben sie im alten Ordner; der Verlauf zeigt dann nur, was im neuen liegt.",
+                    "Move \(summary.count) files (\(size)) with their history into the new folder?\n\(url.path)\n\n"
+                        + "Without moving they stay in the old folder; the history then shows only what is in the new one.")
+                alert.addButton(withTitle: t("Mitnehmen", "Move them"))
+                alert.addButton(withTitle: t("Im alten Ordner lassen", "Leave them"))
+                alert.addButton(withTitle: t("Abbrechen", "Cancel"))
+                switch alert.runModal() {
+                case .alertFirstButtonReturn: move = true
+                case .alertSecondButtonReturn: move = false
+                default: return
+                }
+            }
+            relocating = true
+            assetsMessage = await state.changeAssetsDirectory(url, move: move)
+            relocating = false
+        }
     }
 
     /// Fragt nach dem Ort und speichert den anonymisierten Bericht; nil, wenn abgebrochen.

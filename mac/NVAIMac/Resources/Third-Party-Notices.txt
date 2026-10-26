@@ -57,6 +57,8 @@ Components / Komponenten:
       https://github.com/jpsim/Yams
   yyjson 0.12.0: MIT License
       https://github.com/ibireme/yyjson.git
+  z-image-swift eadca87 (local copy): MIT License
+      https://github.com/xocialize/z-image-swift
   ZIPFoundation 0.9.20: MIT License
       https://github.com/weichsel/ZIPFoundation
 
@@ -2830,6 +2832,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+------------------------------------------------------------------------------
+z-image-swift eadca87 (local copy)
+MIT License
+https://github.com/xocialize/z-image-swift
+------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 Xocialize
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+The Z-Image model weights are licensed by Alibaba Tongyi under Apache-2.0;
+this MIT license covers only the Swift/MLX port code in this repository.
 
 ------------------------------------------------------------------------------
 ZIPFoundation 0.9.20

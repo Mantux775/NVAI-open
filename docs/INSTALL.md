@@ -29,7 +29,7 @@ current user only and needs no administrator rights.
 |---|---|
 | **Windows** | Windows 10 (version 2004 or later) or Windows 11, 64-bit |
 | **Graphics card** | NVIDIA, or AMD Radeon (experimental, see below); 8 GB of VRAM is workable, 12–16 GB is comfortable |
-| **Driver** | NVIDIA: 580.88 or newer (branch R580, needed by PyTorch with CUDA 13): https://www.nvidia.com/drivers. AMD: 26.2.2 or newer |
+| **Driver** | NVIDIA: 580.88 or newer (branch R580, needed by PyTorch with CUDA 13): https://www.nvidia.com/drivers. AMD: a current driver (AMD Software: Adrenalin Edition), at least 26.2.2 |
 | **Internet** | about 3 GB during setup (mostly PyTorch), plus 5–30 GB per model |
 | **Disk** | about 10 GB for the program, plus room for the models |
 
@@ -39,9 +39,18 @@ anything.
 
 ### Experimental (since 0.5): AMD Radeon and several graphics cards
 
-- **AMD Radeon:** the setup detects a Radeon (and no NVIDIA card) and installs PyTorch with
-  ROCm 7.2.1 from AMD (`locks\comfyui-amd-base.lock` plus `locks\comfyui-rocm.lock`, both with
-  hashes). Needs AMD driver 26.2.2 or newer. 3D is skipped on AMD. "Repair NVAI-open" runs the same
+- **AMD Radeon:** the setup detects a Radeon (and no NVIDIA card) and, since 0.5.12, installs PyTorch
+  2.13 with ROCm 10.0 from AMD's multi-architecture packages, as ComfyUI's README describes it:
+  `locks\comfyui-amd-base.lock`, `locks\comfyui-rocm.lock` and the kernels of the detected card
+  (`locks\comfyui-rocm-<gfx>.lock`, for example gfx1201 for a Radeon RX 9070 XT), every file with a
+  fixed address and hash. A small bf16 computation on the card then checks the result; if it fails (an
+  old driver, say), the setup falls back to PyTorch 2.9.1 with ROCm 7.2.1 (`locks\comfyui-rocm72.lock`,
+  driver 26.2.2 or newer). `install-runtime.ps1 -Rocm 10.0|7.2` forces one of them. The Radeon inside a
+  Ryzen processor is ignored when a Radeon card of its own is present. Under "Models", the filter
+  "For your GPU" shows the matching versions: on a Radeon RX 9000 with 16 GB the FP8 and bf16 versions
+  (FP8 runs in hardware there, NVFP4 does not), on other Radeons the INT8 versions. 3D is skipped on
+  AMD. Nothing is measured on a real Radeon yet: feedback in
+  [#2](https://github.com/Mantux775/NVAI-open/issues/2) helps. "Repair NVAI-open" runs the same
   detection again; `install-runtime.ps1 -Gpu amd|nvidia` forces one side.
 - **Several NVIDIA cards:** under "Models" → "Graphics cards", choose a card for image models,
   language models and 3D. Since 0.5.1 also directly in the header: click a card and tick what it
@@ -95,17 +104,22 @@ PhotoCraft**.
 
 To use NVAI-open from Claude Code, see [CLAUDE_CODE.md](CLAUDE_CODE.md).
 
-### FLUX 3 Image Klein (Hugging Face access)
+### FLUX 3 and LTX-2.5 (Hugging Face access)
 
-Black Forest Labs puts this model behind a license confirmation. You need a free account at
-https://huggingface.co:
+Black Forest Labs (FLUX 3 Image Klein) and Lightricks (LTX-2.5) put these models behind a license
+confirmation. You need a free account at https://huggingface.co:
 
-1. Accept the license at https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy.
+1. Accept the license at https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy and
+   https://huggingface.co/Lightricks/LTX-2.5.
 2. Create a token with read access at https://huggingface.co/settings/tokens.
-3. Enter the token in NVAI-open under **Models**.
+3. Enter the token in NVAI-open under **Models**, in the "Hugging Face" box.
 
-License: commercial use only below US$5 million annual revenue, and every image must be
-reviewed before it is published. Details in [MODELS.md](MODELS.md).
+Since 0.5.12 the card of each such model shows whether the stored token already has access.
+Step by step with pictures: [HUGGINGFACE.md](HUGGINGFACE.md).
+
+Licenses: FLUX 3 commercial use only below US$5 million annual revenue, and every image must be
+reviewed before it is published; LTX-2.5 free below US$10 million annual revenue. Details in
+[MODELS.md](MODELS.md).
 
 ### Models
 
@@ -283,6 +297,11 @@ listens on `127.0.0.1:8100` only; the PhotoCraft add-on and your own scripts rea
 |---|---|---|---|
 | MLX (`flux-2-swift-mlx` 3.1.0, MIT) | FLUX.2 Klein 4B, 4 bit or 8 bit (Apache-2.0) | generate, image-to-image (`denoise`), fill with a mask, up to 3 reference images | 4 bit from 8 GB, 8 bit from 24 GB |
 | Core ML (`ml-stable-diffusion`) | Stable Diffusion 1.5/2.1/SDXL as ready-made Core ML pipelines, plus hits from the model search | generate, image-to-image (with VAE encoder), negative prompt; fixed size | from 8 GB |
+| MLX (`z-image-swift`, MIT) | Z-Image Turbo, 4 bit plus 0.28 GB of bf16 layers (Apache-2.0) | text to image, 8 steps | 1 MP from 8 GB, otherwise up to 1536² |
+| MLX (own port `ltxv-swift`) | LTX-Video 2B 0.9.8 distilled (LTX-Video Open Weights License) | text or a start image to video, 24 frames per second, no sound | from 8 GB (up to 768 × 512 × 97 frames) |
+
+The model search under "Models" has "Images" and "Videos". It loads Core ML pipelines and says for every other hit
+whether it runs on this Mac: as a catalog model, not built in (yet), or too big.
 
 Measured on a Mac mini (M1, 8 GB), FLUX.2 Klein 4B, 4 bit, 4 steps:
 

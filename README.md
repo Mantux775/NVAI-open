@@ -9,22 +9,21 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.11.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-Setup-0.5.11.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.7.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.11/NVAI-open-0.4.7.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.12.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.12/NVAI-open-Setup-0.5.12.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.8.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.12/NVAI-open-0.4.8.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.11 for Windows and 0.4.7 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11))
+October 2026: NVAI-open 0.5.12 for Windows and 0.4.8 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.12))
 
-- **Restore old photos:** remove damage, colorize, sharpen; "Automatic" picks thorough or gentle by the kind of damage. On the Mac too, natively on Apple Silicon
-- **MOSS-Image:** the fourth recommended image model, lettering and layout under Apache-2.0
-- **Recommended settings:** every tab lists what was measured
-- **Preview and history:** results open full size with a click, the history loads 50 at a time
-- **Mac (0.4.7):** restoring with "Automatic", "Gentle" and sharpening (SeedVR2 3B), LoRAs for FLUX.2 Klein, music and sounds with Stable Audio 3
+- **AMD Radeon:** PyTorch with ROCm 10; the setup recognizes the card and installs its kernels, on a Radeon RX 9000 NVAI-open recommends the FP8 and bf16 versions (experimental, testers welcome)
+- **Hugging Face:** the model cards show whether the license for FLUX 3 and LTX-2.5 is accepted, with an [illustrated guide](docs/HUGGINGFACE.md)
+- **NVIDIA:** PyTorch 2.14.1 with CUDA 13.0, with the same results as before
+- **Mac (0.4.8):** Z-Image Turbo, video with LTX-Video 2B from text or a start image, a model search for images and videos that says what runs on your Mac, and your own folder for the assets
 
-Neu: **Alte Fotos restaurieren** (Schäden entfernen, einfärben, schärfen; „Automatisch“ wählt nach der Art der Schäden, auch auf dem Mac), **MOSS-Image** (Schrift und Layout unter Apache-2.0), **Empfohlene Einstellungen** in jedem Reiter, **Vorschau per Klick**, ein Verlauf, der in 50er-Schritten nachlädt, und auf dem Mac (0.4.7) Restaurieren mit „Automatisch“, „Schonend“ und Schärfen (SeedVR2 3B), LoRAs für FLUX.2 Klein sowie Musik und Klänge mit Stable Audio 3. 0.5.10 brachte Krea 2 mit Stilvorlage, 3D mit lesbarer Schrift und Video verlängern ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.10)).
+Neu: **AMD Radeon** mit ROCm 10 (das Setup erkennt die Karte und holt ihre Kernel, auf einer Radeon RX 9000 empfiehlt NVAI-open die FP8- und bf16-Fassungen; experimentell, Tester willkommen), die Modellkarten zeigen, ob die **Hugging-Face-Lizenz** für FLUX 3 und LTX-2.5 angenommen ist ([bebilderte Anleitung](docs/de/HUGGINGFACE.md)), **NVIDIA** mit PyTorch 2.14.1 und CUDA 13.0 bei gleichen Ergebnissen, und auf dem Mac (0.4.8) **Z-Image Turbo**, **Video mit LTX-Video 2B** aus Text oder einem Startbild, eine **Modellsuche** für Bilder und Videos, die sagt, was auf deinem Mac läuft, und ein eigener Ordner für die Assets. 0.5.11 brachte das Restaurieren alter Fotos und MOSS-Image ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.11)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -143,6 +142,7 @@ Every tab in NVAI-open has a **Recommended settings** box with what was measured
 - **MOSS-Image:** describe the finished picture and put the text in quotation marks with position and typeface; leave it on 50 steps.
 - **Video:** name loud sounds explicitly, sounds described as soft come out almost inaudible. For a fixed shot write "Static camera, a locked-off medium shot".
 - **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
+- **FLUX 3 and LTX-2.5:** accept the license on Hugging Face and store a read token under "Models"; the model card shows whether access works. Step by step: [docs/HUGGINGFACE.md](docs/HUGGINGFACE.md)
 - **Old photos:** leave it on "Automatic"; it chooses "Thorough" for overall aging (water stains, crack networks) and "Gentle" for separate damage on an otherwise good photo (dust, scratches, tears). Put known colors into the hints ("his suit is dark brown") and compare the two variants at full size.
 
 The same list with the measurements, written for Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance)
@@ -159,13 +159,13 @@ Then just ask: "Make a weathered wooden barrel as a 3D model and put it into Ass
 
 ### Graphics cards and uncensored models
 
-NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40 (on a slow connection such as a riser, NVFP4 where only that fits into the memory). With several cards it uses the strongest one. AMD Radeon works experimentally; testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
+NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40 (on a slow connection such as a riser, NVFP4 where only that fits into the memory). With several cards it uses the strongest one. AMD Radeon works experimentally (PyTorch with ROCm 10; on a Radeon RX 9000 the FP8 and bf16 versions); testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
 
 NVAI-open has no content filter of its own. The model list marks every model as censored, partly censored or uncensored, and uncensored ones such as Chroma, Pony and NoobAI are one click away. More, including LoRAs from Hugging Face and Civitai, under "Models" → "Search models and LoRAs". Respect the law and each model's license; the FLUX 3 license, for example, requires a review of every image before it is published. Overview: [docs/MODELS.md](docs/MODELS.md#censored-or-uncensored)
 
 ### Mac app, PhotoCraft add-on, iOS
 
-- **Mac:** a native app for Apple Silicon with FLUX.2 Klein: generate, refine, fill, reference images, expand prompts, LoRAs, restore old photos, and music and sounds with Stable Audio 3 (30 seconds in about 13 seconds on an M1).
+- **Mac:** a native app for Apple Silicon with FLUX.2 Klein and Z-Image Turbo: generate, refine, fill, reference images, expand prompts, LoRAs, restore old photos, music and sounds with Stable Audio 3 (30 seconds in about 13 seconds on an M1), and short videos with LTX-Video 2B from text or a start image (2 seconds at 768 × 512 in about 95 seconds on an M1 with 8 GB).
 - **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
@@ -319,6 +319,7 @@ In jedem Reiter von NVAI-open stehen unter **Empfohlene Einstellungen** die geme
 - **MOSS-Image:** das fertige Bild beschreiben und die Schrift in Anführungszeichen mit Ort und Schriftart angeben; bei 50 Schritten lassen.
 - **Video:** laute Geräusche ausdrücklich nennen, leise beschriebene kommen fast unhörbar. Für eine feste Einstellung „Static camera, a locked-off medium shot“ schreiben.
 - **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.
+- **FLUX 3 und LTX-2.5:** die Lizenz auf Hugging Face annehmen und unter „Modelle“ einen Token mit Leserecht eintragen; die Modellkarte zeigt, ob der Zugriff klappt. Schritt für Schritt: [docs/de/HUGGINGFACE.md](docs/de/HUGGINGFACE.md)
 - **Alte Fotos:** auf „Automatisch“ lassen; es wählt „Gründlich“ bei flächiger Alterung (Wasserflecken, Rissnetze) und „Schonend“ bei einzelnen Schäden auf einem sonst guten Foto (Staub, Kratzer, Risse). Bekannte Farben in die Hinweise („his suit is dark brown“) und die zwei Varianten in voller Größe vergleichen.
 
 Dieselbe Liste mit den Messwerten, geschrieben für Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance) (englisch)
@@ -335,13 +336,13 @@ Dann einfach sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es n
 
 ### Grafikkarten und unzensierte Modelle
 
-NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40 (an einem langsamen Anschluss wie einem Riser NVFP4, wenn nur das in den Speicher passt). Mit mehreren Karten rechnet die stärkste. AMD Radeon läuft experimentell; Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
+NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40 (an einem langsamen Anschluss wie einem Riser NVFP4, wenn nur das in den Speicher passt). Mit mehreren Karten rechnet die stärkste. AMD Radeon läuft experimentell (PyTorch mit ROCm 10; auf einer Radeon RX 9000 die FP8- und bf16-Fassungen); Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
 
 NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes Modell als zensiert, teilweise zensiert oder unzensiert, und unzensierte wie Chroma, Pony und NoobAI sind einen Klick entfernt. Weitere, auch LoRAs von Hugging Face und Civitai, unter „Modelle“ → „Modelle und LoRAs suchen“. Gesetze und die Lizenz des Modells gelten; die FLUX-3-Lizenz etwa verlangt, jedes Bild vor der Veröffentlichung zu prüfen. Überblick: [docs/de/MODELLE.md](docs/de/MODELLE.md#zensiert-oder-unzensiert)
 
 ### Mac-App, PhotoCraft-Add-on, iOS
 
-- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen, LoRAs, alte Fotos restaurieren sowie Musik und Klänge mit Stable Audio 3 (30 Sekunden in rund 13 Sekunden auf einem M1).
+- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein und Z-Image Turbo: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen, LoRAs, alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3 (30 Sekunden in rund 13 Sekunden auf einem M1) sowie kurze Videos mit LTX-Video 2B aus Text oder einem Startbild (2 Sekunden in 768 × 512 in rund 95 Sekunden auf einem M1 mit 8 GB).
 - **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 

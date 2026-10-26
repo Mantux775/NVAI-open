@@ -7,6 +7,9 @@ import SwiftUI
 enum Thumbnails {
     private static let cache = NSCache<NSString, NSImage>()
 
+    /// Nach einem Wechsel des Ablageordners: die Bilder liegen woanders, der Schlüssel (Dateiname) bliebe gleich.
+    static func clear() { cache.removeAllObjects() }
+
     static func image(for asset: AssetRecord, maxSide: Int = 320) -> NSImage? {
         let key = "\(asset.filename)#\(maxSide)" as NSString
         if let cached = cache.object(forKey: key) { return cached }

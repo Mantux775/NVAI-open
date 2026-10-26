@@ -24,7 +24,7 @@ function issueUrl(report: ProblemReport, description: string): string {
     '',
     `When / Wann: ${s.time}`,
     `NVAI-open: ${s.version} (Windows) · ${s.os}`,
-    `Graphics / Grafik: ${s.graphics} · driver ${s.driver}`,
+    `Graphics / Grafik: ${s.graphics} · driver ${s.driver}` + (s.torch ? ` · PyTorch ${s.torch}` : ''),
     s.last_error ? `Last error / Letzter Fehler:\n\`\`\`\n${s.last_error}\n\`\`\`` : '',
     '',
     `Report / Bericht: please drag \`${report.filename}\` into this box / bitte \`${report.filename}\` hier hineinziehen.`,

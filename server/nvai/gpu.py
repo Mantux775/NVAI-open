@@ -19,6 +19,8 @@ import sys
 import time
 from typing import Any
 
+from pathlib import Path
+
 from . import config
 from .i18n import t
 
@@ -99,6 +101,47 @@ def _nvidia_pcie(exe: str) -> dict[int, dict[str, Any]]:
     return info
 
 
+# AMD-Architektur (gfx-Ziel) aus dem Kartennamen; die Treiberdaten in der Registry nennen sie nicht. Danach richten
+# sich die Empfehlung (RDNA4 rechnet FP8 in Hardware, RDNA3 nicht) und die ROCm-Kernel, die install-runtime.ps1
+# laedt (dieselbe Tabelle steht dort). Quelle: ComfyUIs README (AMD unter Windows, ROCm 10) und AMDs
+# Zieltabelle (github.com/ROCm/TheRock, RELEASES.md). Reihenfolge zaehlt: das erste Muster gewinnt.
+AMD_TARGETS: list[tuple[str, str]] = [
+    (r"RX\s*9070|R9700|AI\s*PRO\s*R9", "gfx1201"),
+    (r"RX\s*9060", "gfx1200"),
+    (r"RX\s*7900|W7900|W7800", "gfx1100"),
+    (r"RX\s*7800|RX\s*7700|W7700", "gfx1101"),
+    (r"RX\s*76[05]0|W7600|W7500", "gfx1102"),
+    (r"8060S|8050S|8040S|AI\s*Max", "gfx1151"),
+    (r"890M|880M", "gfx1150"),
+    (r"780M|760M|740M", "gfx1103"),
+    (r"RX\s*69[05]0|RX\s*6800", "gfx1030"),
+    (r"RX\s*67[05]0", "gfx1031"),
+    (r"RX\s*66[05]0|RX\s*6600", "gfx1032"),
+]
+
+
+def amd_arch(name: str) -> str | None:
+    """gfx-Ziel einer Radeon nach ihrem Namen, etwa "gfx1201" fuer die RX 9070 XT; None = unbekannt."""
+    import re
+    for pattern, target in AMD_TARGETS:
+        if re.search(pattern, name or "", re.IGNORECASE):
+            return target
+    return None
+
+
+def rdna(arch: str | None) -> int | None:
+    """RDNA-Generation eines gfx-Ziels: gfx12xx = 4, gfx11xx = 3, gfx103x = 2."""
+    if not arch:
+        return None
+    if arch.startswith("gfx12"):
+        return 4
+    if arch.startswith("gfx11"):
+        return 3
+    if arch.startswith("gfx103"):
+        return 2
+    return None
+
+
 def _amd_windows() -> list[dict[str, Any]]:
     """Radeon-Karten aus der Klasse "Display" der Geraeteverwaltung.
 
@@ -146,8 +189,81 @@ def _amd_windows() -> list[dict[str, Any]]:
             total_mb = int(mem) // (1024 * 1024) if isinstance(mem, int) and mem > 0 else 0
             cards.append({"index": len(cards), "vendor": "amd", "name": desc or "AMD Radeon",
                           "vram_total_mb": total_mb, "vram_total_gb": round(total_mb / 1024, 1),
-                          "compute_cap": None, "driver": driver or None})
+                          "compute_cap": None, "driver": driver or None, "arch": amd_arch(desc)})
+    # Ryzen 7000/9000 haben eine kleine Radeon im Prozessor ("AMD Radeon(TM) Graphics", RDNA2). Steckt daneben eine
+    # eigene Karte, zählt nur sie: ComfyUI soll dort rechnen, und comfy-kitchen schaltet seine schnellen Kernel ab,
+    # sobald eine RDNA2-Karte sichtbar ist. Eine APU allein (etwa Ryzen AI Max) bleibt.
+    discrete = [c for c in cards if _is_discrete(c["name"])]
+    if discrete and len(discrete) < len(cards):
+        cards = [{**c, "index": i} for i, c in enumerate(discrete)]
     return cards
+
+
+def _is_discrete(name: str) -> bool:
+    import re
+    return bool(re.search(r"\bRX\b|\bPRO\s*W|AI\s*PRO|R9700", name or "", re.IGNORECASE))
+
+
+# HIP-Geräte, wie ROCm sie zählt (nicht unbedingt die Reihenfolge der Registry): einmal im ComfyUI-venv abgefragt
+# und mit Treiber und torch-Fassung in DATA_DIR/hip_devices.json gemerkt.
+HIP_PROBE = (
+    "import json, torch\n"
+    "out = {'torch': torch.__version__, 'hip': torch.version.hip, 'devices': []}\n"
+    "if torch.version.hip and torch.cuda.is_available():\n"
+    "    for i in range(torch.cuda.device_count()):\n"
+    "        p = torch.cuda.get_device_properties(i)\n"
+    "        out['devices'].append({'index': i, 'name': p.name, 'arch': p.gcnArchName.split(':')[0],\n"
+    "                               'total_mb': p.total_memory // (1024 * 1024)})\n"
+    "print(json.dumps(out))\n"
+)
+_hip_cache: dict[str, Any] | None = None
+
+
+def hip_devices(python: str | None = None) -> dict[str, Any] | None:
+    """{"torch", "hip", "devices": [{index, name, arch, total_mb}]} aus dem ComfyUI-venv, oder None (kein ROCm,
+    kein venv, Abfrage fehlgeschlagen). Der Import von torch mit ROCm dauert einige Sekunden; das Ergebnis gilt,
+    solange Treiber und Karten gleich bleiben."""
+    global _hip_cache
+    if vendor() != "amd" or os.getenv("NVAI_SIMULATE_AMD"):
+        return None
+    if _hip_cache is not None:
+        return _hip_cache
+    stamp = ";".join(f"{c['name']}|{c.get('driver')}" for c in _amd_windows())
+    path = config.DATA_DIR / "hip_devices.json"
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if saved.get("stamp") == stamp and saved.get("devices"):
+            _hip_cache = saved
+            return saved
+    except (OSError, ValueError):
+        pass
+    if python is None:
+        from .comfy import comfy_python
+        python = str(comfy_python())
+    if not Path(python).exists():
+        return None
+    try:
+        out = subprocess.run([python, "-c", HIP_PROBE], capture_output=True, text=True, timeout=120,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+        result = json.loads(out.strip().splitlines()[-1])
+    except (subprocess.SubprocessError, OSError, ValueError, IndexError):
+        return None
+    result["stamp"] = stamp
+    try:
+        path.write_text(json.dumps(result, indent=1), encoding="utf-8")
+    except OSError:
+        pass
+    _hip_cache = result
+    return result
+
+
+def hip_main_device() -> int | None:
+    """Die HIP-Nummer der Karte mit dem meisten Speicher (die eigene Radeon vor der integrierten), oder None."""
+    info = hip_devices()
+    devices = (info or {}).get("devices") or []
+    if not devices:
+        return None
+    return max(devices, key=lambda d: d.get("total_mb") or 0)["index"]
 
 
 def list_gpus(force: bool = False) -> list[dict[str, Any]]:
@@ -157,7 +273,7 @@ def list_gpus(force: bool = False) -> list[dict[str, Any]]:
     global _cache, _cached_at
     if not force and _cache is not None and time.time() - _cached_at < _TTL:
         return _cache
-    cards = _nvidia() or _amd_windows()
+    cards = _simulated_amd() or _nvidia() or _amd_windows()
     sim = _simulated()
     if sim and cards:
         # Testschalter: die erste Karte mehrfach melden, damit sich die Mehrkarten-Pfade
@@ -165,6 +281,24 @@ def list_gpus(force: bool = False) -> list[dict[str, Any]]:
         cards = [{**cards[0], "index": i, "name": f"{cards[0]['name']} (sim {i})"} for i in range(sim)]
     _cache, _cached_at = cards, time.time()
     return cards
+
+
+def _simulated_amd() -> list[dict[str, Any]]:
+    """Testschalter NVAI_SIMULATE_AMD="AMD Radeon RX 9070 XT:16": meldet statt der echten Karte eine Radeon
+    mit diesem Namen und Speicher in GB. Nur fuer Empfehlungen, Hinweise und Anzeige; ComfyUI rechnet weiter auf
+    der echten Karte."""
+    spec = os.getenv("NVAI_SIMULATE_AMD", "").strip()
+    if not spec:
+        return []
+    name, _, gb = spec.rpartition(":")
+    try:
+        total_mb = int(float(gb) * 1024)
+    except ValueError:
+        name, total_mb = spec, 16 * 1024
+    name = name or "AMD Radeon"
+    return [{"index": 0, "vendor": "amd", "name": name, "vram_total_mb": total_mb,
+             "vram_total_gb": round(total_mb / 1024, 1), "compute_cap": None, "driver": "simulated",
+             "arch": amd_arch(name)}]
 
 
 def _simulated() -> int:

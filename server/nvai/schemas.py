@@ -281,6 +281,7 @@ class ProblemReportSummary(BaseModel):
     os: str
     graphics: str
     driver: str
+    torch: str = "?"
     last_error: str | None = None
     time: str
 
@@ -420,6 +421,10 @@ class ModelInfo(BaseModel):
     lora_bases: list[str] = []
     trigger: str = ""
     source_url: str = ""
+    # Hugging-Face-Repos des Modells, deren Lizenz erst angenommen werden muss (catalog.GATED_REPOS), und je Repo,
+    # ob der hinterlegte Token Zugriff hat: "granted" | "missing" | "no_token" | "unknown".
+    gated_repos: list[str] = []
+    gated_access: dict[str, str] = {}
 
 
 class DownloadRequest(BaseModel):

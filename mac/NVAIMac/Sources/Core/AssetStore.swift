@@ -4,7 +4,7 @@ import Foundation
 struct AssetRecord: Codable, Sendable, Identifiable, Equatable {
     var id: String
     var jobID: String?
-    var kind: String            // image | upload
+    var kind: String            // image | upload | audio | video
     var filename: String
     var prompt: String
     var modelID: String
@@ -29,7 +29,8 @@ struct AssetRecord: Codable, Sendable, Identifiable, Equatable {
     }
 }
 
-/// Ablage unter ~/Library/Application Support/NV-AI/assets mit einer index.json.
+/// Ablage mit einer index.json, standardmäßig unter ~/Library/Application Support/NV-AI/assets (seit 0.4.8 wählbar,
+/// `Settings.assetsDirectory`).
 /// Ein Actor, weil Server-Anfragen und Aufträge gleichzeitig zugreifen.
 actor AssetStore {
     static let shared = AssetStore()
@@ -117,6 +118,22 @@ actor AssetStore {
         return record
     }
 
+    /// Ein MP4 aus dem Temp-Ordner in die Ablage verschieben (seit 0.4.8, LTX-Video).
+    func addVideo(mp4: URL, jobID: String, prompt: String, modelID: String,
+                  meta: [String: JSONValue]) throws -> AssetRecord {
+        load()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = Self.newID("ast")
+        let filename = "\(id.dropFirst(4))_nvai_video.mp4"
+        try? FileManager.default.removeItem(at: fileURL(filename))
+        try FileManager.default.moveItem(at: mp4, to: fileURL(filename))
+        let record = AssetRecord(id: id, jobID: jobID, kind: "video", filename: filename, prompt: prompt,
+                                 modelID: modelID, meta: meta, createdAt: Date().timeIntervalSince1970)
+        assets.append(record)
+        save()
+        return record
+    }
+
     func addUpload(data: Data, originalName: String) throws -> AssetRecord {
         load()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -141,5 +158,85 @@ actor AssetStore {
         assets.remove(at: index)
         save()
         return true
+    }
+
+    // MARK: Ablageordner wechseln (seit 0.4.8)
+
+    struct RelocateResult: Sendable {
+        /// Dateien, die in den neuen Ordner umgezogen sind.
+        var moved = 0
+        /// Dateien, die im alten Ordner bleiben mussten (Fehler, Name im neuen Ordner schon vergeben).
+        var failed = 0
+        /// Einträge, die im neuen Ordner schon einen Verlauf von NVAI-open hatten.
+        var merged = 0
+    }
+
+    /// Anzahl und Größe der Dateien im Verlauf – für die Rückfrage beim Ordnerwechsel.
+    func summary() -> (count: Int, bytes: Int64) {
+        load()
+        let bytes = assets.reduce(Int64(0)) { sum, record in
+            let size = (try? FileManager.default.attributesOfItem(atPath: fileURL(record.filename).path))?[.size]
+            return sum + ((size as? NSNumber)?.int64Value ?? 0)
+        }
+        return (assets.count, bytes)
+    }
+
+    /// Wechselt die Ablage. Mit `move` ziehen alle Dateien samt Verlauf um; was nicht geht, bleibt mit eigenem Verlauf
+    /// im alten Ordner. Liegt im neuen Ordner schon ein Verlauf von NVAI-open, kommen beide zusammen. Ohne `move` gilt
+    /// der neue Ordner mit seinem eigenen Verlauf (leer, wenn neu); die alten Dateien bleiben, wo sie sind.
+    func relocate(to target: URL, move: Bool) throws -> RelocateResult {
+        load()
+        let fm = FileManager.default
+        let old = directory.standardizedFileURL
+        let new = target.standardizedFileURL
+        var result = RelocateResult()
+        guard new.path != old.path else { return result }
+        try fm.createDirectory(at: new, withIntermediateDirectories: true)
+        var combined = Self.readIndex(new.appendingPathComponent("index.json"))
+            .filter { fm.fileExists(atPath: new.appendingPathComponent($0.filename).path) }
+        result.merged = combined.count
+        if move {
+            var known = Set(combined.map(\.id))
+            var stayed: [AssetRecord] = []
+            for record in assets {
+                let src = old.appendingPathComponent(record.filename)
+                let dst = new.appendingPathComponent(record.filename)
+                // Dasselbe Asset liegt schon im neuen Ordner (von Hand kopiert): das alte bleibt, wo es ist.
+                if known.contains(record.id) || fm.fileExists(atPath: dst.path) {
+                    stayed.append(record)
+                    result.failed += 1
+                    continue
+                }
+                do {
+                    try fm.moveItem(at: src, to: dst)
+                    combined.append(record)
+                    known.insert(record.id)
+                    result.moved += 1
+                } catch {
+                    stayed.append(record)
+                    result.failed += 1
+                }
+            }
+            let oldIndex = old.appendingPathComponent("index.json")
+            if stayed.isEmpty {
+                try? fm.removeItem(at: oldIndex)
+            } else {
+                Self.writeIndex(stayed, to: oldIndex)
+            }
+        }
+        combined.sort { $0.createdAt < $1.createdAt }
+        Settings.assetsDirectory = new
+        assets = combined
+        save()
+        return result
+    }
+
+    private static func readIndex(_ url: URL) -> [AssetRecord] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([AssetRecord].self, from: data)) ?? []
+    }
+
+    private static func writeIndex(_ list: [AssetRecord], to url: URL) {
+        if let data = try? JSONEncoder().encode(list) { try? data.write(to: url, options: .atomic) }
     }
 }

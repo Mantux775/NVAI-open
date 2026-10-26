@@ -2,8 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.11",
-  "x-api-version": 1
+  "version": "0.5.12"
  },
  "paths": {
   "/api/version": {
@@ -3421,6 +3420,22 @@
       "type": "string",
       "title": "Source Url",
       "default": ""
+     },
+     "gated_repos": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Gated Repos",
+      "default": []
+     },
+     "gated_access": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "type": "object",
+      "title": "Gated Access",
+      "default": {}
      }
     },
     "type": "object",

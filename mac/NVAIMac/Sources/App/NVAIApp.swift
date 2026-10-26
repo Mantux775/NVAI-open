@@ -104,6 +104,10 @@ struct StatusBar: View {
             } else {
                 Text("\(SystemInfo.chip), \(SystemInfo.memoryGB) GB").foregroundStyle(.secondary)
             }
+            // Versionsnummer wie in der Weboberfläche unter Windows (Nutzerwunsch 26.10.2026).
+            Divider().frame(height: 12)
+            Text("NVAI-open \(SystemInfo.appVersion)").foregroundStyle(.secondary)
+                .help("NVAI-open \(SystemInfo.appVersion) (Build \(SystemInfo.build))")
         }
         .font(.caption)
         .padding(.horizontal, 12)

@@ -1623,7 +1623,7 @@ VIDEO_MODELS: list[dict[str, Any]] = [
         "license": "LTX-2 Community License",
         "commercial_ok": True,
         "warning": LTX25_WARNING,
-        "best_for": "Dasselbe LTX-2.5 für RTX 20/30/40: INT8 rechnet dort in Hardware",
+        "best_for": "Dasselbe LTX-2.5 für RTX 20/30/40 (INT8 in Hardware) und AMD Radeon",
         "description": (
             "Dasselbe Modell in der INT8-Fassung, die ComfyUIs eigene LTX-2.5-Vorlagen verwenden "
             "(INT8 mit ConvRot). Für Karten ohne FP4-Einheiten gedacht: RTX 20, 30 und 40 rechnen "
@@ -2564,6 +2564,105 @@ UPSCALE_MODELS: list[dict[str, Any]] = [
 ]
 
 
+# ------------------------------------------------------------ Fassungen für AMD Radeon (seit 0.5.12)
+# NVFP4 rechnet nur RTX 50 in Hardware, auf AMD wird es Schicht für Schicht entpackt. RDNA4 (Radeon RX 9000, gfx1200/
+# gfx1201) rechnet FP8 in Hardware: ComfyUI schaltet die FP8-Wege dort ab ROCm 6.4 und torch 2.7 selbst ein, und
+# comfy-kitchen bringt eigene WMMA-Kernel mit (HIP-Backend, gfx1200/gfx1201 in seiner Zielliste). Für int8_convrot
+# berichten Nutzer auf der RX 9070 XT schwarze Bilder, die mit der fp8_scaled-Fassung verschwanden. Deshalb nimmt
+# NVAI-open auf RDNA4 die FP8-Dateien derselben Repos und bf16, wo es kein FP8 gibt und die Datei in 16 GB passt.
+# Ungetestet auf echter AMD-Hardware (hier steckt eine RTX 5060 Ti); Text-Encoder wie in den INT8-Fassungen, außer wo
+# Comfy-Org eine FP8-Datei anbietet.
+
+def _variant(models: list[dict[str, Any]], source_id: str, new_id: str, swap: dict[str, tuple[str, str]],
+             **fields: Any) -> None:
+    """Kopie von `source_id` mit anderen Dateien (`swap`: alter Dateiname → (Repo, neuer Dateiname)) direkt
+    hinter der Vorlage einfügen."""
+    import copy
+    index = next(i for i, e in enumerate(models) if e["id"] == source_id)
+    entry = copy.deepcopy(models[index])
+    for f in entry["files"]:
+        if f["file"] in swap:
+            f["repo"], f["file"] = swap[f["file"]]
+    entry.update(id=new_id, **fields)
+    models.insert(index + 1, entry)
+
+
+_AMD_NOTE = ("Auf AMD noch ungetestet (Rückmeldungen über „Problem melden“ helfen). Auf NVIDIA-Karten ist die "
+             "NVFP4- bzw. INT8-Fassung die bessere Wahl.")
+_KREA_TE_FP8 = ("Comfy-Org/Krea-2", "text_encoders/qwen3vl_4b_fp8_scaled.safetensors")
+
+_variant(
+    IMAGE_MODELS, "qwen-image-2512-int8", "qwen-image-2512-fp8",
+    {"qwen-image-2512-int8-tensorwise.safetensors":
+        ("Comfy-Org/Qwen-Image_ComfyUI", "split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors")},
+    name="Qwen-Image-2512 (FP8, für AMD Radeon)", size_gb=30.1, model_gb=20.43, vram_gb=16,
+    best_for="Qwen-Image-2512 auf AMD Radeon RX 9000 (FP8 in Hardware)",
+    description=(
+        "Dasselbe Modell wie `qwen-image-2512-nvfp4`, in Comfy-Orgs FP8-Fassung (e4m3fn, 20,4 GB). Radeon RX 9000 "
+        "(RDNA4) rechnet FP8 in Hardware; auf 16 GB lädt ComfyUI einen Teil aus dem Arbeitsspeicher nach. Prompt und "
+        "Einstellungen wie bei der NVFP4-Fassung (50 Schritte, cfg 4).\n\n" + _AMD_NOTE),
+    pros=["FP8 rechnet auf Radeon RX 9000 in Hardware", "Apache-2.0"],
+    cons=["20,4 GB: auf 16 GB lädt ComfyUI Teile nach", "Auf AMD ungetestet"],
+)
+_variant(
+    IMAGE_MODELS, "flux3-klein-int8", "flux3-klein-bf16",
+    {"diffusion_models/flux3-image-klein-int8-convrot.safetensors":
+        ("black-forest-labs/flux-3-image-klein-comfy", "diffusion_models/flux3-image-klein-bf16.safetensors"),
+     "text_encoders/qwen3vl_4b_int8_convrot.safetensors": _KREA_TE_FP8},
+    name="FLUX 3 Image Klein (bf16, für AMD Radeon)", size_gb=23.4, model_gb=11.1, vram_gb=14,
+    best_for="FLUX 3 auf AMD Radeon (bf16, passt in 16 GB)",
+    description=(
+        "Dasselbe Modell wie `flux3-klein-nvfp4`, in BFLs voller bf16-Fassung (11,1 GB). Eine FP8-Fassung gibt es "
+        "nicht; bf16 rechnet auf jeder Radeon ohne Sonderkernel und passt in 16 GB. Der Text-Encoder Qwen3-VL-4B "
+        "kommt in FP8 aus Comfy-Orgs Krea-2-Repo (dieselben Gewichte wie bei FLUX 3, mit Krea 2 geteilt), der "
+        "Upsampler wie bei der INT8-Fassung.\n\nRepo gesperrt: Lizenz auf Hugging Face annehmen und Token "
+        "hinterlegen.\n\n" + _AMD_NOTE),
+    pros=["Volle Genauigkeit, passt in 16 GB", "Keine Sonderkernel nötig"],
+    cons=["Doppelt so groß wie INT8", "Repo gesperrt: Lizenz auf Hugging Face annehmen und Token hinterlegen",
+          "Auf AMD ungetestet"],
+)
+_variant(
+    IMAGE_MODELS, "krea2-turbo-int8", "krea2-turbo-fp8",
+    {"diffusion_models/krea2_turbo_int8_convrot.safetensors":
+        ("Comfy-Org/Krea-2", "diffusion_models/krea2_turbo_fp8_scaled.safetensors"),
+     "text_encoders/qwen3vl_4b_int8_convrot.safetensors": _KREA_TE_FP8},
+    name="Krea 2 Turbo (FP8, für AMD Radeon)", size_gb=18.6, model_gb=13.14, vram_gb=16,
+    best_for="Krea 2 auf AMD Radeon RX 9000 (FP8 in Hardware)",
+    description=(
+        "Dasselbe Modell wie `krea2-turbo-nvfp4`, in Comfy-Orgs FP8-Fassung (fp8_scaled, 13,1 GB), Text-Encoder "
+        "ebenfalls in FP8. Radeon RX 9000 (RDNA4) rechnet FP8 in Hardware, und es passt in 16 GB. Prompt-Hinweise "
+        "wie bei der NVFP4-Fassung (Bildausschnitt nennen).\n\nLizenz: Krea 2 Community License — siehe "
+        "Warnhinweis.\n\n" + _AMD_NOTE),
+    pros=["FP8 rechnet auf Radeon RX 9000 in Hardware", "Passt in 16 GB"],
+    cons=["Community-Lizenz: kommerziell nur unter 1 Mio. US-$ Umsatz, Prüfpflicht, kündbar", "Auf AMD ungetestet"],
+)
+_variant(
+    IMAGE_MODELS, "moss-image-sft-int8", "moss-image-sft-bf16",
+    {"diffusion_models/moss_image_sft_int8_convrot.safetensors":
+        ("Comfy-Org/MOSS-Image", "diffusion_models/moss_image_sft_bf16.safetensors")},
+    name="MOSS-Image SFT (bf16, für AMD Radeon)", size_gb=17.75, model_gb=10.16, vram_gb=14,
+    best_for="MOSS-Image auf AMD Radeon (bf16, passt in 16 GB)",
+    description=(
+        "Dasselbe Modell wie `moss-image-sft-int8`, in Comfy-Orgs bf16-Fassung (10,2 GB): rechnet auf jeder Radeon "
+        "ohne Sonderkernel und passt in 16 GB. Schrift und Layout im Bild unter Apache-2.0; Einstellungen wie bei "
+        "der INT8-Fassung (50 Schritte, cfg 3).\n\n" + _AMD_NOTE),
+    pros=["Apache-2.0, ohne Umsatzgrenze verkaufbar", "Volle Genauigkeit, passt in 16 GB"],
+    cons=["Fast doppelt so groß wie INT8", "Auf AMD ungetestet"],
+)
+_variant(
+    UPSCALE_MODELS, "seedvr2-7b-int8", "seedvr2-7b-fp8",
+    {"diffusion_models/seedvr2_7b_int8_convrot.safetensors":
+        ("Comfy-Org/SeedVR2", "diffusion_models/seedvr2_7b_fp8_e4m3fn.safetensors")},
+    name="SeedVR2 7B (FP8, für AMD Radeon)", size_gb=8.7, model_gb=8.24, vram_gb=11,
+    best_for="Schärfen und Vergrößern auf AMD Radeon RX 9000 (FP8 in Hardware)",
+    description=(
+        "Dasselbe Modell wie `seedvr2-7b-nvfp4`, in Comfy-Orgs FP8-Fassung (e4m3fn, 8,2 GB). Radeon RX 9000 (RDNA4) "
+        "rechnet FP8 in Hardware.\n\n" + _AMD_NOTE),
+    pros=["FP8 rechnet auf Radeon RX 9000 in Hardware", "Apache-2.0"],
+    cons=["Auf AMD ungetestet"],
+)
+
+
 ALL_MODELS: list[dict[str, Any]] = (
     IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
     + UPSCALE_MODELS
@@ -2581,3 +2680,20 @@ RECOMMENDED_FP4 = ["qwen-image-2512-nvfp4", "flux3-klein-nvfp4", "krea2-turbo-nv
                    "ltx25-distilled-nvfp4", "seedvr2-7b-nvfp4"]
 RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-int8", "moss-image-sft-int8",
                      "z-image-int8", "ltx25-distilled-int8", "seedvr2-7b-int8"]
+# Radeon RX 9000 (RDNA4) ab 16 GB: FP8 in Hardware, bf16 wo es kein FP8 gibt (siehe „Fassungen für AMD Radeon“).
+# Z-Image in bf16 (12,3 GB) statt INT8; LTX-2.5 gibt es offiziell nur in bf16 (42 GB), INT8 und NVFP4 -- INT8 bleibt.
+RECOMMENDED_AMD_RDNA4 = ["qwen-image-2512-fp8", "flux3-klein-bf16", "krea2-turbo-fp8", "moss-image-sft-bf16",
+                         "z-image", "ltx25-distilled-int8", "seedvr2-7b-fp8"]
+
+# Repos, deren Lizenz auf Hugging Face erst angenommen werden muss (Stand 26.10.2026, alle mit Sofortfreigabe).
+# registry prüft je Repo, ob der hinterlegte Token Zugriff hat; die Oberfläche verlinkt die Anleitung.
+GATED_REPOS = {
+    "black-forest-labs/flux-3-image-klein-comfy",
+    "Lightricks/LTX-2.5",
+    "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+    "Lightricks/LTX-2.5-22b-LoRA-Cinemagraph",
+    "Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control",
+}
+# Bebilderte Anleitung (Konto, Lizenz annehmen, Token) im öffentlichen Repo.
+HF_GUIDE_URL = {"de": "https://github.com/Mantux775/NVAI-open/blob/main/docs/de/HUGGINGFACE.md",
+                "en": "https://github.com/Mantux775/NVAI-open/blob/main/docs/HUGGINGFACE.md"}

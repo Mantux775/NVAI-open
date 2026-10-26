@@ -103,12 +103,13 @@ struct ImageStrip: View {
                 }
             }
             .contentShape(Rectangle())
+            .onTapGesture(count: 2) { AssetActions.openWithDefaultApp(asset) }
             .onTapGesture { toggle(asset.id) }
-            .help(asset.prompt.isEmpty ? (asset.meta["original_name"]?.stringValue ?? asset.filename) : asset.prompt)
+            .help((asset.prompt.isEmpty ? (asset.meta["original_name"]?.stringValue ?? asset.filename) : asset.prompt)
+                  + "\n" + AssetActions.help(click: t("Klick: auswählen", "Click: select")))
             .contextMenu {
-                Button(t("Im Finder zeigen", "Show in Finder")) {
-                    NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(asset.filename)])
-                }
+                AssetMenuItems(asset: asset)
+                Divider()
                 Button(t("Löschen", "Delete"), role: .destructive) { remove(asset) }
             }
     }
@@ -173,6 +174,10 @@ struct PreviewSheet: View {
             }
             AssetThumbnail(asset: showOriginal ? (original ?? asset) : asset, maxSide: 1600)
                 .frame(minWidth: 640, idealWidth: 960, maxWidth: .infinity, minHeight: 420, idealHeight: 680, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { AssetActions.openWithDefaultApp(showOriginal ? (original ?? asset) : asset) }
+                .help(t("Doppelklick: mit der Standard-App öffnen", "Double-click: open with the default app"))
+                .contextMenu { AssetMenuItems(asset: showOriginal ? (original ?? asset) : asset) }
             HStack {
                 Button { step(-1) } label: { Image(systemName: "chevron.left") }
                     .keyboardShortcut(.leftArrow, modifiers: [])
@@ -190,9 +195,8 @@ struct PreviewSheet: View {
                 if let useAsReference {
                     Button(t("Als Referenz", "As reference")) { useAsReference(asset); dismiss() }
                 }
-                Button(t("Im Finder zeigen", "Show in Finder")) {
-                    NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(asset.filename)])
-                }
+                Button(t("Speicherort öffnen", "Show in Finder")) { AssetActions.revealInFinder(asset) }
+                Button(t("Mit der Standard-App öffnen", "Open with the default app")) { AssetActions.openWithDefaultApp(asset) }
                 Button(t("Schließen", "Close")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }

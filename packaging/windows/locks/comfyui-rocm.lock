@@ -1,17 +1,18 @@
-# PyTorch fuer AMD-Grafikkarten unter Windows (ROCm 7.2.1, experimentell seit NV-AI 0.5).
-# Quelle: AMDs Anleitung "PyTorch via PIP installation" (Radeon/Ryzen, Windows), Treiber 26.2.2.
-# Installiert mit --no-deps --require-hashes; die uebrigen Abhaengigkeiten stehen in comfyui-amd-base.lock.
-rocm-sdk-core @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_core-7.2.1-py3-none-win_amd64.whl \
-    --hash=sha256:f68989d48df71cbfc3cb68bf705dc37c0f56e9666feddb59a1a0f5ff7539fe1c
-rocm-sdk-devel @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_devel-7.2.1-py3-none-win_amd64.whl \
-    --hash=sha256:19e6ee67e13432b7c1e8a4077df795dcb1239546ae314700c4b4d97e5b4b8f63
-rocm-sdk-libraries-custom @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm_sdk_libraries_custom-7.2.1-py3-none-win_amd64.whl \
-    --hash=sha256:c7fe0b0731af8896093ff69e11496830d3cb6a4aed73e895c60b7cbdc200be92
-rocm @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/rocm-7.2.1.tar.gz \
-    --hash=sha256:9084902eaa69213a00a90784ad89e6e5fe73c702df0cc6cc3a70d777c7a6142b
-torch @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torch-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl \
-    --hash=sha256:e88bf270163b48f7f27f7ea3db5ffb3be4ba107301933022bcb3c6ddedfeeabb
-torchaudio @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torchaudio-2.9.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl \
-    --hash=sha256:62835605995c7812a3224733abf08e222afddb7a487c493521e613ca46e578ab
-torchvision @ https://repo.radeon.com/rocm/windows/rocm-rel-7.2.1/torchvision-0.24.1%2Brocm7.2.1-cp312-cp312-win_amd64.whl \
-    --hash=sha256:b5c34d76a2f01fb97e1e0f224bd97fc3a58ec1ee1ef2376af2d72086e9aca34c
+# PyTorch 2.13.0 mit ROCm 10.0.0 fuer AMD-Grafikkarten unter Windows (AMDs Mehrarchitektur-Pakete, wie
+# in ComfyUIs README). Erzeugt von tools\make_rocm_locks.py. Installiert mit --no-deps --require-hashes;
+# die uebrigen Abhaengigkeiten stehen in comfyui-amd-base.lock, die Kernel der Karte in
+# comfyui-rocm-<gfx>.lock.
+rocm @ https://stable.repo.amd.com/rocm/core/whl-next/rocm/rocm-10.0.0.tar.gz \
+    --hash=sha256:65b5982249612a310135f5e061b9f28909e8ad718a1ddb3f1abba92298b7216b
+rocm-bootstrap @ https://files.pythonhosted.org/packages/0c/b6/30144880b8e2bad4e9991b08352c7cec17931b5d26b1f9108192f4f17d91/rocm_bootstrap-0.3.0-py3-none-any.whl \
+    --hash=sha256:62d0160ecdd86f7132dbab9aec257cb2c96327df2592b0633aa6bb56399cc095
+rocm-sdk-core @ https://stable.repo.amd.com/rocm/core/whl-next/rocm-sdk-core/rocm_sdk_core-10.0.0-py3-none-win_amd64.whl \
+    --hash=sha256:066195cb0f7df02e6009facb17652dd992d13fae44d87652e5ab928d5b4f0851
+rocm-sdk-libraries @ https://stable.repo.amd.com/rocm/core/whl-next/rocm-sdk-libraries/rocm_sdk_libraries-10.0.0-py3-none-win_amd64.whl \
+    --hash=sha256:bfc7a1bd3b6050fb4d36d8ac2eea80d3afd70c5604a29142463d6cb890fc73bf
+torch @ https://stable.repo.amd.com/rocm/pytorch/whl-next/torch/torch-2.13.0%2Brocm10.0.0-cp312-cp312-win_amd64.whl \
+    --hash=sha256:4ff21da558065d6c28773f9053eadec4897c579e1f34f623db3825755198b164
+torchaudio @ https://stable.repo.amd.com/rocm/pytorch/whl-next/torchaudio/torchaudio-2.11.0.2%2Brocm10.0.0-cp312-cp312-win_amd64.whl \
+    --hash=sha256:25c1857654c9232474bd88da29f91979482d243a2b096e0b22381c4e6bd65cf5
+torchvision @ https://stable.repo.amd.com/rocm/pytorch/whl-next/torchvision/torchvision-0.28.0%2Brocm10.0.0-cp312-cp312-win_amd64.whl \
+    --hash=sha256:ecf20b27fba1b8e189c029be01b984f3a582053c67e5e35f27e3b83a3202b819

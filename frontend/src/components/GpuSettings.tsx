@@ -63,7 +63,8 @@ export function GpuSettings() {
       ? GPU_ROLES.map((r) => `${r.label}: GPU ${assign[r.id]}`).join(' · ')
       : t(`Alles auf ${cardName(assign.image)}`, `Everything on ${cardName(assign.image)}`))
       + (auto ? t(' · automatisch', ' · automatic') : t(' · eigene Wahl', ' · own choice'))
-    : t('AMD Radeon, experimentell', 'AMD Radeon, experimental')
+    : t('AMD Radeon, experimentell: was läuft und was nicht, bitte über „Problem melden“ sagen',
+        'AMD Radeon, experimental: please tell us via “Report a problem” what works and what does not')
 
   return (
     <section className="panel gpu-settings folder-settings">
@@ -82,11 +83,12 @@ export function GpuSettings() {
             <p className="hint small">
               {t(
                 'AMD Radeon erkannt. NVAI-open rechnet hier mit ROCm. Das ist neu und von uns noch nicht '
-                  + 'auf AMD getestet: Bildmodelle in INT8 oder FP8 sollten laufen, NVFP4-Modelle sind '
-                  + 'ein NVIDIA-Format und 3D braucht derzeit NVIDIA. ',
-                'AMD Radeon detected. NVAI-open uses ROCm here. This is new and not tested on AMD by us yet: '
-                  + 'image models in INT8 or FP8 should run, NVFP4 models are an NVIDIA format and 3D '
-                  + 'currently needs NVIDIA. ',
+                  + 'auf AMD getestet. Unter „Für deine Karte“ stehen die passenden Fassungen (auf der '
+                  + 'RX 9000 FP8 und bf16, auf älteren Karten INT8); NVFP4 ist ein NVIDIA-Format, und 3D '
+                  + 'braucht derzeit NVIDIA. ',
+                'AMD Radeon detected. NVAI-open uses ROCm here. This is new and not tested on AMD by us yet. '
+                  + '"For your GPU" lists the suitable versions (FP8 and bf16 on the RX 9000, INT8 on older '
+                  + 'cards); NVFP4 is an NVIDIA format, and 3D currently needs NVIDIA. ',
               )}
               <a href={ISSUES} target="_blank" rel="noreferrer">
                 {t('Bitte erzähl uns auf GitHub, was geht und was nicht.', 'Please tell us on GitHub what works and what does not.')}

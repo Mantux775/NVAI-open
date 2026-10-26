@@ -71,10 +71,13 @@ struct AudioRow: View {
         }
         .padding(6)
         .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.08)))
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { AssetActions.openWithDefaultApp(asset) }
+        .help(t("Doppelklick: mit der Standard-App öffnen · Rechtsklick: Speicherort öffnen",
+                "Double-click: open with the default app · Right-click: show in Finder"))
         .contextMenu {
-            Button(t("Im Finder zeigen", "Show in Finder")) {
-                NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(asset.filename)])
-            }
+            Button(playback.playingID == asset.id ? t("Anhalten", "Stop") : t("Abspielen", "Play")) { playback.toggle(asset) }
+            AssetMenuItems(asset: asset)
         }
     }
 }
@@ -95,6 +98,8 @@ struct AudioModelCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(AudioCatalog.name).font(.headline)
+                    FitBadges(fit: MacFit.of(needGB: MacFit.audioNeedGB),
+                              recommended: MacRecommendations.isRecommended(AudioCatalog.id))
                     Spacer()
                     Text(state.audioInstalled ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
                         .foregroundStyle(state.audioInstalled ? .green : .secondary)

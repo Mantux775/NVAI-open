@@ -19,6 +19,11 @@ enum ContentRating {
         return [
             "flux2-klein-4b": flux2,
             "flux2-klein-4b-q8": flux2,
+            "z-image-turbo-q4": Entry(
+                level: "partial",
+                de: "Die Datenaufbereitung vergibt NSFW-Werte (ohne genannte Schwelle); das Modell erzeugt laut vielen Berichten trotzdem Nacktheit.",
+                en: "Data preparation assigns NSFW scores (no threshold given); according to many reports the model still produces nudity.",
+                source: "https://arxiv.org/html/2511.22699"),
             "coreml-sd21-base": Entry(
                 level: "partial",
                 de: "SD 2.0 war streng gefiltert, 2.1 wurde mit gelockertem Filter nachtrainiert; etwas Nacktheit ist möglich. Apples Paket bringt keinen Safety Checker mit.",

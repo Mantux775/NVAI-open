@@ -1,8 +1,9 @@
 import Foundation
 
-/// Sucht Core-ML-Bildmodelle auf Hugging Face und prüft, ob NVAI-open sie ausführen kann.
+/// Sucht Modelle auf Hugging Face und prüft, ob NVAI-open sie ausführen kann: Core-ML-Bildmodelle lassen sich laden,
+/// MLX-Bildmodelle und Videomodelle werden eingeordnet (läuft als Katalogmodell, nicht eingebaut, zu groß).
 ///
-/// Übernommen aus ios/NVAILocal (HuggingFace.swift), auf Bildmodelle beschränkt.
+/// Übernommen aus ios/NVAILocal (HuggingFace.swift).
 /// Die API ist öffentlich: `/api/models` sucht (mit `expand[]=siblings` samt Dateiliste),
 /// `/api/models/<id>/tree` listet die Dateien mit Größe. Repos liegen als ZIP mit der
 /// kompilierten Pipeline oder als loser `compiled`-Ordner vor – beides funktioniert.
@@ -19,8 +20,26 @@ enum HuggingFace {
         let likes: Int
         /// Grobe Einordnung allein aus den Dateinamen. Genau geprüft wird beim Öffnen.
         let angebote: [Angebot]
+        var pipelineTag = ""
+        var tags: [String] = []
+        /// Für Treffer ohne Core-ML-Pipeline: ob und wie das Modell auf diesem Mac läuft.
+        var einordnung: Einordnung?
         var name: String { id.split(separator: "/").last.map(String.init) ?? id }
         var autor: String { id.split(separator: "/").first.map(String.init) ?? "" }
+        var istLora: Bool { tags.contains("lora") || id.lowercased().contains("lora") }
+
+        func eingeordnet(video: Bool) -> Treffer {
+            var kopie = self
+            kopie.einordnung = HuggingFace.einordnung(id: id, tags: tags, video: video)
+            return kopie
+        }
+    }
+
+    /// Was die Suche zeigt (Nutzerwunsch 26.10.2026: „gezielt nach Video oder Bildern suchen“).
+    enum Art: String, CaseIterable, Identifiable {
+        case bild = "image", video = "video"
+        var id: String { rawValue }
+        var titel: String { self == .bild ? t("Bilder", "Images") : t("Videos", "Videos") }
     }
 
     /// Eine Einheit, die sich als Modell laden lässt.
@@ -90,16 +109,47 @@ enum HuggingFace {
 
     // MARK: - Suche
 
-    static func suche(_ text: String) async throws -> [Treffer] {
+    /// Bilder: ladbare Core-ML-Pipelines zuerst, danach MLX-Bildmodelle mit Einordnung. Videos: Text und Bild zu
+    /// Video, jeweils mit Einordnung; was auf diesem Mac läuft, zuerst.
+    static func suche(_ text: String, art: Art = .bild) async throws -> [Treffer] {
         let frage = text.trimmingCharacters(in: .whitespaces)
-        // Bewusst ohne Tag-Filter: viele Pipelines (pcuenq, Guernika, …) tragen kein coreml-Tag.
-        // Ob etwas ladbar ist, entscheiden die Dateien.
-        var q: [URLQueryItem] = [.init(name: "search", value: frage.isEmpty ? "coreml-stable-diffusion" : frage)]
-        if !frage.isEmpty && !frage.lowercased().contains("coreml") {
-            q = [.init(name: "search", value: frage)]
+        let mitFrage: [URLQueryItem] = frage.isEmpty ? [] : [.init(name: "search", value: frage)]
+        switch art {
+        case .bild:
+            // Drei Anfragen: Viele Pipelines (pcuenq, Guernika, …) tragen kein coreml-Tag, deshalb die freie Suche;
+            // die getaggten gehen dort aber unter den 50 meistgeladenen Treffern eines Suchworts unter („realistic“
+            // fand so nichts, mit Tag 11 Pipelines). Dazu MLX-Bildmodelle, damit „flux“ oder „z-image“ etwas zeigen.
+            async let getaggt = suchanfrage(mitFrage + [.init(name: "filter", value: "coreml")])
+            async let frei = suchanfrage([.init(name: "search", value: frage.isEmpty ? "coreml-stable-diffusion" : frage)])
+            async let mlx = suchanfrage(mitFrage + [.init(name: "filter", value: "mlx"),
+                                                    .init(name: "pipeline_tag", value: "text-to-image")])
+            let a = try await getaggt
+            let b = try await frei
+            // Das coreml-Tag tragen auch Sprach- und Textmodelle mit ZIP-Paketen (Whisper stand ganz oben): nur Repos
+            // ohne Pipeline-Angabe oder mit Bild-Pipeline.
+            let coreml = vereint(a + b)
+                .filter { !$0.angebote.isEmpty && ["", "text-to-image", "image-to-image"].contains($0.pipelineTag) }
+                .sorted { $0.downloads > $1.downloads }
+            let ids = Set(coreml.map(\.id))
+            // Nur Zusatz: Scheitert diese Anfrage, bleiben die Core-ML-Treffer.
+            let andere = vereint((try? await mlx) ?? []).filter { !ids.contains($0.id) && $0.angebote.isEmpty && !$0.istLora }
+            return coreml + andere.map { $0.eingeordnet(video: false) }.sorted { $0.downloads > $1.downloads }
+        case .video:
+            async let t2v = suchanfrage(mitFrage + [.init(name: "pipeline_tag", value: "text-to-video")])
+            async let i2v = suchanfrage(mitFrage + [.init(name: "pipeline_tag", value: "image-to-video")])
+            let a = try await t2v
+            let b = try await i2v
+            // LoRAs lädt der Mac nicht; sie machten bei „wan“ und „ltx“ rund ein Drittel der Treffer aus.
+            return vereint(a + b).filter { !$0.istLora }.map { $0.eingeordnet(video: true) }.sorted {
+                ($0.einordnung?.rang ?? 9, -$0.downloads) < ($1.einordnung?.rang ?? 9, -$1.downloads)
+            }
         }
-        let treffer = try await suchanfrage(q)
-        return treffer.filter { !$0.angebote.isEmpty }.sorted { $0.downloads > $1.downloads }
+    }
+
+    /// Doppelte Treffer aus mehreren Anfragen: der erste bleibt.
+    private static func vereint(_ treffer: [Treffer]) -> [Treffer] {
+        var gesehen = Set<String>()
+        return treffer.filter { gesehen.insert($0.id).inserted }
     }
 
     private static func suchanfrage(_ zusatz: [URLQueryItem]) async throws -> [Treffer] {
@@ -111,6 +161,8 @@ enum HuggingFace {
             .init(name: "expand[]", value: "siblings"),
             .init(name: "expand[]", value: "downloads"),
             .init(name: "expand[]", value: "likes"),
+            .init(name: "expand[]", value: "pipeline_tag"),
+            .init(name: "expand[]", value: "tags"),
         ]
         let (daten, antwort) = try await URLSession.shared.data(from: teile.url!)
         try pruefeAntwort(antwort)
@@ -119,8 +171,106 @@ enum HuggingFace {
             guard let id = e["id"] as? String else { return nil }
             let pfade = (e["siblings"] as? [[String: Any]] ?? []).compactMap { $0["rfilename"] as? String }
             return Treffer(id: id, downloads: e["downloads"] as? Int ?? 0, likes: e["likes"] as? Int ?? 0,
-                           angebote: angebote(repo: id, pfade: pfade))
+                           angebote: angebote(repo: id, pfade: pfade),
+                           pipelineTag: e["pipeline_tag"] as? String ?? "", tags: e["tags"] as? [String] ?? [])
         }
+    }
+
+    // MARK: - Einordnen ohne Core-ML-Pipeline
+
+    /// Was ein Treffer ohne Core-ML-Pipeline für diesen Mac bedeutet, wie die Hinweise der Windows-Suche: Die Familie
+    /// läuft als Katalogmodell, ist (noch) nicht eingebaut oder braucht mehr Arbeitsspeicher. Nur nach Name und Tags
+    /// (die Tags nennen auch das Basismodell, so werden Quantisierungen und Ableger erkannt).
+    struct Einordnung: Hashable {
+        /// katalog: genau das Repo, aus dem ein Katalogmodell lädt; familie: andere Fassung derselben Familie.
+        enum Stand: Hashable { case katalog, familie, nicht, zuGross }
+        let stand: Stand
+        let text: String
+        /// Sortierung: was hier läuft, zuerst; der Rest gemeinsam nach Downloads (sonst standen die LTX-2-Modelle
+        /// bei „ltx-2“ hinter allem anderen).
+        var rang: Int {
+            switch stand {
+            case .katalog: return 0
+            case .familie: return 1
+            case .nicht, .zuGross: return 2
+            }
+        }
+    }
+
+    /// Familie eines Katalogmodells: läuft, wenn es genau dessen Repo ist, sonst nur der Hinweis auf den Katalog.
+    private static func katalogFamilie(_ id: String, name: String, wo: (de: String, en: String)) -> Einordnung {
+        if ModelCatalog.sourceRepos.contains(id.lowercased()) {
+            return Einordnung(stand: .katalog, text: t(
+                "Läuft: Aus diesem Repo lädt NVAI-open \(name), unter „Modelle“\(wo.de).",
+                "Runs: NVAI-open downloads \(name) from this repository, under \"Models\"\(wo.en)."))
+        }
+        return Einordnung(stand: .familie, text: t(
+            "Gleiche Familie wie \(name) im Katalog (unter „Modelle“\(wo.de)). Diese Fassung (andere Version, "
+                + "Quantisierung oder Ableger) lädt NVAI-open für Mac nicht.",
+            "Same family as \(name) in the catalog (under \"Models\"\(wo.en)). NVAI-open for Mac does not load this "
+                + "version (another release, quantization or derivative)."))
+    }
+
+    static func einordnung(id: String, tags: [String], video: Bool) -> Einordnung {
+        let n = ([id] + tags).joined(separator: " ").lowercased()
+        func hat(_ teile: String...) -> Bool { teile.contains { n.contains($0) } }
+        // LoRAs zuerst (die Suche blendet sie aus; für die Schnittstelle bleibt die Einordnung): Ihre Tags nennen das
+        // Basismodell, LTX-2.3-LoRAs liefen sonst unter LTX-Video.
+        if tags.contains("lora") || id.lowercased().contains("lora") {
+            return Einordnung(stand: .nicht, text: t(
+                "LoRA (Zusatz zu einem Modell): lädt NVAI-open für Mac aus der Suche nicht.",
+                "LoRA (an add-on for a model): NVAI-open for Mac does not load it from the search."))
+        }
+        if hat("ltx-2", "ltx2", "ltx_2") {
+            return Einordnung(stand: SystemInfo.memoryGB >= 32 ? .nicht : .zuGross, text: t(
+                "LTX-2 (2.3, 2.5) mit Ton braucht ab 32 GB Arbeitsspeicher und ist in NVAI-open für Mac noch nicht "
+                    + "eingebaut. Die Windows-Fassung rechnet LTX-2.5.",
+                "LTX-2 (2.3, 2.5) with sound needs 32 GB of memory or more and is not built into NVAI-open for Mac "
+                    + "yet. The Windows version runs LTX-2.5."))
+        }
+        if hat("ltx-video", "ltxv", "ltx_video") {
+            if hat("13b") {
+                return Einordnung(stand: .nicht, text: t(
+                    "LTX-Video 13B ist in NVAI-open für Mac noch nicht eingebaut. Auf dem Mac läuft LTX-Video 2B (Katalog).",
+                    "LTX-Video 13B is not built into NVAI-open for Mac yet. On the Mac, LTX-Video 2B runs (catalog)."))
+            }
+            return katalogFamilie(id, name: "LTX-Video 2B (0.9.8 distilled)", wo: (" bei Video", " in Video"))
+        }
+        if hat("wan2", "wan-2", "wan_2") {
+            return Einordnung(stand: .nicht, text: hat("1.3b", "1_3b")
+                ? t("Wan 2.1 1.3B ist für NVAI-open für Mac geplant, aber noch nicht eingebaut.",
+                    "Wan 2.1 1.3B is planned for NVAI-open for Mac but not built in yet.")
+                : t("Wan (5B, 14B) ist in NVAI-open für Mac nicht eingebaut.",
+                    "Wan (5B, 14B) is not built into NVAI-open for Mac."))
+        }
+        if hat("qwen-image", "qwen_image") {
+            return Einordnung(stand: .nicht, text: t(
+                "Qwen-Image (20 Mrd. Parameter) ist in NVAI-open für Mac nicht eingebaut.",
+                "Qwen-Image (20 billion parameters) is not built into NVAI-open for Mac."))
+        }
+        if hat("flux.2-klein", "flux-2-klein", "flux2-klein") {
+            if hat("9b") {
+                return Einordnung(stand: .nicht, text: t(
+                    "FLUX.2 Klein 9B ist nicht im Mac-Katalog; dort steht FLUX.2 Klein 4B.",
+                    "FLUX.2 Klein 9B is not in the Mac catalog; it has FLUX.2 Klein 4B."))
+            }
+            return katalogFamilie(id, name: "FLUX.2 Klein 4B", wo: ("", ""))
+        }
+        if hat("z-image", "zimage", "z_image") {
+            return katalogFamilie(id, name: "Z-Image Turbo", wo: ("", ""))
+        }
+        if hat("flux.1", "flux-1", "flux1") {
+            return Einordnung(stand: .nicht, text: t(
+                "FLUX.1 ist in NVAI-open für Mac nicht eingebaut; FLUX.2 Klein steht im Katalog.",
+                "FLUX.1 is not built into NVAI-open for Mac; FLUX.2 Klein is in the catalog."))
+        }
+        return Einordnung(stand: .nicht, text: video
+            ? t("Diese Videomodell-Familie ist in NVAI-open für Mac nicht eingebaut. Auf dem Mac läuft LTX-Video 2B (Katalog).",
+                "This video model family is not built into NVAI-open for Mac. On the Mac, LTX-Video 2B runs (catalog).")
+            : t("Dieses Format lädt NVAI-open für Mac nicht. Aus der Suche lassen sich Core-ML-Pipelines laden "
+                    + "(Stable Diffusion 1.5, 2 und XL).",
+                "NVAI-open for Mac cannot load this format. From the search it loads Core ML pipelines "
+                    + "(Stable Diffusion 1.5, 2 and XL)."))
     }
 
     // MARK: - Dateien eines Repos

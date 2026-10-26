@@ -8,6 +8,7 @@ import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
 import { CivitaiSearch } from './CivitaiSearch'
 import { HfToken } from './HfToken'
+import { GatedNotice } from '../components/GatedNotice'
 
 interface Props {
   event: ServerEvent | null
@@ -447,6 +448,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                   <p className="muted small">{t('Trigger', 'Trigger')}: <code>{m.trigger}</code></p>
                 )}
                 {m.gpu_note && <p className="warn-text small">{m.gpu_note}</p>}
+                <GatedNotice model={m} onRecheck={load} />
                 <p className="muted small">
                   {t(
                     `${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · ${m.files.length} Datei`

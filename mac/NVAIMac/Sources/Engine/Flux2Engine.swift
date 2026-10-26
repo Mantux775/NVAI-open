@@ -93,11 +93,16 @@ actor Flux2Engine {
     /// „Prompt ausbauen“: Qwen3-4B, der Text-Encoder von FLUX.2 Klein, schreibt aus ein paar Worten
     /// eine volle Bildbeschreibung (BFLs Systemprompt für Text zu Bild, ohne Denkmodus). Braucht keinen
     /// eigenen Download. Auf Macs bis 16 GB wird das Bildmodell vorher entladen.
-    func expand(_ prompt: String, model: CatalogModel) async throws -> String {
+    /// Für Video (seit 0.4.8) mit eigenem Systemprompt aus `PromptTargets`, danach gekürzt wie unter Windows.
+    func expand(_ prompt: String, model: CatalogModel, target: PromptTarget = .image) async throws -> String {
         if SystemInfo.memoryGB <= 16 { await unload() }
         let encoder = KleinTextEncoder(variant: .klein4B, quantization: model.encoder)
         try await encoder.load()
         defer { encoder.unload() }
+        if let system = PromptTargets.system(target) {
+            let raw = try encoder.upsamplePrompt(PromptTargets.userText(target, prompt), systemMessage: system)
+            return PromptTargets.clean(target, raw)
+        }
         var text = try encoder.upsamplePrompt(prompt).trimmingCharacters(in: .whitespacesAndNewlines)
         // Qwen3 setzt die ganze Beschreibung gern in Anführungszeichen (gemessen auf dem M1).
         // Nur dieses äußere Paar entfernen; Schrift im Bild steht laut Systemprompt in eigenen.

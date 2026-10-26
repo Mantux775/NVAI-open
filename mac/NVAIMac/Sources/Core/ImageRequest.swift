@@ -184,6 +184,22 @@ struct ImageJobRequest: Sendable {
             if negative.trimmingCharacters(in: .whitespaces).isEmpty {
                 negative = features["default_negative"] as? String ?? ""
             }
+        case .zimage(let m):
+            // Nur Text zu Bild (Bild-zu-Bild ist im Port vorhanden, aber nicht eingebaut), Turbo ohne CFG.
+            if image != nil || mask != nil || !refs.isEmpty || outpaint != nil {
+                throw APIError(422, t("„\(m.name)“ kann nur Text zu Bild (keine Ausgangs-, Referenz- oder Maskenbilder). Dafür FLUX.2 Klein wählen.",
+                                      "\"\(m.name)\" only does text to image (no start, reference or mask images). Use FLUX.2 Klein for that."))
+            }
+            if !loras.isEmpty {
+                throw APIError(422, t("LoRAs gibt es nur für FLUX.2 Klein.", "LoRAs are only available for FLUX.2 Klein."))
+            }
+            let maxPixels = ZImageCatalog.maxPixels
+            if width * height > maxPixels {
+                let mp = String(format: "%.1f", Double(maxPixels) / 1e6)
+                throw APIError(422, t("Z-Image rechnet auf diesem Mac höchstens \(mp) MP (\(width) × \(height) ist größer).",
+                                      "On this Mac Z-Image renders at most \(mp) MP (\(width) × \(height) is larger)."))
+            }
+            negative = ""
         }
 
         return ImageJobRequest(prompt: prompt, negativePrompt: negative, modelID: model.id, engine: model.engine,

@@ -365,7 +365,48 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
         source_url=entry.get("source_url", ""),
         **gpu_advice(entry),
         **content.lookup(entry["id"]),
+        **gated_info(entry, installed),
     )
+
+
+# ------------------------------------------------------------ Gesperrte Repos (seit 0.5.12)
+
+_ACCESS: dict[tuple[str, str], tuple[float, str]] = {}
+
+
+def gated_info(entry: dict[str, Any], installed: bool) -> dict[str, Any]:
+    """Gesperrte Repos der Pflichtdateien und je Repo der Zugriffsstand. Schon geladene Modelle prüft es nicht."""
+    repos = sorted({f["repo"] for f in entry.get("files", [])
+                    if not f.get("optional") and f.get("repo") in catalog.GATED_REPOS})
+    if not repos:
+        return {}
+    probe = {f["repo"]: f for f in entry["files"] if f.get("repo") in repos}
+    access = {} if installed else {r: gated_access(r, probe[r]["file"]) for r in repos}
+    return {"gated_repos": repos, "gated_access": access}
+
+
+def gated_access(repo: str, file: str) -> str:
+    """Hat der hinterlegte Token Zugriff auf `repo`? Fragt eine Datei des Repos per HEAD ab (ohne sie zu laden):
+    Weiterleitung oder 200 = "granted", 401/403 = "missing". Ohne Token "no_token", bei Netzfehlern "unknown".
+    Ergebnisse gelten 10 Minuten, fehlender Zugriff nur 20 Sekunden (die Freigabe kommt sofort nach der Zustimmung)."""
+    import hashlib
+    import httpx
+
+    token = hf_token()
+    if not token:
+        return "no_token"
+    key = (hashlib.sha256(token.encode()).hexdigest()[:16], repo)
+    hit = _ACCESS.get(key)
+    if hit and time.time() - hit[0] < (600 if hit[1] == "granted" else 20):
+        return hit[1]
+    try:
+        r = httpx.head(f"https://huggingface.co/{repo}/resolve/main/{file}",
+                       headers={"Authorization": f"Bearer {token}"}, follow_redirects=False, timeout=8)
+        state = "granted" if r.status_code < 400 else "missing" if r.status_code in (401, 403) else "unknown"
+    except httpx.HTTPError:
+        state = "unknown"
+    _ACCESS[key] = (time.time(), state)
+    return state
 
 
 def _precision(entry: dict[str, Any]) -> str | None:
@@ -463,20 +504,43 @@ def _slow_bus_swap(info: dict[str, Any]) -> dict[str, str]:
 
 
 def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
-    """AMD-Karten (ROCm, experimentell seit 0.5): dieselben Empfehlungen wie fuer
-    RTX 20/30/40, dazu Hinweise auf das, was dort sicher nicht oder ungetestet laeuft."""
+    """AMD-Karten (ROCm, experimentell seit 0.5). Radeon RX 9000 (RDNA4) ab 15 GB bekommt die FP8- bzw.
+    bf16-Fassungen (catalog.RECOMMENDED_AMD_RDNA4: FP8 rechnet dort in Hardware, NVFP4 nicht, für INT8-ConvRot
+    gibt es auf gfx1201 Berichte über schwarze Bilder); RDNA3 und kleinere Karten die INT8-Fassungen, die
+    comfy-kitchen dort mit eigenen Kernen rechnet. Ungetestet auf echter AMD-Hardware."""
     if entry.get("kind") == "3d":
         return {"recommended": False, "gpu_note": t(
             "3D braucht derzeit eine NVIDIA-Karte: TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen.",
             "3D currently needs an NVIDIA card: TripoSG and TRELLIS.2 use CUDA extensions.")}
-    note = t(f"Auf {info['name']} (ROCm) noch ungetestet -- Rückmeldungen auf GitHub helfen.",
-             f"Not tested on {info['name']} (ROCm) yet -- feedback on GitHub helps.")
-    if _precision(entry) == "nvfp4":
+    generation = gpu.rdna(info.get("arch"))
+    rdna4_large = generation == 4 and (info.get("vram_total_gb") or 0) >= 15
+    picks = catalog.RECOMMENDED_AMD_RDNA4 if rdna4_large else catalog.RECOMMENDED_OLDER
+    fmt = _precision(entry)
+    # Nur konkrete Hinweise je Modell; dass AMD noch ungetestet ist, sagt der AMD-Kasten der Modellseite einmal
+    # (Nutzer 26.10.: Hinweise „nicht zu viel, aber begleitend“; der Satz stand vorher orange auf jeder Karte).
+    note = ""
+    if fmt == "nvfp4":
         note = t("NVFP4 ist ein NVIDIA-Format: auf AMD wird es Schicht für Schicht entpackt und "
-                 "läuft deutlich langsamer, falls überhaupt. Besser die INT8- oder FP8-Fassung.",
+                 "läuft deutlich langsamer, falls überhaupt. Besser die FP8-, bf16- oder INT8-Fassung.",
                  "NVFP4 is an NVIDIA format: on AMD it is unpacked layer by layer and runs much "
-                 "slower, if at all. Better use the INT8 or FP8 version.")
-    return {"recommended": entry["id"] in catalog.RECOMMENDED_OLDER, "gpu_note": note}
+                 "slower, if at all. Better use the FP8, bf16 or INT8 version.")
+    elif fmt == "int8" and rdna4_large and entry["id"] not in picks:
+        note = t(f"Auf {info['name']} (RDNA4) empfiehlt NVAI-open die FP8- bzw. bf16-Fassung: FP8 rechnet dort in "
+                 "Hardware, und für INT8-ConvRot gibt es auf dieser Karte Berichte über schwarze Bilder.",
+                 f"On {info['name']} (RDNA4) NVAI-open recommends the FP8 or bf16 version: FP8 runs in hardware "
+                 "there, and there are reports of black images with INT8 ConvRot on this card.")
+    elif fmt == "int8" and rdna4_large:
+        # LTX-2.5 gibt es nur als NVFP4, INT8-ConvRot und bf16 (44 GB): INT8 ist hier die einzige brauchbare Fassung.
+        note = t(f"Auf {info['name']} die einzige passende Fassung. Für INT8-ConvRot gibt es auf RDNA4 Berichte über "
+                 "schwarze Bilder; bitte über „Problem melden“ sagen, ob es läuft.",
+                 f"The only suitable version on {info['name']}. There are reports of black images with INT8 ConvRot "
+                 "on RDNA4; please tell us via “Report a problem” whether it works.")
+    elif fmt == "fp8" and generation == 3:
+        note = t(f"{info['name']} (RDNA3) hat keine FP8-Einheiten: das Modell wird hochgerechnet und läuft "
+                 "langsamer. Hier ist die INT8-Fassung gedacht.",
+                 f"{info['name']} (RDNA3) has no FP8 units: the model is upcast and runs slower. The INT8 "
+                 "version is meant for this card.")
+    return {"recommended": entry["id"] in picks, "gpu_note": note}
 
 
 def list_models(kind: str | None = None) -> list[ModelInfo]:
@@ -723,10 +787,11 @@ def _download_file(f: dict[str, Any], dest: Path, label: str, base: float, span:
             raise RuntimeError(i18n.t(
                 f"Kein Zugriff auf {f['repo']}: Das Repo ist gesperrt. Auf "
                 f"https://huggingface.co/{f['repo']} die Lizenz akzeptieren (mit dem Konto, dessen "
-                "Token in NVAI-open hinterlegt ist) und erneut laden.",
+                "Token in NVAI-open hinterlegt ist) und erneut laden. Anleitung mit Bildern: "
+                f"{catalog.HF_GUIDE_URL['de']}",
                 f"No access to {f['repo']}: the repo is gated. Accept the license on "
                 f"https://huggingface.co/{f['repo']} (with the account whose token is stored in "
-                "NVAI-open) and download again.")) from exc
+                f"NVAI-open) and download again. Illustrated guide: {catalog.HF_GUIDE_URL['en']}")) from exc
         raise
     # Repos mit Unterordnern (split_files/...) landen verschachtelt -> flach ziehen,
     # damit ComfyUI die Datei in models/<target>/ findet.

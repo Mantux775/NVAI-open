@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LTXV
 
 /// Startet Server und Dienste beim Programmstart – unabhängig davon, ob ein Fenster erscheint.
 /// Die PhotoCraft-App öffnet NVAI-open im Hintergrund (activates=false) und wartet auf /api/version.
@@ -28,13 +29,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Startoptionen für Tests ohne Bildschirm (wie bei der PhotoCraft-App):
 ///
-///     NVAI-open --snapshot <png> [--tab generate|restore|audio|history|models|search|settings] [--report <md>] [--quit]
+///     NVAI-open --snapshot <png> [--tab generate|restore|audio|video|history|models|search|settings] [--report <md>] [--quit]
 ///     NVAI-open --restore-kind <ordner> --kind-out <json> [--quit]
 ///     NVAI-open --sharpen <bild> --sharpen-out <png> [--sharpen-scale 2] [--quit]
 ///     NVAI-open --audio-test <prompt> --audio-out <wav> [--audio-seconds 10] [--quit]
+///     NVAI-open --ltxv-test <ordner> [--quit]
+///     NVAI-open --ltxv-i2v-test <ordner> [--quit]   (Startbild: Encoder und Transformer mit Bedingung)
+///     NVAI-open --video-test <prompt> --video-out <mp4> [--video-size 768x512] [--video-frames 97] [--video-seed 42]
+///               [--video-image <bild>] [--video-prep none|blur|compressed] [--video-image-noise 0.15] [--quit]
 ///
 /// `--snapshot` fotografiert das eigene Fenster (cacheDisplay, keine Bildschirmfreigabe nötig),
-/// `--tab search` öffnet dazu die Modellsuche, `--tab restore` „Generieren“ mit „Foto restaurieren“;
+/// `--tab search` öffnet dazu die Modellsuche, `--tab restore` „Generieren“ mit „Foto restaurieren“, `--tab player`
+/// den Verlauf mit dem neuesten Video im Player;
 /// `--report` schreibt den Messbericht. `--restore-kind` stellt jedem Foto (JPEG/PNG, auch in Unterordnern) die Frage
 /// von „Automatisch“ beim Restaurieren (`VisionEngine`) und schreibt Antwort, Wahl und Sekunden nach `--kind-out`.
 /// `--sharpen` schärft ein Bild mit SeedVR2 (`SeedVR2Engine`) und schreibt Zeit und Speicherspitze ins Protokoll.
@@ -55,7 +61,21 @@ enum LaunchOptions {
         let kindDir = value("--restore-kind")
         let sharpen = value("--sharpen")
         let audio = args.firstIndex(of: "--audio-test").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
-        guard snapshot != nil || report != nil || problem != nil || kindDir != nil || sharpen != nil || audio != nil else { return }
+        let ltxv = value("--ltxv-test")
+        let ltxvI2V = value("--ltxv-i2v-test")
+        let video = args.firstIndex(of: "--video-test").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
+        guard snapshot != nil || report != nil || problem != nil || kindDir != nil || sharpen != nil || audio != nil
+            || ltxv != nil || ltxvI2V != nil || video != nil else { return }
+
+        if let ltxv { await LTXVTest.run(ltxv) }
+        if let ltxvI2V { await LTXVTest.runImageToVideo(ltxvI2V) }
+        if let video, let out = value("--video-out") {
+            await videoTest(video, out: out, size: value("--video-size") ?? "768x512",
+                            frames: Int(value("--video-frames") ?? "") ?? 97, seed: UInt64(value("--video-seed") ?? "") ?? 42,
+                            image: value("--video-image"),
+                            preparation: VideoStartImage.Preparation(rawValue: value("--video-prep") ?? "") ?? .none,
+                            imageNoise: Float(value("--video-image-noise") ?? "") ?? LTXPipeline.imageNoiseScale)
+        }
 
         if let audio, let out = value("--audio-out") {
             await audioTest(audio, out: out, seconds: Double(value("--audio-seconds") ?? "") ?? 10)
@@ -89,13 +109,20 @@ enum LaunchOptions {
         }
         if let snapshot {
             let tab = value("--tab") ?? "generate"
-            AppState.shared.selectedTab = tab == "search" ? "models" : (tab == "restore" || tab == "audio") ? "generate" : tab
-            if tab == "search" { AppState.shared.showSearch = true }
+            AppState.shared.selectedTab = tab == "search" ? "models" : tab == "player" ? "history"
+                : ["restore", "audio", "video"].contains(tab) ? "generate" : tab
+            if tab == "search" {
+                AppState.shared.searchPreset = (HuggingFace.Art(rawValue: value("--search-kind") ?? "image") ?? .bild,
+                                                value("--search-query") ?? "")
+                AppState.shared.showSearch = true
+            }
             if tab == "restore" { AppState.shared.showRestore = true }
             if tab == "audio" { AppState.shared.showAudio = true }
+            if tab == "video" { AppState.shared.showVideo = true }
+            if tab == "player" { AppState.shared.snapshotPlayVideo = AppState.shared.videos.first }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
-            try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : 2_500_000_000)
-            write(snapshot, sheet: tab == "search")
+            try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : tab == "player" ? 4_000_000_000 : 2_500_000_000)
+            write(snapshot, sheet: tab == "search" || tab == "player")
         }
         if quit {
             // Mit offenem Blatt (Modellsuche) beendete terminate die App nicht (gemessen):
@@ -142,6 +169,32 @@ enum LaunchOptions {
         results["_peak_memory_mb"] = Int(sampler.stop())
         if let data = try? JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: URL(fileURLWithPath: out))
+        }
+    }
+
+    /// Prüfstand für LTX-Video: ein Clip, Zeiten je Abschnitt und Speicherspitze ins Protokoll. Mit `image` als
+    /// Startbild; `preparation` und `imageNoise` zum Vergleich der Aufbereitung.
+    private static func videoTest(_ prompt: String, out: String, size: String, frames: Int, seed: UInt64,
+                                  image: String? = nil, preparation: VideoStartImage.Preparation = .none,
+                                  imageNoise: Float = LTXPipeline.imageNoiseScale) async {
+        let parts = size.split(separator: "x").compactMap { Int($0) }
+        let w = parts.first ?? 768, h = parts.count > 1 ? parts[1] : 512
+        do {
+            let start = try image.map { try ImageFiles.load(URL(fileURLWithPath: $0)) }
+            let sampler = PeakMemorySampler()
+            sampler.start()
+            let t0 = Date()
+            let result = try await VideoEngine.shared.generate(prompt: prompt, width: w, height: h, frames: frames, seed: seed,
+                                                               startImage: start, preparation: preparation,
+                                                               imageNoiseScale: imageNoise,
+                                                               onStep: { s, n in AppLog.info("LTX-Video step \(s)/\(n)") })
+            try? FileManager.default.removeItem(atPath: out)
+            try FileManager.default.moveItem(at: result.url, to: URL(fileURLWithPath: out))
+            let parts = result.timings.sorted { $0.key < $1.key }.map { String(format: "%@ %.1f s", $0.key, $0.value) }
+            AppLog.info(String(format: "Video test: %d×%d, %d frames, total %.1f s (%@), peak %d MB", w, h, result.frames,
+                               Date().timeIntervalSince(t0), parts.joined(separator: ", "), Int(sampler.stop())))
+        } catch {
+            AppLog.error("Video test failed: \((error as? LocalizedError)?.errorDescription ?? String(describing: error))")
         }
     }
 

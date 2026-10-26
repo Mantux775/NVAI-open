@@ -1,5 +1,6 @@
 # ComfyUI-Pakete fuer AMD (ROCm): wie comfyui.lock, aber ohne torch/torchvision/torchaudio --
-# die kommen aus comfyui-rocm.lock. Erzeugt aus comfyui.lock, nicht von Hand aendern.
+# die kommen aus comfyui-rocm.lock -- und mit comfy-kitchen wie dort.
+# Erzeugt von tools\make_rocm_locks.py, nicht von Hand aendern.
 --index-url https://pypi.org/simple
 
 aiohappyeyeballs==2.7.1 \

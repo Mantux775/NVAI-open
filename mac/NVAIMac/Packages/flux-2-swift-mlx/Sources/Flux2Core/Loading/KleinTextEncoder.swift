@@ -143,6 +143,24 @@ public class KleinTextEncoder: @unchecked Sendable {
         return enhanced
     }
 
+    /// Like `upsamplePrompt`, but with a caller-defined system message (NVAI-open: prompts for video and other
+    /// targets). Same generation parameters as the image upsampling.
+    public func upsamplePrompt(_ prompt: String, systemMessage: String) throws -> String {
+        guard FluxTextEncoders.shared.isKleinLoaded else {
+            throw Flux2Error.modelNotLoaded("Klein text encoder not loaded")
+        }
+        let messages = [
+            ["role": "system", "content": systemMessage],
+            ["role": "user", "content": prompt],
+        ]
+        let result = try FluxTextEncoders.shared.chatQwen3(
+            messages: messages,
+            parameters: .balanced,
+            stream: false
+        )
+        return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // MARK: - Encoding
 
     /// Encode a text prompt to Klein embeddings

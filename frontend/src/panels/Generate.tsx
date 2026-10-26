@@ -681,6 +681,19 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [dlError, setDlError] = useState<string | null>(null)
 
   const textureNotice = () => {
+    // Auf AMD läuft 3D nicht (TripoSG und TRELLIS.2 brauchen CUDA-Erweiterungen, das Setup lässt es weg):
+    // dann keine Werbung für 16 GB TRELLIS.2, sondern ein kurzer Hinweis.
+    if (health?.gpus?.some((g) => g.vendor === 'amd') && !health.gpus.some((g) => g.vendor === 'nvidia')) {
+      return (
+        <div className="texture-note important">
+          <p>
+            <strong>{t('3D braucht derzeit eine NVIDIA-Karte.', '3D currently needs an NVIDIA card.')}</strong>{' '}
+            {t('TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen, auf AMD Radeon laufen sie nicht.',
+              'TripoSG and TRELLIS.2 use CUDA extensions; they do not run on AMD Radeon.')}
+          </p>
+        </div>
+      )
+    }
     if (!trellis) return null
     if (trellis.installed && trellis.runnable) {
       if (modelId['3d'] === trellis.id) return null

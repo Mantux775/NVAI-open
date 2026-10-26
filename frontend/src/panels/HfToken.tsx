@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { hfGuideUrl } from '../components/GatedNotice'
 import { t } from '../i18n'
 
 /**
@@ -51,22 +52,26 @@ export function HfToken() {
   return (
     <div className="panel hf-token">
       <p className="small">
+        <strong>Hugging Face: </strong>
         {t(
-          'Für FLUX 3 braucht NVAI-open einen Hugging-Face-Token: auf der ',
-          'For FLUX 3, NVAI-open needs a Hugging Face token: accept the license on the ',
+          'FLUX 3 und LTX-2.5 brauchen ein kostenloses Konto. Auf der Modellseite die Lizenz annehmen (',
+          'FLUX 3 and LTX-2.5 need a free account. Accept the license on the model page (',
         )}
-        <a
-          href="https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t('Modellseite', 'model page')}
+        <a href="https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy" target="_blank" rel="noreferrer">
+          FLUX 3
         </a>
-        {t(' die Lizenz bestätigen, dann unter ', ', then create a token with read access under ')}
+        {', '}
+        <a href="https://huggingface.co/Lightricks/LTX-2.5" target="_blank" rel="noreferrer">
+          LTX-2.5
+        </a>
+        {t('), dann unter ', '), then create a token with read access under ')}
         <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noreferrer">
-          {t('Einstellungen → Tokens', 'Settings → Tokens')}
+          {t('Einstellungen → Access Tokens', 'Settings → Access Tokens')}
         </a>
-        {t(' einen Token mit Leserecht anlegen und hier eintragen.', ' and enter it here.')}
+        {t(' einen Token mit Leserecht anlegen und hier eintragen. ', ' and enter it here. ')}
+        <a href={hfGuideUrl()} target="_blank" rel="noreferrer">
+          {t('Anleitung mit Bildern', 'Illustrated guide')}
+        </a>
       </p>
       <form
         className="hf-form"

@@ -8,7 +8,7 @@ import PhotoCraftKit
 final class AppModel {
     static let historyLimit = 20
     /// „NVAI-open für Mac“: startet beim Öffnen seinen Server auf 127.0.0.1:8100.
-    nonisolated static let nvaiMacBundleID = "com.noerr.nvai.mac"
+    nonisolated static let nvaiMacBundleID = "io.github.mantux775.nvai.mac"
     /// Für die Fehlersuche (`--snapshot … --run`) aus dem App-Delegate erreichbar.
     static weak var shared: AppModel?
 

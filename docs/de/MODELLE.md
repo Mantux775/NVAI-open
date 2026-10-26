@@ -52,6 +52,59 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 
+### Neu in NVAI-open für Mac 0.4.8
+
+**Z-Image Turbo** (Tongyi-MAI, Apache-2.0) ist das dritte Bildmodell der Mac-Fassung neben FLUX.2 Klein und Core ML:
+fotografische Bilder und Schrift, Text zu Bild, 8 Schritte, kein Negativprompt. Der Download umfasst 6,2 GB: die
+4-Bit-Fassung von mflux-community und 0,28 GB Schichten in bf16. mflux rechnet auch Ein- und Ausgabeschicht,
+Zeit- und Text-Einbettung und die Modulation auf 4 Bit herunter; auf dem Mac gab das orangestichige, verwaschene
+Bilder mit einem 16-Pixel-Raster. NVAI-open holt genau diese Schichten in bf16 aus mlx-community/Z-Image-Turbo-bf16
+(byteweise, ohne das 12,3-GB-Repo). Mit gleichem Seed kam die Kiste danach als verwittertes Holz mit Seilgriff und
+buchstabengenauer Schrift; bei 1 MP liefen die Seile durch Bohrungen.
+
+| Gemessen auf einem Mac mini M1, 8 GB | |
+|---|---|
+| 512 × 512 | 101 s, Spitze 4,6 GB |
+| 832 × 1216 (1 MP) | 399 s (acht Schritte zu je rund 48 s, Dekodieren 10 s), Spitze 5,4 GB |
+| Größtes Bild | 1 MP bei 8 GB (der Decoder rechnet in überlappenden Kacheln, ohne sichtbare Nähte), sonst 1536² |
+
+**Video mit LTX-Video 2B** (Lightricks, 0.9.8 distilled): Text oder Startbild zu Video in acht Schritten, 24 Bilder je
+Sekunde, ohne Ton, als Aufgabe „Video“ neben „Bild erzeugen“. NVAI-open rechnet es mit einem eigenen MLX-Port, der
+gegen die Referenz geprüft ist. Der Download umfasst 9,0 GB (Transformer, Decoder und Encoder aus Lightricks' Datei,
+der T5-XXL-Text-Encoder in 4 Bit); auf der Platte sind es 8,1 GB, weil der Encoder einmal in eine kleinere Form
+umgewandelt wird. Lizenz: LTX-Video Open Weights License, kostenlos unter 10 Mio. US-$ Jahresumsatz; weitergegebene
+Videos als KI-erzeugt kennzeichnen.
+
+| Gemessen auf einem Mac mini M1, 8 GB | |
+|---|---|
+| 512 × 320, 2 s (49 Bilder) | 40 s, Spitze 5,4 GB |
+| 768 × 512, 4 s (97 Bilder) | 174 s, Spitze 6,2 GB |
+| 768 × 512, 2 s (49 Bilder) mit Startbild | 91 bis 97 s (davon 1 bis 2 s fürs Bild), Spitze 6,0 GB |
+
+Bild und Bewegung passen zusammen (eine Fackel mit Funken und Kamerafahrt, eine Kiste im Regen); Schrift im Bild
+gelingt nicht.
+
+**Startbild:** Das gewählte Bild wird zum ersten Bild des Videos. Es wird mittig auf das Videoformat zugeschnitten,
+ein Bild im Hochformat stellt das Format auf Hochformat um. Im Prompt das Bild kurz beschreiben, dann Bewegung und
+Kamera. Gemessen an einer Welle an Felsen und einem gemalten Lagerfeuer: Das erste Bild trifft die Vorlage (PSNR 26,4
+bis 26,8 dB), und die Bewegung setzt ohne Sprung daran an. Lightricks zeichnet das Startbild
+zusätzlich weich und komprimiert es wie ein Videobild (H.264, CRF 29). Auf dem Mac ließ dieselbe Kompression (HEIC mit
+gleicher Abweichung) die Bewegung im Zweierschritt stocken wie ein Video mit 12 Bildern je Sekunde. NVAI-open schneidet
+deshalb nur zu und skaliert; das leichte Rauschen, das Lightricks in jedem Schritt aufs Startbild gibt, bleibt (bei der
+Welle 12 % mehr Bewegung, genauso gleichmäßig). LTX-Video vor 0.4.8 geladen? „Startbild nachrüsten“ unter „Modelle“
+holt nur den Encoder (1,4 GB). Endbild, Schleife, Ton und LoRAs bleiben LTX-2.5 in der Windows-Fassung vorbehalten.
+
+**Weitere Modelle suchen:** Die Suche unter „Modelle“ hat jetzt „Bilder“ und „Videos“. Bei Bildern findet sie die
+Core-ML-Pipelines, die NVAI-open laden kann (Stable Diffusion 1.5, 2 und XL), auch wenn sie nicht unter den 50
+meistgeladenen Treffern eines Suchworts sind: „realistic“ fand vorher keine, jetzt 11. MLX-Bildmodelle erscheinen mit
+Hinweis: FLUX.2 Klein und Z-Image Turbo laufen als Katalogmodelle, andere Fassungen und Familien lädt sie nicht. Bei
+Videos zeigt sie Text- und Bild-zu-Video-Modelle mit denselben Hinweisen: LTX-Video 2B läuft (Katalog), LTX-2.3 und
+2.5 brauchen ab 32 GB Arbeitsspeicher, Wan und die übrigen sind noch nicht eingebaut. LoRAs blendet sie aus; der Mac
+lädt sie aus der Suche nicht.
+
+Die Fußzeile zeigt jetzt die Version (NVAI-open 0.4.8).
+
+
 ### Neu in NVAI-open für Mac 0.4.7
 
 NVAI-open für Mac restauriert jetzt wie die Windows-Fassung und kann dazu LoRAs und Klänge, alles nativ auf Apple

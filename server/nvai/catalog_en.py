@@ -96,6 +96,9 @@ _LTX25_FEATURES_EN = {
 }
 
 
+_AMD_NOTE = ("Not tested on AMD yet (feedback via “Report a problem” helps). On NVIDIA cards the NVFP4 or INT8 "
+             "version is the better choice.")
+
 EN: dict[str, dict[str, Any]] = {
     # ------------------------------------------------------------ IMAGE
     "sdxl-base": {
@@ -972,7 +975,7 @@ EN: dict[str, dict[str, Any]] = {
     "ltx25-distilled-int8": {
         "name": "LTX-2.5 (INT8, distilled, with sound)",
         "warning": _LTX25_WARNING,
-        "best_for": "The same LTX-2.5 for RTX 20/30/40: INT8 is computed in hardware there",
+        "best_for": "The same LTX-2.5 for RTX 20/30/40 (INT8 in hardware) and AMD Radeon",
         "description": (
             "The same model in the INT8 version that ComfyUI's own LTX-2.5 templates use (INT8 with "
             "ConvRot). Meant for cards without FP4 units: RTX 20, 30 and 40 compute INT8 in hardware, "
@@ -1449,6 +1452,70 @@ EN: dict[str, dict[str, Any]] = {
             "Invents fine detail (skin, fabric) at strong enlargement that was not in the original",
             "Less detail than 7B according to the manufacturer",
         ],
+    },
+    # Versions for AMD Radeon (since 0.5.12), see "Fassungen für AMD Radeon" in catalog.py.
+    "qwen-image-2512-fp8": {
+        "name": "Qwen-Image-2512 (FP8, for AMD Radeon)",
+        "best_for": "Qwen-Image-2512 on AMD Radeon RX 9000 (FP8 in hardware)",
+        "description": (
+            "The same model as `qwen-image-2512-nvfp4`, in Comfy-Org's FP8 version (e4m3fn, 20.4 GB). Radeon RX 9000 "
+            "(RDNA4) computes FP8 in hardware; on 16 GB ComfyUI streams part of it from system memory. Prompts and "
+            "settings as with the NVFP4 version (50 steps, cfg 4).\n\n" + _AMD_NOTE
+        ),
+        "pros": ["FP8 runs in hardware on Radeon RX 9000", "Apache-2.0"],
+        "cons": ["20.4 GB: on 16 GB ComfyUI streams parts of it", "Not tested on AMD yet"],
+    },
+    "flux3-klein-bf16": {
+        "name": "FLUX 3 Image Klein (bf16, for AMD Radeon)",
+        "warning": FLUX3_LICENSE_WARNING,
+        "best_for": "FLUX 3 on AMD Radeon (bf16, fits into 16 GB)",
+        "features": {"prompt_hint": FLUX3_PROMPT_HINT},
+        "description": (
+            "The same model as `flux3-klein-nvfp4`, in BFL's full bf16 version (11.1 GB). There is no FP8 version; "
+            "bf16 runs on every Radeon without special kernels and fits into 16 GB. The text encoder Qwen3-VL-4B comes "
+            "in FP8 from Comfy-Org's Krea-2 repo (the same weights as for FLUX 3, shared with Krea 2), the upsampler "
+            "as in the INT8 version.\n\nGated repo: accept the license on Hugging Face and store a token.\n\n"
+            + _AMD_NOTE
+        ),
+        "pros": ["Full precision, fits into 16 GB", "No special kernels needed"],
+        "cons": ["Twice the size of INT8", "Gated repo: accept the license on Hugging Face and store a token",
+                 "Not tested on AMD yet"],
+    },
+    "krea2-turbo-fp8": {
+        "name": "Krea 2 Turbo (FP8, for AMD Radeon)",
+        "warning": KREA2_LICENSE_WARNING,
+        "best_for": "Krea 2 on AMD Radeon RX 9000 (FP8 in hardware)",
+        "features": {"prompt_hint": KREA2_PROMPT_HINT},
+        "description": (
+            "The same model as `krea2-turbo-nvfp4`, in Comfy-Org's FP8 version (fp8_scaled, 13.1 GB), the text "
+            "encoder in FP8 as well. Radeon RX 9000 (RDNA4) computes FP8 in hardware, and it fits into 16 GB. Prompt "
+            "hints as for the NVFP4 version (state the framing).\n\nLicense: Krea 2 Community License — see "
+            "warning.\n\n" + _AMD_NOTE
+        ),
+        "pros": ["FP8 runs in hardware on Radeon RX 9000", "Fits into 16 GB"],
+        "cons": [_LICENSE_CON_KREA2, "Not tested on AMD yet"],
+    },
+    "moss-image-sft-bf16": {
+        "name": "MOSS-Image SFT (bf16, for AMD Radeon)",
+        "best_for": "MOSS-Image on AMD Radeon (bf16, fits into 16 GB)",
+        "features": {"prompt_hint": MOSS_IMAGE_PROMPT_HINT},
+        "description": (
+            "The same model as `moss-image-sft-int8`, in Comfy-Org's bf16 version (10.2 GB): runs on every Radeon "
+            "without special kernels and fits into 16 GB. Text and layout in the image under Apache-2.0; settings as "
+            "with the INT8 version (50 steps, cfg 3).\n\n" + _AMD_NOTE
+        ),
+        "pros": ["Apache-2.0, can be sold without a revenue limit", "Full precision, fits into 16 GB"],
+        "cons": ["Almost twice the size of INT8", "Not tested on AMD yet"],
+    },
+    "seedvr2-7b-fp8": {
+        "name": "SeedVR2 7B (FP8, for AMD Radeon)",
+        "best_for": "Sharpening and enlarging on AMD Radeon RX 9000 (FP8 in hardware)",
+        "description": (
+            "The same model as `seedvr2-7b-nvfp4`, in Comfy-Org's FP8 version (e4m3fn, 8.2 GB). Radeon RX 9000 "
+            "(RDNA4) computes FP8 in hardware.\n\n" + _AMD_NOTE
+        ),
+        "pros": ["FP8 runs in hardware on Radeon RX 9000", "Apache-2.0"],
+        "cons": ["Not tested on AMD yet"],
     },
 }
 

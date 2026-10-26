@@ -27,10 +27,15 @@ server = MCPServer(
     "nvai",
     version="0.2.0",
     instructions=(
-        "Local asset generation on the user's own NVIDIA GPU. All generate_* tools "
+        "Local asset generation on the user's own GPU (NVIDIA; AMD Radeon experimental). "
+        "All generate_* tools "
         "block until done and return absolute file paths that can be used directly in "
         "Unity or Blender. Call health() first: it shows the backend, the active models "
-        "and the queue.\n\n"
+        "and the queue. On an AMD Radeon the -nvfp4 ids below are the wrong choice: use the "
+        "versions list_models marks as recommended (FP8 or bf16 on a Radeon RX 9000, INT8 "
+        "on other Radeons). FLUX 3 and LTX-2.5 need the license accepted on Hugging Face and "
+        "a stored token; if download_model reports 'No access ... gated', send the user to "
+        "the illustrated guide in the error message instead of retrying.\n\n"
         "IMAGE MODELS -- the four recommended ones (times measured on an RTX 5060 Ti 16 GB):\n"
         "1. qwen-image-2512-nvfp4 (Qwen-Image-2512, 50 steps, cfg 4, Apache-2.0, ~100 s "
         "at 1024x1024): for final assets, text in the image (letter-perfect) and structural "

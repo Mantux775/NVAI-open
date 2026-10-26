@@ -82,6 +82,8 @@ LOCAL = [
      "Packages/seedvr2-mlx-swift"),
     ("speech-swift (Stable Audio 3)", "cbad3be (local copy)", "https://github.com/soniqo/speech-swift",
      "Packages/stable-audio-3-swift"),
+    ("z-image-swift", "eadca87 (local copy)", "https://github.com/xocialize/z-image-swift",
+     "Packages/z-image-swift"),
 ]
 for name, version, location, folder in LOCAL:
     licenses = files_in(Path(folder), LICENSE_NAMES)

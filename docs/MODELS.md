@@ -51,6 +51,58 @@ such ("according to BFL").
 
 Without a `model_id`, NVAI-open uses the active image model.
 
+### New in NVAI-open for Mac 0.4.8
+
+**Z-Image Turbo** (Tongyi-MAI, Apache-2.0) is the third image model of the Mac version next to FLUX.2 Klein and
+Core ML: photographic images and lettering, text to image, 8 steps, no negative prompt. The download is 6.2 GB: the
+4-bit build by mflux-community plus 0.28 GB of layers in bf16. mflux also quantizes the input and output layers, the
+timestep and caption embeddings and the modulation to 4 bits, and on the Mac that gave orange, blurred images with a
+16-pixel grid. NVAI-open fetches exactly these layers in bf16 from mlx-community/Z-Image-Turbo-bf16 (by byte range,
+without the 12.3 GB repo). With the same seed the crate then came out as weathered wood with a rope handle and
+letter-perfect lettering; at 1 MP the ropes passed through drilled holes.
+
+| Measured on a Mac mini M1, 8 GB | |
+|---|---|
+| 512 × 512 | 101 s, peak 4.6 GB |
+| 832 × 1216 (1 MP) | 399 s (eight steps of about 48 s, decoding 10 s), peak 5.4 GB |
+| Largest image | 1 MP on 8 GB (the decoder works in overlapping tiles, no visible seams), 1536² otherwise |
+
+**Video with LTX-Video 2B** (Lightricks, 0.9.8 distilled): text or a start image to video in eight steps, 24 frames
+per second, no sound, in a "Video" task next to "Create image". NVAI-open runs it through its own MLX port, checked
+against the reference implementation. The download is 9.0 GB (the transformer, decoder and encoder from Lightricks'
+file, the T5-XXL text encoder in 4-bit); on disk it takes 8.1 GB, because the encoder is converted once into a
+smaller form. License: LTX-Video Open Weights License, free below US$10M annual revenue; mark distributed videos as
+AI-generated.
+
+| Measured on a Mac mini M1, 8 GB | |
+|---|---|
+| 512 × 320, 2 s (49 frames) | 40 s, peak 5.4 GB |
+| 768 × 512, 4 s (97 frames) | 174 s, peak 6.2 GB |
+| 768 × 512, 2 s (49 frames) with a start image | 91 to 97 s (1 to 2 s of it for the image), peak 6.0 GB |
+
+Picture and motion hold together (a torch with sparks and a camera push-in, a crate in the rain); lettering does not
+come out.
+
+**Start image:** the chosen picture becomes the first frame; it is center-cropped to the video size, and choosing a
+portrait picture switches to the portrait size. In the prompt, describe the picture briefly, then the motion and the
+camera. Measured with a wave on rocks and a painted campfire: the first frame matches the picture (PSNR 26.4 to
+26.8 dB), and the motion starts from it without a jump. Lightricks also blurs the start image and
+compresses it like a video frame (H.264, CRF 29). On the Mac the same compression (HEIC with the same deviation) made
+the motion stutter in pairs of frames like a 12 fps video, so NVAI-open only crops and scales; the slight noise that
+Lightricks adds to the start image in every step stays (12 % more motion with the wave, just as smooth). Downloaded
+LTX-Video before 0.4.8? "Add start image" under "Models" fetches only the encoder (1.4 GB). End image, loop, sound and
+LoRAs remain with LTX-2.5 in the Windows version.
+
+**Finding more models:** the search under "Models" now has "Images" and "Videos". For images it finds the Core ML
+pipelines NVAI-open can load (Stable Diffusion 1.5, 2 and XL) even when they are not among the 50 most downloaded
+results for a word: "realistic" found none before, now 11. MLX image models appear with a note: FLUX.2 Klein and
+Z-Image Turbo run as catalog models, other versions and families do not load. For videos it lists text-to-video and
+image-to-video models with the same notes: LTX-Video 2B runs (catalog), LTX-2.3 and 2.5 need 32 GB of memory or
+more, Wan and the others are not built in yet. LoRAs are not shown; the Mac does not load them from the search.
+
+The footer now shows the version (NVAI-open 0.4.8).
+
+
 ### New in NVAI-open for Mac 0.4.7
 
 NVAI-open for Mac now restores like the Windows version and adds LoRAs and audio, all natively on Apple Silicon

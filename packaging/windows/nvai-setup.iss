@@ -97,8 +97,10 @@ en.DirModels=Models:
 de.DirModels=Modelle:
 en.DirInside=Data and model folders must not be inside the program folder (%1).%n%nUninstalling removes the program folder; models and images should survive that. Please choose a folder outside.
 de.DirInside=Daten- und Modellordner dürfen nicht im Programmordner liegen (%1).%n%nDie Deinstallation entfernt den Programmordner; Modelle und Bilder sollen dabei erhalten bleiben. Bitte einen Ordner außerhalb wählen.
-en.NoGpu=No NVIDIA graphics card with a driver was found.%n%nNVAI-open computes on an NVIDIA card. Without one it installs, but cannot generate anything.%n%nInstall anyway?
-de.NoGpu=Es wurde keine NVIDIA-Grafikkarte mit Treiber gefunden.%n%nNVAI-open rechnet auf einer NVIDIA-Karte. Ohne sie lässt es sich installieren, erzeugt aber nichts.%n%nTrotzdem installieren?
+en.NoGpu=No NVIDIA or AMD Radeon graphics card with a driver was found.%n%nNVAI-open computes on an NVIDIA or AMD Radeon card. Without one it installs, but cannot generate anything.%n%nInstall anyway?
+de.NoGpu=Es wurde keine NVIDIA- oder AMD-Radeon-Grafikkarte mit Treiber gefunden.%n%nNVAI-open rechnet auf einer NVIDIA- oder AMD-Radeon-Karte. Ohne sie lässt es sich installieren, erzeugt aber nichts.%n%nTrotzdem installieren?
+en.AmdGpu=Found: %1%n%nNVAI-open sets up PyTorch with ROCm for AMD Radeon (experimental). It needs a current AMD driver (AMD Software: Adrenalin Edition). The models recommended for this card are marked under "Models"; 3D needs an NVIDIA card.%n%nFLUX 3 and LTX-2.5 need a free Hugging Face account and accepting their license on Hugging Face - the app links to an illustrated guide.
+de.AmdGpu=Gefunden: %1%n%nNVAI-open richtet PyTorch mit ROCm für AMD Radeon ein (experimentell). Nötig ist ein aktueller AMD-Treiber (AMD Software: Adrenalin Edition). Unter „Modelle“ sind die für diese Karte empfohlenen Modelle markiert; 3D braucht eine NVIDIA-Karte.%n%nFLUX 3 und LTX-2.5 brauchen ein kostenloses Hugging-Face-Konto und die Annahme ihrer Lizenz auf Hugging Face - die App verlinkt eine bebilderte Anleitung.
 en.OldDriver=Found: %1%n%nThe graphics driver %2 is too old. NVAI-open needs at least version %3.%nPlease update first via https://www.nvidia.com/drivers%n%nInstall anyway?
 de.OldDriver=Gefunden: %1%n%nDer Grafiktreiber %2 ist zu alt. NVAI-open braucht mindestens Version %3.%nBitte zuerst über https://www.nvidia.com/drivers aktualisieren.%n%nTrotzdem installieren?
 en.NoPhotoCraft=The add-on needs PhotoCraft (0.10.0 or newer), which is not installed here yet.%n%nOpen the download page now?
@@ -252,10 +254,36 @@ begin
   Result := (Major > {#MinDriverMajor}) or ((Major = {#MinDriverMajor}) and (Minor >= {#MinDriverMinor}));
 end;
 
+{ The Radeon to compute on (a card of its own before the Radeon inside a Ryzen processor), or ''. Asked via WMI,
+  like install-runtime.ps1 does. }
+function AmdCardName: String;
+var
+  Locator, Service, Items, Item: Variant;
+  I: Integer;
+  Name: String;
+begin
+  Result := '';
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\CIMV2');
+    Items := Service.ExecQuery('SELECT Name FROM Win32_VideoController');
+    for I := 0 to Items.Count - 1 do
+    begin
+      Item := Items.ItemIndex(I);
+      Name := Item.Name;
+      if (Pos('Radeon', Name) > 0) or (Pos('AMD', Name) > 0) then
+        if (Result = '') or (Pos(' RX ', ' ' + Name + ' ') > 0) then
+          Result := Name;
+    end;
+  except
+    Result := '';
+  end;
+end;
+
 function InitializeSetup: Boolean;
 var
   ResultCode: Integer;
-  Version: String;
+  Version, AmdName: String;
 begin
   Result := True;
   GpuLine := '';
@@ -267,7 +295,18 @@ begin
     GpuLine := '';
   end;
   if GpuLine = '' then
-    Result := SuppressibleMsgBox(CustomMessage('NoGpu'), mbConfirmation, MB_YESNO, IDYES) = IDYES
+  begin
+    { No NVIDIA card: an AMD Radeon is supported too (ROCm, install-runtime.ps1). }
+    AmdName := AmdCardName;
+    if AmdName <> '' then
+    begin
+      Log('GPU: ' + AmdName + ' (AMD, ROCm)');
+      Result := SuppressibleMsgBox(FmtMessage(CustomMessage('AmdGpu'), [AmdName]),
+        mbInformation, MB_OKCANCEL, IDOK) = IDOK;
+    end
+    else
+      Result := SuppressibleMsgBox(CustomMessage('NoGpu'), mbConfirmation, MB_YESNO, IDYES) = IDYES;
+  end
   else if not DriverOk(GpuLine, Version) then
     { A line must not start with "[" - ISCC would read it as a section tag. }
     Result := SuppressibleMsgBox(FmtMessage(CustomMessage('OldDriver'), [GpuLine, Version,

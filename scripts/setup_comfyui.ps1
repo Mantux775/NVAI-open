@@ -17,7 +17,9 @@ $py = Join-Path $comfy ".venv\Scripts\python.exe"
 # FP4-Vorteil komplett auffrisst (gemessen 5,9 statt 0,18 ms je 4096x3072-Block).
 # Braucht einen Treiber ab 580.
 Write-Host "== PyTorch (CUDA 13.0, Blackwell) ==" -ForegroundColor Cyan
-uv pip install --python $py torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+# Ohne torchaudio: ComfyUI 0.42.1 und NVAI-open importieren es nicht, und fuer cu130 gibt es es nur bis 2.11
+# (ABI passt nicht zu torch 2.14). Das Setup nimmt die getestete Fassung aus packaging/windows/locks/comfyui.lock.
+uv pip install --python $py torch torchvision --index-url https://download.pytorch.org/whl/cu130
 
 Write-Host "== ComfyUI-Requirements ==" -ForegroundColor Cyan
 uv pip install --python $py -r (Join-Path $comfy "requirements.txt")

@@ -162,6 +162,10 @@ class Backend:
             # Erst mit mehreren Karten eine feste Karte vorgeben; mit einer bleibt alles
             # wie vor 0.5. ComfyUI setzt daraus CUDA_VISIBLE_DEVICES (bzw. HIP_*).
             args += ["--cuda-device", str(gpu.device_for(self.role))]
+        elif gpu.vendor() == "amd" and (hip := gpu.hip_main_device()) is not None:
+            # Unter Windows macht ComfyUI ohne Vorgabe Gerät 0 sichtbar. Auf AMD kann das die Radeon im Prozessor
+            # sein; deshalb die HIP-Nummer der größten Karte (gpu.hip_devices fragt ROCm selbst).
+            args += ["--cuda-device", str(hip)]
         if self.key != "main":
             own = config.DATA_DIR / f"comfy-{self.key}"
             for flag, sub in (("--user-directory", "user"), ("--output-directory", "output"),

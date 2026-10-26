@@ -22,10 +22,6 @@ struct GenerateView: View {
     @State private var message: String?
     @State private var negative = ""
     @State private var guidance = 7.5
-    /// „Prompt ausbauen“: läuft gerade, und der Text davor (für „Zurücknehmen“).
-    @State private var expanding = false
-    @State private var promptBeforeExpand: String?
-    @State private var expandInfo: String?
     /// Bild erzeugen oder altes Foto restaurieren (seit 0.4.6, dieselbe Route wie POST /api/image/restore).
     @State private var formMode = FormMode.generate
     @State private var photoID: String?
@@ -42,11 +38,18 @@ struct GenerateView: View {
     /// Große Vorschau eines Ergebnisses (Klick auf ein Bild).
     @State private var preview: AssetRecord?
 
-    enum FormMode: Hashable { case generate, restore, audio }
+    enum FormMode: Hashable { case generate, restore, audio, video }
 
     /// Musik und Klänge (seit 0.4.7, Stable Audio 3 Medium).
     @State private var audioPrompt = ""
     @State private var audioSeconds = 10.0
+
+    /// Video (seit 0.4.8, LTX-Video 2B), mit Startbild als erstem Bild des Videos.
+    @State private var videoPrompt = ""
+    @State private var videoSizeIndex = 0
+    @State private var videoFrames = 97
+    @State private var videoStartID: String?
+    @AppStorage("video.model") private var videoModelID = VideoCatalog.id
 
     private var sizes: [(label: String, w: Int, h: Int)] {
         ModelCatalog.flux2Sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 1024, $0["h"] as? Int ?? 1024) }
@@ -54,6 +57,17 @@ struct GenerateView: View {
 
     private var activeModel: AnyModel? { Models.find(state.activeModelID) }
     private var isCoreML: Bool { activeModel?.engine == "coreml" }
+    /// FLUX.2 Klein (LoRAs, Füllen, Erweitern); Z-Image Turbo nimmt keine Bilder an (features.img2img = false).
+    private var isFlux: Bool { activeModel?.engine == "mlx" }
+    private var takesImages: Bool { activeModel?.features["img2img"] as? Bool ?? true }
+    /// Gemessen am Mac mini M1 mit 8 GB (26.10.2026): 512² 101 s, 832 × 1216 399 s (acht Schritte je ~48 s).
+    private var zimageDuration: String {
+        let size = sizes[min(sizeIndex, sizes.count - 1)]
+        let measured = size.w * size.h <= 512 * 512 ? t("rund 100 s", "about 100 s") : t("rund 7 min", "about 7 min")
+        return t("Dauer je Bild auf einem Mac mini M1 mit 8 GB (gemessen): \(measured).",
+                 "Time per image on a Mac mini M1 with 8 GB (measured): \(measured).")
+    }
+
     private var fixedSize: Int? {
         if case .coreml(let m) = activeModel { return m.resolution }
         return nil
@@ -81,6 +95,7 @@ struct GenerateView: View {
         steps = f["steps"] as? Int ?? 4
         guidance = f["cfg"] as? Double ?? 7.5
         if isCoreML { referenceIDs = []; maskID = nil; outpaintOn = false }
+        if !takesImages { startID = nil; referenceIDs = []; maskID = nil; outpaintOn = false }
     }
 
     var body: some View {
@@ -94,10 +109,12 @@ struct GenerateView: View {
             applyDefaults()
             if state.showRestore { formMode = .restore }
             if state.showAudio { formMode = .audio }
+            if state.showVideo { formMode = .video }
         }
         .onChange(of: state.activeModelID) { _, _ in applyDefaults() }
         .onChange(of: state.showRestore) { _, show in if show { formMode = .restore } }
         .onChange(of: state.showAudio) { _, show in if show { formMode = .audio } }
+        .onChange(of: state.showVideo) { _, show in if show { formMode = .video } }
         .sheet(item: $preview) { asset in
             let list = jobAssets.contains(asset) ? jobAssets : [asset]
             PreviewSheet(assets: list, index: list.firstIndex(of: asset) ?? 0,
@@ -122,10 +139,16 @@ struct GenerateView: View {
                     Text(t("Bild erzeugen", "Create image")).tag(FormMode.generate)
                     Text(t("Foto restaurieren", "Restore photo")).tag(FormMode.restore)
                     Text(t("Musik und Klänge", "Music and sounds")).tag(FormMode.audio)
+                    Text(t("Video", "Video")).tag(FormMode.video)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                if formMode == .restore { restoreForm } else if formMode == .audio { audioForm } else { generateForm }
+                switch formMode {
+                case .restore: restoreForm
+                case .audio: audioForm
+                case .video: videoForm
+                case .generate: generateForm
+                }
             }
             .padding(14)
         }
@@ -286,6 +309,195 @@ struct GenerateView: View {
         do {
             let request = try AudioJobRequest.parse(.object(body))
             let job = await JobQueue.shared.submitAudio(request)
+            lastJobID = job.id
+            await state.refresh()
+        } catch {
+            message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
+    // MARK: Video
+
+    private var videoSizes: [(label: String, w: Int, h: Int)] {
+        VideoCatalog.sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 768, $0["h"] as? Int ?? 512) }
+    }
+
+    private var videoSize: (label: String, w: Int, h: Int) { videoSizes[min(videoSizeIndex, videoSizes.count - 1)] }
+
+    private var videoModel: VideoCatalog.Choice {
+        VideoCatalog.choices.first { $0.id == videoModelID } ?? VideoCatalog.choices[0]
+    }
+
+    /// Startbild wählbar: nicht, wenn das Modell keines kann (ausgegraut); ungeprüft (nil) bleibt es wählbar mit
+    /// Hinweis; LTX-Video 2B braucht dafür seinen Bild-Encoder.
+    private var startImageUsable: Bool {
+        switch videoModel.startImage {
+        case false?: return false
+        case true?: return state.videoEncoderInstalled
+        case nil: return true
+        }
+    }
+
+    private var videoDownload: JobRecord? {
+        state.jobs.first { $0.downloadModelID == VideoCatalog.id && !$0.isFinished }
+    }
+
+    @ViewBuilder
+    private var videoStartBox: some View {
+        GroupBox(t("Startbild (optional)", "Start image (optional)")) {
+            VStack(alignment: .leading, spacing: 6) {
+                if videoModel.startImage == true && state.videoInstalled && !state.videoEncoderInstalled {
+                    Text(t("Das Startbild braucht den Bild-Encoder von LTX-Video: 1,4 GB Download, danach 0,46 GB auf der Platte.",
+                           "A start image needs LTX-Video's image encoder: 1.4 GB download, then 0.46 GB on disk."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let videoDownload {
+                        ProgressView(value: videoDownload.progress)
+                        Text(videoDownload.stage).font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Button(t("Startbild nachrüsten", "Add start image")) {
+                            Task {
+                                _ = await JobQueue.shared.submitVideoDownload()
+                                await state.refresh()
+                            }
+                        }
+                    }
+                }
+                strip(single($videoStartID))
+                    .disabled(!startImageUsable)
+                    .opacity(startImageUsable ? 1 : 0.4)
+                if videoModel.startImage == false {
+                    Text(t("Das gewählte Videomodell kann kein Startbild.", "The selected video model cannot take a start image."))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else if videoModel.startImage == nil {
+                    Text(t("Ob das gewählte Videomodell ein Startbild nutzt, ist ungeprüft.",
+                           "It has not been checked whether the selected video model uses a start image."))
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if videoStartID != nil && startImageUsable {
+                    Text(t("Das Bild wird mittig auf \(videoSize.w) × \(videoSize.h) zugeschnitten und ist das erste Bild des Videos. "
+                           + "Im Prompt das Bild kurz beschreiben, dann Bewegung und Kamera.",
+                           "The image is center-cropped to \(videoSize.w) × \(videoSize.h) and becomes the first frame. "
+                           + "In the prompt, describe the image briefly, then the motion and the camera."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .onChange(of: videoStartID) { _, id in
+            // Hoch- oder Querformat wie das Bild; innerhalb davon schneidet das Startbild mittig zu.
+            guard let size = pixelSize(id), size.width != size.height else { return }
+            let portrait = size.height > size.width
+            if (videoSize.h > videoSize.w) != portrait,
+               let index = videoSizes.firstIndex(where: { ($0.h > $0.w) == portrait }) {
+                videoSizeIndex = index
+            }
+        }
+    }
+
+    /// Längen, die bei diesem Format auf diesen Mac passen (`VideoJobRequest.maxVoxels`).
+    private var videoFrameChoices: [Int] {
+        VideoCatalog.frameChoices.filter { videoSize.w * videoSize.h * $0 <= VideoJobRequest.maxVoxels }
+    }
+
+    /// Gemessen am Mac mini M1 mit 8 GB (26.10.2026): 512 × 320 × 49 Bilder 40 s, 768 × 512 × 97 Bilder 174 s;
+    /// dazwischen und darüber linear nach der Zahl der Bildpunkte geschätzt.
+    private var videoDuration: String {
+        let voxels = Double(videoSize.w * videoSize.h * videoFrames)
+        let seconds = 4 + voxels * 4.45e-6
+        let measured = (videoSize.w == 512 && videoSize.h == 320 && videoFrames == 49)
+            || (videoSize.w == 768 && videoSize.h == 512 && videoFrames == 97)
+        let amount = seconds < 90 ? t("rund \(Int((seconds / 5).rounded() * 5)) s", "about \(Int((seconds / 5).rounded() * 5)) s")
+            : t("rund \(Int((seconds / 60).rounded())) min", "about \(Int((seconds / 60).rounded())) min")
+        return measured
+            ? t("Dauer auf einem Mac mini M1 mit 8 GB (gemessen): \(amount).", "Time on a Mac mini M1 with 8 GB (measured): \(amount).")
+            : t("Dauer auf einem Mac mini M1 mit 8 GB (geschätzt aus zwei Messungen): \(amount).",
+                "Time on a Mac mini M1 with 8 GB (estimated from two measurements): \(amount).")
+    }
+
+    @ViewBuilder
+    private var videoForm: some View {
+        if !state.videoInstalled {
+            Text(t("Braucht LTX-Video 2B (7,6 GB).", "Needs LTX-Video 2B (7.6 GB)."))
+                .font(.callout).foregroundStyle(.orange)
+            Button(t("Unter „Modelle“ laden …", "Download under \"Models\" …")) { state.selectedTab = "models" }
+                .buttonStyle(.link)
+        }
+        if VideoCatalog.choices.count > 1 {
+            Picker(t("Modell", "Model"), selection: $videoModelID) {
+                ForEach(VideoCatalog.choices) { Text($0.name).tag($0.id) }
+            }
+        } else {
+            LabeledContent(t("Modell", "Model"), value: videoModel.name)
+        }
+        Text(t("Beschreibung (auf Englisch)", "Description")).font(.subheadline.bold())
+        TextEditor(text: $videoPrompt)
+            .font(.body)
+            .frame(minHeight: 110)
+            .overlay(alignment: .topLeading) {
+                if videoPrompt.isEmpty {
+                    Text(verbatim: "A close-up shot of a burning torch mounted on a dark stone wall in a medieval castle "
+                         + "at night. The flame flickers and sways, casting warm orange light across the rough stone "
+                         + "blocks. Small sparks rise and fade into the darkness. The camera slowly pushes in.")
+                        .foregroundStyle(.tertiary).padding(6).allowsHitTesting(false)
+                }
+            }
+            .border(.quaternary)
+        ExpandPromptRow(text: $videoPrompt, target: .video, message: $message)
+        Text(t("Ein Absatz im Präsens: Einstellung, Ort und Licht, die Handlung mit Verben, dann die Kamera. Bewegung "
+               + "ausdrücklich beschreiben. Schrift im Bild gelingt LTX-Video 2B nicht. Ohne Ton, 24 Bilder je Sekunde.",
+               "One paragraph in the present tense: shot, setting and light, the action with verbs, then the camera. "
+               + "Describe motion explicitly. LTX-Video 2B cannot render lettering. No sound, 24 frames per second."))
+            .font(.caption).foregroundStyle(.secondary)
+        videoStartBox
+        Picker(t("Format", "Size"), selection: $videoSizeIndex) {
+            ForEach(videoSizes.indices, id: \.self) { i in Text(videoSizes[i].label).tag(i) }
+        }
+        Picker(t("Länge", "Length"), selection: $videoFrames) {
+            ForEach(videoFrameChoices, id: \.self) { f in
+                Text(String(format: t("%.0f s (%d Bilder)", "%.0f s (%d frames)"), Double(f - 1) / Double(VideoCatalog.fps), f)).tag(f)
+            }
+        }
+        .onChange(of: videoSizeIndex) { _, _ in
+            if !videoFrameChoices.contains(videoFrames) { videoFrames = videoFrameChoices.last ?? 49 }
+        }
+        Text(videoDuration).font(.caption).foregroundStyle(.secondary)
+        HStack {
+            Text("Seed")
+            TextField(t("zufällig", "random"), text: $seedText).frame(width: 140)
+        }
+        HStack {
+            Button {
+                Task { await submitVideo() }
+            } label: {
+                Text(t("Erzeugen", "Generate")).frame(minWidth: 120)
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .buttonStyle(.borderedProminent)
+            .disabled(!state.videoInstalled || videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if let job = currentJob, !job.isFinished {
+                Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
+            }
+        }
+        if let message { Text(message).foregroundStyle(.red).font(.callout) }
+        if !state.videos.isEmpty {
+            Text(t("Zuletzt erzeugt", "Recently generated")).font(.subheadline.bold()).padding(.top, 6)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 10)], spacing: 10) {
+                ForEach(state.videos.prefix(12)) { asset in VideoRow(asset: asset) }
+            }
+        }
+    }
+
+    private func submitVideo() async {
+        message = nil
+        var body: [String: JSONValue] = [
+            "prompt": .string(videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "width": .int(videoSize.w), "height": .int(videoSize.h), "frames": .int(videoFrames),
+            "fps": .int(VideoCatalog.fps), "model_id": .string(videoModel.id),
+        ]
+        if let start = videoStartID, startImageUsable { body["image_asset_id"] = .string(start) }
+        if let seed = Int(seedText.trimmingCharacters(in: .whitespaces)) { body["seed"] = .int(seed) }
+        do {
+            let request = try VideoJobRequest.parse(.object(body))
+            let job = await JobQueue.shared.submitVideo(request)
             lastJobID = job.id
             await state.refresh()
         } catch {
@@ -491,8 +703,8 @@ struct GenerateView: View {
             }
             .border(.quaternary)
         Text(hint).font(.caption).foregroundStyle(.secondary)
-        expandRow
-        if !isCoreML { loraSection }
+        ExpandPromptRow(text: $prompt, target: .image, message: $message)
+        if isFlux { loraSection }
 
         if isCoreML {
             Text(t("Negativer Prompt", "Negative prompt")).font(.subheadline.bold())
@@ -508,6 +720,9 @@ struct GenerateView: View {
             Picker(t("Format", "Size"), selection: $sizeIndex) {
                 ForEach(sizes.indices, id: \.self) { i in Text(sizes[i].label).tag(i) }
             }
+            if activeModel?.engine == "zimage" {
+                Text(zimageDuration).font(.caption).foregroundStyle(.secondary)
+            }
         }
         Stepper(t("Schritte: \(steps)", "Steps: \(steps)"), value: $steps, in: 1...60)
         HStack {
@@ -517,6 +732,7 @@ struct GenerateView: View {
             Stepper(t("Bilder: \(batch)", "Images: \(batch)"), value: $batch, in: 1...4)
         }
 
+        if takesImages {
         GroupBox(t("Ausgangsbild (optional)", "Start image (optional)")) {
             VStack(alignment: .leading, spacing: 8) {
                 strip(single($startID))
@@ -548,6 +764,7 @@ struct GenerateView: View {
                 }
             }
             .padding(4)
+        }
         }
 
         if maxReferences > 0 {
@@ -612,58 +829,6 @@ struct GenerateView: View {
             .font(.caption).foregroundStyle(.secondary)
     }
 
-    /// „✨ Prompt ausbauen“: aus ein paar Worten eine volle Bildbeschreibung, mit Zurücknehmen.
-    @ViewBuilder
-    private var expandRow: some View {
-        let canExpand = Models.expansionModel != nil
-        HStack {
-            Button {
-                Task { await expand() }
-            } label: {
-                Text(expanding ? t("Baut aus …", "Expanding …") : t("✨ Prompt ausbauen", "✨ Expand prompt"))
-            }
-            .disabled(!canExpand || expanding || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .help(t("Schreibt aus ein paar Worten eine volle Bildbeschreibung (Qwen3 aus FLUX.2 Klein). "
-                    + "Danach lesen und Erfundenes streichen.",
-                    "Turns a few words into a full image description (Qwen3 from FLUX.2 Klein). "
-                    + "Read it afterwards and delete what was invented."))
-            if expanding { ProgressView().controlSize(.small) }
-            if let before = promptBeforeExpand, !expanding {
-                Button(t("Zurück zum eigenen Prompt", "Back to my prompt")) {
-                    prompt = before
-                    promptBeforeExpand = nil
-                    expandInfo = nil
-                }
-            }
-            Spacer()
-        }
-        if !canExpand {
-            Text(t("Prompt ausbauen braucht FLUX.2 Klein (unter „Modelle“).",
-                   "Expand prompt needs FLUX.2 Klein (under \"Models\")."))
-                .font(.caption).foregroundStyle(.secondary)
-        } else if let expandInfo {
-            Text(expandInfo).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func expand() async {
-        message = nil
-        let original = prompt
-        expanding = true
-        defer { expanding = false }
-        do {
-            let result = try await JobQueue.expandAndWait(original.trimmingCharacters(in: .whitespacesAndNewlines))
-            promptBeforeExpand = original
-            prompt = result.expanded
-            let words = result.expanded.split(whereSeparator: \.isWhitespace).count
-            expandInfo = t("\(words) Wörter in \(Int(result.seconds.rounded())) s. Lesen und Erfundenes streichen.",
-                           "\(words) words in \(Int(result.seconds.rounded())) s. Read it and delete what was invented.")
-            await state.refresh()
-        } catch {
-            message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-        }
-    }
-
     // MARK: Bilder hochladen und löschen
 
     /// Dateien als Uploads ablegen (wie POST /api/upload); gibt die neuen Asset-IDs zurück.
@@ -705,7 +870,7 @@ struct GenerateView: View {
 
     private var jobAssets: [AssetRecord] {
         guard let job = currentJob else { return [] }
-        return state.images.filter { $0.jobID == job.id }
+        return (state.images + state.audios + state.videos).filter { $0.jobID == job.id }
     }
 
     private var results: some View {
@@ -721,12 +886,14 @@ struct GenerateView: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 10)], spacing: 10) {
                         ForEach(jobAssets.filter { $0.kind == "audio" }) { asset in AudioRow(asset: asset) }
-                        ForEach(jobAssets.filter { $0.kind != "audio" }) { asset in
+                        ForEach(jobAssets.filter { $0.kind == "video" }) { asset in VideoRow(asset: asset) }
+                        ForEach(jobAssets.filter { $0.kind == "image" || $0.kind == "upload" }) { asset in
                             VStack(alignment: .leading) {
                                 AssetThumbnail(asset: asset, maxSide: 720)
                                     .contentShape(Rectangle())
+                                    .onTapGesture(count: 2) { AssetActions.openWithDefaultApp(asset) }
                                     .onTapGesture { preview = asset }
-                                    .help(t("Klick: große Vorschau", "Click: large preview"))
+                                    .help(AssetActions.help(click: t("Klick: große Vorschau", "Click: large preview")))
                                 Text(details(asset)).font(.caption).foregroundStyle(.secondary)
                             }
                             .contextMenu {
@@ -735,9 +902,7 @@ struct GenerateView: View {
                                     formMode = .generate
                                     startID = asset.id
                                 }
-                                Button(t("Im Finder zeigen", "Show in Finder")) {
-                                    NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(asset.filename)])
-                                }
+                                AssetMenuItems(asset: asset)
                             }
                         }
                     }
@@ -799,7 +964,7 @@ struct GenerateView: View {
         }
         let installedLoRAs = Set(state.loras.filter(\.installed).map(\.id))
         let chosen = loraChoices.filter { installedLoRAs.contains($0.key) }.sorted { $0.key < $1.key }
-        if !isCoreML && !chosen.isEmpty {
+        if isFlux && !chosen.isEmpty {
             body["loras"] = .array(chosen.map { .object(["model_id": .string($0.key), "strength": .double($0.value)]) })
         }
         do {

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import LTXV
 
 /// Ein Auftrag – Felder wie `Job` im NVAI-open-Vertrag.
 struct JobRecord: Sendable, Identifiable {
@@ -19,9 +20,13 @@ struct JobRecord: Sendable, Identifiable {
     var restore: RestoreJobRequest?
     /// Musik oder Klang (seit 0.4.7, `POST /api/generate/audio`).
     var audio: AudioJobRequest?
+    /// Video (seit 0.4.8, `POST /api/generate/video`).
+    var video: VideoJobRequest?
     var downloadModelID: String?
     /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
     var expandPrompt: String?
+    /// Wofür ausgebaut wird (seit 0.4.8 auch Video); nil = Bild.
+    var expandTarget: PromptTarget?
     var expanded: String?
     var cancelRequested = false
     /// Sprache des Clients bzw. der App; Stufen und Fehler des Auftrags folgen ihr.
@@ -64,6 +69,7 @@ actor JobQueue {
     private var worker: Task<Void, Never>?
     /// Laufender Download als eigene Task, damit „Abbrechen“ ihn mitten in der Datei stoppen kann.
     private var downloadTask: Task<Void, Error>?
+    private var videoTask: Task<VideoEngine.Result, Error>?
     /// Die laufende FLUX.2-Rechnung. Das Paket prüft nach jedem Schritt auf Abbruch
     /// (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md), ein Abbrechen wirkt also innerhalb eines Schritts.
     private var imageTask: Task<CGImage, Error>?
@@ -115,6 +121,28 @@ actor JobQueue {
                             stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
                             lang: request.lang)
         job.audio = request
+        add(job)
+        return job
+    }
+
+    func submitVideo(_ request: VideoJobRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: request.imageAssetID == nil ? "txt2video" : "img2video",
+                            status: "queued",
+                            stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
+                            lang: request.lang)
+        job.video = request
+        add(job)
+        return job
+    }
+
+    /// LTX-Video 2B laden.
+    func submitVideoDownload() -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == VideoCatalog.id && !$0.isFinished }) {
+            return existing
+        }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(VideoCatalog.id)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: VideoCatalog.id, lang: Lang.current)
         add(job)
         return job
     }
@@ -175,17 +203,18 @@ actor JobQueue {
         return job
     }
 
-    func submitExpand(_ prompt: String) -> JobRecord {
+    func submitExpand(_ prompt: String, target: PromptTarget = .image) -> JobRecord {
         let job = JobRecord(id: AssetStore.newID("job"), kind: "expand_prompt", status: "queued", stage: t("wartet", "queued"),
-                            params: .object(["prompt": .string(prompt)]), createdAt: Date().timeIntervalSince1970,
-                            expandPrompt: prompt, lang: Lang.current)
+                            params: .object(["prompt": .string(prompt), "target": .string(target.rawValue)]),
+                            createdAt: Date().timeIntervalSince1970,
+                            expandPrompt: prompt, expandTarget: target, lang: Lang.current)
         add(job)
         return job
     }
 
     /// Prompt ausbauen und warten: läuft in der Warteschlange (ein Modell zur Zeit), danach wird der
     /// Auftrag gelöscht, damit er nicht im Verlauf steht. Für die Generieren-Seite und die API.
-    static func expandAndWait(_ prompt: String) async throws -> (expanded: String, seconds: Double) {
+    static func expandAndWait(_ prompt: String, target: PromptTarget = .image) async throws -> (expanded: String, seconds: Double) {
         guard Models.expansionModel != nil else {
             throw APIError(409, t("Prompt ausbauen braucht FLUX.2 Klein (dessen Text-Encoder schreibt die Beschreibung). "
                                   + "Bitte unter „Modelle“ laden.",
@@ -193,7 +222,7 @@ actor JobQueue {
                                   + "Please download it under \"Models\"."))
         }
         let started = Date()
-        let job = await shared.submitExpand(prompt)
+        let job = await shared.submitExpand(prompt, target: target)
         var record = job
         while !record.isFinished {
             try? await Task.sleep(for: .milliseconds(300))
@@ -248,6 +277,7 @@ actor JobQueue {
             }
             if job.request?.engine == "coreml" { CoreMLEngine.shared.requestCancel() }
             imageTask?.cancel()
+            videoTask?.cancel()
         default:
             break
         }
@@ -317,10 +347,13 @@ actor JobQueue {
             if let modelID = job.downloadModelID {
                 try await runDownload(id, modelID: modelID)
             } else if let prompt = job.expandPrompt {
-                try await runExpand(id, prompt: prompt)
+                try await runExpand(id, prompt: prompt, target: job.expandTarget ?? .image)
             } else if let audio = job.audio {
                 AppLog.info("Job \(id) started: audio, \(Int(audio.seconds)) s, \(audio.steps) steps")
                 try await runAudio(id, audio)
+            } else if let video = job.video {
+                AppLog.info("Job \(id) started: video, \(video.width)×\(video.height), \(video.frames) frames, \(video.fps) fps")
+                try await runVideo(id, video)
             } else if let restore = job.restore {
                 AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
                 try await runRestore(id, restore)
@@ -377,6 +410,17 @@ actor JobQueue {
     }
 
     private func runDownload(_ id: String, modelID: String) async throws {
+        if modelID == VideoCatalog.id {
+            update(id) { $0.stage = t("lädt \(VideoCatalog.name)", "downloading \(VideoCatalog.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await VideoCatalog.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            return
+        }
         if modelID == AudioCatalog.id {
             update(id) { $0.stage = t("lädt \(AudioCatalog.name)", "downloading \(AudioCatalog.name)") }
             let report: @Sendable (Double, String) -> Void = { fraction, message in
@@ -423,6 +467,8 @@ actor JobQueue {
                 try await Flux2Engine.shared.load(m, progress: report)
             case .coreml(let m):
                 try await CoreMLInstaller.install(m, progress: report)
+            case .zimage(let m):
+                try await m.download(progress: report)
             }
         }
         downloadTask = work
@@ -432,13 +478,22 @@ actor JobQueue {
         if jobs[id]?.cancelRequested == true { throw CancellationError() }
     }
 
-    private func runExpand(_ id: String, prompt: String) async throws {
+    private func runExpand(_ id: String, prompt: String, target: PromptTarget) async throws {
         guard let model = Models.expansionModel else {
             throw APIError(409, t("FLUX.2 Klein ist nicht geladen.", "FLUX.2 Klein is not downloaded."))
         }
         await CoreMLEngine.shared.unload()
+        // Qwen3 neben einem geladenen Video- oder Klangmodell sprengt 8 GB (wie vor einem Video, siehe runVideo).
+        if SystemInfo.memoryGB <= 16 {
+            await VideoEngine.shared.unload()
+            await AudioEngine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+            await VisionEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            MemoryLog.release()
+        }
         update(id) { $0.stage = t("baut den Prompt aus", "expanding the prompt") }
-        let text = try await Flux2Engine.shared.expand(prompt, model: model)
+        let text = try await Flux2Engine.shared.expand(prompt, model: model, target: target)
         update(id) { $0.expanded = text }
         AppLog.info("Expanded prompt: \(prompt.split(separator: " ").count) → \(text.split(separator: " ").count) words")
     }
@@ -455,6 +510,10 @@ actor JobQueue {
         guard let any = Models.find(req.modelID) else { throw APIError(404, t("Unbekanntes Modell: \(req.modelID)", "Unknown model: \(req.modelID)")) }
         if case .coreml(let m) = any {
             try await runCoreML(id, req, model: m)
+            return
+        }
+        if case .zimage(let m) = any {
+            try await runZImage(id, req, model: m)
             return
         }
         guard case .flux(let model) = any else { return }
@@ -658,12 +717,79 @@ actor JobQueue {
         }
     }
 
-    /// Auf Macs bis 16 GB passt neben FLUX.2 kein weiteres Modell: Klang, SeedVR2 und Qwen3.5 freigeben.
+    /// Auf Macs bis 16 GB passt neben FLUX.2 kein weiteres Modell: Klang, SeedVR2, Qwen3.5 und Z-Image freigeben.
     private func freeHelpers() async {
         guard SystemInfo.memoryGB <= 16 else { return }
         await AudioEngine.shared.unload()
         await SeedVR2Engine.shared.unload()
         await VisionEngine.shared.unload()
+        await ZImageEngine.shared.unload()
+        await VideoEngine.shared.unload()
+    }
+
+    /// Z-Image Turbo (`ZImageEngine`): Text zu Bild, 8 Schritte.
+    private func runZImage(_ id: String, _ req: ImageJobRequest, model: ZImageModel) async throws {
+        await CoreMLEngine.shared.unload()
+        if SystemInfo.memoryGB <= 16 {
+            await Flux2Engine.shared.unload()
+            await AudioEngine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+            await VisionEngine.shared.unload()
+            await VideoEngine.shared.unload()
+            MemoryLog.release()
+        }
+        let baseSeed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        for index in 0..<req.batch {
+            if jobs[id]?.cancelRequested == true { break }
+            let seed = baseSeed &+ UInt64(index)
+            update(id) {
+                $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)")
+                    : t("rechnet", "generating")
+            }
+            let sampler = PeakMemorySampler()
+            sampler.start()
+            let started = Date()
+            let work = Task {
+                try await ZImageEngine.shared.generate(
+                    model: model, prompt: req.prompt, width: req.width, height: req.height, steps: req.steps, seed: seed,
+                    onStep: { step, total in
+                        Task { await JobQueue.shared.stepProgress(id, index: index, of: req.batch, step: step, total: total) }
+                    },
+                    onDecode: { done, total in
+                        Task { await JobQueue.shared.decodeProgress(id, index: index, of: req.batch, done: done, total: total) }
+                    })
+            }
+            imageTask = work
+            if jobs[id]?.cancelRequested == true { work.cancel() }
+            let result: CGImage
+            do {
+                result = try await work.value
+            } catch {
+                imageTask = nil
+                _ = sampler.stop()
+                if jobs[id]?.cancelRequested == true { break }
+                throw error
+            }
+            imageTask = nil
+            let seconds = Date().timeIntervalSince(started)
+            let peak = sampler.stop()
+            MemoryLog.line("after Z-Image")
+            let png = try ImageFiles.pngData(ImageFiles.resized(result, width: req.width, height: req.height))
+            let meta: [String: JSONValue] = [
+                "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height), "steps": .int(req.steps),
+                "cfg": .double(0), "model_name": .string(model.name), "workflow": .string(model.workflow),
+                "engine": .string("mlx"), "mode": .string("txt2img"),
+                "duration_s": .double((seconds * 10).rounded() / 10), "peak_memory_mb": .int(Int(peak)),
+                "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+            ]
+            let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt, modelID: model.id, meta: meta)
+            let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: 0, width: req.width, height: req.height,
+                                          steps: req.steps, mode: "txt2img", modelID: model.id)
+            update(id) {
+                $0.assetIDs.append(asset.id)
+                $0.timings.append(timing)
+            }
+        }
     }
 
     // MARK: Musik und Klänge
@@ -675,6 +801,8 @@ actor JobQueue {
             await Flux2Engine.shared.unload()
             await SeedVR2Engine.shared.unload()
             await VisionEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            await VideoEngine.shared.unload()
             MemoryLog.release()
         }
         update(id) { $0.stage = t("lädt Stable Audio 3", "loading Stable Audio 3") }
@@ -719,6 +847,83 @@ actor JobQueue {
         update(id) { $0.assetIDs.append(asset.id) }
     }
 
+    // MARK: Video
+
+    /// LTX-Video 2B (`VideoEngine`): Startbild-Encoder, T5, Transformer und Decoder nacheinander, MP4 in die Ablage.
+    private func runVideo(_ id: String, _ req: VideoJobRequest) async throws {
+        var startImage: CGImage?
+        if let image = req.imageAssetID { startImage = try await loadImage(image, t("Startbild", "Start image")) }
+        await CoreMLEngine.shared.unload()
+        if SystemInfo.memoryGB <= 16 {
+            await Flux2Engine.shared.unload()
+            await AudioEngine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+            await VisionEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            MemoryLog.release()
+        }
+        let seed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        update(id) { $0.stage = t("liest den Prompt", "reading the prompt") }
+        let sampler = PeakMemorySampler()
+        sampler.start()
+        let started = Date()
+        let work = Task {
+            try await VideoEngine.shared.generate(
+                prompt: req.prompt, width: req.width, height: req.height, frames: req.frames, fps: req.fps, seed: seed,
+                startImage: startImage,
+                onStep: { step, total in
+                    Task { await JobQueue.shared.videoProgress(id, phase: 0, done: step, total: total) }
+                },
+                onDecode: { done, total in
+                    Task { await JobQueue.shared.videoProgress(id, phase: 1, done: done, total: total) }
+                })
+        }
+        videoTask = work
+        defer { videoTask = nil }
+        let result: VideoEngine.Result
+        do {
+            result = try await work.value
+        } catch {
+            _ = sampler.stop()
+            throw error
+        }
+        let seconds = Date().timeIntervalSince(started)
+        let peak = sampler.stop()
+        MemoryLog.line("after LTX-Video")
+        var meta: [String: JSONValue] = [
+            "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height), "frames": .int(result.frames),
+            "fps": .int(req.fps), "seconds": .double((Double(result.frames) / Double(req.fps) * 100).rounded() / 100),
+            "steps": .int(8), "cfg": .double(1), "model_name": .string(VideoCatalog.name),
+            "workflow": .string(req.imageAssetID == nil ? "ltxv_distilled" : "ltxv_distilled_i2v"),
+            "engine": .string("mlx"), "format": .string("mp4"),
+            "duration_s": .double((seconds * 10).rounded() / 10), "peak_memory_mb": .int(Int(peak)),
+            "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+        ]
+        for (key, value) in result.timings { meta["\(key)_s"] = .double((value * 10).rounded() / 10) }
+        if let image = req.imageAssetID {
+            meta["image_asset_id"] = .string(image)
+            meta["image_noise_scale"] = .double((Double(LTXPipeline.imageNoiseScale) * 100).rounded() / 100)
+        }
+        let asset = try await AssetStore.shared.addVideo(mp4: result.url, jobID: id, prompt: req.prompt,
+                                                         modelID: VideoCatalog.id, meta: meta)
+        update(id) { $0.assetIDs.append(asset.id) }
+    }
+
+    /// Phase 0: Entrauschen (bis 85 %), Phase 1: Dekodieren in Kacheln.
+    private func videoProgress(_ id: String, phase: Int, done: Int, total: Int) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            let fraction = total > 0 ? Double(done) / Double(total) : 0
+            if phase == 0 {
+                $0.progress = min(0.85, 0.85 * fraction)
+                $0.stage = t("Schritt \(done) von \(total)", "step \(done) of \(total)")
+            } else {
+                $0.progress = min(0.99, 0.85 + 0.14 * fraction)
+                $0.stage = t("dekodiert · Kachel \(done) von \(total)", "decoding · tile \(done) of \(total)")
+            }
+        }
+    }
+
     // MARK: Restaurieren
 
     private func restoreProgress(_ id: String, run: Int, of count: Int, label: String, step: Int, total: Int) {
@@ -727,6 +932,15 @@ actor JobQueue {
             let inRun = total > 0 ? Double(step) / Double(total) : 0
             $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
             $0.stage = "\(label) · " + t("Schritt \(step) von \(total)", "step \(step) of \(total)")
+        }
+    }
+
+    /// Z-Image dekodiert auf kleinen Macs in Kacheln (1024² am 8-GB-M1: vier).
+    private func decodeProgress(_ id: String, index: Int, of count: Int, done: Int, total: Int) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            let prefix = count > 1 ? t("Bild \(index + 1) von \(count), ", "image \(index + 1) of \(count), ") : ""
+            $0.stage = prefix + t("dekodiert · Kachel \(done) von \(total)", "decoding · tile \(done) of \(total)")
         }
     }
 
@@ -774,7 +988,11 @@ actor JobQueue {
         }
         let photo = try await loadImage(req.imageAssetID, t("Foto", "Photo"))
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 { await AudioEngine.shared.unload() }
+        if SystemInfo.memoryGB <= 16 {
+            await AudioEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            await VideoEngine.shared.unload()
+        }
         var kind: (mode: String, answer: String?)?
         if req.repair && req.repairMode == "auto" {
             if HelperModel.vision.installed {
