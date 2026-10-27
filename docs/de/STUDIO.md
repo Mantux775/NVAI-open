@@ -178,3 +178,7 @@ mit dem Standardweg und rund einen Tag mit DFR. Standbilder mit Musik und Sprech
 - Titel, Untertitel, Kamerafahrten auf Standbildern, Wellenformen, Export als PNG-Einzelbilder, WAV oder
   SRT, Austausch mit anderen Schnittprogrammen (OpenTimelineIO).
 - Das Studio in NVAI-open für Mac.
+
+## Making of
+
+Wie das Video entstand, das das Studio vorstellt, von der Anfrage in Claude Code bis zum Export, mit allen Prompts, Zeiten und Prüfungen: [MAKING_OF.md](MAKING_OF.md).

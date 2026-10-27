@@ -102,7 +102,7 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
 | Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
 | Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join, conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
-| Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
+| Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt at about 2 words per second, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; 15 spoken words ran past the end of a 6 s shot, 11 fit; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
 | Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
 | Sound effects / instrumental music | Stable Audio Open / Stable Audio 3 Medium | Describe the sound for SFX; Stable Audio 3 up to 5 min, one sentence with BPM, no vocals (ACE-Step was removed in 0.5.13) |
 | 3D source image | One object, plain background, no floor, no cast shadow; `project_front=True` for lettering | Floor and shadow become a plate under the mesh; painted lettering became a distorted relief |
@@ -136,6 +136,7 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
 | Best quality (DFR) 1920 × 1088, 5 s | LTX-2.5 NVFP4 | ~786 s (standard path ~241 s) |
 | From a start image, 1920 × 1088: 6 s DFR / 4 s standard (Studio scenes) | LTX-2.5 NVFP4 | ~1519 s / ~249 s |
+| From a start image, 1920 × 832 (2.39:1), DFR: 6 s / 5 s / extend by 3 s | LTX-2.5 NVFP4 | ~305–326 s / ~242–245 s / ~146–150 s |
 | DFR 1280 × 704, 4 s / with 48 fps | LTX-2.5 NVFP4 | ~118 s / ~294 s |
 | Extend a video, 5 s + 4 s, 1920 × 1088 | LTX-2.5 NVFP4 | ~255 s for the new part including joining |
 | Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
@@ -862,8 +863,14 @@ cards, three illustrating shots and music underneath. What carried over:
    `params.image_asset_id`; the scene prompt then only describes motion, speech and sound.
 2. **Speech comes from LTX-2.5.** Put the line in quotation marks with the voice ("says in a warm, cheerful,
    clear female voice: "…""), and add "Static camera, a locked-off shot; the framing stays exactly as in
-   the first frame." A line of 15 words filled a 6 s shot to the last frame, so stay below 2.5 words per
-   second and give the person something to do after the line ("Then she smiles and nods once."). Keep product names out of the spoken line: how
+   the first frame." Plan about 2 words per second: a line of 15 words ran into the last frame of a 6 s shot
+   and was cut off mid-word, 11 words ended at 5.7 s, and the 13 words of the closing line at 4.2 s (LTX spoke
+   2.2 and 3.3 words per second). Give the person something to do after the line ("Then she smiles and nods
+   once."). Leave gestures out: "a single quick wave and lowers it back onto the desk right away" still gave
+   2.5 s of waving, 1.4 s of it silent before the first word; with "her hands stay resting on the desk, and right
+   away she says …" she started at 0.6 s. Use commas, not exclamation marks: after "Hi!" LTX paused 0.6 s,
+   which sounded like a dropout over quiet music; after "Hi there," 0.3 s. Keep product names out of the
+   spoken line: how
    the model pronounces an acronym is a gamble. Show the name instead (on a monitor in the start image, on a
    title card). You cannot hear the take: check that speech is there (the 300–3400 Hz band rises clearly
    above the room tone while the person talks) and ask the user to listen to the wording.
@@ -889,6 +896,30 @@ cards, three illustrating shots and music underneath. What carried over:
    end). For a scene that missed, set a new seed with `scene.update` (`params.seed`) and run
    `studio_generate(scene_ids=[…])`: the new take becomes the scene's take, the old one stays in its list and
    `scene.take` switches back if it was better. Then `edit.conform` and `studio_export`.
+
+### Recipe: short comedy scenes with one character
+
+Built in October 2026: more scenes for an existing photorealistic short film (1920 × 802, one character with a
+blank stare in absurd war situations), eight gags of 8–9 s, 68 s in all, as one Studio project.
+
+1. **Keep the format of the original.** Project 1920 × 802, video scenes with `params` 1920 × 832 (multiples of 64;
+   3.6 % off, so the export crops 15 rows top and bottom). Measured with a start image: DFR at 1920 × 832 took
+   305–326 s for 6 s and 242–245 s for 5 s, while 6 s at 1920 × 1088 took 1248–1519 s. The `project` export preset
+   with NVENC and no bitrate wrote 16 Mbit/s.
+2. **The face from the original** (a frame cropped to head and shoulders) as the reference image for FLUX 3, the
+   clothing written out in the prompt, four variants per scene at 1920 × 832 (133–186 s); compare faces at full size.
+3. **The joke has to be in the start image.** The user on the first laundry scene: the soldier "holds the washing line
+   in the air, that is not funny". FLUX tied the line to the tank's gun barrel in 0 of 4 images, and the painter stood
+   on a peaceful meadow in 0 of 4; the hammock strung between two howitzers came right in 4 of 4. When a connection is
+   missing, edit the best variant: it as the first reference image, the face as the second, "Change only …, keep …
+   exactly as in the first image". 4 of 4 correct, 204–207 s.
+4. **Write the timing into the prompt.** "For the first two seconds nothing happens: …, then the tank suddenly fires"
+   gave 1.3 s of calm build-up; without it the shot came after 0.2 s. For the deadpan look: "his face completely
+   still, his eyes fixed on the distance".
+5. **Extend instead of re-rolling** (the user: the clips should "run a little longer, like in the original, so the
+   joke lands"): `generate_video(extend_asset_id=…, frames=73, quality="dfr")` adds 3 s of aftermath (146–150 s per
+   clip, the seam 2.4–3.4 of 255). Then `scene.take` with that `asset_id`, lay the scenes out again, delete the old
+   clips and run `edit.conform` (connected clips keep their in and out otherwise).
 
 ## Lossless copy of every video (since 0.5.13)
 

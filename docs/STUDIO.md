@@ -175,3 +175,7 @@ cheaper.
 - Titles, subtitles, camera moves on still images, waveforms, export as PNG frames, WAV or SRT,
   exchange with other editors (OpenTimelineIO).
 - The Studio in NVAI-open for Mac.
+
+## Making of
+
+How the video that presents the Studio was made, from the request in Claude Code to the export, with every prompt, time and check: [MAKING_OF.md](MAKING_OF.md).

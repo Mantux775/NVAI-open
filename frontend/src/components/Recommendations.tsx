@@ -125,6 +125,42 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Dieselbe Person in mehreren Szenen', 'The same person in several shots'),
+      text: t(
+        'LTX-2.5 erfindet ohne Startbild jedes Mal ein neues Gesicht. Startbilder mit FLUX 3 in Videogröße, weitere '
+          + 'Einstellungen mit dem ersten als Referenzbild: 4 von 4 behielten Gesicht, Brille, Haar und Kleidung.',
+        'Without a start image, LTX-2.5 invents a new face every time. Start images with FLUX 3 in the video size, '
+          + 'further shots with the first one as a reference image: 4 of 4 kept face, glasses, hair and clothing.',
+      ),
+    },
+    {
+      head: t('Gesprochener Satz: rund 2 Wörter je Sekunde', 'Spoken line: about 2 words per second'),
+      text: t(
+        '15 Wörter liefen in einer 6-s-Szene bis ins letzte Bild und brachen mitten im Wort ab, 11 endeten 0,3 s '
+          + 'vor Schluss. Nach dem Satz eine kleine Handlung vorgeben („Then she smiles and nods once.“).',
+        '15 words ran into the last frame of a 6 s shot and were cut off mid-word, 11 ended 0.3 s before the end. '
+          + 'Give the person a small action after the line (“Then she smiles and nods once.”).',
+      ),
+    },
+    {
+      head: t('Keine Gesten beim Sprechen', 'No gestures while speaking'),
+      text: t(
+        '„A single quick wave“ dauerte trotzdem 2,5 s, davon 1,4 s stumm. Mit „her hands stay resting on the desk“ '
+          + 'sprach sie ab 0,6 s. Komma statt Ausrufezeichen: nach „Hi!“ 0,6 s Pause, nach „Hi there,“ 0,3 s.',
+        '“A single quick wave” still lasted 2.5 s, 1.4 s of it silent. With “her hands stay resting on the desk” '
+          + 'she spoke from 0.6 s. Commas, not exclamation marks: after “Hi!” a 0.6 s pause, after “Hi there,” 0.3 s.',
+      ),
+    },
+    {
+      head: t('Zeit im Prompt ausschreiben', 'Write the timing into the prompt'),
+      text: t(
+        '„For the first two seconds nothing happens: …, then …“ gab 1,3 s ruhigen Vorlauf; ohne kam der Knall nach '
+          + '0,2 s, und die Pointe ging unter.',
+        '“For the first two seconds nothing happens: …, then …” gave 1.3 s of calm build-up; without it the bang '
+          + 'came after 0.2 s and the joke got lost.',
+      ),
+    },
+    {
       head: t('Schleife nur mit ruhiger Kamera', 'Loop only with a still camera'),
       text: t(
         'Mit Heranfahren zerfiel die Schleife in den letzten Frames.',
