@@ -599,6 +599,9 @@ export const api = {
   jobAssets: (id: string) => req<Asset[]>(`/api/jobs/${id}/assets`),
   assets: (kind?: string, limit = 100) =>
     req<Asset[]>(`/api/assets?limit=${limit}${kind ? `&kind=${kind}` : ''}`),
+  /** Eine Seite fürs Material des Studios: media zählt Uploads nach Endung dazu, q sucht in allen Assets */
+  assetPage: (opts: { media: 'all' | 'image' | 'video' | 'audio'; q?: string; limit: number; offset: number }) =>
+    req<Asset[]>(`/api/assets?media=${opts.media}&limit=${opts.limit}&offset=${opts.offset}${opts.q ? `&q=${encodeURIComponent(opts.q)}` : ''}`),
   asset: (id: string) => req<Asset>(`/api/assets/${id}`),
 
   // Studio (seit 0.6): Projekte mit Komposition und Schnitt; jede Änderung ist ein Befehl.
@@ -622,6 +625,30 @@ export const api = {
   studioExport: (id: string, preset: string) =>
     req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
   studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),
+  studioConformPlan: (id: string) =>
+    req<{ items: StudioConformItem[]; without_take: number; transition_markers: number }>(`/api/studio/projects/${id}/conform`),
+  studioPackageInfo: (id: string) =>
+    req<{ name: string; files: number; bytes: number; master_bytes: number }>(`/api/studio/projects/${id}/package/info`),
+  /** Download-Adresse des Pakets (ZIP); der Browser lädt es über einen Link */
+  studioPackageUrl: (id: string, masters: boolean) => `/api/studio/projects/${id}/package?masters=${masters ? 'true' : 'false'}`,
+  studioImport: async (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    // wie upload: den Content-Type (multipart mit Boundary) setzt der Browser
+    const res = await fetch('/api/studio/import', { method: 'POST', body: fd, headers: { 'Accept-Language': getLang() } })
+    if (!res.ok) {
+      const body = await res.text()
+      let detail = body.slice(0, 400)
+      try {
+        detail = JSON.parse(body).detail ?? detail
+      } catch {
+        /* Klartext */
+      }
+      throw new Error(detail)
+    }
+    return (await res.json()) as StudioProject
+  },
+  revealAsset: (id: string) => req<{ ok: boolean; path: string }>(`/api/assets/${id}/reveal`, { method: 'POST' }),
 
   /** H.264-Vorschau für ein Video, das der Browser nicht abspielt (MKV, MOV …); fertig meldet assets.changed */
   assetPreview: (id: string) => req<{ ok: boolean }>(`/api/assets/${id}/preview`, { method: 'POST' }),
@@ -753,9 +780,41 @@ export interface StudioClip {
   start: number
   in: number
   out: number
+  /** 1 = 100 %; die Länge auf der Zeitleiste ist (out − in) / speed */
+  speed?: number
   gain_db: number
   muted: boolean
-  transition: { kind: string; duration: number } | null
+  /** Übergang am Anfang; marker: kommt von einem Übergang-Marker (wandert mit ihm) */
+  transition: { kind: StudioTransitionKind; duration: number; marker?: string } | null
+}
+
+export type StudioTransitionKind = 'dissolve' | 'dip_black' | 'dip_white' | 'wipe'
+
+export interface StudioTrack {
+  id: string
+  kind: 'video' | 'audio'
+  /** Bild der Videospur aus (Vorschau und Export) */
+  hidden?: boolean
+  /** Ton der Spur aus, bei Videospuren der Ton ihrer Clips */
+  muted?: boolean
+}
+
+/** Was „Übernehmen“ täte (GET /api/studio/projects/{id}/conform) */
+export interface StudioConformItem {
+  scene_id: string
+  title: string
+  lane: StudioLane
+  track: string
+  action: 'create' | 'replace' | 'same' | 'error'
+  start_s?: number
+  length_s?: number
+  scene_s?: number
+  clip_ids?: string[]
+  overlaps?: { clip_id: string; title: string; seconds: number }[]
+  in_edit?: boolean
+  edited?: boolean
+  error?: string
+  default: boolean
 }
 
 export interface StudioMedia {
@@ -772,7 +831,7 @@ export interface StudioProject {
   settings: { width: number; height: number; fps: [number, number]; sample_rate: number; video_quality?: 'dfr' | 'standard' }
   scenes: StudioScene[]
   markers: StudioMarker[]
-  tracks: { id: string; kind: 'video' | 'audio' }[]
+  tracks: StudioTrack[]
   clips: StudioClip[]
   media: Record<string, StudioMedia>
   /** Adresse und Art aller verwendeten Assets (Takes und Clips) */

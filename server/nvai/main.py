@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, WebSocket, WebS
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 
 import httpx
 
@@ -843,8 +844,11 @@ async def get_job_assets(job_id: str) -> list[Asset]:
 # ------------------------------------------------------------- Assets
 
 @app.get("/api/assets", response_model=list[Asset])
-async def get_assets(kind: str | None = None, limit: int = 100, offset: int = 0) -> list[Asset]:
-    return db.list_assets(kind=kind, limit=limit, offset=offset)
+async def get_assets(kind: str | None = None, limit: int = 100, offset: int = 0, media: str | None = None,
+                     q: str | None = None) -> list[Asset]:
+    """Verlauf, neueste zuerst; `media` (image|video|audio|all) nimmt Uploads nach Endung dazu, `q` sucht in allen
+    Assets (Prompt, Dateiname, Angaben). Das Material des Studios lädt so je 100 und sucht über alles."""
+    return db.list_assets(kind=kind, limit=max(1, limit), offset=max(0, offset), media=media, query=q)
 
 
 @app.get("/api/assets/{asset_id}", response_model=Asset)
@@ -992,6 +996,57 @@ async def studio_commands() -> list[dict[str, str]]:
 @app.get("/api/studio/presets")
 async def studio_presets() -> list[dict[str, Any]]:
     return studio.presets()
+
+
+@app.get("/api/studio/projects/{pid}/conform")
+async def studio_conform_plan(pid: str) -> dict[str, Any]:
+    """Was „Übernehmen“ täte (neue Clips, ausgetauschtes Material, Überdeckungen), ohne etwas zu ändern."""
+    p = await asyncio.to_thread(studio.refresh, pid)
+    return await asyncio.to_thread(studio.conform_plan, p)
+
+
+@app.get("/api/studio/projects/{pid}/package/info")
+async def studio_package_info(pid: str) -> dict[str, Any]:
+    return await asyncio.to_thread(studio.package_info, pid)
+
+
+@app.get("/api/studio/projects/{pid}/package")
+async def studio_package(pid: str, masters: bool = False) -> FileResponse:
+    """Projekt als ZIP mit allem Material zum Herunterladen (auf Wunsch mit den verlustfreien Kopien)."""
+    path, name = await asyncio.to_thread(studio.build_package, pid, masters)
+    return FileResponse(path, media_type="application/zip", filename=name,
+                        background=BackgroundTask(path.unlink, missing_ok=True))
+
+
+@app.post("/api/studio/import")
+async def studio_import(file: UploadFile) -> dict[str, Any]:
+    """Studio-Paket (.zip) oder Projektdatei (.json) einlesen; gibt das neue Projekt zurück."""
+    folder = config.DATA_DIR / "studio" / "pakete"
+    folder.mkdir(parents=True, exist_ok=True)
+    tmp = folder / f"import-{db.new_id('imp')}{Path(file.filename or 'x.zip').suffix.lower()}"
+    try:
+        with tmp.open("wb") as fh:
+            await asyncio.to_thread(shutil.copyfileobj, file.file, fh, 1 << 20)
+        p = await asyncio.to_thread(studio.import_package, tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+    jobs.publish({"type": "assets.changed"})
+    return studio.view(p)
+
+
+@app.post("/api/assets/{asset_id}/reveal")
+async def asset_reveal(asset_id: str, request: Request) -> dict[str, Any]:
+    """Speicherort im Explorer öffnen, die Datei markiert. Nur für diesen Rechner: Im LAN-Betrieb würde sonst ein
+    anderes Gerät hier Fenster öffnen."""
+    if not _is_local(request.headers, request.client):
+        raise HTTPException(403, t("Den Speicherort öffnet nur der Rechner, auf dem NVAI-open läuft.",
+                                   "Only the computer running NVAI-open can open the folder."))
+    asset = db.get_asset(asset_id)
+    path = config.ASSET_DIR / asset.filename if asset else None
+    if path is None or not path.exists():
+        raise HTTPException(404, t("Datei nicht gefunden", "File not found"))
+    await asyncio.to_thread(folders.reveal, path)
+    return {"ok": True, "path": str(path)}
 
 
 # ---------------------------------------------------------- Live-Feed

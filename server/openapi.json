@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "x-api-version": 1
  },
  "paths": {
@@ -1644,6 +1644,7 @@
   "/api/assets": {
    "get": {
     "summary": "Get Assets",
+    "description": "Verlauf, neueste zuerst; `media` (image|video|audio|all) nimmt Uploads nach Endung dazu, `q` sucht in allen\nAssets (Prompt, Dateiname, Angaben). Das Material des Studios lädt so je 100 und sucht über alles.",
     "operationId": "get_assets_api_assets_get",
     "parameters": [
      {
@@ -1680,6 +1681,38 @@
        "type": "integer",
        "default": 0,
        "title": "Offset"
+      }
+     },
+     {
+      "name": "media",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Media"
+      }
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Q"
       }
      }
     ],
@@ -2385,6 +2418,220 @@
     }
    }
   },
+  "/api/studio/projects/{pid}/conform": {
+   "get": {
+    "summary": "Studio Conform Plan",
+    "description": "Was „Übernehmen“ täte (neue Clips, ausgetauschtes Material, Überdeckungen), ohne etwas zu ändern.",
+    "operationId": "studio_conform_plan_api_studio_projects__pid__conform_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Conform Plan Api Studio Projects  Pid  Conform Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/package/info": {
+   "get": {
+    "summary": "Studio Package Info",
+    "operationId": "studio_package_info_api_studio_projects__pid__package_info_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Package Info Api Studio Projects  Pid  Package Info Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/package": {
+   "get": {
+    "summary": "Studio Package",
+    "description": "Projekt als ZIP mit allem Material zum Herunterladen (auf Wunsch mit den verlustfreien Kopien).",
+    "operationId": "studio_package_api_studio_projects__pid__package_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "masters",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Masters"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/import": {
+   "post": {
+    "summary": "Studio Import",
+    "description": "Studio-Paket (.zip) oder Projektdatei (.json) einlesen; gibt das neue Projekt zurück.",
+    "operationId": "studio_import_api_studio_import_post",
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_studio_import_api_studio_import_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Studio Import Api Studio Import Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/assets/{asset_id}/reveal": {
+   "post": {
+    "summary": "Asset Reveal",
+    "description": "Speicherort im Explorer öffnen, die Datei markiert. Nur für diesen Rechner: Im LAN-Betrieb würde sonst ein\nanderes Gerät hier Fenster öffnen.",
+    "operationId": "asset_reveal_api_assets__asset_id__reveal_post",
+    "parameters": [
+     {
+      "name": "asset_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Asset Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Asset Reveal Api Assets  Asset Id  Reveal Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/files/{filename}": {
    "get": {
     "summary": "Serve File",
@@ -2505,6 +2752,20 @@
      "created_at"
     ],
     "title": "Asset"
+   },
+   "Body_studio_import_api_studio_import_post": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "contentMediaType": "application/octet-stream",
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "Body_studio_import_api_studio_import_post"
    },
    "Body_upload_api_upload_post": {
     "properties": {

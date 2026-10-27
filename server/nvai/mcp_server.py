@@ -68,7 +68,8 @@ server = MCPServer(
         "text in quotation marks with position and typeface. Short prompts are first expanded by "
         "MOSS's own text encoder (returned as 'caption', upsample_prompt=False switches it off); a "
         "JSON with 'summary' and 'items' as the prompt sets the layout. The negative prompt works. "
-        "Text to image only: no reference images, no mask. Not available on the Mac.\n"
+        "Text to image only: no reference images, no mask (an existing character came out as a "
+        "different person). Not available on the Mac.\n"
         "list_models(kind='image', detailed=True) returns 'features' for each model: which "
         "parameters have an effect, recommended sizes (sizes) and a prompt hint.\n\n"
         "SHORT PROMPTS: expand_prompt(prompt, width, height) turns a few words into a full "
@@ -79,7 +80,15 @@ server = MCPServer(
         "helmet). Not needed for flux3-klein-* and moss-image-sft-int8: they expand internally.\n\n"
         "VIDEO -- the recommended model is LTX-2.5 (ltx25-distilled-nvfp4 on RTX 50, "
         "ltx25-distilled-int8 on older cards): picture and sound in one pass, 5 s at 1280x704 "
-        "in ~93 s, at 1920x1088 in ~251 s on an RTX 5060 Ti. Prompt as one present-tense "
+        "in ~93 s, at 1920x1088 in ~251 s on an RTX 5060 Ti. FACES (measured): LTX has no "
+        "identity lock and works on 32-px cells, so keep a person's face large (medium shot or "
+        "closer; faces of 100-200 px and running extras melted), make the start image with "
+        "flux3-klein-* from a frontal, sharp reference, hold framing and face with an end image "
+        "edited from the start image ('static camera' alone still pushed in, 3 of 3), never "
+        "extend a clip whose face matters, and keep 1920x832 to 6 s on 16 GB (8 s with dfr: "
+        "20-60 min). VOICES: the voice changes per clip; let people speak only with their face in "
+        "the shot and the same voice description, and offer 2-3 variants per line to listen to. "
+        "Details in generate_video. Prompt as one present-tense "
         "paragraph: shot, setting and "
         "light, the action with verbs, camera movement, then the sound; spoken lines in "
         "quotation marks; name loud sound sources explicitly (sounds described as soft came out "
@@ -87,14 +96,11 @@ server = MCPServer(
         "or loop=True (seamless loop; keep the camera still), quality='dfr' (more detail, "
         "slower; temporal_upscale for 48 fps), auto_duration, audio_asset_id (the picture "
         "follows a given sound, e.g. "
-        "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA; "
-        "measured at 1920x1088 and 0.2: a wave's spray fell over 5 s instead of 1.5 s with sharp "
-        "droplets, without the LoRA it froze into a milky veil). "
+        "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA). "
         "Several shots in one clip: write the cuts out in prose (expand_prompt "
         "target='video_multishot'). list_models(kind='lora') marks LoRAs recommended for "
         "LTX-2.5 in features.recommended_for. The Cinemagraph LoRA (trigger CINEMAGRAPH_MOTION) "
-        "only works with a start image and loop=True: measured 6 % of the picture moving with a "
-        "still face, 82-84 % without loop. A person from a photo in a video: first "
+        "only works with a start image and loop=True. A person from a photo in a video: first "
         "generate_image with flux3-klein-*, the photo (cropped to head and shoulders) in "
         "reference_asset_ids, batch_size=4, in the video size, prompt 'Cinematic film still. The "
         "person from the first image, with exactly the same face, eyes, nose, mouth and hair "
@@ -110,7 +116,8 @@ server = MCPServer(
         "FLUX ignored 'wider shot' when editing). Measured prompt traps: 'shouts' gives "
         "grimaces ('says firmly in a rough, deep voice' is calmer); a gesture that may 'rise out "
         "of the frame' makes the camera follow it; for a fixed frame write 'Static camera, a "
-        "locked-off medium shot; the framing stays exactly as in the first frame.'; 'calm, "
+        "locked-off medium shot; the framing stays exactly as in the first frame.' (it still "
+        "pushed in 3 of 3 times at 1920x832; an end image holds the framing); 'calm, "
         "proud expression' became a grin ('stern, determined, does not smile'). Thin props "
         "(rifles, flag poles) that cross people in the start image morph into each other.\n\n"
         "OLD PHOTOS: restore_image(image_path or image_asset_id) removes damage (repair), colorizes "
@@ -619,6 +626,36 @@ async def generate_video(
     (1080p) for final videos, about 2.7 times as long as 1280x704 (720p, for drafts) -- say so
     to the user. Frames 97 = 4 s, 121 = 5 s, up to 481 = 20 s.
 
+    FACES, VOICES AND CHARACTERS (LTX-2.5, measured): there is no identity lock and no voice input --
+    the start image is only the first frame, the voice is drawn anew for every clip from the voice
+    description, the visible face and the seed, and the model works on 32x32 px cells (the first
+    stage at half resolution). Faces of 100-200 px and running extras melted (eyes, rifles turned
+    into sticks); faces of 260-300 px stayed clean.
+    Voice: let a person speak only where their face is in the picture, and keep the voice description
+    word for word the same in every clip ("in a warm, cheerful, clear female voice"). An off-screen
+    voice, a speaker seen from behind and a separate helper clip all came out as a different voice.
+    Make 2-3 variants per spoken line and let the user listen (pitch did not predict the user's
+    choice). Once a line is approved, lock it: pass it as audio_asset_id (an uploaded WAV) for any new
+    clip with that line, e.g. a vertical version; the voice is then identical and the lips follow it.
+    For a shot without the face, leave it silent or cut the chosen line out of a variant with the
+    face and lay it on an audio track (studio_command clip.add, track A1).
+    Start image without a face (from behind, over the shoulder): when the person turns around, LTX
+    invents a different face. Keep them turned away ("keeps facing the monitor and never turns
+    around"), or give an end image with the face, or start in profile, or cut to a separate shot.
+    For a person who must stay recognizable:
+      - medium shot or closer, few extras and those far in the back;
+      - start image from flux3-klein-* with a frontal, unobstructed, sharpened reference (a
+        sideways-glancing reference came back as crooked eyes; moss-image-* takes no reference and
+        drew a different man in 4 of 4);
+      - 'Static camera, a locked-off ...' still pushed in (3 of 3) and the face was redrawn on the
+        way. To hold framing and face, pass an end image that flux3-klein-* edits from the start
+        image (start image as the first reference, face as the second, "Change only this: ...,
+        keep his face ... the framing and everything else exactly as in the first image"): the
+        camera stayed put and the last frame matched (similarity to the starting face 0.98);
+      - no extend_asset_id (see there); keep explosions, flying dirt and hands away from the face;
+      - on a 16 GB card at most 6 s (145 frames) at 1920x832: 8 s with quality='dfr' took 20
+        minutes once and hit the one-hour limit another time. Build longer scenes from parts.
+
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
     kandinsky5-lite-i2v require it. The asset ID comes from
@@ -646,7 +683,9 @@ async def generate_video(
             Wan 2.2 A14B LoRAs often come as a high-noise and a low-noise file: load
             both, each is applied to its own expert automatically.
             LoRAs recommended for LTX-2.5 carry features.recommended_for=['ltx25'] and a
-            recommended features.strength (download them with download_model).
+            recommended features.strength (download them with download_model). The Cinemagraph
+            LoRA only works with a start image and loop=True: measured 6 % of the picture moving
+            with a still face, 82-84 % without loop.
         end_image_asset_id: LTX-2.5: last frame. With image_asset_id the clip moves from
             the start image to the end image (transition); without it, it ends on it.
         loop: LTX-2.5: the start image is also the end image -- a seamless loop. Keep the
@@ -663,18 +702,25 @@ async def generate_video(
             (1-20 s); `frames` is ignored. Write pauses ("a beat of silence") into the
             prompt if the clip should hold.
         audio_asset_id: LTX-2.5: a sound the picture follows (e.g. music from
-            generate_audio). The clip gets its length (at most 20 s), the original sound
-            ends up in the MP4.
+            generate_audio, or an uploaded WAV). The clip gets its length (at most 20 s), the
+            original sound ends up in the MP4. Keeps a voice identical across clips: cut a line the
+            user already approved out of an earlier take, upload it as WAV and pass it here; the
+            clip's sound then matched the given line exactly (correlation 1.000) and the lips moved
+            to it. Give it a little extra tail if the clip needs material after the cut.
         motion_speed: LTX-2.5: slow motion, 1 = real time, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x
             slower at the same playback fps. Reliable together with the Slow Motion
-            Control LoRA and a start image.
+            Control LoRA and a start image: measured at 1920x1088 and 0.2, a wave's spray fell
+            over 5 s instead of 1.5 s with sharp droplets; without the LoRA it froze into a milky
+            veil.
         crf: LTX-2.5: H.264 quality of the MP4 (CRF, lower = better and larger). Empty =
             12; ComfyUI's own default of 18 gave only 6 to 13 Mbit/s at 1080p.
         extend_asset_id: LTX-2.5: continue an existing video (asset ID of a video). Its last frame
             becomes the start image, size and frame rate come from it, and the new part is appended
             with its sound; the prompt describes what happens next, frames/seconds its length. The
             result lists the extended video first, then the new part on its own. Not together with
-            image_asset_id, loop or audio_asset_id.
+            image_asset_id, loop or audio_asset_id. It loses faces: the new part only sees the last
+            frame, and in several extended clips a different man appeared in it. When a face
+            matters, generate parts with a clean start and end image each (flux3-klein-*) instead.
         master: Also store the video losslessly (FFV1 in MKV, sound as float PCM); its path comes back
             in 'lossless_files'. Use it for editing and exporting: measured, a YouTube export made from it
             reached 42.3 instead of 37.7 dB PSNR. Costs about 32 MB per second at 1080p, 16 MB at 720p;
@@ -936,8 +982,9 @@ async def studio_create(name: str, width: int = 1920, height: int = 1080, fps: i
 
     A project has two timelines. The COMPOSITION holds scenes (a prompt, a model, a duration) on four lanes:
     'video' (video clips or still images), 'voice', 'music', 'sfx', plus markers that say what goes where. The EDIT
-    holds the real clips on tracks V1, V2 (above V1), A1, A2. Typical flow: studio_create -> one scene.add per
-    shot -> studio_generate(wait=True) -> check the takes -> edit.conform -> markers / cuts -> studio_export.
+    holds the real clips on tracks V1, V2 (above V1), A1, A2; track.add adds more. Typical flow: studio_create ->
+    one scene.add per shot -> studio_generate(wait=True) -> check the takes -> edit.conform -> markers / cuts ->
+    studio_export.
 
     Args:
         name: Project name.
@@ -953,14 +1000,26 @@ async def studio_create(name: str, width: int = 1920, height: int = 1080, fps: i
 
 
 @server.tool()
-async def studio_get(project_id: str) -> dict[str, Any]:
+async def studio_get(project_id: str, conform_plan: bool = False) -> dict[str, Any]:
     """A Studio project in compact form: scenes (status empty/running/done/error, take, error), markers (kind,
-    name, comment, params, done), clips (track, start_s, end_s, transition) and the edit length. Finished
-    generation jobs are already entered as takes. Markers of kind 'ai' that are not done are tasks the user left
-    for you: carry them out, then set them done with marker.update."""
+    name, comment, params, done), tracks (hidden, muted), clips (track, start_s, end_s, speed, transition) and the
+    edit length. Finished generation jobs are already entered as takes. Markers of kind 'ai' that are not done are
+    tasks the user left for you: carry them out, then set them done with marker.update.
+
+    Args:
+        project_id: The project.
+        conform_plan: Also return what edit.conform would do (create / replace / same per scene, the clips a new
+            clip would cover, takes already in the edit, clips the user has cut). Before conforming again into an
+            edit the user has worked on, read it and pass scenes / overwrite instead of overwriting blindly.
+    """
     async with await _client() as c:
         r = await c.get(f"/api/studio/projects/{project_id}", params={"format": "summary"})
-        return r.json() if r.status_code < 400 else {"ok": False, "error": r.text[:300]}
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.text[:300]}
+        out = r.json()
+        if conform_plan:
+            out["conform_plan"] = (await c.get(f"/api/studio/projects/{project_id}/conform")).json()
+        return out
 
 
 @server.tool()
@@ -970,20 +1029,31 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
 
     Commands:
       scene.add     lane (video|voice|music|sfx), prompt, title, kind (video|image|audio), model_id, start_s
-                    (default: end of the lane), duration_s (default 5), params (seed, width, height ...)
+                    (default: end of the lane), duration_s (default 5), params (seed, width, height,
+                    image_asset_id = start image of a video scene, quality = dfr|standard for LTX-2.5,
+                    audio_asset_id = a given sound such as an approved spoken line ...)
       scene.update  id + any of title, prompt, kind, model_id, lane, chain_from (scene id whose last frame becomes
-                    the start image), lyrics, params, start_s, duration_s
+                    the start image), params (merged), start_s, duration_s
       scene.delete  id
       scene.take    id, asset_id: choose a take or add any asset as a take
       marker.add    at_s, kind (place|transition|chain|audio|ai|note), name, comment, duration_s, params
                     (place: scene_id, track; transition: seconds; audio: scene_id)
       marker.update id + fields, done (true when an 'ai' task is finished); marker.delete id
+                    A 'transition' marker (params seconds, transition) acts at once on a video clip starting there.
       edit.conform  puts the chosen takes into the edit, swaps regenerated media into linked clips, applies the
-                    place/transition/audio markers
-      clip.add      track (V1|V2|A1|A2), asset_id, start_s, in_s, duration_s (overwrites what lies below)
-      clip.move     id, start_s, track;  clip.trim id + edge (start|end) + to_s, or in_s/out_s
+                    place/transition/audio markers. Optional scenes=[ids] (only these) and overwrite=[ids] (new
+                    clips that would cover others); check first with studio_get(conform_plan=True)
+      clip.add      track (V1, V2 ... A1, A2 ...), asset_id, start_s, in_s, duration_s or out_s, speed, gain_db
+                    (overwrites what lies below)
+      clip.move     id, start_s, track, or moves=[{id, start_s, track}] for a group (they keep their gaps)
+      clip.trim     id + edge (start|end) + to_s, or in_s/out_s (media time)
       clip.razor    at_s, track (all tracks if omitted);  clip.delete ids, ripple
-      clip.update   id, gain_db, muted, transition ({kind: 'dissolve', duration_s} or null)
+      clip.update   id, gain_db, muted, transition ({kind: dissolve|dip_black|dip_white|wipe, duration_s} or
+                    null), speed (1.0 = 100 %, 0.1 to 10; in/out stay media time, the length changes; if the
+                    longer clip runs into the next one, add overlap: clamp | ripple | overwrite)
+      track.add     kind (video: new top track, audio: new bottom track); track.delete id (not V1/A1);
+      track.update  id, hidden (video picture off), muted (sound off) -- both also apply to the export
+      batch         commands=[{command, params}] as one undo step
       project.update name, width, height, fps
 
     Args:

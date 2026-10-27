@@ -7,7 +7,13 @@ export const sec = (ticks: number) => ticks / TPS
 /** Dezimalzeichen der Oberflächensprache: 7,5 auf Deutsch, 7.5 auf Englisch. */
 export const decimal = (text: string) => (getLang() === 'de' ? text.replace('.', ',') : text)
 export const ticks = (seconds: number) => Math.round(seconds * TPS)
-export const clipEnd = (c: StudioClip) => c.start + (c.out - c.in)
+/** Geschwindigkeit eines Clips (1 = 100 %); ältere Projekte kennen das Feld nicht. */
+export const clipSpeed = (c: StudioClip) => c.speed ?? 1
+/** Länge auf der Zeitleiste: Material (Out − In) durch die Geschwindigkeit, wie studio.clip_length. */
+export const clipLength = (c: StudioClip) => Math.round((c.out - c.in) / clipSpeed(c))
+export const clipEnd = (c: StudioClip) => c.start + clipLength(c)
+/** Medienzeit (Ticks), die `offset` Ticks nach dem Clipanfang läuft. */
+export const mediaAt = (c: StudioClip, offset: number) => c.in + Math.round(offset * clipSpeed(c))
 
 /** Ein Bild in Ticks bei der Bildrate des Projekts. */
 export const frameTicks = (p: StudioProject) => Math.round((TPS * p.settings.fps[1]) / p.settings.fps[0])
@@ -42,8 +48,18 @@ export function clipAt(p: StudioProject, track: string, t: number): StudioClip |
   return p.clips.find((c) => c.track === track && c.start <= t && t < clipEnd(c))
 }
 
-/** Der Clip derselben Spur, der genau dort endet, wo dieser beginnt (für Überblendungen). */
+/** Der Clip derselben Spur, der genau dort endet, wo dieser beginnt (für Übergänge). */
 export function previousClip(p: StudioProject, c: StudioClip): StudioClip | undefined {
   const tol = TPS / 1000
   return p.clips.find((o) => o.track === c.track && o.id !== c.id && Math.abs(clipEnd(o) - c.start) < tol)
+}
+
+/** Spuren einer Art in Anzeigereihenfolge (Video von oben: V3, V2, V1; Ton: A1, A2 …). */
+export const tracksOf = (p: StudioProject, kind: 'video' | 'audio') => p.tracks.filter((tr) => tr.kind === kind)
+export const trackKind = (p: StudioProject, id: string) => p.tracks.find((tr) => tr.id === id)?.kind
+/** Die gewünschte Spur, sonst die mit der höchsten Nummer dieser Art (wie studio._track_or_highest). */
+export function trackOrHighest(p: StudioProject, wanted: string, kind: 'video' | 'audio'): string {
+  const ids = tracksOf(p, kind).map((tr) => tr.id)
+  if (ids.includes(wanted)) return wanted
+  return ids.reduce((a, b) => (Number(b.slice(1)) > Number(a.slice(1)) ? b : a), ids[0])
 }

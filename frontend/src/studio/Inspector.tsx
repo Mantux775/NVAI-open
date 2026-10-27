@@ -1,7 +1,7 @@
-// Eigenschaften der Auswahl: Szene (Prompt, Modell, Länge, Anschluss, Takes), Clip (In/Out, Lautstärke,
-// Überblendung), Marker (Art, Auftrag, Angaben je Art) oder Material (Angaben, Einfügen, Löschen); ohne Auswahl das
-// Projekt (Format, Bildrate). Eingaben gelten beim Verlassen des Feldes oder mit Enter; jede Änderung am Projekt ist
-// ein Befehl und lässt sich rückgängig machen.
+// Eigenschaften der Auswahl: Szene (Prompt, Modell, Länge, Anschluss, Takes), Clip (In/Out, Geschwindigkeit,
+// Lautstärke, Übergang), Übergang (Art, Dauer), Marker (Art, Auftrag, Angaben je Art) oder Material (Angaben, Einfügen,
+// Löschen); mehrere Objekte zeigen, was für alle gilt; ohne Auswahl das Projekt (Format, Bildrate). Eingaben gelten
+// beim Verlassen des Feldes oder mit Enter; jede Änderung am Projekt ist ein Befehl und lässt sich rückgängig machen.
 
 import { useEffect, useState } from 'react'
 import {
@@ -14,11 +14,12 @@ import {
   type StudioMarkerKind,
   type StudioProject,
   type StudioScene,
+  type StudioTransitionKind,
 } from '../api'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
-import { decimal, sec } from './time'
-import type { Selection } from './Timelines'
+import { clipLength, clipSpeed, decimal, sec, tracksOf, trackOrHighest } from './time'
+import { selIds, TRANSITION_LABEL, type Selection } from './Timelines'
 
 interface Props {
   project: StudioProject
@@ -31,6 +32,8 @@ interface Props {
   asset: Asset | null
   playhead: number
   onDeleteAsset: (a: Asset) => Promise<void>
+  /** Geschwindigkeit setzen; fragt nach, wenn der längere Clip an den nächsten stößt */
+  onSpeed: (c: StudioClip, speed: number) => void
 }
 
 /** Formate für bestehende Projekte (neue beginnen mit 1920 × 1080) */
@@ -61,8 +64,8 @@ export const MARKER_LABEL: Record<StudioMarkerKind, string> = {
 const MARKER_HINT: Record<StudioMarkerKind, string> = {
   place: t('Beim Übernehmen kommt die gewählte Szene an diese Stelle, auf die gewählte Spur (V2 liegt über V1).',
     'On conform, the chosen scene goes here, on the chosen track (V2 is above V1).'),
-  transition: t('Beim Übernehmen bekommt der Clip, der hier beginnt, eine Überblendung dieser Länge.',
-    'On conform, the clip that starts here gets a dissolve of this length.'),
+  transition: t('Der Videoclip, der hier beginnt, bekommt diesen Übergang: sofort, wenn er schon im Schnitt liegt, sonst beim Übernehmen. Wandert der Marker, wandert der Übergang mit.',
+    'The video clip that starts here gets this transition: right away if it is already in the edit, otherwise on conform. Move the marker and the transition moves along.'),
   chain: t('Beim Erzeugen beginnt die Videoszene an dieser Stelle mit dem letzten Bild der Szene davor (nahtloser Anschluss).',
     'On generate, the video scene starting here begins with the last frame of the scene before it (seamless chain).'),
   audio: t('Beim Übernehmen beginnt die gewählte Ton-Szene (Musik, Sprecher, Klang) an dieser Stelle.',
@@ -124,22 +127,98 @@ function Seconds({ label, value, onCommit, min = 0 }: { label: string; value: nu
   )
 }
 
-export function Inspector({ project, selection, models, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset }: Props) {
+export function Inspector({ project, selection, models, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed }: Props) {
   const p = project
   if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
   if (selection.type === 'asset') {
     return asset ? <AssetProps p={p} a={asset} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
   }
+  if ((selection.ids?.length ?? 1) > 1) return <ManyProps p={p} selection={selection} onCommand={onCommand} onGenerate={onGenerate} onSelect={onSelect} />
   if (selection.type === 'scene') {
     const s = p.scenes.find((x) => x.id === selection.id)
     return s ? <SceneProps p={p} s={s} models={models} onCommand={onCommand} onGenerate={onGenerate} /> : null
   }
   if (selection.type === 'clip') {
     const c = p.clips.find((x) => x.id === selection.id)
-    return c ? <ClipProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} /> : null
+    return c ? <ClipProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} onSpeed={onSpeed} /> : null
+  }
+  if (selection.type === 'transition') {
+    const c = p.clips.find((x) => x.id === selection.id)
+    return c?.transition ? <TransitionProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} /> : null
   }
   const m = p.markers.find((x) => x.id === selection.id)
   return m ? <MarkerProps p={p} m={m} onCommand={onCommand} /> : null
+}
+
+/** Mehrere Objekte derselben Art (Rahmen oder Umschalt-Klick): was für alle gilt. */
+function ManyProps({ p, selection, onCommand, onGenerate, onSelect }: {
+  p: StudioProject
+  selection: NonNullable<Selection>
+  onCommand: Props['onCommand']
+  onGenerate: Props['onGenerate']
+  onSelect: Props['onSelect']
+}) {
+  const ids = selIds(selection, selection.type)
+  const batch = (command: string, items: Record<string, unknown>[]) =>
+    onCommand('batch', { commands: items.map((params) => ({ command, params })) })
+  if (selection.type === 'clip') {
+    const clips = p.clips.filter((c) => ids.includes(c.id))
+    const allMuted = clips.every((c) => c.muted)
+    const from = Math.min(...clips.map((c) => c.start))
+    const to = Math.max(...clips.map((c) => c.start + clipLength(c)))
+    return (
+      <div className="st-inspector">
+        <h3>{t(`${clips.length} Clips`, `${clips.length} clips`)}</h3>
+        <p className="muted small">
+          {t(`Von ${decimal(sec(from).toFixed(2))} bis ${decimal(sec(to).toFixed(2))} s. Ziehen verschiebt alle zusammen, auch auf eine andere Spur.`,
+            `From ${decimal(sec(from).toFixed(2))} to ${decimal(sec(to).toFixed(2))} s. Dragging moves them all together, also to another track.`)}
+        </p>
+        <div className="st-actions">
+          <button className="btn small ghost" onClick={() => batch('clip.update', clips.map((c) => ({ id: c.id, muted: !allMuted })))}>
+            {allMuted ? t('Ton an', 'Unmute') : t('Stumm schalten', 'Mute')}
+          </button>
+          <button className="btn small ghost" onClick={() => batch('clip.update', clips.map((c) => ({ id: c.id, transition: { kind: 'dissolve', duration_s: 0.5 } })))}>
+            {t('Überblendung 0,5 s an jeden', 'Dissolve 0.5 s on each')}
+          </button>
+        </div>
+        <div className="st-actions">
+          <button className="btn small ghost" onClick={() => { onCommand('clip.delete', { ids }); onSelect(null) }}>{t('Löschen', 'Delete')}</button>
+          <button className="btn small ghost" onClick={() => { onCommand('clip.delete', { ids, ripple: true }); onSelect(null) }}>
+            {t('Löschen, Lücken schließen', 'Delete, close gaps')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+  if (selection.type === 'scene') {
+    const scenes = p.scenes.filter((s) => ids.includes(s.id))
+    const busy = scenes.filter((s) => s.status === 'running' || s.status === 'waiting').length
+    return (
+      <div className="st-inspector">
+        <h3>{t(`${scenes.length} Szenen`, `${scenes.length} scenes`)}</h3>
+        <p className="muted small">{t('Ziehen verschiebt alle zusammen.', 'Dragging moves them all together.')}</p>
+        <div className="st-actions">
+          <button className="btn primary small" disabled={busy === scenes.length} onClick={() => onGenerate(scenes.filter((s) => s.status !== 'running' && s.status !== 'waiting').map((s) => s.id))}>
+            {t('Alle erzeugen', 'Generate all')}
+          </button>
+          <button className="btn small ghost" onClick={() => { batch('scene.delete', scenes.map((s) => ({ id: s.id }))); onSelect(null) }}>{t('Löschen', 'Delete')}</button>
+        </div>
+      </div>
+    )
+  }
+  const markers = p.markers.filter((m) => ids.includes(m.id))
+  const allDone = markers.every((m) => m.done)
+  return (
+    <div className="st-inspector">
+      <h3>{t(`${markers.length} Marker`, `${markers.length} markers`)}</h3>
+      <div className="st-actions">
+        <button className="btn small ghost" onClick={() => batch('marker.update', markers.map((m) => ({ id: m.id, done: !allDone })))}>
+          {allDone ? t('Wieder offen', 'Reopen') : t('Erledigt', 'Done')}
+        </button>
+        <button className="btn small ghost" onClick={() => { batch('marker.delete', markers.map((m) => ({ id: m.id }))); onSelect(null) }}>{t('Löschen', 'Delete')}</button>
+      </div>
+    </div>
+  )
 }
 
 function SceneProps({ p, s, models, onCommand, onGenerate }: {
@@ -173,6 +252,10 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         value={s.prompt}
         area
         rows={6}
+        placeholder={s.lane === 'video' ? t(
+          'Ein Absatz: Einstellung, Handlung, Kamera, Ton. Personen: Gesicht im Bild lassen, sonst erfindet LTX ein neues; sprechen nur mit Gesicht im Bild, die Stimme immer gleich beschreiben („in a warm, cheerful, clear female voice“).',
+          'One paragraph: shot, action, camera, sound. People: keep the face in the picture, or LTX invents a new one; let them speak only with their face in the shot and describe the voice the same way every time ("in a warm, cheerful, clear female voice").',
+        ) : undefined}
         onCommit={(v) => update({ prompt: v })}
       />
       <div className="st-grid2">
@@ -293,8 +376,8 @@ function ProjectProps({ p, onCommand }: { p: StudioProject; onCommand: Props['on
       </p>
       <h4>{t('So geht es', 'How it works')}</h4>
       <p className="muted small">
-        {t('Eine Szene, einen Clip, einen Marker oder links Material anklicken. Doppelklick auf eine leere Bahn legt eine Szene an, auf die Markerzeile einen Marker. Leertaste spielt ab, C schneidet am Abspielkopf, Entf löscht, Esc zeigt wieder den Schnitt.',
-          'Click a scene, a clip, a marker or media on the left. Double-click an empty lane to add a scene, the marker row to add a marker. Space plays, C cuts at the playhead, Del deletes, Esc shows the edit again.')}
+        {t('Eine Szene, einen Clip, einen Marker oder links Material anklicken; Rechtsklick zeigt überall, was geht. Werkzeuge links oben: Auswahl (V), Schneiden (C), Magnet (S, ohne Magnet andocken mit Umschalt). Mehrere Objekte: Rahmen im Leeren aufziehen oder Umschalt-Klick. Leertaste spielt ab, Strg+K schneidet am Abspielkopf, Strg+C/X/V kopiert, schneidet aus, fügt am Abspielkopf ein, Strg+D setzt eine Überblendung, Entf löscht, Esc zeigt wieder den Schnitt. Spuren: Rechtsklick auf V1, A1 … fügt hinzu oder entfernt, Auge und Lautsprecher schalten Bild und Ton (auch im Export).',
+          'Click a scene, a clip, a marker or media on the left; right-click anywhere shows what you can do. Tools at the top left: Selection (V), Razor (C), Magnet (S; without it, hold Shift to dock). Several objects: drag a box in empty space or Shift-click. Space plays, Ctrl+K cuts at the playhead, Ctrl+C/X/V copies, cuts, pastes at the playhead, Ctrl+D adds a dissolve, Del deletes, Esc shows the edit again. Tracks: right-click V1, A1 … to add or remove, the eye and speaker switch picture and sound (also in the export).')}
       </p>
     </div>
   )
@@ -312,7 +395,7 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
   const kind = mediaKind(a)
   const m = a.meta ?? {}
   const used = p.clips.some((c) => c.asset_id === a.id)
-  const track = kind === 'audio' ? 'A2' : 'V1'
+  const track = kind === 'audio' ? trackOrHighest(p, 'A2', 'audio') : 'V1'
   const created = new Date(a.created_at * 1000).toLocaleString(t('de-DE', 'en-GB'), { dateStyle: 'short', timeStyle: 'short' })
   const rows: [string, string][] = []
   if (m.model_name) rows.push([t('Modell', 'Model'), String(m.model_name)])
@@ -352,6 +435,8 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
                   </a>
                 ) : m.studio_project ? (
                   t('nein, ein Export', 'no, an export')
+                ) : m.imported ? (
+                  t('nein, ohne verlustfreie Kopie importiert', 'no, imported without the lossless copy')
                 ) : (
                   t('nein (vor 0.5.13 oder abgeschaltet)', 'no (before 0.5.13 or switched off)')
                 )}
@@ -387,10 +472,46 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
   )
 }
 
-function ClipProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: StudioClip; onCommand: Props['onCommand']; onSelect: Props['onSelect'] }) {
+/** Auswahl der Übergangsart (klassisch gerechnet, in Vorschau und Export gleich). */
+function TransitionKind({ value, onChange }: { value: StudioTransitionKind; onChange: (k: StudioTransitionKind) => void }) {
+  return (
+    <label className="st-field">
+      <span>{t('Art', 'Kind')}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as StudioTransitionKind)}>
+        {Object.entries(TRANSITION_LABEL).map(([id, label]) => (
+          <option key={id} value={id}>{label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/** Geschwindigkeit in Prozent (wie FilmCraft: In und Out bleiben, die Länge ändert sich). */
+function Speed({ c, onSpeed }: { c: StudioClip; onSpeed: Props['onSpeed'] }) {
+  const pct = Math.round(clipSpeed(c) * 1000) / 10
+  return (
+    <Field
+      label={t('Geschwindigkeit (%)', 'Speed (%)')}
+      value={decimal(String(pct))}
+      onCommit={(v) => {
+        const n = parseFloat(v.replace(',', '.').replace('%', ''))
+        if (Number.isFinite(n) && n >= 10 && n <= 1000 && n !== pct) onSpeed(c, n / 100)
+      }}
+    />
+  )
+}
+
+function ClipProps({ p, c, onCommand, onSelect, onSpeed }: {
+  p: StudioProject
+  c: StudioClip
+  onCommand: Props['onCommand']
+  onSelect: Props['onSelect']
+  onSpeed: Props['onSpeed']
+}) {
   const media = p.media[c.asset_id]
   const scene = c.scene_id ? p.scenes.find((s) => s.id === c.scene_id) : undefined
   const update = (fields: Record<string, unknown>) => onCommand('clip.update', { id: c.id, ...fields })
+  const speed = clipSpeed(c)
   return (
     <div className="st-inspector">
       <h3>{t('Clip', 'Clip')} · {c.track}</h3>
@@ -402,10 +523,16 @@ function ClipProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: StudioC
       )}
       <div className="st-grid2">
         <Seconds label={t('Start (s)', 'Start (s)')} value={c.start} onCommit={(v) => onCommand('clip.move', { id: c.id, start: v })} />
-        <Seconds label={t('Länge (s)', 'Length (s)')} value={c.out - c.in} min={0.04} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: c.in + v })} />
+        <Seconds label={t('Länge (s)', 'Length (s)')} value={clipLength(c)} min={0.04} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: c.in + Math.round(v * speed) })} />
         <Seconds label={t('In (s)', 'In (s)')} value={c.in} onCommit={(v) => onCommand('clip.trim', { id: c.id, in: v })} />
         <Seconds label={t('Out (s)', 'Out (s)')} value={c.out} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: v })} />
+        {media?.kind !== 'image' && <Speed c={c} onSpeed={onSpeed} />}
       </div>
+      {media?.kind !== 'image' && speed !== 1 && (
+        <p className="muted small">
+          {t('In und Out sind Zeiten im Material. Der Ton behält seine Tonhöhe.', 'In and Out are times in the material. The sound keeps its pitch.')}
+        </p>
+      )}
       {media?.kind !== 'image' && (
         <>
           <label className="st-field">
@@ -413,7 +540,8 @@ function ClipProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: StudioC
             <input type="range" min={-30} max={12} step={1} value={c.gain_db} onChange={(e) => update({ gain_db: Number(e.target.value) })} />
           </label>
           <label className="st-check">
-            <input type="checkbox" checked={c.muted} onChange={(e) => update({ muted: e.target.checked })} /> {t('Stumm', 'Muted')}
+            <input type="checkbox" checked={c.muted} onChange={(e) => update({ muted: e.target.checked })} />
+            <span>{t('Stumm', 'Muted')}</span>
           </label>
         </>
       )}
@@ -422,21 +550,54 @@ function ClipProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: StudioC
           type="checkbox"
           checked={!!c.transition}
           onChange={(e) => update({ transition: e.target.checked ? { kind: 'dissolve', duration_s: 0.5 } : null })}
-        />{' '}
-        {t('Überblenden vom vorigen Clip', 'Dissolve from the previous clip')}
+        />
+        <span>{t('Übergang vom vorigen Clip', 'Transition from the previous clip')}</span>
       </label>
       {c.transition && (
-        <Seconds
-          label={t('Überblendung (s)', 'Dissolve (s)')}
-          value={c.transition.duration}
-          min={0.04}
-          onCommit={(v) => update({ transition: { kind: 'dissolve', duration: v } })}
-        />
+        <div className="st-grid2">
+          <TransitionKind value={c.transition.kind} onChange={(kind) => update({ transition: { kind, duration: c.transition!.duration } })} />
+          <Seconds
+            label={t('Dauer (s)', 'Duration (s)')}
+            value={c.transition.duration}
+            min={0.04}
+            onCommit={(v) => update({ transition: { kind: c.transition!.kind, duration: v } })}
+          />
+        </div>
       )}
       <div className="st-actions">
         <button className="btn small ghost" onClick={() => onCommand('clip.delete', { ids: [c.id] })}>{t('Löschen', 'Delete')}</button>
         <button className="btn small ghost" onClick={() => onCommand('clip.delete', { ids: [c.id], ripple: true })}>
           {t('Löschen, Lücke schließen', 'Delete, close gap')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TransitionProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: StudioClip; onCommand: Props['onCommand']; onSelect: Props['onSelect'] }) {
+  const tr = c.transition!
+  const update = (fields: Record<string, unknown>) => onCommand('clip.update', { id: c.id, transition: { kind: tr.kind, duration: tr.duration, ...fields } })
+  const marker = tr.marker ? p.markers.find((m) => m.id === tr.marker) : undefined
+  return (
+    <div className="st-inspector">
+      <h3>{t('Übergang', 'Transition')} · {c.track}</h3>
+      <p className="muted small">
+        {t('Klassisch gerechnet, ohne KI: Vorschau und Export zeigen dasselbe. Der vorige Clip läuft dafür über sein Ende hinaus weiter; reicht sein Material nicht, steht sein letztes Bild.',
+          'Computed classically, no AI: preview and export show the same. The previous clip runs on past its end; if its material runs out, its last frame holds.')}
+      </p>
+      <div className="st-grid2">
+        <TransitionKind value={tr.kind} onChange={(kind) => update({ kind })} />
+        <Seconds label={t('Dauer (s)', 'Duration (s)')} value={tr.duration} min={0.04} onCommit={(v) => update({ duration: v })} />
+      </div>
+      {marker && (
+        <button className="link-btn small" onClick={() => onSelect({ type: 'marker', id: marker.id })}>
+          {t('Kommt vom Übergang-Marker', 'Comes from the transition marker')} {marker.name ? t(`„${marker.name}“`, `"${marker.name}"`) : ''}
+        </button>
+      )}
+      <div className="st-actions">
+        <button className="btn small ghost" onClick={() => onSelect({ type: 'clip', id: c.id })}>{t('Zum Clip', 'To the clip')}</button>
+        <button className="btn small ghost" onClick={() => { onCommand('clip.update', { id: c.id, transition: null }); onSelect({ type: 'clip', id: c.id }) }}>
+          {t('Entfernen', 'Remove')}
         </button>
       </div>
     </div>
@@ -486,24 +647,31 @@ function MarkerProps({ p, m, onCommand }: { p: StudioProject; m: StudioMarker; o
           {sceneSelect(['video'])}
           <label className="st-field">
             <span>{t('Spur', 'Track')}</span>
-            <select value={m.params.track ?? 'V2'} onChange={(e) => update({ params: { track: e.target.value } })}>
-              <option value="V2">V2 ({t('oben', 'top')})</option>
-              <option value="V1">V1</option>
+            <select value={trackOrHighest(p, m.params.track ?? 'V2', 'video')} onChange={(e) => update({ params: { track: e.target.value } })}>
+              {tracksOf(p, 'video').map((tr, i) => (
+                <option key={tr.id} value={tr.id}>{tr.id}{i === 0 ? ` (${t('oben', 'top')})` : ''}</option>
+              ))}
             </select>
           </label>
         </>
       )}
       {m.kind === 'audio' && sceneSelect(['voice', 'music', 'sfx'])}
-      {m.kind === 'transition' && !m.duration && (
-        <Seconds
-          label={t('Überblendung (s)', 'Dissolve (s)')}
-          value={Math.round((m.params.seconds ?? 0.5) * TPS)}
-          min={0.04}
-          onCommit={(v) => update({ params: { seconds: v / TPS } })}
-        />
+      {m.kind === 'transition' && (
+        <div className="st-grid2">
+          <TransitionKind value={m.params.transition ?? 'dissolve'} onChange={(kind) => update({ params: { transition: kind } })} />
+          {!m.duration && (
+            <Seconds
+              label={t('Dauer (s)', 'Duration (s)')}
+              value={Math.round((m.params.seconds ?? 0.5) * TPS)}
+              min={0.04}
+              onCommit={(v) => update({ params: { seconds: v / TPS } })}
+            />
+          )}
+        </div>
       )}
       <label className="st-check">
-        <input type="checkbox" checked={m.done} onChange={(e) => update({ done: e.target.checked })} /> {t('Erledigt', 'Done')}
+        <input type="checkbox" checked={m.done} onChange={(e) => update({ done: e.target.checked })} />
+        <span>{t('Erledigt', 'Done')}</span>
       </label>
       <div className="st-actions">
         <button className="btn small ghost" onClick={() => onCommand('marker.delete', { id: m.id })}>{t('Löschen', 'Delete')}</button>

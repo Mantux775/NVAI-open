@@ -1,20 +1,25 @@
 // Material (Nutzer 26.10.2026: „kompakter und aktueller ansicht, ich soll assets hier auch löschen können, genau so
 // abspielen oder vorschau anzeigen wenn ich den anklicke“): alles aus dem Verlauf, neueste zuerst, als kompakte Liste
 // oder als Kacheln, mit Filter und Suche. Fertige Aufträge, Hochladen und Löschen kommen live dazu. Ein Klick zeigt
-// das Asset im Monitor und spielt es ab; Ziehen auf eine Spur legt einen Clip an, auf eine Szene einen Take. Löschen
-// fragt im Knopf selbst nach (kein Browser-Dialog) und lässt, was im Schnitt liegt, stehen.
+// das Asset im Monitor und spielt es ab; Ziehen auf eine Spur legt einen Clip an, auf eine Szene einen Take. Rechtsklick
+// (Nutzer 27.10.2026): an eine Spur senden, Speicherort öffnen, Datei öffnen, löschen. Löschen fragt im Knopf selbst
+// nach (kein Browser-Dialog) und lässt, was im Schnitt liegt, stehen. Geladen werden je 100 (Nutzer 27.10.: „lädt nicht
+// alle Assets … max 100, dann weitere 100. Suche soll alle durchsuchen“); Filter und Suche fragt der Server über alles.
 
-import { useEffect, useRef, useState, type DragEvent as RDragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent as RDragEvent, type MouseEvent as RMouseEvent } from 'react'
 import { api, type Asset } from '../api'
 import { t } from '../i18n'
+import type { MenuItem } from './ContextMenu'
 import { ASSET_MIME } from './Timelines'
 import { decimal } from './time'
 
 type Filter = 'all' | 'image' | 'video' | 'audio'
 type View = 'list' | 'grid'
-const VIDEO = /\.(mp4|webm|mov|mkv)$/i
-const AUDIO = /\.(mp3|wav|flac|ogg|m4a|aac)$/i
+// wie db.UPLOAD_VIDEO / UPLOAD_AUDIO auf dem Server
+const VIDEO = /\.(mp4|webm|mov|mkv|avi|wmv|flv|mxf|mts|m2ts|ts)$/i
+const AUDIO = /\.(mp3|wav|flac|ogg|m4a|aac|opus)$/i
 const KEY_VIEW = 'nvai-studio-bin-view'
+const PAGE = 100
 
 /** Uploads tragen keine Art; die Endung sagt sie. */
 export function mediaKind(a: Asset): 'image' | 'video' | 'audio' | null {
@@ -98,27 +103,58 @@ interface Props {
   usedIds: Set<string>
   onOpen: (a: Asset) => void
   onDeleted: (id: string) => void
+  /** Einträge des Rechtsklick-Menüs, die das Studio beisteuert (an eine Spur senden …) */
+  menuItems: (a: Asset) => MenuItem[]
+  onMenu: (e: { clientX: number; clientY: number }, items: MenuItem[]) => void
 }
 
-export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Props) {
+export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuItems, onMenu }: Props) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('') // die Suche mit kurzer Pause nach dem Tippen
+  const [more, setMore] = useState(false) // liefert der Server noch weitere?
+  const [loading, setLoading] = useState(false)
   const [view, setView] = useState<View>(stored)
   const [confirm, setConfirm] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const count = useRef(0) // wie viele geladen sind: beim Auffrischen nicht wieder auf 100 schrumpfen
+  const ask = useRef(0) // nur die Antwort auf die letzte Anfrage zählt
 
-  const load = () =>
+  /** Erste Seite neu (oder so viele wie schon geladen) bzw. die nächsten 100 dazu. */
+  const load = (append: boolean, keep = false) => {
+    const my = ++ask.current
+    const offset = append ? count.current : 0
+    const limit = append ? PAGE : keep ? Math.max(PAGE, Math.ceil(count.current / PAGE) * PAGE) : PAGE
+    setLoading(true)
     api
-      .assets(undefined, 300)
+      .assetPage({ media: filter, q: search || undefined, limit, offset })
       .then((list) => {
-        setAssets(list.filter((a) => mediaKind(a) !== null))
+        if (my !== ask.current) return
+        const next = append ? [...assets, ...list.filter((a) => !assets.some((x) => x.id === a.id))] : list
+        count.current = next.length
+        setAssets(next)
+        setMore(list.length === limit)
         setError(null)
       })
-      .catch((e) => setError(String(e.message ?? e)))
+      .catch((e) => my === ask.current && setError(String(e.message ?? e)))
+      .finally(() => my === ask.current && setLoading(false))
+  }
 
   useEffect(() => {
-    load()
+    const id = setTimeout(() => setSearch(query.trim()), 250)
+    return () => clearTimeout(id)
+  }, [query])
+
+  // neuer Filter oder neue Suche: von vorn; neue Aufträge, Hochladen, Löschen: so viele wie schon geladen
+  useEffect(() => {
+    count.current = 0
+    load(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, search])
+  useEffect(() => {
+    if (refreshKey) load(false, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey])
 
   const switchView = (v: View) => {
@@ -134,7 +170,7 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Prop
     if (!files) return
     try {
       for (const f of Array.from(files)) await api.upload(f)
-      load()
+      load(false, true)
     } catch (e: any) {
       setError(String(e.message ?? e))
     }
@@ -154,16 +190,14 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Prop
     try {
       await api.deleteAsset(a.id)
       setAssets((list) => list.filter((x) => x.id !== a.id))
+      count.current = Math.max(0, count.current - 1)
       onDeleted(a.id)
     } catch (e: any) {
       setError(String(e.message ?? e))
     }
   }
 
-  const q = query.trim().toLowerCase()
-  const shown = assets.filter(
-    (a) => (filter === 'all' || mediaKind(a) === filter) && (!q || assetLabel(a).toLowerCase().includes(q)),
-  )
+  const shown = assets.filter((a) => mediaKind(a) !== null)
   const filters: [Filter, string][] = [
     ['all', t('Alle', 'All')],
     ['image', t('Bilder', 'Images')],
@@ -192,6 +226,20 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Prop
       draggable: true,
       title: assetLabel(a),
       onClick: () => onOpen(a),
+      onContextMenu: (e: RMouseEvent) => {
+        e.preventDefault()
+        onOpen(a)
+        onMenu(e, [
+          ...menuItems(a),
+          {
+            label: used ? t('Löschen (liegt im Schnitt)', 'Delete (in the edit)') : t('Löschen …', 'Delete …'),
+            disabled: used,
+            danger: true,
+            separator: true,
+            onClick: () => remove(a), // der Knopf in der Zeile fragt noch einmal nach
+          },
+        ])
+      },
       onDragStart: (e: RDragEvent) => {
         e.dataTransfer.setData(ASSET_MIME, JSON.stringify({ id: a.id, kind }))
         e.dataTransfer.effectAllowed = 'copy'
@@ -230,7 +278,9 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Prop
     <div className="st-bin">
       <div className="st-bin-head">
         <b>{t('Material', 'Media')}</b>
-        <span className="muted small">{shown.length}</span>
+        <span className="muted small" title={more ? t('Weitere lassen sich nachladen', 'More can be loaded') : undefined}>
+          {shown.length}{more ? '+' : ''}
+        </span>
         <span className="st-spacer" />
         <button className={`btn small ghost${view === 'list' ? ' active' : ''}`} onClick={() => switchView('list')} title={t('Liste', 'List')}>☰</button>
         <button className={`btn small ghost${view === 'grid' ? ' active' : ''}`} onClick={() => switchView('grid')} title={t('Kacheln', 'Tiles')}>▦</button>
@@ -254,7 +304,14 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted }: Prop
       )}
       <div className={view === 'grid' ? 'st-bin-list' : 'st-bin-rows'}>
         {shown.map(item)}
-        {shown.length === 0 && <p className="muted small">{q ? t('Nichts gefunden.', 'Nothing found.') : t('Noch nichts da.', 'Nothing here yet.')}</p>}
+        {shown.length === 0 && !loading && (
+          <p className="muted small">{search ? t('Nichts gefunden.', 'Nothing found.') : t('Noch nichts da.', 'Nothing here yet.')}</p>
+        )}
+        {more && (
+          <button className="btn small ghost st-bin-more" disabled={loading} onClick={() => load(true)}>
+            {loading ? t('Lädt …', 'Loading …') : t(`Weitere ${PAGE} laden`, `Load ${PAGE} more`)}
+          </button>
+        )}
       </div>
     </div>
   )

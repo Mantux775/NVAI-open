@@ -161,6 +161,47 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Gesicht groß und sauber im Startbild', 'A large, clean face in the start image'),
+      text: t(
+        'LTX rechnet in Zellen von 32 px: Gesichter unter rund 200 px und rennende Nebenfiguren zerliefen. Halbnah '
+          + 'oder näher; Startbild mit FLUX 3 und einer frontalen, geschärften Vorlage (mit Seitenblick kamen schiefe '
+          + 'Augen).',
+        'LTX works in cells of 32 px: faces under about 200 px and running extras melted. Medium shot or closer; '
+          + 'start image from FLUX 3 with a frontal, sharpened reference (a sideways glance gave crooked eyes).',
+      ),
+    },
+    {
+      head: t('Kamera mit Endbild festhalten', 'Hold the camera with an end image'),
+      text: t(
+        '„Static camera“ im Prompt fuhr trotzdem heran (3 von 3). Mit einem Endbild, das FLUX 3 aus dem Startbild '
+          + 'bearbeitet (gleiches Gesicht, gleicher Ausschnitt), stand die Kamera, und das Gesicht war am Ende wieder '
+          + 'dasselbe.',
+        '“Static camera” in the prompt still pushed in (3 of 3). With an end image that FLUX 3 edits from the start '
+          + 'image (same face, same framing), the camera stayed put and the face was the same again at the end.',
+      ),
+    },
+    {
+      head: t('Gleiche Stimme in mehreren Clips', 'The same voice across clips'),
+      text: t(
+        'LTX erfindet die Stimme in jedem Clip neu. Sie passte, wenn das Gesicht im Bild war und die Beschreibung '
+          + 'wortgleich blieb; aus dem Off und von hinten klang sie anders. Je Satz 2–3 Varianten machen und nach Gehör '
+          + 'wählen.',
+        'LTX makes up the voice anew in every clip. It matched when the face was in the picture and the description '
+          + 'stayed word for word the same; off-screen and from behind it sounded different. Make 2–3 variants per line '
+          + 'and pick by ear.',
+      ),
+    },
+    {
+      head: t('Gesichter: nicht verlängern, höchstens 6 s', 'Faces: no extending, 6 s at most'),
+      text: t(
+        'Verlängern kennt nur das letzte Bild; im angehängten Teil kam mehrfach ein anderer Mann. Längere Szenen aus '
+          + 'Abschnitten mit Start- und Endbild. 8 s in 1920 × 832 mit DFR passen nicht in 16 GB (20–60 statt 6,5 min).',
+        'Extending only sees the last frame; the appended part showed a different man several times. Build longer '
+          + 'scenes from parts with start and end images. 8 s at 1920 × 832 with DFR does not fit in 16 GB (20–60 '
+          + 'instead of 6.5 min).',
+      ),
+    },
+    {
       head: t('Schleife nur mit ruhiger Kamera', 'Loop only with a still camera'),
       text: t(
         'Mit Heranfahren zerfiel die Schleife in den letzten Frames.',

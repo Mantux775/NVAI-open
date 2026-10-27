@@ -1498,11 +1498,17 @@ def _check_video_options(p: dict[str, Any], entry: dict[str, Any]) -> None:
                              "Start and end image or a loop only work without DFR."))
 
 
+AUDIO_UPLOAD_SUFFIXES = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".opus"}
+
+
 def _stage_audio(asset_id: str) -> tuple[str, float | None]:
     """Ton-Asset nach ComfyUIs input/ (LoadAudio) und seine Laenge in Sekunden, soweit bekannt:
-    aus den Metadaten der Erzeugung, bei WAV aus dem Dateikopf."""
+    aus den Metadaten der Erzeugung, bei WAV aus dem Dateikopf. Auch ein hochgeladener Ton geht (Nutzer 27.10.:
+    eine schon abgenommene Stimme einem neuen Clip vorgeben, damit sie gleich klingt)."""
     asset = db.get_asset(asset_id)
-    if asset is None or asset.kind != "audio":
+    uploaded_audio = (asset is not None and asset.kind == "upload"
+                      and Path(asset.filename).suffix.lower() in AUDIO_UPLOAD_SUFFIXES)
+    if asset is None or not (asset.kind == "audio" or uploaded_audio):
         raise RuntimeError(t(f"Ton nicht gefunden: {asset_id}", f"Audio not found: {asset_id}"))
     src = config.ASSET_DIR / asset.filename
     if not src.exists():

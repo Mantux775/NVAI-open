@@ -92,7 +92,9 @@ _LTX25_FEATURES_EN = {
         "One paragraph in the present tense, 4 to 8 sentences: the shot, setting and light, the "
         "action from start to end with verbs, the people, the camera movement, last the sound. "
         "Spoken lines in quotation marks. Several shots: write every cut out (\"A hard cut "
-        "transitions to …\"), 2 to 4 shots."),
+        "transitions to …\"), 2 to 4 shots. People: keep the face large and frontal in the start "
+        "image and don't let them turn away; let them speak only with their face in the shot and the "
+        "same voice description, otherwise the voice changes."),
 }
 
 

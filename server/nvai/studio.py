@@ -1,9 +1,13 @@
 """Studio: Projekte mit zwei Zeitleisten (Nutzer 26.10.2026, Anleitung docs/STUDIO.md).
 
 Komposition: Szenen mit Prompt, Modell und Dauer auf Bahnen (Bild/Video, Sprecher, Musik, Klang), dazu Marker, die
-sagen, was wohin soll. Schnitt: die echten Clips auf Spuren (V1, V2, A1, A2) mit In/Out, Ueberblendung und
-Lautstaerke. Ein Clip bleibt mit seiner Szene verbunden: Wird sie neu erzeugt, tauscht er beim Uebernehmen sein
-Material und behaelt den Schnitt, soweit das neue Material reicht.
+sagen, was wohin soll. Schnitt: die echten Clips auf Spuren (V1 unten, V2 … darueber, A1, A2 …; Spuren lassen sich
+hinzufuegen, entfernen, ausblenden und stumm schalten) mit In/Out, Geschwindigkeit, Uebergang und Lautstaerke. Ein
+Clip bleibt mit seiner Szene verbunden: Wird sie neu erzeugt, tauscht er beim Uebernehmen sein Material und behaelt
+den Schnitt, soweit das neue Material reicht.
+
+Geschwindigkeit wie bei FilmCraft: In/Out bleiben Medienzeit, die Laenge auf der Zeitleiste ist (Out − In) durch die
+Geschwindigkeit (clip_length); 0,5 = halb so schnell, doppelt so lang.
 
 Zeit in ganzzahligen Ticks wie bei FilmCraft (254 016 000 000 je Sekunde: teilt jede Bild- und Abtastrate, kein
 Rundungsfehler bei 29,97 fps). Befehle nehmen Zeiten in Ticks (`start`, `duration`, `at`, `in`, `out`) oder in
@@ -21,8 +25,10 @@ import json
 import os
 import re
 import subprocess
+import shutil
 import threading
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
@@ -42,6 +48,11 @@ TRACKS = [{"id": "V2", "kind": "video"}, {"id": "V1", "kind": "video"},
 MARKER_KINDS = ("place", "transition", "chain", "audio", "ai", "note")
 MARKER_COLORS = {"place": "blue", "transition": "yellow", "chain": "green", "audio": "cyan", "ai": "purple",
                  "note": "gray"}
+MAX_TRACKS = 8  # je Art
+# Klassische Übergänge, gerechnet in Vorschau und Export (nichts davon erzeugt die KI): Überblendung, Abblende über
+# Schwarz bzw. Weiß, Wischblende von links. Der Ton blendet bei allen über.
+TRANSITION_KINDS = ("dissolve", "dip_black", "dip_white", "wipe")
+SPEED_MIN, SPEED_MAX = 0.1, 10.0  # 10 bis 1000 %
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 DEFAULT_IMAGE_SECONDS = 5.0
 
@@ -99,11 +110,25 @@ def _path(pid: str) -> Path:
     return _dir() / f"{pid}.json"
 
 
+def _replace(tmp: Path, path: Path) -> None:
+    """os.replace mit kurzem Wiederholen. Unter Windows scheitert es mit WinError 5, solange ein anderer die Datei
+    offen hat: Gemessen 27.10.2026 im Funktionstest von 0.5.14 las die offene Weboberfläche gerade die Projektliste
+    (`list_projects`), als der nächste Befehl das eben angelegte Projekt speicherte (500 statt 200)."""
+    for attempt in range(40):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 39:
+                raise
+            time.sleep(0.05)
+
+
 def _save(p: dict[str, Any]) -> None:
     path = _path(p["id"])
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    _replace(tmp, path)
     # Die Oberflaeche laedt nach, auch wenn Claude per MCP oder ein fertiger Auftrag das Projekt geaendert hat
     jobs.publish({"type": "studio.changed", "project_id": p["id"], "updated_at": p.get("updated_at")})
 
@@ -155,7 +180,7 @@ def delete(pid: str) -> None:
     trash = _dir() / "papierkorb"
     trash.mkdir(exist_ok=True)
     with _lock:
-        os.replace(path, trash / f"{pid}-{int(time.time())}.json")
+        _replace(path, trash / f"{pid}-{int(time.time())}.json")
         _undo.pop(pid, None)
         _redo.pop(pid, None)
 
@@ -214,8 +239,22 @@ def _find(items: list[dict[str, Any]], item_id: str, what: str) -> dict[str, Any
     raise NotFound(t(f"Unbekannte {what}: {item_id}", f"Unknown {what}: {item_id}"))
 
 
+def clip_speed(c: dict[str, Any]) -> float:
+    return float(c.get("speed") or 1.0)  # Projekte vor der Geschwindigkeit kennen das Feld nicht
+
+
+def clip_length(c: dict[str, Any]) -> int:
+    """Länge auf der Zeitleiste: Material (Out − In) durch die Geschwindigkeit."""
+    return int(round((c["out"] - c["in"]) / clip_speed(c)))
+
+
 def clip_end(c: dict[str, Any]) -> int:
-    return c["start"] + (c["out"] - c["in"])
+    return c["start"] + clip_length(c)
+
+
+def _media_at(c: dict[str, Any], offset: int) -> int:
+    """Medienzeit, die `offset` Ticks nach dem Clipanfang auf der Zeitleiste läuft."""
+    return c["in"] + int(round(offset * clip_speed(c)))
 
 
 def edit_duration(p: dict[str, Any]) -> int:
@@ -341,8 +380,21 @@ def _project_update(p: dict[str, Any], a: dict[str, Any]) -> None:
 SCENE_FIELDS = ("title", "prompt", "kind", "model_id", "lane", "chain_from", "lyrics")
 
 
+@command("batch", "Mehrere Befehle als ein Schritt (ein Rückgängig), etwa beim Einfügen mehrerer Clips: commands "
+         "[{command, params}]; scheitert einer, bleibt alles beim Alten")
+def _batch(p: dict[str, Any], a: dict[str, Any]) -> dict[str, list[Any]]:
+    results = []
+    for item in a.get("commands") or []:
+        name = str(item.get("command", ""))
+        if name == "batch" or name not in COMMANDS:
+            raise StudioError(t(f"Unbekannter Befehl im Stapel: {name}", f"Unknown command in the batch: {name}"))
+        results.append(COMMANDS[name](p, dict(item.get("params") or {})))
+    return {"results": results}
+
+
 @command("scene.add", "Szene anlegen: lane (video|voice|music|sfx), prompt, title, kind (video|image|audio), "
-         "model_id, start/start_s (sonst hinten an der Bahn), duration/duration_s (Vorgabe 5 s), params")
+         "model_id, start/start_s (sonst hinten an der Bahn), duration/duration_s (Vorgabe 5 s), params; takes und "
+         "take übernehmen vorhandenes Material (Einfügen einer kopierten Szene)")
 def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     lane = a.get("lane", "video")
     if lane not in LANES:
@@ -354,17 +406,21 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     kind = a.get("kind") or ("video" if lane == "video" else "audio")
     if kind not in ("video", "image", "audio"):
         raise StudioError(t("kind ist video, image oder audio.", "kind is video, image or audio."))
+    takes = [str(x) for x in a.get("takes") or []]  # beim Einfügen einer kopierten Szene
+    for asset_id in takes:
+        _media(p, asset_id)
+    take = a.get("take") if a.get("take") in takes else (takes[-1] if takes else None)
     scene = {"id": db.new_id("sc"), "lane": lane, "start": max(0, start), "duration": duration,
              "title": str(a.get("title", "")), "prompt": str(a.get("prompt", "")), "kind": kind,
              "model_id": a.get("model_id"), "lyrics": str(a.get("lyrics", "")), "params": dict(a.get("params") or {}),
-             "chain_from": a.get("chain_from"), "takes": [], "take": None, "jobs": [], "error": None}
+             "chain_from": a.get("chain_from"), "takes": takes, "take": take, "jobs": [], "error": None}
     p["scenes"].append(scene)
     p["scenes"].sort(key=lambda s: (LANES.index(s["lane"]), s["start"]))
     return {"id": scene["id"]}
 
 
-@command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, lyrics, params "
-         "(wird zusammengeführt), start/start_s, duration/duration_s")
+@command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, params "
+         "(wird zusammengeführt, z. B. image_asset_id, quality, seed), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
     for key in SCENE_FIELDS:
@@ -425,6 +481,7 @@ def _marker_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
               "color": a.get("color") or MARKER_COLORS[kind], "params": dict(a.get("params") or {}), "done": False}
     p["markers"].append(marker)
     p["markers"].sort(key=lambda m: m["at"])
+    _apply_transition_marker(p, marker)
     return {"id": marker["id"]}
 
 
@@ -449,11 +506,38 @@ def _marker_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     if duration is not None:
         m["duration"] = max(0, duration)
     p["markers"].sort(key=lambda x: x["at"])
+    if any(k in a for k in ("at", "at_s", "duration", "duration_s", "kind", "params")):
+        _apply_transition_marker(p, m)
 
 
-@command("marker.delete", "Marker löschen: id")
+@command("marker.delete", "Marker löschen: id. Eine Überblendung, die er gesetzt hat, bleibt am Clip")
 def _marker_delete(p: dict[str, Any], a: dict[str, Any]) -> None:
-    p["markers"].remove(_find(p["markers"], a.get("id", ""), t("Marker", "marker")))
+    m = _find(p["markers"], a.get("id", ""), t("Marker", "marker"))
+    p["markers"].remove(m)
+    for c in p["clips"]:
+        if (c.get("transition") or {}).get("marker") == m["id"]:
+            c["transition"].pop("marker")
+
+
+def _apply_transition_marker(p: dict[str, Any], m: dict[str, Any]) -> bool:
+    """Übergang-Marker wirken sofort (Nutzer 27.10.2026: „Überblendungen wirken sofort, wenn ich sie anlege“): auf
+    den Videoclip, der am Marker (± eine halbe Sekunde) beginnt, untere Spur zuerst. Wandert der Marker oder ändert
+    er Art oder Dauer, wandert die Überblendung mit; liegt dort noch kein Clip, setzt sie das Übernehmen."""
+    for c in p["clips"]:
+        if (c.get("transition") or {}).get("marker") == m["id"]:
+            c["transition"] = None
+    if m["kind"] != "transition":
+        return False
+    duration = m["duration"] or ticks(float(m["params"].get("seconds", 0.5)))
+    kind = m["params"].get("transition") or "dissolve"
+    half = ticks(0.5)
+    video = [c for c in p["clips"] if _track(p, c["track"])["kind"] == "video"]
+    for c in sorted(video, key=lambda c: (_track_number(c["track"]), c["start"])):
+        if abs(c["start"] - m["at"]) <= half and c["start"] > 0:
+            c["transition"] = {**_transition(p, c, {"kind": kind if kind in TRANSITION_KINDS else "dissolve",
+                                                    "duration": duration}), "marker": m["id"]}
+            return True
+    return False
 
 
 # ------------------------------------------------------------------------------------------- Schnitt
@@ -465,13 +549,90 @@ def _track(p: dict[str, Any], track_id: str) -> dict[str, Any]:
     raise StudioError(t(f"Spur {track_id} gibt es nicht.", f"No track {track_id}."))
 
 
-def _overwrite(p: dict[str, Any], clip: dict[str, Any]) -> None:
+def _tracks_of(p: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    return [tr for tr in p["tracks"] if tr["kind"] == kind]
+
+
+def _track_number(track_id: str) -> int:
+    return int(track_id[1:])
+
+
+def _track_or_highest(p: dict[str, Any], wanted: str | None, kind: str) -> str:
+    """Die gewünschte Spur, wenn es sie gibt, sonst die mit der höchsten Nummer dieser Art (A2 entfernt → A1)."""
+    ids = [tr["id"] for tr in _tracks_of(p, kind)]
+    return wanted if wanted in ids else max(ids, key=_track_number)
+
+
+def _order_tracks(p: dict[str, Any]) -> None:
+    """Videospuren von oben nach unten (V3, V2, V1), darunter die Tonspuren (A1, A2 …), wie in der Ansicht."""
+    p["tracks"] = (sorted(_tracks_of(p, "video"), key=lambda tr: -_track_number(tr["id"]))
+                   + sorted(_tracks_of(p, "audio"), key=lambda tr: _track_number(tr["id"])))
+
+
+def _renumber(p: dict[str, Any], kind: str) -> None:
+    """Spuren einer Art lückenlos nummerieren (V1 bleibt unten); Clips und Platzieren-Marker ziehen mit."""
+    prefix = "V" if kind == "video" else "A"
+    ordered = sorted(_tracks_of(p, kind), key=lambda tr: _track_number(tr["id"]))
+    mapping = {tr["id"]: f"{prefix}{i + 1}" for i, tr in enumerate(ordered)}
+    for tr in ordered:
+        tr["id"] = mapping[tr["id"]]
+    for c in p["clips"]:
+        c["track"] = mapping.get(c["track"], c["track"])
+    for m in p["markers"]:
+        if m["params"].get("track") in mapping:
+            m["params"]["track"] = mapping[m["params"]["track"]]
+
+
+@command("track.add", "Spur hinzufügen: kind (video|audio). Eine neue Videospur kommt oben dazu (V3 über V2), eine "
+         "Tonspur unten (A3 unter A2)")
+def _track_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
+    kind = a.get("kind", "video")
+    if kind not in ("video", "audio"):
+        raise StudioError(t("kind ist video oder audio.", "kind is video or audio."))
+    have = _tracks_of(p, kind)
+    if len(have) >= MAX_TRACKS:
+        raise StudioError(t(f"Höchstens {MAX_TRACKS} Spuren je Art.", f"At most {MAX_TRACKS} tracks of each kind."))
+    track = {"id": f"{'V' if kind == 'video' else 'A'}{len(have) + 1}", "kind": kind, "hidden": False, "muted": False}
+    p["tracks"].append(track)
+    _order_tracks(p)
+    return {"id": track["id"]}
+
+
+@command("track.delete", "Spur entfernen: id. Ihre Clips gehen mit (Rückgängig holt beides zurück); V1 und A1 "
+         "bleiben immer (wie bei FilmCraft). Die Spuren darüber bzw. darunter rücken nach (V3 wird V2)")
+def _track_delete(p: dict[str, Any], a: dict[str, Any]) -> dict[str, int]:
+    tr = _track(p, a.get("id", ""))
+    if _track_number(tr["id"]) == 1:
+        raise StudioError(t("V1 und A1 bleiben immer.", "V1 and A1 always stay."))
+    before = len(p["clips"])
+    p["clips"] = [c for c in p["clips"] if c["track"] != tr["id"]]
+    for m in p["markers"]:
+        if m["params"].get("track") == tr["id"]:
+            m["params"].pop("track")  # Platzieren-Marker fällt auf die oberste Spur zurück
+    p["tracks"].remove(tr)
+    _renumber(p, tr["kind"])
+    _order_tracks(p)
+    return {"clips_removed": before - len(p["clips"])}
+
+
+@command("track.update", "Spur schalten: id, hidden (Bild der Videospur aus), muted (Ton der Spur aus, bei Videospuren "
+         "der Ton ihrer Clips). Gilt für Vorschau und Export")
+def _track_update(p: dict[str, Any], a: dict[str, Any]) -> None:
+    tr = _track(p, a.get("id", ""))
+    if "hidden" in a and tr["kind"] == "video":
+        tr["hidden"] = bool(a["hidden"])
+    if "muted" in a:
+        tr["muted"] = bool(a["muted"])
+
+
+def _overwrite(p: dict[str, Any], clip: dict[str, Any], keep_ids: set[str] | frozenset[str] = frozenset()) -> None:
     """Wie „Überschreiben“ in jedem Schnittprogramm: Was auf derselben Spur unter dem Clip liegt, wird gekürzt,
-    geteilt oder entfernt."""
+    geteilt oder entfernt. `keep_ids`: Clips, die mitverschoben werden und sich deshalb nicht gegenseitig kürzen."""
     s, e = clip["start"], clip_end(clip)
     keep = []
     for c in p["clips"]:
-        if c is clip or c["track"] != clip["track"] or clip_end(c) <= s or c["start"] >= e:
+        if (c is clip or c["id"] in keep_ids or c["track"] != clip["track"] or clip_end(c) <= s
+                or c["start"] >= e):
             keep.append(c)
             continue
         if c["start"] >= s and clip_end(c) <= e:
@@ -479,16 +640,16 @@ def _overwrite(p: dict[str, Any], clip: dict[str, Any]) -> None:
         if c["start"] < s and clip_end(c) > e:  # teilen
             tail = copy.deepcopy(c)
             tail["id"] = db.new_id("cl")
-            tail["in"] = c["in"] + (e - c["start"])
+            tail["in"] = _media_at(c, e - c["start"])
             tail["start"] = e
             tail["transition"] = None
-            c["out"] = c["in"] + (s - c["start"])
+            c["out"] = _media_at(c, s - c["start"])
             keep += [c, tail]
         elif c["start"] < s:  # Ende kürzen
-            c["out"] = c["in"] + (s - c["start"])
+            c["out"] = _media_at(c, s - c["start"])
             keep.append(c)
         else:  # Anfang kürzen
-            c["in"] += e - c["start"]
+            c["in"] = _media_at(c, e - c["start"])
             c["start"] = e
             c["transition"] = None
             keep.append(c)
@@ -496,47 +657,95 @@ def _overwrite(p: dict[str, Any], clip: dict[str, Any]) -> None:
     p["clips"].sort(key=lambda c: (c["track"], c["start"]))
 
 
+def _check_speed(value: Any) -> float:
+    try:
+        speed = float(value)
+    except (TypeError, ValueError):
+        raise StudioError(t("speed ist eine Zahl (1.0 = 100 %).", "speed is a number (1.0 = 100 %).")) from None
+    if not SPEED_MIN <= speed <= SPEED_MAX:
+        raise StudioError(t(f"Geschwindigkeit {SPEED_MIN * 100:.0f} bis {SPEED_MAX * 100:.0f} %.",
+                            f"Speed {SPEED_MIN * 100:.0f} to {SPEED_MAX * 100:.0f} %."))
+    return speed
+
+
 def _new_clip(p: dict[str, Any], track: str, asset_id: str, start: int, length: int | None = None,
-              in_point: int = 0, scene_id: str | None = None) -> dict[str, Any]:
+              in_point: int = 0, scene_id: str | None = None, speed: Any = 1.0,
+              out_point: int | None = None) -> dict[str, Any]:
+    """Neuer Clip; `length` ist die Länge auf der Zeitleiste, `out_point` (statt length) das Ende in Medienzeit."""
     tr = _track(p, track)
     media = _media(p, asset_id)
     if tr["kind"] == "audio" and media["kind"] == "image":
         raise StudioError(t("Ein Bild gehört auf eine Videospur.", "An image belongs on a video track."))
     if tr["kind"] == "video" and media["kind"] == "audio":
         raise StudioError(t("Ton gehört auf eine Tonspur.", "Audio belongs on an audio track."))
-    available = None if media["kind"] == "image" else (media["duration"] or 0) - in_point
-    if length is None:
-        length = available if available else ticks(DEFAULT_IMAGE_SECONDS)
+    speed = 1.0 if media["kind"] == "image" else _check_speed(speed)
+    available = None if media["kind"] == "image" else (media["duration"] or 0) - in_point  # Medienzeit
+    if out_point is not None:
+        material = out_point - in_point
+    elif length is not None:
+        material = int(round(length * speed))
+    else:
+        material = available if available else ticks(DEFAULT_IMAGE_SECONDS)
     if available is not None:
-        length = min(length, available)
-    if length <= 0:
+        material = min(material, available)
+    if material <= 0:
         raise StudioError(t("Der Clip hätte keine Länge.", "The clip would have no length."))
     return {"id": db.new_id("cl"), "track": track, "asset_id": asset_id, "scene_id": scene_id, "start": max(0, start),
-            "in": in_point, "out": in_point + length, "gain_db": 0.0, "muted": False, "transition": None}
+            "in": in_point, "out": in_point + material, "speed": speed, "gain_db": 0.0, "muted": False,
+            "transition": None}
 
 
-@command("clip.add", "Clip auf eine Spur legen (überschreibt Darunterliegendes): track (V1|V2|A1|A2), asset_id, "
-         "start/start_s, in/in_s, duration/duration_s")
+def _transition(p: dict[str, Any], c: dict[str, Any], spec: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Übergang am Anfang eines Clips: Art und Dauer (höchstens die Länge des Clips, mindestens ein Bild)."""
+    if spec is None:
+        return None
+    kind = spec.get("kind") or "dissolve"
+    if kind not in TRANSITION_KINDS:
+        raise StudioError(t(f"Übergang {kind} gibt es nicht ({', '.join(TRANSITION_KINDS)}).",
+                            f"No transition {kind} ({', '.join(TRANSITION_KINDS)})."))
+    duration = _time(spec, "duration", ticks(0.5))
+    return {"kind": kind, "duration": max(frame_ticks(p), min(duration, clip_length(c)))}
+
+
+@command("clip.add", "Clip auf eine Spur legen (überschreibt Darunterliegendes): track (V1, V2 … A1, A2 …), asset_id, "
+         "start/start_s, in/in_s, duration/duration_s (Länge auf der Zeitleiste) oder out/out_s (Medienzeit); "
+         "wahlweise speed, gain_db, muted, transition, scene_id (beim Einfügen eines ausgeschnittenen Clips)")
 def _clip_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     clip = _new_clip(p, a.get("track", "V1"), a.get("asset_id", ""), _time(a, "start", edit_duration(p)),
-                     _time(a, "duration"), _time(a, "in", 0))
+                     _time(a, "duration"), _time(a, "in", 0), speed=a.get("speed", 1.0), out_point=_time(a, "out"))
+    if "gain_db" in a:
+        clip["gain_db"] = max(-60.0, min(12.0, float(a["gain_db"])))
+    if "muted" in a:
+        clip["muted"] = bool(a["muted"])
+    if a.get("scene_id") and any(s["id"] == a["scene_id"] for s in p["scenes"]):
+        clip["scene_id"] = a["scene_id"]
+    if a.get("transition"):
+        clip["transition"] = _transition(p, clip, a["transition"])
     p["clips"].append(clip)
     _overwrite(p, clip)
     return {"id": clip["id"]}
 
 
-@command("clip.move", "Clip verschieben: id, start/start_s, track (überschreibt am Ziel)")
+@command("clip.move", "Clip verschieben: id mit start/start_s und/oder track, oder mehrere zugleich mit moves "
+         "[{id, start/start_s, track}]. Überschreibt am Ziel, die mitverschobenen Clips kürzen sich nicht gegenseitig")
 def _clip_move(p: dict[str, Any], a: dict[str, Any]) -> None:
-    c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
-    start = _time(a, "start")
-    if start is not None:
-        c["start"] = max(0, start)
-    if a.get("track"):
-        tr = _track(p, a["track"])
-        if tr["kind"] != _track(p, c["track"])["kind"]:
-            raise StudioError(t("Video bleibt auf Video-, Ton auf Tonspuren.", "Video stays on video, audio on audio tracks."))
-        c["track"] = tr["id"]
-    _overwrite(p, c)
+    moves = a.get("moves") or [{k: a[k] for k in ("id", "start", "start_s", "track") if k in a}]
+    plan = []
+    for mv in moves:  # erst alles prüfen, dann verschieben
+        c = _find(p["clips"], mv.get("id", ""), t("Clip", "clip"))
+        if mv.get("track"):
+            if _track(p, mv["track"])["kind"] != _track(p, c["track"])["kind"]:
+                raise StudioError(t("Video bleibt auf Video-, Ton auf Tonspuren.",
+                                    "Video stays on video, audio on audio tracks."))
+        plan.append((c, _time(mv, "start"), mv.get("track")))
+    for c, start, track in plan:
+        if start is not None:
+            c["start"] = max(0, start)
+        if track:
+            c["track"] = track
+    moved = {c["id"] for c, _, _ in plan}
+    for c, _, _ in plan:
+        _overwrite(p, c, moved)
 
 
 @command("clip.trim", "Clip trimmen: id und edge (start|end) mit to/to_s (Zeitleistenposition), oder in/out "
@@ -545,30 +754,29 @@ def _clip_trim(p: dict[str, Any], a: dict[str, Any]) -> None:
     c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
     media = _media(p, c["asset_id"])
     limit = None if media["kind"] == "image" else media["duration"]
-    frame = frame_ticks(p)
+    speed = clip_speed(c)
     to = _time(a, "to")
     if a.get("edge") == "start" and to is not None:
-        delta = to - c["start"]
-        c["in"] = c["in"] + delta
+        c["in"] = _media_at(c, to - c["start"])
         c["start"] = to
     elif a.get("edge") == "end" and to is not None:
-        c["out"] = c["in"] + (to - c["start"])
+        c["out"] = _media_at(c, to - c["start"])
     else:
         if _time(a, "in") is not None:
             new_in = _time(a, "in")
-            c["start"] += new_in - c["in"]
+            c["start"] += int(round((new_in - c["in"]) / speed))  # das Bild bleibt an seiner Stelle
             c["in"] = new_in
         if _time(a, "out") is not None:
             c["out"] = _time(a, "out")
     if c["in"] < 0:  # nicht vor den Anfang des Materials
-        c["start"] -= c["in"]
+        c["start"] -= int(round(c["in"] / speed))
         c["in"] = 0
     if limit is not None and c["out"] > limit:
         c["out"] = limit
     if c["start"] < 0:
-        c["in"] -= c["start"]
+        c["in"] -= int(round(c["start"] * speed))
         c["start"] = 0
-    if c["out"] - c["in"] < frame:
+    if clip_length(c) < frame_ticks(p):
         raise StudioError(t("Ein Clip braucht mindestens ein Bild.", "A clip needs at least one frame."))
     _overwrite(p, c)
 
@@ -585,7 +793,7 @@ def _clip_razor(p: dict[str, Any], a: dict[str, Any]) -> dict[str, list[str]]:
         if c["start"] < at < clip_end(c):
             tail = copy.deepcopy(c)
             tail["id"] = db.new_id("cl")
-            tail["in"] = c["in"] + (at - c["start"])
+            tail["in"] = _media_at(c, at - c["start"])
             tail["start"] = at
             tail["transition"] = None
             c["out"] = tail["in"]
@@ -602,49 +810,155 @@ def _clip_delete(p: dict[str, Any], a: dict[str, Any]) -> None:
         c = _find(p["clips"], clip_id, t("Clip", "clip"))
         p["clips"].remove(c)
         if a.get("ripple"):
-            gap = c["out"] - c["in"]
+            gap = clip_length(c)
             for other in p["clips"]:
                 if other["track"] == c["track"] and other["start"] >= clip_end(c):
                     other["start"] -= gap
 
 
-@command("clip.update", "Clip ändern: id, gain_db, muted, transition (Überblendung am Anfang: {kind: dissolve, "
-         "duration/duration_s} oder null)")
+def _set_speed(p: dict[str, Any], c: dict[str, Any], value: Any, overlap: str | None) -> None:
+    """Neue Geschwindigkeit; In und Out bleiben, die Länge auf der Zeitleiste ändert sich. Wird der Clip länger und
+    stößt an einen späteren Clip derselben Spur, entscheidet `overlap` (Nutzer 27.10.2026: „es soll mich warnen,
+    wenn es beim Verlängern mit anderen Clips kollidiert“): clamp (endet am nächsten Clip, wie FilmCraft ohne
+    Ripple), ripple (schiebt die späteren Clips der Spur nach hinten, wie FilmCraft mit Ripple) oder overwrite
+    (überdeckt sie). Ohne Angabe wird abgelehnt und die Meldung nennt die betroffenen Clips; die Oberfläche fragt
+    vorher nach."""
+    if _media(p, c["asset_id"])["kind"] == "image":
+        raise StudioError(t("Ein Standbild hat keine Geschwindigkeit; seine Länge ändert man direkt.",
+                            "A still image has no speed; change its length directly."))
+    speed = _check_speed(value)
+    old_end = clip_end(c)
+    c["speed"] = speed
+    new_end = clip_end(c)
+    if new_end <= old_end:
+        return  # kürzer: dahinter entsteht eine Lücke
+    later = [o for o in p["clips"] if o is not c and o["track"] == c["track"] and o["start"] >= c["start"]]
+    hit = [o for o in later if o["start"] < new_end]
+    if not hit:
+        return
+    if overlap == "clamp":
+        c["out"] = _media_at(c, min(o["start"] for o in hit) - c["start"])
+        if clip_length(c) < frame_ticks(p):
+            raise StudioError(t("Bis zum nächsten Clip ist kein Platz.", "There is no room before the next clip."))
+    elif overlap == "overwrite":
+        _overwrite(p, c)
+    elif overlap == "ripple":
+        for o in later:
+            o["start"] += new_end - old_end
+    else:
+        names = ", ".join(_clip_label(p, o) for o in hit[:3])
+        raise StudioError(t(
+            f"Mit {speed * 100:.0f} % wird der Clip {seconds(new_end - old_end):.2f} s länger und stößt an "
+            f"{len(hit)} Clip(s) ({names}). overlap angeben: clamp (endet am nächsten Clip), ripple (die späteren "
+            f"Clips der Spur rücken nach hinten) oder overwrite (überdecken).",
+            f"At {speed * 100:.0f} % the clip becomes {seconds(new_end - old_end):.2f} s longer and runs into "
+            f"{len(hit)} clip(s) ({names}). Give overlap: clamp (end at the next clip), ripple (push the later clips "
+            f"of the track) or overwrite (cover them)."))
+
+
+def _clip_label(p: dict[str, Any], c: dict[str, Any]) -> str:
+    scene = next((s for s in p["scenes"] if s["id"] == c.get("scene_id")), None)
+    if scene and scene.get("title"):
+        return scene["title"]
+    asset = db.get_asset(c["asset_id"])
+    label = (asset.prompt or asset.meta.get("original_name") or asset.filename) if asset else c["asset_id"]
+    return label if len(label) <= 40 else label[:39].rstrip() + "…"
+
+
+@command("clip.update", "Clip ändern: id, gain_db, muted, transition (Übergang am Anfang: {kind: dissolve|dip_black|"
+         "dip_white|wipe, duration/duration_s} oder null), speed (0.1 bis 10, 1.0 = 100 %) mit overlap "
+         "(clamp|ripple|overwrite), falls der längere Clip an den nächsten stößt")
 def _clip_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
     if "gain_db" in a:
         c["gain_db"] = max(-60.0, min(12.0, float(a["gain_db"])))
     if "muted" in a:
         c["muted"] = bool(a["muted"])
+    if "speed" in a:
+        _set_speed(p, c, a["speed"], a.get("overlap"))
     if "transition" in a:
-        tr = a["transition"]
-        if tr is None:
-            c["transition"] = None
-        else:
-            duration = _time(tr, "duration", ticks(0.5))
-            c["transition"] = {"kind": tr.get("kind", "dissolve"),
-                               "duration": max(frame_ticks(p), min(duration, c["out"] - c["in"]))}
+        c["transition"] = _transition(p, c, a["transition"])
+    elif c.get("transition"):  # die Länge kann sich geändert haben
+        c["transition"]["duration"] = min(c["transition"]["duration"], clip_length(c))
 
 
 # ---------------------------------------------------------------------------------------- Übernehmen
 
-@command("edit.conform", "Komposition übernehmen: legt die gewählten Takes in den Schnitt, tauscht neu erzeugtes "
-         "Material in verbundenen Clips aus und wertet die Marker aus (place, transition, audio)")
-def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, int]:
-    created = updated = transitions = 0
+def _conform_targets(p: dict[str, Any]) -> dict[str, tuple[int, str]]:
+    """Wohin das Übernehmen jede Szene legt: Platzieren-Marker (Vorgabe V2, sonst die oberste Spur), sonst an den
+    Szenenanfang auf die Spur ihrer Bahn. Audio-Marker verschieben dabei die Ton-Szene an die Marke (in `p`)."""
     scenes = {s["id"]: s for s in p["scenes"]}
-    # Audio-Marker: die genannte Szene beginnt an der Marke
     for m in p["markers"]:
         if m["kind"] == "audio" and m["params"].get("scene_id") in scenes:
             scenes[m["params"]["scene_id"]]["start"] = m["at"]
-    placed: dict[str, tuple[int, str]] = {}
+    targets = {s["id"]: (s["start"], _track_or_highest(p, LANE_TRACK[s["lane"]], "video" if s["lane"] == "video"
+                                                       else "audio")) for s in p["scenes"]}
     for m in p["markers"]:
         if m["kind"] == "place" and m["params"].get("scene_id") in scenes:
-            placed[m["params"]["scene_id"]] = (m["at"], m["params"].get("track") or "V2")
-    for s in p["scenes"]:
+            targets[m["params"]["scene_id"]] = (m["at"], _track_or_highest(p, m["params"].get("track") or "V2", "video"))
+    return targets
+
+
+def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
+    """Was „Übernehmen“ täte, ohne etwas zu ändern (Nutzer 27.10.2026: „es soll erkennen, wenn die Clips schon
+    generiert worden sind … ich kann mit der Checkbox wählen, welche überschrieben werden“).
+
+    Je Szene mit Take ein Eintrag: `create` (noch kein verbundener Clip; `overlaps` nennt die Clips, die er überdecken
+    würde, `in_edit`, wenn der Take schon als Clip im Schnitt liegt), `replace` (verbundene Clips bekommen den neuen
+    Take; `edited`, wenn ihre Länge nicht mehr der Szene entspricht oder sie geschnitten sind) oder `same`. `default`
+    ist der Vorschlag für das Häkchen."""
+    q = copy.deepcopy(p)
+    targets = _conform_targets(q)
+    frame = frame_ticks(q)
+    in_edit = {c["asset_id"] for c in q["clips"]}
+    items, without = [], 0
+    for s in q["scenes"]:
         if not s.get("take"):
+            without += 1
             continue
-        start, track = placed.get(s["id"], (s["start"], LANE_TRACK[s["lane"]]))
+        start, track = targets[s["id"]]
+        base = {"scene_id": s["id"], "title": s.get("title") or s.get("prompt", "")[:40] or s["id"],
+                "lane": s["lane"], "track": track}
+        linked = [c for c in q["clips"] if c.get("scene_id") == s["id"]]
+        if linked:
+            changed = any(c["asset_id"] != s["take"] for c in linked)
+            edited = len(linked) > 1 or linked[0]["in"] != 0 or abs(clip_length(linked[0]) - s["duration"]) > frame
+            items.append({**base, "action": "replace" if changed else "same", "clip_ids": [c["id"] for c in linked],
+                          "track": linked[0]["track"], "start_s": round(seconds(linked[0]["start"]), 3),
+                          "length_s": round(seconds(sum(clip_length(c) for c in linked)), 3),
+                          "scene_s": round(seconds(s["duration"]), 3), "edited": edited,
+                          "default": changed and not edited})
+            continue
+        try:
+            clip = _new_clip(q, track, s["take"], start, s["duration"], 0, s["id"])
+        except StudioError as exc:
+            items.append({**base, "action": "error", "error": str(exc), "default": False})
+            continue
+        overlaps = [{"clip_id": c["id"], "title": _clip_label(q, c),
+                     "seconds": round(seconds(min(clip_end(c), clip_end(clip)) - max(c["start"], clip["start"])), 3)}
+                    for c in q["clips"] if c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start]
+        dup = s["take"] in in_edit
+        items.append({**base, "action": "create", "start_s": round(seconds(start), 3),
+                      "length_s": round(seconds(clip_length(clip)), 3), "overlaps": overlaps, "in_edit": dup,
+                      "default": not overlaps and not dup})
+    transitions = sum(1 for m in q["markers"] if m["kind"] == "transition")
+    return {"items": items, "without_take": without, "transition_markers": transitions}
+
+
+@command("edit.conform", "Komposition übernehmen: legt die gewählten Takes in den Schnitt, tauscht neu erzeugtes "
+         "Material in verbundenen Clips aus und wertet die Marker aus (place, transition, audio). Wahlweise nur "
+         "scenes [ids]; neue Clips, die andere überdecken würden, dann nur für die Szenen in overwrite [ids]. "
+         "Vorher zeigt GET /api/studio/projects/{id}/conform (MCP: studio_get mit conform_plan), was passieren würde")
+def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
+    created = updated = transitions = 0
+    only = set(a["scenes"]) if isinstance(a.get("scenes"), list) else None
+    allowed = set(a.get("overwrite") or [])
+    skipped: list[str] = []
+    targets = _conform_targets(p)
+    for s in p["scenes"]:
+        if not s.get("take") or (only is not None and s["id"] not in only):
+            continue
+        start, track = targets[s["id"]]
         linked = [c for c in p["clips"] if c.get("scene_id") == s["id"]]
         if linked:
             for c in linked:
@@ -657,23 +971,19 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, int]:
                     updated += 1
             continue
         clip = _new_clip(p, track, s["take"], start, s["duration"], 0, s["id"])
+        covers = any(c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start for c in p["clips"])
+        if covers and only is not None and s["id"] not in allowed:
+            skipped.append(s["id"])  # der Nutzer hat das Überschreiben hier nicht erlaubt
+            continue
         p["clips"].append(clip)
         _overwrite(p, clip)
         created += 1
     # Übergang-Marker: Überblendung auf den Clip, der dort (± eine halbe Sekunde) beginnt
-    half = ticks(0.5)
     for m in p["markers"]:
-        if m["kind"] != "transition":
-            continue
-        duration = m["duration"] or ticks(float(m["params"].get("seconds", 0.5)))
-        for c in p["clips"]:
-            if c["track"] in ("V1", "V2") and abs(c["start"] - m["at"]) <= half and c["start"] > 0:
-                c["transition"] = {"kind": m["params"].get("transition", "dissolve"),
-                                   "duration": max(frame_ticks(p), min(duration, c["out"] - c["in"]))}
-                transitions += 1
-                break
+        if m["kind"] == "transition" and _apply_transition_marker(p, m):
+            transitions += 1
     p["clips"].sort(key=lambda c: (c["track"], c["start"]))
-    return {"created": created, "updated": updated, "transitions": transitions}
+    return {"created": created, "updated": updated, "transitions": transitions, "skipped": skipped}
 
 
 # --------------------------------------------------------------------------- Abgleich mit den Aufträgen
@@ -810,8 +1120,11 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
     fps = 24 if (model_id or "").startswith("ltx") else 16
     step = 8 if (model_id or "").startswith("ltx") else 4
     frames = max(9, int(round(secs * fps / step)) * step + 1)
+    # audio_asset_id: ein vorgegebener Ton, etwa ein schon abgenommener Satz, damit die Stimme gleich bleibt (Nutzer
+    # 27.10.); die Länge kommt dann vom Ton
     extra = {k: v for k, v in params.items() if k in ("seed", "steps", "cfg", "negative_prompt", "loras",
-                                                      "end_image_asset_id", "quality", "motion_speed")}
+                                                      "end_image_asset_id", "quality", "motion_speed",
+                                                      "audio_asset_id", "loop", "temporal_upscale", "crf")}
     entry = registry.get_entry(model_id) if model_id else None
     if entry and entry.get("family") == "ltx25" and "quality" not in extra:
         # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und kein Endbild
@@ -991,19 +1304,25 @@ def render_plan(p: dict[str, Any], preset: str) -> dict[str, Any]:
                             "The edit is empty: conform scenes or add clips first."))
     pr = PRESETS[preset]
     s = p["settings"]
+    tracks = {tr["id"]: tr for tr in p["tracks"]}
     clips = []
     for c in p["clips"]:
         path = _source_path(c["asset_id"])
         media = _media(p, c["asset_id"])
+        track = tracks.get(c["track"], {})
         clips.append({"track": c["track"], "path": str(path), "media": media["kind"], "audio": media.get("audio", False),
                       "start": seconds(c["start"]), "in": seconds(c["in"]), "out": seconds(c["out"]),
-                      "gain_db": c.get("gain_db", 0.0), "muted": c.get("muted", False),
+                      "speed": clip_speed(c), "gain_db": c.get("gain_db", 0.0),
+                      # stumm geschaltete Spur: ihr Ton fehlt, auch der Ton von Videoclips
+                      "muted": bool(c.get("muted") or track.get("muted")),
                       "transition": ({"kind": c["transition"]["kind"],
                                       "seconds": seconds(c["transition"]["duration"])} if c.get("transition") else None)})
     lossless_audio = pr["codec"] in ("ffv1", "prores")  # PCM schwingt nicht über wie AAC
+    # Ausgeblendete Videospuren fehlen im Bild (ihr Ton bleibt, solange die Spur nicht stumm ist)
+    visible = [tr["id"] for tr in p["tracks"] if not tr.get("hidden")]
     return {"width": pr.get("width") or s["width"], "height": pr.get("height") or s["height"], "fps": s["fps"],
             "sample_rate": s.get("sample_rate", 48000), "codec": pr["codec"], "bitrate": pr["bitrate"],
-            "duration": seconds(edit_duration(p)), "tracks": [tr["id"] for tr in p["tracks"]], "clips": clips,
+            "duration": seconds(edit_duration(p)), "tracks": visible, "clips": clips,
             "loudness": -14.0, "ceiling_db": -1.0 if lossless_audio else -2.5}
 
 
@@ -1091,6 +1410,176 @@ async def export(pid: str, preset: str) -> Job:
     return await jobs.submit("studio_export", {"project_id": pid, "preset": preset})
 
 
+# ------------------------------------------------------------------------ Projekt als Paket (Nutzer 27.10.2026)
+#
+# „+“ neben der Projektauswahl: Neu, Exportieren, Importieren. Ein Paket ist ein ZIP mit nvai-studio.json (Projekt
+# und Angaben aller benutzten Assets) und den Dateien unter files/: Clips, Takes, Start- und Endbilder, vorgegebener
+# Ton, die H.264-Vorschauen und auf Wunsch die verlustfreien Kopien (groß: 1080p rund 32 MB je Sekunde). Gepackt
+# wird ohne Kompression (Videos sind schon komprimiert). Beim Import bleiben die Asset-IDs; was es dort schon gibt,
+# wird nicht noch einmal kopiert, das Projekt bekommt eine neue ID.
+
+PACKAGE_FORMAT = "nvai-studio"
+PACKAGE_MANIFEST = "nvai-studio.json"
+SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$")
+
+
+def _used_assets(p: dict[str, Any]) -> list[str]:
+    ids = {c["asset_id"] for c in p["clips"]}
+    for s in p["scenes"]:
+        ids.update(s.get("takes") or [])
+        params = s.get("params") or {}
+        ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id") if params.get(k))
+        ids.update(params.get("reference_asset_ids") or [])
+    return sorted(ids)
+
+
+def _package_files(p: dict[str, Any], masters: bool) -> tuple[list[dict[str, Any]], list[Path]]:
+    assets, files = [], []
+    for asset_id in _used_assets(p):
+        asset = db.get_asset(asset_id)
+        if asset is None or not (config.ASSET_DIR / asset.filename).exists():
+            continue  # gelöscht: im Projekt steht der Clip dann als fehlend
+        meta = dict(asset.meta or {})
+        names = [asset.filename] + [meta[k] for k in ("preview",) if meta.get(k)]
+        if masters and meta.get("master"):
+            names.append(meta["master"])
+        elif "master" in meta:
+            meta.pop("master")
+        names = [n for n in names if (config.ASSET_DIR / n).exists()]
+        if meta.get("preview") not in names:
+            meta.pop("preview", None)
+        assets.append({"id": asset.id, "kind": asset.kind, "filename": asset.filename, "prompt": asset.prompt,
+                       "model_id": asset.model_id, "meta": meta, "created_at": asset.created_at})
+        files += [config.ASSET_DIR / n for n in names]
+    return assets, files
+
+
+def package_info(pid: str) -> dict[str, Any]:
+    """Größe eines Pakets mit und ohne verlustfreie Kopien, für die Auswahl in der Oberfläche."""
+    p = load(pid)
+    _, light = _package_files(p, False)
+    _, full = _package_files(p, True)
+    return {"name": p["name"], "files": len(light), "bytes": sum(f.stat().st_size for f in light),
+            "master_bytes": sum(f.stat().st_size for f in full) - sum(f.stat().st_size for f in light)}
+
+
+def build_package(pid: str, masters: bool = False) -> tuple[Path, str]:
+    """ZIP auf die Platte (Studio-Ordner, Unterordner pakete) und der Dateiname zum Herunterladen."""
+    p = load(pid)
+    assets, files = _package_files(p, masters)
+    folder = _dir() / "pakete"
+    folder.mkdir(exist_ok=True)
+    path = folder / f"{p['id']}-{int(time.time())}.zip"
+    manifest = {"format": PACKAGE_FORMAT, "version": 1, "exported_at": time.time(), "masters": masters,
+                "project": p, "assets": assets}
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED, allowZip64=True) as z:
+        z.writestr(PACKAGE_MANIFEST, json.dumps(manifest, ensure_ascii=False, indent=1))
+        for f in dict.fromkeys(files):
+            z.write(f, f"files/{f.name}")
+    slug = re.sub(r"[^\w.-]+", "_", p["name"]).strip("._") or p["id"]
+    return path, f"{slug}.nvai-studio.zip"
+
+
+def _unique_name(name: str) -> str:
+    stem, suffix = Path(name).stem, Path(name).suffix
+    while (config.ASSET_DIR / name).exists():
+        name = f"{stem}-{db.new_id('imp')[4:12]}{suffix}"
+    return name
+
+
+def import_package(path: Path) -> dict[str, Any]:
+    """Paket (ZIP) oder nur das Projekt (JSON) einlesen; gibt das neue Projekt zurück."""
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as z:
+            try:
+                manifest = json.loads(z.read(PACKAGE_MANIFEST).decode("utf-8"))
+            except KeyError:
+                raise StudioError(t("Kein Studio-Paket: nvai-studio.json fehlt.",
+                                    "Not a Studio package: nvai-studio.json is missing.")) from None
+            members = set(z.namelist())
+            for a in manifest.get("assets") or []:
+                _import_asset(z, members, a)
+    else:
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            raise StudioError(t("Weder Studio-Paket (.zip) noch Projekt (.json).",
+                                "Neither a Studio package (.zip) nor a project (.json).")) from None
+        if "project" not in manifest:  # eine nackte Projektdatei aus studio/
+            manifest = {"format": PACKAGE_FORMAT, "project": manifest}
+    p = manifest.get("project")
+    if manifest.get("format") != PACKAGE_FORMAT or not isinstance(p, dict) or not isinstance(p.get("clips"), list):
+        raise StudioError(t("Das ist kein Studio-Projekt.", "This is not a Studio project."))
+    now = time.time()
+    names = {info["name"] for info in list_projects()}
+    name = str(p.get("name") or "Import")
+    if name in names:
+        name = next(f"{name} ({i})" for i in range(2, 1000) if f"{name} ({i})" not in names)
+    p.update(id=db.new_id("stu"), name=name, created_at=now, updated_at=now, version=VERSION)
+    p.setdefault("tracks", copy.deepcopy(TRACKS))
+    p.setdefault("markers", [])
+    p.setdefault("scenes", [])
+    p.setdefault("media", {})
+    for s in p["scenes"]:  # Aufträge gehören zur anderen Installation
+        s["jobs"] = []
+        s.pop("waiting_for", None)
+    with _lock:
+        _save(p)
+    return p
+
+
+def _import_asset(z: zipfile.ZipFile, members: set[str], a: dict[str, Any]) -> None:
+    """Ein Asset aus dem Paket: vorhandenes bleibt, sonst Dateien kopieren und unter derselben ID eintragen."""
+    asset_id = str(a.get("id", ""))
+    if not re.fullmatch(r"[a-z]{2,5}_[0-9a-f]{6,32}", asset_id) or a.get("kind") not in ("image", "video", "audio",
+                                                                                        "upload"):
+        return
+    existing = db.get_asset(asset_id)
+    if existing is not None and (config.ASSET_DIR / existing.filename).exists():
+        _import_extras(z, members, a, existing)
+        return
+    meta = dict(a.get("meta") or {})
+    renamed: dict[str, str] = {}
+    for key in ("filename", "preview", "master"):
+        name = a.get("filename") if key == "filename" else meta.get(key)
+        if not name:
+            continue
+        if not SAFE_NAME.match(str(name)) or f"files/{name}" not in members:
+            if key == "filename":
+                return  # ohne Datei kein Asset
+            meta.pop(key, None)
+            continue
+        target = _unique_name(str(name))
+        with z.open(f"files/{name}") as src, open(config.ASSET_DIR / target, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+        renamed[key] = target
+    for key in ("preview", "master"):
+        if key in renamed:
+            meta[key] = renamed[key]
+    meta["imported"] = True
+    db.insert_asset(asset_id, a["kind"], renamed["filename"], str(a.get("prompt") or ""), str(a.get("model_id") or ""),
+                    meta, float(a.get("created_at") or time.time()))
+
+
+def _import_extras(z: zipfile.ZipFile, members: set[str], a: dict[str, Any], existing: Any) -> None:
+    """Das Asset gibt es schon: eine fehlende verlustfreie Kopie oder Vorschau aus dem Paket ergänzen (erst ein Paket
+    ohne Kopien importiert, später eins mit)."""
+    have = existing.meta or {}
+    changes = {}
+    for key in ("master", "preview"):
+        name = (a.get("meta") or {}).get(key)
+        if not name or (have.get(key) and (config.ASSET_DIR / have[key]).exists()):
+            continue
+        if not SAFE_NAME.match(str(name)) or f"files/{name}" not in members:
+            continue
+        target = _unique_name(str(name))
+        with z.open(f"files/{name}") as src, open(config.ASSET_DIR / target, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 20)
+        changes[key] = target
+    if changes:
+        db.update_asset_meta(existing.id, changes)
+
+
 # --------------------------------------------------------------------------------------- Für die API
 
 def view(p: dict[str, Any]) -> dict[str, Any]:
@@ -1132,9 +1621,13 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                     "takes": len(s["takes"]), "error": s.get("error")} for s in p["scenes"]],
         "markers": [{"id": m["id"], "at_s": round(seconds(m["at"]), 3), "kind": m["kind"], "name": m["name"],
                      "comment": m["comment"], "params": m["params"], "done": m["done"]} for m in p["markers"]],
+        "tracks": [{"id": tr["id"], "kind": tr["kind"], **{k: True for k in ("hidden", "muted") if tr.get(k)}}
+                   for tr in p["tracks"]],
         "clips": [{"id": c["id"], "track": c["track"], "start_s": round(seconds(c["start"]), 3),
                    "end_s": round(seconds(clip_end(c)), 3), "asset_id": c["asset_id"], "scene_id": c.get("scene_id"),
-                   "transition": c.get("transition") and round(seconds(c["transition"]["duration"]), 3)}
+                   **({"speed": clip_speed(c)} if clip_speed(c) != 1.0 else {}),
+                   "transition": c.get("transition") and {"kind": c["transition"]["kind"],
+                                                          "seconds": round(seconds(c["transition"]["duration"]), 3)}}
                   for c in p["clips"]],
         "duration_s": round(seconds(edit_duration(p)), 3),
     }

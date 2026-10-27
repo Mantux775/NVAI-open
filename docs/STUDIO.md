@@ -22,17 +22,20 @@ Claude Code can do all of it as well.
 | Music | Instrumental music up to 5 minutes (Stable Audio 3 Medium); no model sings yet |
 | Sound | Sound effects and ambience (Stable Audio Open) |
 
-**Edit** (bottom): the clips that end up in the video, on the tracks V2 (above V1), V1, A1 and A2. Every
-clip has an in and an out point, a volume, and optionally a dissolve at its start.
+**Edit** (bottom): the clips that end up in the video, on the tracks V1, V2 (above V1) … and A1, A2 …;
+right-click a track name to add more. Every clip has an in and an out point, a speed, a volume, and
+optionally a transition at its start.
 
 **Conform** puts the chosen takes of the composition into the edit. A clip stays linked to its scene:
-generate the scene again, conform, and the clip gets the new material while your cut stays.
+generate the scene again, conform, and the clip gets the new material while your cut stays. If the edit
+already holds clips, the Studio asks first (see [Conform without surprises](#conform-without-surprises)).
 
 ## Step by step
 
-1. **New project:** click **+** next to the project list at the top left. Projects are called "New 1",
-   "New 2" and so on and start at 1920 × 1080 and 24 fps. Name, format, frame rate and the quality of the
-   video scenes are in the properties on the right as long as nothing is selected.
+1. **New project:** click **+** next to the project list at the top left, then "New project". Projects
+   are called "New 1", "New 2" and so on and start at 1920 × 1080 and 24 fps. Name, format, frame rate and
+   the quality of the video scenes are in the properties on the right: clicking the project list shows
+   them, and so does a click into empty space.
 2. **Add scenes:** double-click a lane, then write the prompt in the properties. Drag a scene to move
    it, drag its right edge to change its length. For video the length sets the number of frames
    (LTX-2.5 at 24 fps); a 1080p project gets 1920 × 1088.
@@ -42,8 +45,10 @@ generate the scene again, conform, and the clip gets the new material while your
    scene waits for the scene before it and follows by itself. Finished scenes show their takes in the
    properties; click a take to use it.
 5. **Conform.**
-6. **Edit:** C cuts at the playhead, drag clips to move them, drag their edges to trim them, Del
-   deletes and Shift+Del also closes the gap. Dissolve, volume and mute are in the properties.
+6. **Edit:** with Selection (V), drag clips to move them and drag their edges to trim them; with the
+   Razor (C), a click cuts the clip, and Ctrl+K cuts at the playhead. Del deletes, Shift+Del also closes the
+   gap. A right-click anywhere shows what you can do; speed, transition, volume and mute are also in the
+   properties.
 7. **Export:** pick a format and click "Export". The finished video is also in the History.
 
 The Studio saves every change at once. Undo and redo go back up to 100 steps; takes that finish in
@@ -55,7 +60,8 @@ the meantime stay. "Delete" next to the project moves it into the Studio's trash
 The list on the left holds everything from the History, newest first: compact as a list or as tiles,
 with a filter for images, videos and audio and a search field. It stays up to date by itself: finished
 jobs, uploads and deletions show up right away. ◆ marks a video with a lossless copy, ● media that lies
-in the edit.
+in the edit. It loads 100 at a time; "Load 100 more" at the end fetches the next ones, and the filter and
+the search look through all your media, not just what is loaded.
 
 **Click** a file and the monitor becomes a source monitor: videos and sound play with their own
 controls, images are shown in full. The properties show model, length, size, frame rate, seed and date,
@@ -74,12 +80,65 @@ browser. NVAI-open gives them an H.264 preview: Studio exports write it in the s
 in the background a few seconds later. The preview is only for watching; the export and the download
 use the original.
 
+## Tools, right-click and tracks
+
+Three tools sit at the top left above the track names, each with its key:
+
+- **Selection (V):** drag to move, drag the edges to trim, drag a box in empty space to select several
+  objects; Shift- or Ctrl-click adds or removes one. Whatever is selected moves together, clips also to
+  another track of the same kind.
+- **Razor (C):** a white line shows the spot, a click cuts the clip, with Shift on all tracks. Esc or V
+  goes back to Selection.
+- **Magnet:** when on, clips, scenes and markers dock to edges, markers, the playhead and 0; a white line
+  shows where. When off, they dock while you hold Shift ⇧. Toggle it with a click or with S.
+
+**Right-click** works everywhere:
+
+![Right-click on a clip, with the speed submenu open](images/studio-menu.jpg)
+
+| Where | What |
+|---|---|
+| Clip | Cut, Copy, Paste, Cut here, Transition at the start, Speed, Mute, Marker here, Show in folder, Delete |
+| Transition | Kind, Duration, Remove |
+| Empty spot in the edit | Paste here, Transition at a nearby cut, Marker here, Add track |
+| Track name (V1, A1 …) | Add a video or audio track, hide, mute, remove the track |
+| Scene, empty lane | Generate, Cut, Copy, Paste, Delete; new scene or new still image here |
+| Marker, marker row | Done, Kind, Cut, Copy, Delete; Marker here |
+| Media on the left | Show in the monitor, send to a track (at the playhead), Show in folder, Open file, Delete |
+
+**Copy and paste:** Ctrl+C remembers the selected clips, scenes or markers, Ctrl+V puts them at the
+playhead, clips on the same tracks; afterwards the playhead sits at their end. Cut (Ctrl+X) leaves a gap. A
+clip that was cut stays linked to its scene when you paste it.
+
+**Tracks:** V1 and A1 always stay. New video tracks go on top (V3 above V2), audio tracks at the bottom.
+The eye hides the picture of a video track, the speaker mutes a track, on video tracks the sound of their
+clips. Both apply to the preview and the export. Removing a track removes its clips too; undo brings both
+back.
+
+## Speed and transitions
+
+Set the **speed** in percent (10 to 1000 %) in the clip's properties or with a right-click. As in
+FilmCraft, in and out stay times in the material; the clip gets shorter or longer. Frames are repeated or
+skipped, and the sound keeps its pitch, in the preview and in the export. If a slower clip runs into the
+next one, the Studio asks: up to the next clip (the clip then shows less material), push the later clips of
+the track back, or cover them. Measured: 80 % turns a 6 s clip into 7.5 s, and the export shows the right
+spot in the material (checked 4 and 7 s into the clip).
+
+**Transitions** come as cross dissolve, dip to black, dip to white and wipe (from the left, with a soft
+edge). They are computed classically, without AI, and take effect at once; preview and export show the
+same. A transition sits as a hatched block at the start of its clip, over the picture: click it to select
+it, drag its right edge to change the duration. Add one with a right-click on the clip ("Transition at the
+start") or on an empty spot above the cut ("Transition here", also in the top track), with Ctrl+D on the
+selected clips or at the cut near the playhead, or with a transition marker. The previous clip runs on past
+its end for it; if its material runs out, its last frame holds. Without a previous clip on the same track,
+the clip fades in over the picture below, or over black.
+
 ## Markers
 
 | Marker | What it does |
 |---|---|
 | Place | On conform, the chosen scene goes here, on the chosen track (V2 lies above V1) |
-| Transition | On conform, the clip that starts here gets a dissolve of this length |
+| Transition | The video clip that starts here gets this transition (kind and length): at once if it is already in the edit, otherwise on conform. Move the marker and the transition moves along |
 | Chain | On generate, the video scene that starts here begins with the last frame of the scene before it: a seamless join |
 | Audio from here | On conform, the chosen audio scene (music, voice, sound) starts here |
 | AI task | A task for Claude: it reads it over MCP, does it and ticks it off |
@@ -90,6 +149,26 @@ scene start with the last frame of the forest scene, and a transition marker at 
 castle in 0.75 s. The exported video, frame by frame:
 
 ![Top: the last two frames of the forest scene and the first two of the clearing scene, the same knight in the same pose. Bottom: the clearing, the dissolve, the castle](images/studio-export-frames.jpg)
+
+## Conform without surprises
+
+"Conform" checks first what it would do. If everything is new and covers nothing, it just goes ahead.
+Otherwise a list appears: **new clips**, with a warning when one would cover an existing clip (its tick then
+allows overwriting) and a note when the take already lies in the edit; and **clips in the edit whose scene
+has a new take**. Preselected is whatever does not change something you cut yourself: a clip that is still
+as long as its scene gets the new take; a shortened or split one is swapped only if you tick it, and keeps
+your cut.
+
+![Before conforming again: a new clip that would cover an existing one (not ticked) and an unchanged clip that gets its scene's new take (ticked)](images/studio-conform.jpg)
+
+## Passing projects on
+
+**"+" → "Export project"** packs the project with all its media into a ZIP file: clips, takes, start and
+end images, given sound and the previews, and on request the lossless copies too (about 32 MB per second at
+1080p). The menu shows the size first. **"Import project"** reads such a package or a project file (.json),
+also on another computer. Media that already exists there is not copied twice; if a project with that name
+exists, the new one gets a number. Measured: the portrait tutorial with 17 files makes 63 MB, packed in
+0.5 s, without compression because videos are compressed already.
 
 ## Quality: 1080p without loss along the way
 
@@ -111,14 +190,20 @@ castle in 0.75 s. The exported video, frame by frame:
 | Key | |
 |---|---|
 | Space | Play and pause |
-| C | Cut at the playhead (with a clip selected, only on its track) |
+| V / C | Selection / Razor tool |
+| S | Magnet on and off |
+| Shift (⇧) while dragging | Dock, also without the magnet |
+| Ctrl+K | Cut at the playhead (with clips selected, only on their tracks) |
+| Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste at the playhead |
+| Ctrl+D | Dissolve on the selected clips or at the cut near the playhead |
+| Ctrl+A | Select all clips |
 | M | Note marker at the playhead |
-| Del / Shift+Del | Delete the selection / delete the clip and close the gap |
+| Del / Shift+Del | Delete the selection / delete clips and close the gap |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | ← → | One frame; with Shift one second |
 | Home / End | To the start / to the end |
 | + / −, Ctrl+mouse wheel | Zoom |
-| Esc | From the source monitor back to the edit |
+| Esc | Cancel a drag, back to Selection, clear the selection, from the source monitor back to the edit |
 
 "Full screen" at the top right hides everything but the Studio.
 

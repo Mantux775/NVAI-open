@@ -14,11 +14,15 @@ Einpassen: Weicht das Seitenverhältnis höchstens 5 % ab, füllt das Bild den R
 (LTX-2.5 rechnet 1080p als 1920 × 1088: 8 Zeilen weg statt das ganze Bild um 0,7 % zu verkleinern und
 schwarze Ränder); sonst passt es mit schwarzen Rändern hinein.
 
-Bild: V1 unten, V2 darüber (deckend, ins Format eingepasst). Eine Überblendung am Anfang eines Clips mischt ihn mit
-dem vorherigen Clip derselben Spur; der läuft dafür über sein Ende hinaus weiter, so weit sein Material reicht, sonst
-steht sein letztes Bild. Ton: alle Clips mit Ton (auch die Tonspur der Videos), Lautstärke je Clip, Überblendungen als
-Ein- und Ausblenden; danach integrierte Lautheit nach ITU-R BS.1770 auf −14 LUFS und der Limiter von NVAI-open
-(comfy_nodes/nvai_audio.py) auf −2,5 dBFS, weil AAC bis knapp 2 dB überschwingt (gemessen 24.10.).
+Bild: V1 unten, V2, V3 … darüber (deckend, ins Format eingepasst); ausgeblendete Spuren fehlen im Plan. Ein Übergang
+am Anfang eines Clips mischt ihn mit dem vorherigen Clip derselben Spur (ohne den mit dem Bild darunter bzw. Schwarz);
+der vorige läuft dafür über sein Ende hinaus weiter, so weit sein Material reicht, sonst steht sein letztes Bild.
+Arten: Überblendung, Abblende über Schwarz bzw. Weiß (erste Hälfte ab-, zweite aufblenden), Wischblende von links mit
+weicher Kante. Geschwindigkeit: Medienzeit = In + Zeit im Clip × Geschwindigkeit (Bilder werden wiederholt oder
+übersprungen), der Ton wird mit atempo gedehnt und behält seine Tonhöhe wie die Vorschau im Browser.
+Ton: alle Clips mit Ton (auch die Tonspur der Videos), Lautstärke je Clip, Übergänge als Ein- und Ausblenden; danach
+integrierte Lautheit nach ITU-R BS.1770 auf −14 LUFS und der Limiter von NVAI-open (comfy_nodes/nvai_audio.py) auf
+−2,5 dBFS, weil AAC bis knapp 2 dB überschwingt (gemessen 24.10.).
 """
 from __future__ import annotations
 
@@ -239,6 +243,45 @@ def read_audio(path: str, start: float, end: float, rate: int) -> np.ndarray:
     return out
 
 
+def stretch(audio: np.ndarray, speed: float, rate: int, length: int) -> np.ndarray:
+    """Ton auf `length` Proben bringen, die Tonhöhe bleibt (atempo; je Stufe 0,5 bis 2, deshalb verkettet).
+    Gemessen 27.10. mit 440 Hz: 10 bis 1000 % treffen die Tonhöhe genau, die Länge auf etwa 2 %, der Rest wird
+    aufgefüllt bzw. abgeschnitten."""
+    if abs(speed - 1.0) < 1e-6 or audio.shape[1] == 0:
+        out = audio
+    else:
+        graph = av.filter.Graph()
+        src = graph.add_abuffer(format="fltp", sample_rate=rate, layout="stereo", time_base=Fraction(1, rate))
+        steps, rest = [], speed
+        while rest < 0.5:
+            steps.append(0.5)
+            rest /= 0.5
+        while rest > 2.0:
+            steps.append(2.0)
+            rest /= 2.0
+        steps.append(rest)
+        nodes = ([src] + [graph.add("atempo", f"{s:.6f}") for s in steps]
+                 + [graph.add("aformat", "sample_fmts=fltp:channel_layouts=stereo"), graph.add("abuffersink")])
+        for a, b in zip(nodes, nodes[1:]):
+            a.link_to(b)
+        graph.configure()
+        frame = av.AudioFrame.from_ndarray(np.ascontiguousarray(audio, dtype=np.float32), format="fltp",
+                                           layout="stereo")
+        frame.sample_rate, frame.pts, frame.time_base = rate, 0, Fraction(1, rate)
+        graph.push(frame)
+        graph.push(None)
+        parts = []
+        while True:
+            try:
+                parts.append(graph.pull().to_ndarray())
+            except (av.BlockingIOError, av.EOFError):
+                break
+        out = np.concatenate(parts, axis=1) if parts else np.zeros((2, 0), np.float32)
+    if out.shape[1] >= length:
+        return out[:, :length]
+    return np.pad(out, ((0, 0), (0, length - out.shape[1])))
+
+
 def loudness(x: np.ndarray, rate: int) -> float:
     """Integrierte Lautheit nach ITU-R BS.1770-4 (K-Filter, 400-ms-Blöcke, Gates −70 LUFS und −10 LU)."""
     if rate != 48000:
@@ -262,13 +305,23 @@ def loudness(x: np.ndarray, rate: int) -> float:
     return float(-0.691 + 10 * np.log10(final.mean())) if final.size else -70.0
 
 
+def speed_of(c: dict[str, Any]) -> float:
+    return float(c.get("speed") or 1.0)
+
+
+def length_of(c: dict[str, Any]) -> float:
+    """Länge auf der Zeitleiste in Sekunden: Material durch die Geschwindigkeit."""
+    return (c["out"] - c["in"]) / speed_of(c)
+
+
 def mix_audio(plan: dict[str, Any], rate: int) -> np.ndarray:
     total = int(np.ceil(plan["duration"] * rate)) + 1
     mix = np.zeros((2, total), np.float32)
     clips = [c for c in plan["clips"] if not c["muted"] and (c["media"] == "audio" or c["audio"])]
     for c in clips:
-        length = c["out"] - c["in"]
-        audio = read_audio(c["path"], c["in"], c["out"], rate) * np.float32(10 ** (c["gain_db"] / 20))
+        n_len = int(round(length_of(c) * rate))
+        audio = stretch(read_audio(c["path"], c["in"], c["out"], rate), speed_of(c), rate, n_len)
+        audio *= np.float32(10 ** (c["gain_db"] / 20))
         tr = c.get("transition")
         if tr and tr["seconds"] > 0:  # einblenden
             n = min(audio.shape[1], int(tr["seconds"] * rate))
@@ -276,10 +329,12 @@ def mix_audio(plan: dict[str, Any], rate: int) -> np.ndarray:
             # der vorherige Clip derselben Spur läuft über sein Ende hinaus aus
             prev = _previous(plan, c)
             if prev is not None and (prev["media"] == "audio" or prev["audio"]) and not prev["muted"]:
-                tail = read_audio(prev["path"], prev["out"], prev["out"] + tr["seconds"], rate)
+                k = speed_of(prev)
+                tail = stretch(read_audio(prev["path"], prev["out"], prev["out"] + tr["seconds"] * k, rate), k, rate,
+                               int(round(tr["seconds"] * rate)))
                 tail *= np.float32(10 ** (prev["gain_db"] / 20)) * np.linspace(1.0, 0.0, tail.shape[1], dtype=np.float32)
                 _add(mix, tail, int(round(c["start"] * rate)))
-        _add(mix, audio[:, :int(round(length * rate))], int(round(c["start"] * rate)))
+        _add(mix, audio, int(round(c["start"] * rate)))
     return mix
 
 
@@ -291,8 +346,27 @@ def _add(mix: np.ndarray, part: np.ndarray, at: int) -> None:
 
 def _previous(plan: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any] | None:
     before = [c for c in plan["clips"] if c["track"] == clip["track"] and c is not clip
-              and abs((c["start"] + c["out"] - c["in"]) - clip["start"]) < 1e-3]
+              and abs((c["start"] + length_of(c)) - clip["start"]) < 1e-3]
     return before[0] if before else None
+
+
+WIPE_EDGE = 0.04  # weiche Kante der Wischblende, Anteil der Bildbreite
+
+
+def blend(base: np.ndarray, img: np.ndarray, a: float, kind: str) -> np.ndarray:
+    """Übergang bei Fortschritt a (0 → 1) von `base` (voriger Clip, Bild darunter oder Schwarz) zu `img`."""
+    b, i = base.astype(np.float32), img.astype(np.float32)
+    if kind in ("dip_black", "dip_white"):
+        color = np.float32(0.0 if kind == "dip_black" else 255.0)
+        out = b + (color - b) * (2 * a) if a < 0.5 else color + (i - color) * (2 * a - 1)
+    elif kind == "wipe":
+        width = img.shape[1]
+        x = np.arange(width, dtype=np.float32) / width
+        mask = np.clip((a * (1 + WIPE_EDGE) - x) / WIPE_EDGE, 0.0, 1.0)[None, :, None]
+        out = b * (1 - mask) + i * mask
+    else:
+        out = b * (1 - a) + i * a
+    return np.clip(out + 0.5, 0, 255).astype(np.uint8)
 
 
 # --------------------------------------------------------------------------------------------- Ablauf
@@ -328,7 +402,7 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
 
     def active(track: str, t: float) -> int | None:
         for i, c in enumerate(plan["clips"]):
-            if c["track"] == track and c["start"] <= t < c["start"] + c["out"] - c["in"] - 1e-9:
+            if c["track"] == track and c["start"] <= t < c["start"] + length_of(c) - 1e-9:
                 return i
         return None
 
@@ -347,21 +421,20 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
             if i is None:
                 continue
             c = plan["clips"][i]
-            img = source(i).frame_at(c["in"] + (t - c["start"]))
+            local = t - c["start"]
+            img = source(i).frame_at(c["in"] + local * speed_of(c))
             if img is None:
                 continue
             tr = c.get("transition")
-            local = t - c["start"]
             if tr and tr["seconds"] > 0 and local < tr["seconds"]:
                 prev = _previous(plan, c)
                 if prev is not None:
                     j = plan["clips"].index(prev)
-                    before = source(j).frame_at(prev["out"] + local)
+                    before = source(j).frame_at(prev["out"] + local * speed_of(prev))
                     base = before if before is not None else (canvas if canvas is not None else black)
                 else:
                     base = canvas if canvas is not None else black
-                a = np.float32(local / tr["seconds"])
-                img = (base.astype(np.float32) * (1 - a) + img.astype(np.float32) * a).astype(np.uint8)
+                img = blend(base, img, local / tr["seconds"], tr.get("kind", "dissolve"))
             canvas = img
         for sink in sinks:
             sink.video(canvas if canvas is not None else black, f)

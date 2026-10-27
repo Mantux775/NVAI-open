@@ -892,6 +892,7 @@ kbd {
 .st-bin-flag { position: absolute; top: 3px; left: 4px; color: var(--accent); font-size: 10px; text-shadow: 0 0 3px #000; }
 .st-bin-filter { display: flex; gap: 2px; padding: 0 6px 6px; }
 .st-bin-filter .tab { padding: 3px 8px; font-size: 12px; }
+.st-bin-more { grid-column: 1 / -1; margin: 6px 4px 2px; justify-content: center; }
 .st-bin-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 8px 8px; align-content: start; }
 .st-bin-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: grab; display: flex; flex-direction: column; }
 .st-bin-item:hover { border-color: var(--accent-dim); }
@@ -915,7 +916,8 @@ kbd {
 .st-field input, .st-field textarea, .st-field select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 13px; }
 .st-field textarea { resize: vertical; }
 .st-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
-.st-check { font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.st-check { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: flex-start; cursor: pointer; }
+.st-check input { width: auto; flex: 0 0 auto; margin: 0; }
 .st-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .st-takes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .st-take { position: relative; padding: 0; border: 2px solid var(--line); border-radius: 6px; background: #000; overflow: hidden; cursor: pointer; color: var(--muted); }
@@ -965,7 +967,6 @@ kbd {
 .st-clip.st-video, .st-clip.st-image { background: #23344a; border-color: #34507a; }
 .st-track.st-audio .st-clip { background: #203a3a; border-color: #2f5a5a; }
 .st-clip.st-muted { opacity: .5; }
-.st-transition { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, rgba(255, 255, 255, .28), transparent); border-right: 1px dashed rgba(255, 255, 255, .45); pointer-events: none; }
 .st-gain { margin-left: auto; font-size: 10px; color: var(--muted); pointer-events: none; }
 .st-marker-row { background: #12161b; }
 .st-marker { position: absolute; top: 3px; height: 18px; font-size: 10px; padding: 0 4px; border-radius: 3px; white-space: nowrap; overflow: hidden; cursor: grab; color: #0b0e11; font-weight: 600; transform: translateX(-6px); touch-action: none; }
@@ -983,3 +984,60 @@ kbd {
 /* Schmale Fenster: erst die Seitenspalten schmaler, dann ohne Medienleiste */
 @media (max-width: 1200px) { .st-upper { grid-template-columns: 200px minmax(0, 1fr) 280px; } }
 @media (max-width: 900px) { .st-upper { grid-template-columns: minmax(0, 1fr) 260px; } .st-bin { display: none; } }
+
+/* Schnittwerkzeuge (27.10.2026): Werkzeuge im freien Feld links oben, Spurköpfe mit Auge und Lautsprecher */
+.st-tools { display: flex; align-items: center; gap: 3px; padding: 0 4px; }
+.st-tool { position: relative; width: 25px; height: 21px; padding: 0; display: grid; place-items: center; background: transparent; border: 1px solid transparent; border-radius: 4px; color: var(--muted); cursor: pointer; }
+.st-tool:hover { color: var(--text); background: var(--panel-2); }
+.st-tool.active { color: var(--accent); border-color: var(--accent-dim); background: var(--panel-2); }
+.st-tool kbd { position: absolute; right: 1px; bottom: 1px; padding: 0; border: 0; background: none; font: 600 7px/1 system-ui, sans-serif; color: inherit; opacity: .85; }
+.st-tool kbd.st-kbd-shift { right: 1px; bottom: 2px; line-height: 0; }
+.st-kbd-shift svg { display: block; }
+.st-track-head { gap: 2px; padding-right: 4px; }
+.st-track-name { flex: 1; }
+.st-icon { width: 18px; height: 18px; padding: 0; display: grid; place-items: center; background: transparent; border: 0; border-radius: 3px; color: var(--muted); cursor: pointer; }
+.st-icon:hover { color: var(--text); background: var(--panel-2); }
+.st-icon.off { color: var(--danger); }
+.st-track-head.st-off .st-track-name { opacity: .55; }
+.st-track.st-hidden { background-color: rgba(0, 0, 0, .28); }
+.st-speed { flex: 0 0 auto; font-size: 10px; color: #f2c94c; pointer-events: none; }
+.st-razor-mode .st-clip, .st-razor-mode .st-track { cursor: crosshair; }
+.st-razor-mode .st-trans { pointer-events: none; }
+.st-razorline { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 3px #000; z-index: 6; pointer-events: none; }
+.st-snapline { position: absolute; top: 0; bottom: 0; width: 1px; background: #fff; box-shadow: 0 0 4px rgba(255, 255, 255, .8); z-index: 9; pointer-events: none; }
+.st-marquee { position: fixed; z-index: 50; border: 1px solid var(--accent); background: rgba(118, 185, 0, .12); pointer-events: none; }
+
+/* Übergang als eigener Block über dem Schnitt (wie FilmCraft: schraffiert, mit Namen) */
+.st-trans { position: absolute; bottom: 3px; height: 46%; z-index: 4; display: flex; align-items: center; overflow: hidden; border: 1px solid rgba(255, 255, 255, .65); border-radius: 3px; cursor: pointer; touch-action: none; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .30) 0 4px, rgba(255, 255, 255, .10) 4px 8px); }
+.st-trans-dip_black { background: repeating-linear-gradient(135deg, rgba(0, 0, 0, .65) 0 4px, rgba(255, 255, 255, .14) 4px 8px); }
+.st-trans-dip_white { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .55) 0 4px, rgba(255, 255, 255, .18) 4px 8px); }
+.st-trans-wipe { background: linear-gradient(90deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, .45) 50%, rgba(255, 255, 255, .08) 50%); }
+.st-trans-label { padding: 0 3px; font-size: 9px; color: #fff; text-shadow: 0 0 2px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.st-trans.st-sel { outline: 2px solid var(--accent); outline-offset: 0; }
+.st-dip { position: absolute; inset: 0; pointer-events: none; }
+
+/* Rechtsklick-Menü */
+.st-menu-layer { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
+.st-menu { pointer-events: auto; z-index: 101; min-width: 200px; padding: 4px; font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgba(0, 0, 0, .55); }
+.st-menu-item { position: relative; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 5px; white-space: nowrap; cursor: default; user-select: none; }
+.st-menu-item:hover, .st-menu-item.open { background: var(--panel-2); }
+.st-menu-item.disabled { color: var(--muted); opacity: .55; }
+.st-menu-item.danger { color: #ff8a8a; }
+.st-menu-check { width: 12px; color: var(--accent); }
+.st-menu-label { flex: 1; }
+.st-menu-hint { margin-left: 18px; font-size: 11px; color: var(--muted); }
+.st-menu-arrow { color: var(--muted); }
+.st-menu-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+
+/* Dialoge im Studio (kein Browser-Dialog) */
+.st-dialog-layer { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .45); }
+.st-dialog { width: min(660px, 100%); max-height: 80vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, .55); }
+.st-dialog-small { width: min(470px, 100%); }
+.st-dialog h3 { margin: 0; font-size: 15px; }
+.st-dialog h4 { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.st-dialog p { margin: 0; }
+.st-dialog-actions { justify-content: flex-end; margin-top: 6px; }
+.st-dialog-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-conform-item { align-items: flex-start; line-height: 1.4; }
+.st-conform-item input { margin-top: 2px; }
+.st-conform-item.warn b { color: #f2c94c; }

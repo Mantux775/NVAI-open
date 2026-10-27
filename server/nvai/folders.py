@@ -125,6 +125,18 @@ def browse(initial: str | None) -> str | None:
     return chosen or None
 
 
+def reveal(path: Path) -> None:
+    """Ordner einer Datei im Explorer (Finder, Dateimanager) öffnen, die Datei markiert (Studio: „Speicherort
+    öffnen“). Der Pfad kommt aus der Datenbank, nie aus der Anfrage."""
+    if sys.platform == "win32":
+        # explorer will /select, und den Pfad in einem Stück; als Liste würde Python den Pfad anders quoten
+        subprocess.Popen(f'explorer /select,"{path}"')
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path.parent)])
+
+
 def restart() -> None:
     """Ueber den Starter neu starten: der beendet diesen Server und startet ihn mit den
     Registry-Werten neu. Die eigenen NVAI_*-Variablen fallen weg, sonst gewaennen die alten Ordner."""

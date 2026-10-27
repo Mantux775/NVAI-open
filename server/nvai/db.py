@@ -155,6 +155,20 @@ def create_asset(
     return _asset(asset_id, job_id, kind, filename, prompt, model_id, meta, created)
 
 
+def insert_asset(asset_id: str, kind: str, filename: str, prompt: str, model_id: str, meta: dict[str, Any],
+                 created: float) -> Asset:
+    """Asset unter einer vorgegebenen ID eintragen (Import eines Studio-Pakets: die Projekte verweisen auf die IDs);
+    ein Eintrag ohne Datei unter derselben ID wird ersetzt."""
+    with _lock:
+        _c().execute(
+            "INSERT OR REPLACE INTO assets (id, job_id, kind, filename, prompt, model_id, meta, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (asset_id, None, kind, filename, prompt, model_id, json.dumps(meta), created),
+        )
+        _c().commit()
+    return _asset(asset_id, None, kind, filename, prompt, model_id, meta, created)
+
+
 def _asset(
     aid: str, job_id: str | None, kind: str, filename: str,
     prompt: str, model_id: str, meta: dict[str, Any], created: float,
@@ -180,12 +194,42 @@ def get_asset(asset_id: str) -> Asset | None:
     return _row_to_asset(row) if row else None
 
 
-def list_assets(kind: str | None = None, limit: int = 100, offset: int = 0) -> list[Asset]:
-    q = "SELECT * FROM assets"
+# Hochgeladenes nach Endung (Uploads tragen keine Art), wie Bin.tsx `mediaKind`
+UPLOAD_VIDEO = (".mp4", ".webm", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".mxf", ".mts", ".m2ts", ".ts")
+UPLOAD_AUDIO = (".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus")
+
+
+def _upload_ext_sql(exts: tuple[str, ...]) -> tuple[str, list[str]]:
+    return "(" + " OR ".join("lower(filename) LIKE ?" for _ in exts) + ")", [f"%{e}" for e in exts]
+
+
+def list_assets(kind: str | None = None, limit: int = 100, offset: int = 0, media: str | None = None,
+                query: str | None = None) -> list[Asset]:
+    """Neueste zuerst. `media` (image|video|audio|all) zählt Uploads nach ihrer Endung dazu, wie das Material des
+    Studios; `query` sucht ohne Groß-/Kleinschreibung in Prompt, Dateiname und Angaben (z. B. dem ursprünglichen
+    Dateinamen oder der Beschreibung des Upsamplers), über alle Assets, nicht nur die geladenen."""
+    where: list[str] = []
     args: list[Any] = []
     if kind:
-        q += " WHERE kind = ?"
+        where.append("kind = ?")
         args.append(kind)
+    if media in ("image", "video", "audio", "all"):
+        vid, vargs = _upload_ext_sql(UPLOAD_VIDEO)
+        aud, aargs = _upload_ext_sql(UPLOAD_AUDIO)
+        if media == "all":
+            where.append("kind IN ('image', 'video', 'audio', 'upload')")
+        elif media == "image":
+            where.append(f"(kind = 'image' OR (kind = 'upload' AND NOT {vid} AND NOT {aud}))")
+            args += vargs + aargs
+        else:
+            ext, eargs = (vid, vargs) if media == "video" else (aud, aargs)
+            where.append(f"(kind = ? OR (kind = 'upload' AND {ext}))")
+            args += [media] + eargs
+    if query and query.strip():
+        pattern = f"%{query.strip().lower()}%"
+        where.append("(lower(prompt) LIKE ? OR lower(filename) LIKE ? OR lower(meta) LIKE ?)")
+        args += [pattern, pattern, pattern]
+    q = "SELECT * FROM assets" + (" WHERE " + " AND ".join(where) if where else "")
     q += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
     args += [limit, offset]
     with _lock:

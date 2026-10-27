@@ -1471,7 +1471,9 @@ LTX25_FEATURES: dict[str, Any] = {
         "Ein Absatz im Präsens, 4 bis 8 Sätze: Einstellung, Ort und Licht, die Handlung von Anfang "
         "bis Ende mit Verben, Figuren, die Kamerabewegung, zuletzt der Ton. Gesprochenes in "
         "Anführungszeichen. Mehrere Einstellungen: jeden Schnitt ausschreiben (\"A hard cut "
-        "transitions to …\"), 2 bis 4 Einstellungen."),
+        "transitions to …\"), 2 bis 4 Einstellungen. Personen: Gesicht groß und frontal im Startbild, "
+        "nicht abwenden lassen; sprechen nur mit Gesicht im Bild und immer gleich beschriebener Stimme, "
+        "sonst klingt sie anders."),
     "placeholder": (
         "Cinematic wide shot of a lighthouse on a rocky coast at dusk. Waves crash against the rocks "
         "while the beam sweeps slowly across the dark sea. The camera pushes in slowly. Sound: roaring "
