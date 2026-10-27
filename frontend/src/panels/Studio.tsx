@@ -36,6 +36,8 @@ const KEY_PROJECT = 'nvai-studio-project'
 const KEY_ZOOM = 'nvai-studio-zoom'
 const KEY_SPLIT = 'nvai-studio-split'
 const KEY_MAGNET = 'nvai-studio-magnet'
+const KEY_BIN = 'nvai-studio-bin-width'
+const BIN_WIDTH = 240
 
 function stored(key: string): string | null {
   try {
@@ -93,6 +95,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const [playing, setPlaying] = useState(false)
   const [zoom, setZoomState] = useState(() => Number(stored(KEY_ZOOM)) || 40)
   const [split, setSplit] = useState(() => Number(stored(KEY_SPLIT)) || 44)
+  const [binWidth, setBinWidth] = useState(() => Number(stored(KEY_BIN)) || BIN_WIDTH)
   const [notice, setNotice] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [presets, setPresets] = useState<{ id: string; label: string; ext: string }[]>([])
@@ -109,6 +112,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const [conformPlan, setConformPlan] = useState<ConformPlan | null>(null)
   const [speedAsk, setSpeedAsk] = useState<SpeedAsk | null>(null)
   const root = useRef<HTMLDivElement>(null)
+  const upper = useRef<HTMLDivElement>(null)
   const importInput = useRef<HTMLInputElement>(null)
   const pid = project?.id
 
@@ -831,6 +835,29 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
     window.addEventListener('pointerup', up)
   }
 
+  // Breite der Materialspalte ziehen (Nutzer 27.10.2026: „dann soll Material-Spalte breiter gemacht werden können“);
+  // Doppelklick stellt sie zurück
+  const dragBin = (e: RPointerEvent) => {
+    const box = upper.current?.getBoundingClientRect()
+    if (!box) return
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      const w = Math.round(Math.max(180, Math.min(ev.clientX - box.left, box.width - 330 - 320)))
+      setBinWidth(w)
+      store(KEY_BIN, String(w))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  const resetBin = () => {
+    setBinWidth(BIN_WIDTH)
+    store(KEY_BIN, String(BIN_WIDTH))
+  }
+
   const running = project?.scenes.filter((s) => s.status === 'running' || s.status === 'waiting').length ?? 0
   const askNames = speedAsk ? speedAsk.hits.map((c) => project?.scenes.find((s) => s.id === c.scene_id)?.title || project?.assets[c.asset_id]?.prompt?.slice(0, 30) || c.asset_id) : []
 
@@ -898,9 +925,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
             {exporting.status === 'running' && <>{Math.round(exporting.progress * 100)} % · {exporting.stage}</>}
             {exporting.status === 'done' && (
               /\.(mkv|mov)$/i.test(exporting.url ?? '') ? (
-                <a href={exporting.url} download>{t('Fertig – herunterladen (auch im Verlauf)', 'Done – download (also in History)')}</a>
+                <a href={exporting.url} download>{t('Fertig – herunterladen (auch im Projektordner)', 'Done – download (also in the project folder)')}</a>
               ) : (
-                <a href={exporting.url} target="_blank" rel="noreferrer">{t('Fertig – ansehen (auch im Verlauf)', 'Done – view (also in History)')}</a>
+                <a href={exporting.url} target="_blank" rel="noreferrer">{t('Fertig – ansehen (auch im Projektordner)', 'Done – view (also in the project folder)')}</a>
               )
             )}
             {exporting.status === 'error' && <span className="warn-text">{exporting.error}</span>}
@@ -934,16 +961,20 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
         </div>
       ) : (
         <>
-          <div className="st-upper">
+          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `min(${binWidth}px, 50vw) 5px minmax(0, 1fr) 330px` }}>
             <Bin
               refreshKey={binKey + assetsVersion}
               selectedId={selection?.type === 'asset' ? selection.id : null}
               usedIds={new Set(project.clips.map((c) => c.asset_id))}
+              projectId={project.id}
+              home={project.folder}
               onOpen={openSource}
               onDeleted={assetGone}
               menuItems={binMenu}
               onMenu={(e, items) => setMenu({ x: e.clientX, y: e.clientY, items })}
             />
+            <div className="st-vsplit" onPointerDown={dragBin} onDoubleClick={resetBin}
+              title={t('Ziehen: Breite der Materialspalte; Doppelklick: zurücksetzen', 'Drag: width of the media column; double-click: reset')} />
             <Monitor
               project={project}
               playhead={playhead}

@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import {
+  fileUrl,
   TPS,
   type Asset,
   type ModelInfo,
@@ -406,6 +407,8 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
   if (fps) rows.push([t('Bildrate', 'Frame rate'), `${decimal(String(Math.round(fps * 1000) / 1000))} fps`])
   if (m.seed !== undefined && m.seed !== null) rows.push(['Seed', String(m.seed)])
   rows.push([t('Erstellt', 'Created'), created])
+  // Projektordner (seit 0.5.15); oberste Ebene = der allgemeine Verlauf
+  rows.push([t('Ordner', 'Folder'), a.folder ? a.folder.split('/').pop()! : t('Verlauf', 'History')])
   return (
     <div className="st-inspector">
       <h3>
@@ -430,7 +433,7 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
                 ) : m.preset === 'prores' ? (
                   t('ProRes 4444, fast verlustfrei', 'ProRes 4444, near lossless')
                 ) : m.master ? (
-                  <a href={`/files/${m.master}`} download title={t('FFV1 in MKV, Ton als Float-PCM', 'FFV1 in MKV, sound as float PCM')}>
+                  <a href={fileUrl(m.master)} download title={t('FFV1 in MKV, Ton als Float-PCM', 'FFV1 in MKV, sound as float PCM')}>
                     {t('MKV herunterladen', 'Download MKV')}
                   </a>
                 ) : m.studio_project ? (

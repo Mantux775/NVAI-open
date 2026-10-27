@@ -54,6 +54,10 @@ IO_KINDS = {"download"}
 TEXT_KINDS = {"expand_prompt"}
 RENDER_KINDS = {"studio_export"}
 
+# Wohin die Dateien eines fertigen Auftrags gehören, bevor job.done rausgeht: Das Studio legt die seiner Projekte in
+# deren Ordner (seit 0.5.15; studio.py setzt den Haken, jobs.py kennt das Studio nicht). Läuft in einem Thread.
+place_assets: Callable[[Job, list[str]], None] | None = None
+
 
 class JobContext:
     """Was ein Handler zum Melden von Fortschritt braucht.
@@ -213,6 +217,11 @@ async def _run_one(job_id: str) -> None:
     ctx = JobContext(job, asyncio.get_running_loop())
     try:
         asset_ids = await _handlers[job.kind](job, ctx)
+        if place_assets is not None and asset_ids:
+            try:
+                await asyncio.to_thread(place_assets, job, asset_ids)
+            except Exception:  # noqa: BLE001 - dann bleibt das Material eben im Verlauf
+                traceback.print_exc()
         db.update_job(
             job_id, status="done", progress=1.0, stage=t("fertig", "done"),
             asset_ids=asset_ids, finished_at=time.time(),

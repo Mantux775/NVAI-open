@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent } from '../api'
+import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type StudioProjectInfo } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
@@ -162,6 +162,32 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     setMasterState(on)
     try {
       localStorage.setItem('nvai-video-master', on ? '1' : '0')
+    } catch {
+      /* privates Fenster */
+    }
+  }
+  // Ablegen in (seit 0.5.15, Nutzer 27.10.2026: „neu generierte Assets für das Projekt wie Referenzbilder gleich im
+  // Projektordner“): Verlauf oder der Ordner eines Studio-Projekts, gemerkt im Browser; ein gelöschtes Projekt fällt
+  // auf den Verlauf zurück
+  const [projects, setProjects] = useState<StudioProjectInfo[]>([])
+  const [target, setTarget] = useState(() => {
+    try {
+      return localStorage.getItem('nvai-generate-project') ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const refreshProjects = () => {
+    api.studioProjects().then(setProjects).catch(() => {})
+  }
+  useEffect(() => {
+    refreshProjects()
+  }, [])
+  const projectId = projects.some((x) => x.id === target) ? target : ''
+  const chooseProject = (id: string) => {
+    setTarget(id)
+    try {
+      localStorage.setItem('nvai-generate-project', id)
     } catch {
       /* privates Fenster */
     }
@@ -645,6 +671,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           + `free space above the head.`,
         negative_prompt: '', model_id: refModel.id, steps: null, seed: seed ? Number(seed) : null,
         width: vidSize.w, height: vidSize.h, batch_size: 4, reference_asset_ids: [sourceId],
+        project_id: projectId || null,
       })
       setJobId(job.id)
     } catch (e) {
@@ -785,6 +812,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       model_id: modelId[mode] || null,
       steps: steps ? Number(steps) : null,
       seed: seed ? Number(seed) : null,
+      project_id: projectId || null,
     }
     try {
       let job
@@ -822,6 +850,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           model_id: restoreEdits ? modelId.restore || null : null,
           upscale_model_id: restoreSharpen && upscaler ? upscaler.id : null,
           seed: seed ? Number(seed) : null,
+          project_id: projectId || null,
         })
       } else if (mode === 'audio') {
         job = await api.generateAudio({ ...common, seconds })
@@ -2071,6 +2100,22 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             </label>
           )}
         </div>
+
+        {mode !== '3d' && projects.length > 0 && (
+          <label className="gen-target"
+            title={t('Verlauf oder der Ordner eines Studio-Projekts: Was du für ein Projekt erzeugst (etwa Start- oder '
+              + 'Referenzbilder), liegt dann gleich in seinem Ordner, im Studio wie im Verlauf.',
+              'History or the folder of a Studio project: what you make for a project (start or reference images, '
+              + 'say) goes straight into its folder, in the Studio and in the history.')}>
+            {t('Ablegen in', 'Save to')}
+            <select value={projectId} onPointerDown={refreshProjects} onChange={(e) => chooseProject(e.target.value)}>
+              <option value="">{t('Verlauf', 'History')}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{t('Studio-Projekt', 'Studio project')}: {p.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <button className="btn primary" onClick={generate}
           disabled={busy || (mode === 'restore' ? false : noModel) || !canGenerate}>

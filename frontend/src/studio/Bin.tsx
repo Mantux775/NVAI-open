@@ -5,9 +5,17 @@
 // (Nutzer 27.10.2026): an eine Spur senden, Speicherort öffnen, Datei öffnen, löschen. Löschen fragt im Knopf selbst
 // nach (kein Browser-Dialog) und lässt, was im Schnitt liegt, stehen. Geladen werden je 100 (Nutzer 27.10.: „lädt nicht
 // alle Assets … max 100, dann weitere 100. Suche soll alle durchsuchen“); Filter und Suche fragt der Server über alles.
+//
+// Ordner (seit 0.5.15, Nutzer 27.10.2026: „jedes Projekt in Studio soll einen eigenen Unterordner für seine Assets
+// bekommen … neben dem Upload-Button brauche ich einen Ordner-Button, der Ordner einblendet oder ausblendet, ich kann
+// mit dem ersten Ordner „..“ nach oben klettern, mit einem Doppelklick öffnet es den Ordner. Beim Wechseln des
+// Projekts soll sein Projektordner automatisch öffnen“): Oben stehen die Projektordner, darunter der allgemeine
+// Verlauf. Ausgeblendet fehlen nur die Ordnereinträge, die Liste bleibt im geöffneten Ordner (Nutzer: „es sollte schon
+// da bleiben, wo das Projekt ist … oder den Ordner halt, den ich gerade benutze“); die Suche sucht immer überall.
 
 import { useEffect, useRef, useState, type DragEvent as RDragEvent, type MouseEvent as RMouseEvent } from 'react'
-import { api, type Asset } from '../api'
+import { api, fileUrl, type Asset, type AssetFolder } from '../api'
+import { FolderIcon } from '../components/FolderIcon'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
 import { ASSET_MIME } from './Timelines'
@@ -19,6 +27,7 @@ type View = 'list' | 'grid'
 const VIDEO = /\.(mp4|webm|mov|mkv|avi|wmv|flv|mxf|mts|m2ts|ts)$/i
 const AUDIO = /\.(mp3|wav|flac|ogg|m4a|aac|opus)$/i
 const KEY_VIEW = 'nvai-studio-bin-view'
+const KEY_FOLDERS = 'nvai-studio-bin-folders'
 const PAGE = 100
 
 /** Uploads tragen keine Art; die Endung sagt sie. */
@@ -35,7 +44,7 @@ const NO_BROWSER = /\.(mkv|mov|avi|wmv|flv|mxf|mts|m2ts|ts)$/i
 /** Was der Browser abspielt: die Datei selbst oder, bei MKV, MOV & Co., ihre H.264-Vorschau (meta.preview). FFV1
  * und ProRes spielt kein Browser; NVAI-open legt die Vorschau beim Export bzw. nach dem Hochladen an. */
 export function previewUrl(a: Asset): string | null {
-  if (a.meta?.preview) return `/files/${a.meta.preview}`
+  if (a.meta?.preview) return fileUrl(a.meta.preview)
   return NO_BROWSER.test(a.filename) ? null : a.url
 }
 
@@ -60,11 +69,29 @@ export function assetFacts(a: Asset): string[] {
 
 const KIND_ICON = { image: '▣', video: '▶', audio: '♪' }
 
-function stored(): View {
+/** Eine Ebene höher: Projektordner (Studio/<Name>) liegen in der Ansicht direkt unter der obersten Ebene. */
+function parentOf(folder: string): string {
+  const parts = folder.split('/')
+  return parts.length <= 2 ? '' : parts.slice(0, -1).join('/')
+}
+
+function folderName(folder: string): string {
+  return folder.split('/').pop() ?? folder
+}
+
+function stored(key: string): string | null {
   try {
-    return localStorage.getItem(KEY_VIEW) === 'grid' ? 'grid' : 'list'
+    return localStorage.getItem(key)
   } catch {
-    return 'list'
+    return null
+  }
+}
+
+function store(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* privates Fenster */
   }
 }
 
@@ -101,6 +128,9 @@ interface Props {
   selectedId: string | null
   /** Assets, die als Clip im Schnitt liegen: nicht löschbar */
   usedIds: Set<string>
+  /** Das offene Projekt und sein Ordner: Beim Wechsel öffnet die Liste diesen Ordner */
+  projectId: string
+  home?: string
   onOpen: (a: Asset) => void
   onDeleted: (id: string) => void
   /** Einträge des Rechtsklick-Menüs, die das Studio beisteuert (an eine Spur senden …) */
@@ -108,18 +138,27 @@ interface Props {
   onMenu: (e: { clientX: number; clientY: number }, items: MenuItem[]) => void
 }
 
-export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuItems, onMenu }: Props) {
+export function Bin({ refreshKey, selectedId, usedIds, projectId, home, onOpen, onDeleted, menuItems, onMenu }: Props) {
   const [assets, setAssets] = useState<Asset[]>([])
+  const [folders, setFolders] = useState<AssetFolder[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('') // die Suche mit kurzer Pause nach dem Tippen
   const [more, setMore] = useState(false) // liefert der Server noch weitere?
   const [loading, setLoading] = useState(false)
-  const [view, setView] = useState<View>(stored)
+  const [view, setView] = useState<View>(() => (stored(KEY_VIEW) === 'grid' ? 'grid' : 'list'))
+  const [showFolders, setShowFolders] = useState(() => stored(KEY_FOLDERS) !== '0')
+  const [cwd, setCwd] = useState(home ?? '') // der geöffnete Ordner, '' = oberste Ebene
+  const [picked, setPicked] = useState<string | null>(null) // markierter Ordner (oder '..')
   const [confirm, setConfirm] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const count = useRef(0) // wie viele geladen sind: beim Auffrischen nicht wieder auf 100 schrumpfen
   const ask = useRef(0) // nur die Antwort auf die letzte Anfrage zählt
+  const lastHome = useRef(home)
+
+  // Ordnereinträge („..“, Projektordner): nur eingeblendet und ohne Suche (die Suche sucht überall). Gelistet wird
+  // immer der geöffnete Ordner, auch mit ausgeblendeten Ordnern.
+  const inFolders = showFolders && !search
 
   /** Erste Seite neu (oder so viele wie schon geladen) bzw. die nächsten 100 dazu. */
   const load = (append: boolean, keep = false) => {
@@ -127,8 +166,11 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
     const offset = append ? count.current : 0
     const limit = append ? PAGE : keep ? Math.max(PAGE, Math.ceil(count.current / PAGE) * PAGE) : PAGE
     setLoading(true)
+    if (!append && inFolders && cwd === '') {
+      api.assetFolders().then((list) => my === ask.current && setFolders(list)).catch(() => {})
+    }
     api
-      .assetPage({ media: filter, q: search || undefined, limit, offset })
+      .assetPage({ media: filter, q: search || undefined, folder: search ? undefined : cwd, limit, offset })
       .then((list) => {
         if (my !== ask.current) return
         const next = append ? [...assets, ...list.filter((a) => !assets.some((x) => x.id === a.id))] : list
@@ -146,12 +188,27 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
     return () => clearTimeout(id)
   }, [query])
 
-  // neuer Filter oder neue Suche: von vorn; neue Aufträge, Hochladen, Löschen: so viele wie schon geladen
+  // Projektwechsel öffnet dessen Ordner; heißt das Projekt nur anders, folgt die Liste, wenn sie dort stand
+  useEffect(() => {
+    setCwd(home ?? '')
+    setPicked(null)
+    lastHome.current = home
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+  useEffect(() => {
+    if (home !== lastHome.current) {
+      if (cwd === lastHome.current) setCwd(home ?? '')
+      lastHome.current = home
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [home])
+
+  // neuer Filter, neue Suche, anderer Ordner: von vorn; neue Aufträge, Hochladen, Löschen: so viele wie schon geladen
   useEffect(() => {
     count.current = 0
     load(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, search])
+  }, [filter, search, showFolders, cwd])
   useEffect(() => {
     if (refreshKey) load(false, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,17 +216,30 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
 
   const switchView = (v: View) => {
     setView(v)
-    try {
-      localStorage.setItem(KEY_VIEW, v)
-    } catch {
-      /* privates Fenster */
-    }
+    store(KEY_VIEW, v)
   }
 
+  const toggleFolders = () => {
+    setShowFolders(!showFolders)
+    store(KEY_FOLDERS, showFolders ? '0' : '1')
+  }
+
+  const openFolder = (folder: string) => {
+    setPicked(null)
+    setCwd(folder)
+  }
+
+  const goUp = () => {
+    setPicked(cwd) // der Ordner, aus dem man kommt, bleibt markiert
+    setCwd(parentOf(cwd))
+  }
+
+  // Hochgeladenes landet im geöffneten Ordner
+  const uploadFolder = cwd
   const upload = async (files: FileList | null) => {
     if (!files) return
     try {
-      for (const f of Array.from(files)) await api.upload(f)
+      for (const f of Array.from(files)) await api.upload(f, uploadFolder || undefined)
       load(false, true)
     } catch (e: any) {
       setError(String(e.message ?? e))
@@ -197,6 +267,14 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
     }
   }
 
+  const revealFolder = async (folder: string) => {
+    try {
+      await api.revealFolder(folder)
+    } catch (e: any) {
+      setError(String(e.message ?? e))
+    }
+  }
+
   const shown = assets.filter((a) => mediaKind(a) !== null)
   const filters: [Filter, string][] = [
     ['all', t('Alle', 'All')],
@@ -205,11 +283,72 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
     ['audio', t('Ton', 'Audio')],
   ]
 
+  const files = (n: number) => t(`${n} ${n === 1 ? 'Datei' : 'Dateien'}`, `${n} ${n === 1 ? 'file' : 'files'}`)
+
+  /** Ordnereintrag (auch „..“): Klick markiert, Doppelklick öffnet. */
+  const folderItem = (key: string, label: string, sub: string, title: string, open: () => void, extra?: {
+    current?: boolean
+    orphan?: boolean
+    menu?: MenuItem[]
+  }) => {
+    const sel = picked === key ? ' st-sel' : ''
+    const cls = `${extra?.current ? ' current' : ''}${extra?.orphan ? ' orphan' : ''}`
+    const common = {
+      title,
+      onClick: () => setPicked(key),
+      onDoubleClick: open,
+      onContextMenu: (e: RMouseEvent) => {
+        e.preventDefault()
+        setPicked(key)
+        onMenu(e, extra?.menu ?? [{ label: t('Öffnen', 'Open'), onClick: open }])
+      },
+    }
+    if (view === 'grid') {
+      return (
+        <div key={key} {...common} className={`st-bin-item st-bin-folder${cls}${sel}`}>
+          <span className="st-bin-folder-big">{key === '..' ? '..' : <FolderIcon size={30} />}</span>
+          <span className="st-bin-label small">{label}</span>
+        </div>
+      )
+    }
+    return (
+      <div key={key} {...common} className={`st-bin-row st-bin-folder${cls}${sel}`}>
+        <span className="st-bin-thumb">{key === '..' ? <b>..</b> : <FolderIcon size={18} />}</span>
+        <span className="st-bin-text">
+          <span className="st-bin-name">{label}</span>
+          <span className="st-bin-meta">{sub}</span>
+        </span>
+      </div>
+    )
+  }
+
+  const folderEntries = () => {
+    if (!inFolders) return null
+    if (cwd !== '') {
+      return folderItem('..', '..', t('Eine Ebene hoch', 'Up one level'), t('Doppelklick: eine Ebene hoch', 'Double-click: up one level'), goUp)
+    }
+    return folders.map((f) => {
+      const current = f.path === home
+      const orphan = !f.project_id
+      const sub = `${files(f.items)}${current ? t(' · offenes Projekt', ' · open project') : orphan ? t(' · ohne Projekt', ' · no project') : ''}`
+      return folderItem(f.path, f.name, sub, t(`Doppelklick: öffnen (${f.path})`, `Double-click: open (${f.path})`), () => openFolder(f.path), {
+        current,
+        orphan,
+        menu: [
+          { label: t('Öffnen', 'Open'), onClick: () => openFolder(f.path) },
+          { label: t('Speicherort öffnen', 'Show in folder'), separator: true, onClick: () => revealFolder(f.path) },
+        ],
+      })
+    })
+  }
+
   const item = (a: Asset) => {
     const kind = mediaKind(a)
     const used = usedIds.has(a.id)
     const lossless = !!a.meta?.master
     const asking = confirm === a.id
+    // in der Suche: wo es liegt
+    const where = search && a.folder ? folderName(a.folder) : null
     const del = (
       <button
         className={`st-bin-del${asking ? ' asking' : ''}`}
@@ -224,10 +363,14 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
     )
     const common = {
       draggable: true,
-      title: assetLabel(a),
-      onClick: () => onOpen(a),
+      title: assetLabel(a) + (a.folder ? `\n${t('Ordner', 'Folder')}: ${folderName(a.folder)}` : ''),
+      onClick: () => {
+        setPicked(null)
+        onOpen(a)
+      },
       onContextMenu: (e: RMouseEvent) => {
         e.preventDefault()
+        setPicked(null)
         onOpen(a)
         onMenu(e, [
           ...menuItems(a),
@@ -267,12 +410,23 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
             {kind && KIND_ICON[kind]} {assetFacts(a).join(' · ')}
             {lossless && <span className="st-bin-mark" title={t('Verlustfreie Kopie (FFV1) für Schnitt und Export', 'Lossless copy (FFV1) for editing and export')}>◆</span>}
             {used && <span className="st-bin-mark used" title={t('Liegt im Schnitt', 'In the edit')}>●</span>}
+            {where && <span className="st-bin-where" title={a.folder}><FolderIcon size={10} /> {where}</span>}
           </span>
         </span>
         {del}
       </div>
     )
   }
+
+  const emptyText = search
+    ? t('Nichts gefunden.', 'Nothing found.')
+    : cwd !== ''
+      ? t('Der Ordner ist leer. Was das Projekt erzeugt, exportiert oder hier hochlädt, landet hier.',
+        'The folder is empty. What the project generates, exports or uploads here lands here.')
+      : t('Noch nichts da.', 'Nothing here yet.')
+  const uploadTitle = uploadFolder
+    ? t(`Bilder, Videos oder Ton hochladen, in den Ordner „${folderName(uploadFolder)}“`, `Upload images, videos or audio into the folder "${folderName(uploadFolder)}"`)
+    : t('Bilder, Videos oder Ton hochladen, in den allgemeinen Verlauf', 'Upload images, videos or audio into the general history')
 
   return (
     <div className="st-bin">
@@ -284,9 +438,16 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
         <span className="st-spacer" />
         <button className={`btn small ghost${view === 'list' ? ' active' : ''}`} onClick={() => switchView('list')} title={t('Liste', 'List')}>☰</button>
         <button className={`btn small ghost${view === 'grid' ? ' active' : ''}`} onClick={() => switchView('grid')} title={t('Kacheln', 'Tiles')}>▦</button>
-        <label className="btn small" title={t('Bilder, Videos oder Ton hochladen', 'Upload images, videos or audio')}>
+        <button
+          className={`btn small ghost st-bin-folders${showFolders ? ' active' : ''}`}
+          onClick={toggleFolders}
+          title={showFolders ? t('Ordner ausblenden: nur das Material des geöffneten Ordners', 'Hide folders: only the media of the open folder') : t('Ordner einblenden: „..“, die Projektordner und der Verlauf', 'Show folders: "..", the project folders and the history')}
+        >
+          <FolderIcon />
+        </button>
+        <label className="btn small" title={uploadTitle}>
           ⭱
-          <input type="file" multiple accept="image/*,video/*,audio/*" hidden onChange={(e) => upload(e.target.files)} />
+          <input type="file" multiple accept="image/*,video/*,audio/*" hidden onChange={(e) => { upload(e.target.files); e.target.value = '' }} />
         </label>
       </div>
       <div className="st-bin-filter">
@@ -296,17 +457,29 @@ export function Bin({ refreshKey, selectedId, usedIds, onOpen, onDeleted, menuIt
           </button>
         ))}
       </div>
-      <input className="st-bin-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Suchen …', 'Search …')} />
+      <input className="st-bin-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Suchen (in allen Ordnern) …', 'Search (all folders) …')} />
+      {!search && cwd !== '' && (
+        <div className="st-bin-path">
+          <button className="st-bin-crumb" onClick={() => openFolder('')} title={t('Oberste Ebene: Projektordner und Verlauf', 'Top level: project folders and history')}>
+            {t('Material', 'Media')}
+          </button>
+          <span className="muted">›</span>
+          <FolderIcon size={12} />
+          <span className="st-bin-cwd" title={cwd}>{folderName(cwd)}</span>
+        </div>
+      )}
       {error && (
         <p className="warn-text small st-bin-error" onClick={() => setError(null)}>
           {error}
         </p>
       )}
       <div className={view === 'grid' ? 'st-bin-list' : 'st-bin-rows'}>
-        {shown.map(item)}
-        {shown.length === 0 && !loading && (
-          <p className="muted small">{search ? t('Nichts gefunden.', 'Nothing found.') : t('Noch nichts da.', 'Nothing here yet.')}</p>
+        {folderEntries()}
+        {inFolders && cwd === '' && folders.length > 0 && shown.length > 0 && (
+          <div className="st-bin-section">{t('Verlauf', 'History')}</div>
         )}
+        {shown.map(item)}
+        {shown.length === 0 && !loading && !(inFolders && cwd === '' && folders.length > 0) && <p className="muted small">{emptyText}</p>}
         {more && (
           <button className="btn small ghost st-bin-more" disabled={loading} onClick={() => load(true)}>
             {loading ? t('Lädt …', 'Loading …') : t(`Weitere ${PAGE} laden`, `Load ${PAGE} more`)}

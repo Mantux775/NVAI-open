@@ -36,13 +36,31 @@ export interface Asset {
   id: string
   job_id: string | null
   kind: AssetKind
+  /** relativ zum Asset-Ordner; seit 0.5.15 auch in einem Projektordner (Studio/<Name>/…) */
   filename: string
+  /** der Ordner, '' = oberste Ebene (Verlauf) */
+  folder?: string
   url: string
   thumb_url: string | null
   prompt: string
   model_id: string
   meta: Record<string, any>
   created_at: number
+}
+
+/** Adresse einer Asset-Datei unter /files/, je Abschnitt kodiert (Projektnamen mit Leerzeichen, Umlauten, #). */
+export function fileUrl(name: string): string {
+  return '/files/' + name.split('/').map(encodeURIComponent).join('/')
+}
+
+/** Ein Projektordner im Material (GET /api/folders) */
+export interface AssetFolder {
+  path: string
+  name: string
+  items: number
+  updated_at: number | null
+  project_id: string | null
+  project_name: string | null
 }
 
 export interface ModelFile {
@@ -324,6 +342,8 @@ export interface ImageParams {
   controlnet_strength?: number
   controlnet_end?: number
   controlnet_preprocess?: 'none' | 'canny'
+  /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */
+  project_id?: string | null
 }
 
 export interface AudioParams {
@@ -334,6 +354,8 @@ export interface AudioParams {
   steps?: number | null
   cfg?: number | null
   seed?: number | null
+  /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */
+  project_id?: string | null
 }
 
 export interface VideoParams {
@@ -360,6 +382,8 @@ export interface VideoParams {
   motion_speed?: number
   /** verlustfreie Kopie (FFV1/MKV) neben dem MP4, Vorgabe an */
   master?: boolean
+  /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */
+  project_id?: string | null
 }
 
 /** POST /api/image/restore (server: schemas.RestoreImageRequest). */
@@ -378,6 +402,8 @@ export interface RestoreParams {
   model_id?: string | null
   upscale_model_id?: string | null
   seed?: number | null
+  /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */
+  project_id?: string | null
 }
 
 export interface Mesh3DParams {
@@ -578,10 +604,11 @@ export const api = {
   restoreImage: (p: RestoreParams) =>
     req<Job>('/api/image/restore', { method: 'POST', body: JSON.stringify(p) }),
 
-  /** Bild-Upload als Quelle für Bild→3D. Kein JSON — FormData. */
-  upload: async (file: File) => {
+  /** Bild-Upload als Quelle für Bild→3D. Kein JSON — FormData. `folder`: ein Projektordner (Material im Studio). */
+  upload: async (file: File, folder?: string) => {
     const fd = new FormData()
     fd.append('file', file)
+    if (folder) fd.append('folder', folder)
     // Content-Type setzt der Browser selbst (multipart mit Boundary), die Sprache nicht.
     const res = await fetch('/api/upload', {
       method: 'POST',
@@ -592,16 +619,22 @@ export const api = {
     return (await res.json()) as Asset
   },
 
-  /** Neueste zuerst; `exclude` laesst eine Art weg (Verlauf: Downloads). */
-  jobs: (limit = 50, offset = 0, exclude?: string) =>
-    req<Job[]>(`/api/jobs?limit=${limit}&offset=${offset}${exclude ? `&exclude=${exclude}` : ''}`),
+  /** Neueste zuerst; `exclude` laesst eine Art weg (Verlauf: Downloads). `folder` (seit 0.5.15): ohne Angabe alles samt
+   * Projektordnern, '' nur der allgemeine Verlauf, 'Studio/<Name>' ein Projektordner. */
+  jobs: (limit = 50, offset = 0, exclude?: string, folder?: string) =>
+    req<Job[]>(`/api/jobs?limit=${limit}&offset=${offset}${exclude ? `&exclude=${exclude}` : ''}${folder !== undefined ? `&folder=${encodeURIComponent(folder)}` : ''}`),
   job: (id: string) => req<Job>(`/api/jobs/${id}`),
   jobAssets: (id: string) => req<Asset[]>(`/api/jobs/${id}/assets`),
   assets: (kind?: string, limit = 100) =>
     req<Asset[]>(`/api/assets?limit=${limit}${kind ? `&kind=${kind}` : ''}`),
-  /** Eine Seite fürs Material des Studios: media zählt Uploads nach Endung dazu, q sucht in allen Assets */
-  assetPage: (opts: { media: 'all' | 'image' | 'video' | 'audio'; q?: string; limit: number; offset: number }) =>
-    req<Asset[]>(`/api/assets?media=${opts.media}&limit=${opts.limit}&offset=${opts.offset}${opts.q ? `&q=${encodeURIComponent(opts.q)}` : ''}`),
+  /** Eine Seite fürs Material des Studios: media zählt Uploads nach Endung dazu, q sucht in allen Assets, folder nur
+   * in einem Ordner ('' = oberste Ebene) */
+  assetPage: (opts: { media: 'all' | 'image' | 'video' | 'audio'; q?: string; folder?: string; limit: number; offset: number }) =>
+    req<Asset[]>(`/api/assets?media=${opts.media}&limit=${opts.limit}&offset=${opts.offset}${opts.q ? `&q=${encodeURIComponent(opts.q)}` : ''}${opts.folder !== undefined ? `&folder=${encodeURIComponent(opts.folder)}` : ''}`),
+  /** Die Projektordner (seit 0.5.15) */
+  assetFolders: () => req<AssetFolder[]>('/api/folders'),
+  /** Einen Projektordner im Explorer öffnen (nur auf dem Rechner mit NVAI-open) */
+  revealFolder: (path: string) => req<{ ok: boolean; path: string }>('/api/folders/reveal', { method: 'POST', body: JSON.stringify({ path }) }),
   asset: (id: string) => req<Asset>(`/api/assets/${id}`),
 
   // Studio (seit 0.6): Projekte mit Komposition und Schnitt; jede Änderung ist ein Befehl.
@@ -840,6 +873,8 @@ export interface StudioProject {
   edit_duration: number
   composition_duration: number
   history: { undo: number; redo: number }
+  /** eigener Ordner im Material (Studio/<Name>, seit 0.5.15) */
+  folder?: string
   updated_at: number
 }
 
@@ -850,4 +885,5 @@ export interface StudioProjectInfo {
   scenes: number
   clips: number
   duration_s: number
+  folder?: string | null
 }

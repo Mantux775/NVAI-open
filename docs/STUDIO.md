@@ -57,11 +57,33 @@ the meantime stay. "Delete" next to the project moves it into the Studio's trash
 
 ## Media
 
-The list on the left holds everything from the History, newest first: compact as a list or as tiles,
-with a filter for images, videos and audio and a search field. It stays up to date by itself: finished
-jobs, uploads and deletions show up right away. ◆ marks a video with a lossless copy, ● media that lies
-in the edit. It loads 100 at a time; "Load 100 more" at the end fetches the next ones, and the filter and
-the search look through all your media, not just what is loaded.
+The list on the left holds your media, newest first: compact as a list or as tiles, with a filter for
+images, videos and audio and a search field. It stays up to date by itself: finished jobs, uploads and
+deletions show up right away. ◆ marks a video with a lossless copy, ● media that lies in the edit. It loads
+100 at a time; "Load 100 more" at the end fetches the next ones, and the filter and the search look through
+all your media, not just what is loaded. Drag the line to the right of the list to make it wider; a
+double-click on the line resets it.
+
+**Every project has its own folder** (since 0.5.15), on disk in the data folder under
+`assets\Studio\<project name>`; renaming the project renames the folder. What the Studio makes for a project
+lands there: takes, exports, the last frames for chains and what you upload while the folder is open. The
+History lists what was generated or exported there with the folder's name, and its folder filter shows everything,
+only the general History or one project. Images, videos, sound and restored photos you make in the Generate tab for a project go straight into its
+folder too: choose the project under "Save to" above the Generate button (Claude: `project_id`). The folder button next to the upload button shows or hides the folders: on the
+top level are the project folders (the open project's in green), below them the general History; ".." at the
+top of a folder goes up one level, a double-click opens a folder, and a right-click on a folder offers "Show
+in folder". Switching to another project opens its folder. Hiding the folders only hides these folder entries:
+the list stays in the folder you have open. The search always looks through every folder and shows where each
+file lies.
+
+![The media list with folders: on the top level the project folders and the general History, inside a project folder ".." goes up](images/studio-folders.jpg)
+
+When 0.5.15 first starts, the media of existing projects moves into their folders: takes, clips,
+start and end images, given sound, exports, last frames and uploads that only this project uses. Media that
+several projects use, or that a job in the History needs as a reference, stays where it is. "Clear history"
+leaves the project folders alone, and anything a project uses as well; deleting a single History entry deletes
+its files even in a project folder, unless a project uses them. A deleted project keeps its folder with its
+media; an empty one disappears.
 
 **Click** a file and the monitor becomes a source monitor: videos and sound play with their own
 controls, images are shown in full. The properties show model, length, size, frame rate, seed and date,
@@ -167,8 +189,9 @@ your cut.
 end images, given sound and the previews, and on request the lossless copies too (about 32 MB per second at
 1080p). The menu shows the size first. **"Import project"** reads such a package or a project file (.json),
 also on another computer. Media that already exists there is not copied twice; if a project with that name
-exists, the new one gets a number. Measured: the portrait tutorial with 17 files makes 63 MB, packed in
-0.5 s, without compression because videos are compressed already.
+exists, the new one gets a number. The imported project gets its own folder, and its media goes there.
+Measured: the portrait tutorial with 17 files makes 63 MB, packed in 0.5 s, without compression because
+videos are compressed already.
 
 ## Quality: 1080p without loss along the way
 
@@ -235,6 +258,7 @@ NVAI-open's MCP server has six Studio tools: `studio_projects`, `studio_create`,
 generates them, conforms them, sets markers and cuts, and exports; the Studio shows every change live
 while it works. With an "AI task" marker you leave Claude a note right in the timeline, such as "fade in
 a title here": Claude finds open tasks with `studio_get` and ticks them off when they are done.
+`studio_get` also names the project folder, and `list_assets(folder="Studio/<name>")` lists its files.
 Setup and details: [CLAUDE_CODE.md](CLAUDE_CODE.md#studio-whole-videos-from-scenes-since-0513).
 
 ## Times

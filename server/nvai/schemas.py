@@ -125,6 +125,9 @@ class GenerateImageRequest(BaseModel):
         default_factory=list, max_length=8,
         description="LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke",
     )
+    project_id: str | None = Field(
+        None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
+                          "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
 
 
 class GenerateAudioRequest(BaseModel):
@@ -144,6 +147,9 @@ class GenerateAudioRequest(BaseModel):
         None, pattern=r"^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B) (major|minor)$",
         description='Key, e.g. "Bb major". Empty = C major')
     language: str = "en"
+    project_id: str | None = Field(
+        None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
+                          "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
 
 
 class GenerateVideoRequest(BaseModel):
@@ -200,6 +206,9 @@ class GenerateVideoRequest(BaseModel):
         None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird "
                           "Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton "
                           "angehaengt. Ergebnis: das verlaengerte Video und das neue Stueck einzeln")
+    project_id: str | None = Field(
+        None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
+                          "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
 
 
 class RestoreImageRequest(BaseModel):
@@ -243,6 +252,9 @@ class RestoreImageRequest(BaseModel):
     batch_size: int = Field(1, ge=1, le=4, description="Varianten; beim Restaurieren schwankt die Treue "
                                                        "der Gesichter je Seed, mehrere zur Auswahl lohnen")
     seed: int | None = None
+    project_id: str | None = Field(
+        None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
+                          "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",
@@ -359,7 +371,8 @@ class Asset(BaseModel):
     id: str
     job_id: str | None
     kind: AssetKind
-    filename: str
+    filename: str  # relativ zum Asset-Ordner; seit 0.5.15 auch in einem Unterordner (Studio/<Projekt>/…)
+    folder: str = ""  # der Unterordner, '' = oberste Ebene (Verlauf)
     url: str
     thumb_url: str | None = None
     prompt: str = ""

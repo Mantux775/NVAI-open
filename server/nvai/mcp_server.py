@@ -197,6 +197,7 @@ async def _generate(path: str, payload: dict[str, Any], ctx: Context) -> dict[st
         "asset_ids": [a["id"] for a in assets],
         "urls": [f"{API}{a['url']}" for a in assets],
         "kind": first.get("kind"),
+        "folder": first.get("folder", ""),
         "seed": meta.get("seed"),
         "model_id": first.get("model_id"),
     }
@@ -338,6 +339,7 @@ async def generate_image(
     controlnet_end: float = 0.8,
     controlnet_preprocess: str = "none",
     loras: list[dict[str, Any]] | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Generates an image locally on the GPU and returns file paths and asset IDs.
 
@@ -404,9 +406,11 @@ async def generate_image(
             family fits the model: list_models(kind="lora") lists them, and each image or
             video model names the LoRA families it takes in 'lora_bases'. Put the LoRA's
             'trigger' words into the prompt. 0.6-1.0 is the usual strength.
+        project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
+            History, e.g. start or reference images made for that project. Unknown project: error.
 
     Returns:
-        files, asset_ids, seed, model_id; for FLUX 3 also 'caption' -- the description
+        files, asset_ids, seed, model_id, folder; for FLUX 3 also 'caption' -- the description
         the image was actually generated from.
     """
     payload = {
@@ -427,6 +431,7 @@ async def generate_image(
         "controlnet_end": controlnet_end,
         "controlnet_preprocess": controlnet_preprocess,
         "loras": loras or [],
+        "project_id": project_id,
     }
     return await _generate("/api/generate/image", payload, ctx)
 
@@ -446,6 +451,7 @@ async def restore_image(
     megapixels: float | None = None,
     model_id: str | None = None,
     seed: int | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Restores an old photo: removes damage, colorizes, sharpens -- each step can be switched on or off.
 
@@ -488,6 +494,8 @@ async def restore_image(
         megapixels: Working size of FLUX for the repair (0.5-4); None = 2.
         model_id: Editing model; None = FLUX 3 Klein.
         seed: For reproducible results.
+        project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
+            History, e.g. start images or a voice line made for that project. Unknown project: error.
 
     Returns:
         files, asset_ids, seed. LICENSE: FLUX 3 output (repair, colorize) falls under the FLUX Kommunity
@@ -508,6 +516,7 @@ async def restore_image(
         "image_asset_id": image_asset_id, "repair": repair, "repair_mode": repair_mode,
         "colorize": colorize, "sharpen": sharpen, "scale": scale, "notes": notes,
         "batch_size": batch_size, "megapixels": megapixels, "model_id": model_id, "seed": seed,
+        "project_id": project_id,
     }
     return await _generate("/api/image/restore", payload, ctx)
 
@@ -568,6 +577,7 @@ async def generate_audio(
     negative_prompt: str = "",
     model_id: str | None = None,
     seed: int | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Generates audio locally on the GPU and returns the file paths.
 
@@ -584,10 +594,12 @@ async def generate_audio(
         negative_prompt: What to avoid.
         model_id: Force a model; otherwise the active audio model.
         seed: For reproducible results.
+        project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
+            History, e.g. start images or a voice line made for that project. Unknown project: error.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
-        "seconds": seconds, "model_id": model_id, "seed": seed,
+        "seconds": seconds, "model_id": model_id, "seed": seed, "project_id": project_id,
     }
     return await _generate("/api/generate/audio", payload, ctx)
 
@@ -615,6 +627,7 @@ async def generate_video(
     crf: float | None = None,
     extend_asset_id: str | None = None,
     master: bool = True,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
@@ -725,6 +738,8 @@ async def generate_video(
             in 'lossless_files'. Use it for editing and exporting: measured, a YouTube export made from it
             reached 42.3 instead of 37.7 dB PSNR. Costs about 32 MB per second at 1080p, 16 MB at 720p;
             False saves the space when only the MP4 is needed (e.g. straight into Unity).
+        project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
+            History, e.g. start images or a voice line made for that project. Unknown project: error.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
@@ -734,6 +749,7 @@ async def generate_video(
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
         "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id, "master": master,
+        "project_id": project_id,
     }
     return await _generate("/api/generate/video", payload, ctx)
 
@@ -881,24 +897,33 @@ async def text_to_3d(
 
 
 @server.tool()
-async def list_assets(kind: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+async def list_assets(kind: str | None = None, limit: int = 20, folder: str | None = None) -> list[dict[str, Any]]:
     """Most recently generated assets with prompt, path and model.
+
+    Material of a Studio project lives in its own folder (assets/Studio/<project name>, see studio_get 'folder'):
+    takes, exports, last frames for chains and uploads made there; generate_* and restore_image put their results
+    there with project_id. The web UI's history shows it with its folder name.
 
     Args:
         kind: 'image', 'mesh' or 'upload'; None = everything.
         limit: Number of entries.
+        folder: Only this folder: '' = the general history, 'Studio/<project name>' = a project's folder;
+            None = everything.
     """
     from . import config
 
     params: dict[str, Any] = {"limit": limit}
     if kind:
         params["kind"] = kind
+    if folder is not None:
+        params["folder"] = folder
     async with await _client() as c:
         assets = (await c.get("/api/assets", params=params)).json()
     return [
         {
             "id": a["id"], "kind": a["kind"], "prompt": a["prompt"], "model_id": a["model_id"],
-            "path": str(config.ASSET_DIR / a["filename"]), "created_at": a["created_at"],
+            "path": str(config.ASSET_DIR / a["filename"]), "folder": a.get("folder", ""),
+            "created_at": a["created_at"],
         }
         for a in assets
     ]
@@ -922,7 +947,8 @@ async def delete_asset(asset_id: str) -> dict[str, Any]:
 async def clear_history(kind: str | None = None, confirm: bool = False) -> dict[str, Any]:
     """Clears the generation history and deletes the associated files.
 
-    Irreversible. Models are not affected, only generated assets.
+    Irreversible. Models are not affected, only generated assets. Studio project folders stay, and so does anything
+    a Studio project uses (clips, takes, start images).
 
     Args:
         kind: 'image', 'audio' or 'video'; None = everything.
@@ -959,7 +985,7 @@ async def copy_asset(asset_id: str, destination: str) -> dict[str, Any]:
     dest = Path(destination)
     if dest.is_dir() or not dest.suffix:
         dest.mkdir(parents=True, exist_ok=True)
-        dest = dest / asset["filename"]
+        dest = dest / Path(asset["filename"]).name  # ohne den Projektordner (Studio/<Projekt>/…)
     else:
         dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
@@ -1004,7 +1030,10 @@ async def studio_get(project_id: str, conform_plan: bool = False) -> dict[str, A
     """A Studio project in compact form: scenes (status empty/running/done/error, take, error), markers (kind,
     name, comment, params, done), tracks (hidden, muted), clips (track, start_s, end_s, speed, transition) and the
     edit length. Finished generation jobs are already entered as takes. Markers of kind 'ai' that are not done are
-    tasks the user left for you: carry them out, then set them done with marker.update.
+    tasks the user left for you: carry them out, then set them done with marker.update. 'folder' is the project's
+    own folder on disk (assets/Studio/<name>, renamed with the project): its takes, exports and last frames land
+    there, and list_assets(folder='Studio/<name>') lists them. Start or reference images for the project: pass
+    project_id to generate_image (generate_video, generate_audio, restore_image) and they land there too.
 
     Args:
         project_id: The project.

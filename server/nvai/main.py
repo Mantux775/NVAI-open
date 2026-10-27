@@ -8,12 +8,13 @@ import ipaddress
 import shutil
 import signal
 import time
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -47,6 +48,11 @@ from .schemas import (
 async def lifespan(app: FastAPI):
     config.ensure_dirs()
     db.init()
+    # Einmal je Projekt (vor 0.5.15 angelegt): Ordner anlegen, was nur dieses Projekt nutzt, hineinlegen
+    try:
+        await asyncio.to_thread(studio.migrate_folders)
+    except Exception:  # noqa: BLE001 - der Server soll trotzdem starten; was nicht wanderte, bleibt im Verlauf
+        traceback.print_exc()
     await jobs.start()
     yield
     await jobs.shutdown()
@@ -92,6 +98,8 @@ API_FEATURES = [
     "restore_gentle",  # ... repair_mode "gentle": nur die Schaeden einsetzen (NVAI-open fuer Mac kann beides nicht)
     "history_pages",   # GET /api/jobs?offset=&exclude=download: der Verlauf blaettert in 50er-Schritten
     "studio",          # /api/studio/*: Projekte mit Komposition (Szenen, Marker) und Schnitt, Befehle, Export
+    "asset_folders",   # Projektordner im Material: GET /api/folders, folder an Assets und Upload,
+                       # GET /api/assets?folder= und /api/jobs?folder=, project_id beim Erzeugen (seit 0.5.15)
 ]
 
 
@@ -670,9 +678,21 @@ async def comfy_checkpoints() -> dict[str, Any]:
 
 # --------------------------------------------------------- Generieren
 
+def _job_params(req: Any) -> dict[str, Any]:
+    """Parameter eines Auftrags. Mit project_id kommen die Ergebnisse gleich in den Ordner des Studio-Projekts statt in
+    den Verlauf (seit 0.5.15): Der Auftrag traegt dann studio_project wie die des Studios, jobs.place_assets legt die
+    Dateien vor job.done dorthin. Unbekanntes Projekt: 404 (studio.NotFound)."""
+    params = req.model_dump()
+    pid = params.pop("project_id", None)
+    if pid:
+        studio.load(pid)
+        params["studio_project"] = pid
+    return params
+
+
 @app.post("/api/generate/image", response_model=Job)
 async def generate_image(req: GenerateImageRequest) -> Job:
-    return await jobs.submit("txt2img", req.model_dump())
+    return await jobs.submit("txt2img", _job_params(req))
 
 
 @app.post("/api/image/restore", response_model=Job)
@@ -685,17 +705,17 @@ async def restore_image(req: RestoreImageRequest) -> Job:
         raise HTTPException(422, t("Bitte mindestens einen Schritt wählen: Schäden entfernen, Einfärben oder "
                                    "Schärfen.", "Please choose at least one step: remove damage, colorize or "
                                    "sharpen."))
-    return await jobs.submit("restore", req.model_dump())
+    return await jobs.submit("restore", _job_params(req))
 
 
 @app.post("/api/generate/audio", response_model=Job)
 async def generate_audio(req: GenerateAudioRequest) -> Job:
-    return await jobs.submit("txt2audio", req.model_dump())
+    return await jobs.submit("txt2audio", _job_params(req))
 
 
 @app.post("/api/generate/video", response_model=Job)
 async def generate_video(req: GenerateVideoRequest) -> Job:
-    return await jobs.submit("txt2video", req.model_dump())
+    return await jobs.submit("txt2video", _job_params(req))
 
 
 @app.post("/api/generate/3d", response_model=Job)
@@ -818,9 +838,11 @@ async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
 # --------------------------------------------------------------- Jobs
 
 @app.get("/api/jobs", response_model=list[Job])
-async def get_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None) -> list[Job]:
-    """Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten)."""
-    return db.list_jobs(limit=limit, offset=offset, exclude=exclude)
+async def get_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, folder: str | None = None) -> list[Job]:
+    """Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten). `folder` (seit
+    0.5.15): ohne die Angabe alles samt den Projektordnern des Studios, leer nur der allgemeine Verlauf,
+    `Studio/<Name>` die Aufträge mit Dateien in diesem Projektordner."""
+    return db.list_jobs(limit=limit, offset=offset, exclude=exclude, folder=folder)
 
 
 @app.get("/api/jobs/{job_id}", response_model=Job)
@@ -845,10 +867,32 @@ async def get_job_assets(job_id: str) -> list[Asset]:
 
 @app.get("/api/assets", response_model=list[Asset])
 async def get_assets(kind: str | None = None, limit: int = 100, offset: int = 0, media: str | None = None,
-                     q: str | None = None) -> list[Asset]:
+                     q: str | None = None, folder: str | None = None) -> list[Asset]:
     """Verlauf, neueste zuerst; `media` (image|video|audio|all) nimmt Uploads nach Endung dazu, `q` sucht in allen
-    Assets (Prompt, Dateiname, Angaben). Das Material des Studios lädt so je 100 und sucht über alles."""
-    return db.list_assets(kind=kind, limit=max(1, limit), offset=max(0, offset), media=media, query=q)
+    Assets (Prompt, Dateiname, Angaben). Das Material des Studios lädt so je 100 und sucht über alles. `folder`: nur
+    dieser Ordner (leer = oberste Ebene, Studio/<Projekt> = ein Projektordner); ohne die Angabe alle."""
+    return db.list_assets(kind=kind, limit=max(1, limit), offset=max(0, offset), media=media, query=q, folder=folder)
+
+
+@app.get("/api/folders")
+async def get_folders() -> list[dict[str, Any]]:
+    """Die Projektordner des Studios (Studio/<Name>) mit Projekt und Zahl der Dateien, auch leere und die gelöschter
+    Projekte."""
+    return await asyncio.to_thread(studio.folder_list)
+
+
+@app.post("/api/folders/reveal")
+async def folder_reveal(body: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Einen Projektordner im Explorer öffnen; nur auf diesem Rechner, nur Ordner aus GET /api/folders."""
+    if not _is_local(request.headers, request.client):
+        raise HTTPException(403, t("Den Speicherort öffnet nur der Rechner, auf dem NVAI-open läuft.",
+                                   "Only the computer running NVAI-open can open the folder."))
+    known = {f["path"] for f in await asyncio.to_thread(studio.folder_list)}
+    path = db.asset_file(str(body.get("path", ""))) if body.get("path") in known else None
+    if path is None or not path.is_dir():
+        raise HTTPException(404, t("Ordner nicht gefunden", "Folder not found"))
+    await asyncio.to_thread(folders.open_folder, path)
+    return {"ok": True, "path": str(path)}
 
 
 @app.get("/api/assets/{asset_id}", response_model=Asset)
@@ -874,7 +918,9 @@ async def delete_job(job_id: str) -> dict[str, Any]:
     """Loescht einen Verlaufseintrag mit allen erzeugten Dateien."""
     if jobs.current_job_id() == job_id:
         raise HTTPException(409, t("Dieser Job läuft gerade.", "This job is running right now."))
-    ok, count, freed = db.delete_job(job_id)
+    # Was ein Studio-Projekt benutzt, bleibt (als Asset ohne Auftrag), sonst fehlte dort der Clip; sonst wird auch im
+    # Projektordner gelöscht, der Verlauf zeigt die Ordner seit 0.5.15 mit
+    ok, count, freed = db.delete_job(job_id, await asyncio.to_thread(studio.used_asset_ids))
     if not ok:
         raise HTTPException(404, t("Job nicht gefunden", "Job not found"))
     jobs.publish({"type": "assets.changed"})
@@ -892,7 +938,7 @@ async def clear_history(kind: str | None = None) -> dict[str, Any]:
         running = db.get_job(current)
         if running and running.kind != "download":
             raise HTTPException(409, t("Es läuft gerade eine Generierung – bitte abwarten.", "A generation is running – please wait."))
-    n_jobs, n_assets, freed = db.clear_history(kind)
+    n_jobs, n_assets, freed = db.clear_history(kind, await asyncio.to_thread(studio.used_asset_ids))
     jobs.publish({"type": "assets.changed"})
     return {
         "ok": True, "jobs": n_jobs, "assets": n_assets,
@@ -901,11 +947,16 @@ async def clear_history(kind: str | None = None) -> dict[str, Any]:
 
 
 @app.post("/api/upload", response_model=Asset)
-async def upload(file: UploadFile) -> Asset:
-    """Bild-Upload -- Grundlage fuer den spaeteren Bild-zu-3D-Pfad."""
+async def upload(file: UploadFile, folder: str = Form("")) -> Asset:
+    """Bild-Upload -- Grundlage fuer den spaeteren Bild-zu-3D-Pfad. `folder`: ein Projektordner (Studio/<Name>),
+    in dem das Material des Studios gerade steht; ohne die Angabe die oberste Ebene."""
     config.ensure_dirs()
     suffix = Path(file.filename or "upload.png").suffix or ".png"
-    name = f"{db.new_id('upl')}{suffix}"
+    folder = folder.replace("\\", "/").strip("/")
+    target = db.asset_file(folder) if folder else config.ASSET_DIR
+    if target is None or not target.is_dir():
+        raise HTTPException(404, t(f"Ordner nicht gefunden: {folder}", f"Folder not found: {folder}"))
+    name = f"{folder}/{db.new_id('upl')}{suffix}" if folder else f"{db.new_id('upl')}{suffix}"
     dest = config.ASSET_DIR / name
     with dest.open("wb") as fh:
         shutil.copyfileobj(file.file, fh)
@@ -1087,15 +1138,16 @@ EXTRA_MIME = {
 
 
 # Im Schema stand vorher application/json -- geliefert wird aber die Datei selbst.
-@app.get("/files/{filename}", response_class=FileResponse, responses={200: {
-    "description": "Die Asset-Datei; der Typ folgt der Endung (png, wav, webm, glb ...)",
+@app.get("/files/{filename:path}", response_class=FileResponse, responses={200: {
+    "description": "Die Asset-Datei; der Typ folgt der Endung (png, wav, webm, glb ...). Seit 0.5.15 auch in einem "
+                   "Unterordner (Studio/<Projekt>/…), je Abschnitt URL-kodiert",
     "content": {"image/*": {}, "audio/*": {}, "video/*": {}, "model/gltf-binary": {},
                 "application/octet-stream": {}},
 }})
 async def serve_file(filename: str) -> FileResponse:
-    # Kein Pfad-Traversal: nur der Dateiname zaehlt.
-    path = config.ASSET_DIR / Path(filename).name
-    if not path.exists():
+    # Kein Pfad-Traversal: nur Pfade innerhalb des Asset-Ordners (db.asset_file)
+    path = db.asset_file(filename)
+    if path is None or not path.is_file():
         raise HTTPException(404, t("Datei nicht gefunden", "File not found"))
     media_type = EXTRA_MIME.get(path.suffix.lower())
     return FileResponse(path, media_type=media_type)

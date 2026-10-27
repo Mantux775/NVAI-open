@@ -862,12 +862,38 @@ kbd {
 .st-start .panel { max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
 .st-start h2 { margin: 0; }
 
-.st-upper { display: grid; grid-template-columns: 240px minmax(0, 1fr) 330px; min-height: 0; }
+.st-upper { display: grid; grid-template-columns: 240px 5px minmax(0, 1fr) 330px; min-height: 0; }
 .st-bin, .st-side { min-height: 0; overflow: auto; background: var(--panel); }
-.st-bin { border-right: 1px solid var(--line); display: flex; flex-direction: column; overflow-x: hidden; }
+.st-bin { display: flex; flex-direction: column; overflow-x: hidden; }
+/* Breite der Materialspalte (Nutzer 27.10.2026), wie die Trennlinie über den Zeitleisten */
+.st-vsplit { cursor: col-resize; background: var(--line); }
+.st-vsplit:hover { background: var(--accent-dim); }
 .st-side { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
-.st-bin-head { display: flex; align-items: center; gap: 4px; padding: 8px 10px 4px; }
+.st-bin-head { display: flex; align-items: center; gap: 4px; padding: 8px 10px 4px; min-width: 0; }
+.st-bin-head .btn { flex: none; }
 .st-bin-head .btn.active { color: var(--accent); border-color: var(--accent-dim); }
+/* Ordner im Material (seit 0.5.15): Kopfzeile Material › Ordner, „..“, Projektordner über dem Verlauf */
+.st-folder-icon { display: inline-block; vertical-align: -2px; flex: none; }
+.st-bin-folders .st-folder-icon { vertical-align: -1px; }
+.st-bin-path { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 0 10px 5px; font-size: 12px; }
+.st-bin-crumb { background: none; border: 0; padding: 0; font: inherit; color: var(--muted); cursor: pointer; flex: none; }
+.st-bin-crumb:hover { color: var(--text); text-decoration: underline; }
+.st-bin-path .st-folder-icon { color: var(--accent); }
+.st-bin-cwd { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-bin-folder .st-bin-thumb { background: var(--panel-2); color: var(--muted); font-size: 13px; }
+.st-bin-folder:hover .st-bin-thumb { color: var(--text); }
+.st-bin-folder.current .st-bin-name, .st-bin-folder.current .st-bin-thumb { color: var(--accent); }
+.st-bin-folder.orphan .st-bin-name { color: var(--muted); }
+.st-bin-folder { user-select: none; }
+.st-bin-item.st-bin-folder { cursor: pointer; }
+.st-bin-folder-big { aspect-ratio: 16 / 9; display: grid; place-items: center; color: var(--muted); font-weight: 600; font-size: 18px; }
+.st-bin-item.st-bin-folder.current .st-bin-folder-big { color: var(--accent); }
+.st-bin-section { grid-column: 1 / -1; padding: 7px 6px 2px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line); margin-top: 4px; }
+.st-bin-where { margin-left: 6px; }
+/* Verlauf mit den Projektordnern, Generator „Ablegen in“ (seit 0.5.15) */
+.history-folder { margin-left: 10px; max-width: 280px; }
+.history-folder-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--accent); white-space: nowrap; }
+.gen-target { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
 .st-bin-search { width: auto; margin: 0 8px 6px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; font: inherit; font-size: 12px; }
 .st-bin-error { margin: 0 10px 6px; cursor: pointer; }
 .st-bin-rows { display: flex; flex-direction: column; gap: 1px; padding: 0 4px 8px; }
@@ -893,7 +919,7 @@ kbd {
 .st-bin-filter { display: flex; gap: 2px; padding: 0 6px 6px; }
 .st-bin-filter .tab { padding: 3px 8px; font-size: 12px; }
 .st-bin-more { grid-column: 1 / -1; margin: 6px 4px 2px; justify-content: center; }
-.st-bin-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 0 8px 8px; align-content: start; }
+.st-bin-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; padding: 0 8px 8px; align-content: start; }
 .st-bin-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: grab; display: flex; flex-direction: column; }
 .st-bin-item:hover { border-color: var(--accent-dim); }
 .st-bin-item img, .st-bin-item video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; pointer-events: none; }

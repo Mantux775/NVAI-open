@@ -9,21 +9,20 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.12.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.12/NVAI-open-Setup-0.5.12.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.8.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.12/NVAI-open-0.4.8.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.15.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.15/NVAI-open-Setup-0.5.15.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.8.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.15/NVAI-open-0.4.8.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.14 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.14)), the Mac stays at 0.4.8
+October 2026: NVAI-open 0.5.15 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.15)), the Mac stays at 0.4.8
 
-- **Studio editing tools:** selection, razor and magnet with their keys, right-click menus everywhere, several clips at once, copy and paste, more video and audio tracks with eye and mute (also in the export), speed in percent, four classic transitions, and a check before "Conform" overwrites anything ([guide](docs/STUDIO.md))
-- **Projects as packages:** export a project with all its media as a ZIP file and import it on another PC
-- **Keep a voice:** give an approved spoken line, uploaded as a sound file, to new LTX-2.5 clips; the lips follow it
-- 0.5.13 brought the Studio, a lossless copy of every AI video and new export formats ([notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.13))
+- **A folder for every Studio project:** takes, exports and uploads land in the project's own folder on disk, and the folder is renamed with the project. "Save to" in the Generate tab (and `project_id` for Claude) puts start or reference images made for a project there too. In the Studio a folder button next to the upload button shows the folders, ".." goes up, a double-click opens a folder, and switching projects opens its folder; the History also lists what was generated into a folder, with the folder's name, and filters by folder. On the first start, existing projects take in what only they use ([guide](docs/STUDIO.md#media))
+- **Wider media list:** drag the line next to it
+- 0.5.14 brought the Studio editing tools (tools with keys, right-click menus, tracks, speed, transitions), projects as packages and a way to keep a voice ([notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.14))
 
-Neu: **Schnittwerkzeuge im Studio**: Auswahl, Schneiden und Magnet mit ihren Tasten, Rechtsklick-Menüs überall, mehrere Clips auf einmal, Kopieren und Einfügen, weitere Video- und Tonspuren mit Auge und Stummschalter (auch im Export), Geschwindigkeit in Prozent, vier klassische Übergänge und eine Rückfrage, bevor „Übernehmen“ etwas überschreibt ([Anleitung](docs/de/STUDIO.md)); **Projekte als Paket** exportieren und auf einem anderen PC importieren; eine **Stimme halten**: einen abgenommenen Satz als Tondatei neuen LTX-2.5-Clips vorgeben, die Lippen folgen ihm. 0.5.13 brachte das Studio, eine verlustfreie Kopie jedes KI-Videos und neue Exportformate ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.13)).
+Neu: **ein Ordner für jedes Studio-Projekt**: Takes, Exporte und Hochgeladenes landen im eigenen Ordner des Projekts auf der Platte, und der Ordner heißt mit dem Projekt mit. „Ablegen in“ im Generator (und `project_id` für Claude) legt Start- oder Referenzbilder für ein Projekt ebenfalls dort ab. Im Studio blendet der Ordner-Knopf neben dem Hochladen-Knopf die Ordner ein, „..“ geht eine Ebene hoch, ein Doppelklick öffnet einen Ordner, und beim Projektwechsel öffnet sich sein Ordner; der Verlauf führt auch, was in einen Ordner erzeugt wurde, mit dem Ordnernamen und filtert nach Ordnern. Beim ersten Start holen bestehende Projekte zu sich, was nur sie nutzen ([Anleitung](docs/de/STUDIO.md#material)). Die **Materialspalte** lässt sich breiter ziehen. 0.5.14 brachte die Schnittwerkzeuge im Studio, Projekte als Paket und eine Stimme halten ([Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.14)).
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -69,7 +68,7 @@ A full-screen editor for whole videos. At the top you compose: scenes with a pro
 
 - **Editing:** selection, razor and magnet with their keys, right-click menus everywhere, several clips at once, video and audio tracks with eye and mute, speed in percent, cross dissolve, dips to black or white and wipes, and a check before "Conform" overwrites anything.
 - **Markers:** a chain marker makes a clip start with the last frame of the one before it, so two shots join seamlessly; transition markers add transitions; an AI task marker leaves Claude a note in the timeline.
-- **Media:** everything you generated, as a compact list with search. Click a file to play it in the monitor, drag it onto a track, delete it right there.
+- **Media:** every project has its own folder for what it generates, exports and uploads, next to the general History; a compact list with search across all folders. Click a file to play it in the monitor, drag it onto a track, delete it right there.
 - **High-quality 1080p:** video scenes run in the best LTX-2.5 quality, every AI video is also kept losslessly, and only the export compresses: measured 42.3 instead of 37.7 dB PSNR for a YouTube export.
 - **Export:** YouTube 1080p and 4K, Shorts, AV1, a lossless master (MKV) or ProRes 4444 for other editing software.
 - **Claude Code** builds the whole video for you over MCP while you watch it in the Studio.
@@ -263,7 +262,7 @@ Ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Oben komponierst
 
 - **Schneiden:** Auswahl, Schneiden und Magnet mit ihren Tasten, Rechtsklick-Menüs überall, mehrere Clips auf einmal, Video- und Tonspuren mit Auge und Stummschalter, Geschwindigkeit in Prozent, Überblendung, Abblende über Schwarz oder Weiß und Wischblende, und eine Rückfrage, bevor „Übernehmen“ etwas überschreibt.
 - **Marker:** Ein Anschluss-Marker lässt einen Clip mit dem letzten Bild des vorigen beginnen, so gehen zwei Einstellungen nahtlos ineinander über; Übergang-Marker setzen Übergänge; ein KI-Auftrag hinterlässt Claude eine Notiz in der Zeitleiste.
-- **Material:** alles, was du erzeugt hast, als kompakte Liste mit Suche. Ein Klick spielt die Datei im Monitor ab, auf eine Spur gezogen wird sie zum Clip, gelöscht wird sie direkt dort.
+- **Material:** Jedes Projekt hat einen eigenen Ordner für das, was es erzeugt, exportiert und hochlädt, neben dem allgemeinen Verlauf; eine kompakte Liste mit Suche über alle Ordner. Ein Klick spielt die Datei im Monitor ab, auf eine Spur gezogen wird sie zum Clip, gelöscht wird sie direkt dort.
 - **Hochwertiges 1080p:** Videoszenen laufen in der höchsten Qualität von LTX-2.5, jedes KI-Video wird zusätzlich verlustfrei aufbewahrt, und komprimiert wird erst beim Export: gemessen 42,3 statt 37,7 dB PSNR bei einem YouTube-Export.
 - **Export:** YouTube 1080p und 4K, Shorts, AV1, ein verlustfreier Master (MKV) oder ProRes 4444 für andere Schnittprogramme.
 - **Claude Code** baut dir das ganze Video per MCP, während du im Studio zusiehst.

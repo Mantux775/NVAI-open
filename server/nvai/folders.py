@@ -137,6 +137,17 @@ def reveal(path: Path) -> None:
         subprocess.Popen(["xdg-open", str(path.parent)])
 
 
+def open_folder(path: Path) -> None:
+    """Einen Ordner selbst öffnen (Studio: Projektordner im Material). Der Pfad ist vorher gegen die bekannten
+    Projektordner geprüft."""
+    if sys.platform == "win32":
+        subprocess.Popen(["explorer", str(path)])
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
+
+
 def restart() -> None:
     """Ueber den Starter neu starten: der beendet diesen Server und startet ihn mit den
     Registry-Werten neu. Die eigenen NVAI_*-Variablen fallen weg, sonst gewaennen die alten Ordner."""

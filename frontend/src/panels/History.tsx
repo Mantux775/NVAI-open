@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type Asset, type Job, type ServerEvent } from '../api'
+import { api, type Asset, type AssetFolder, type Job, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
+import { FolderIcon } from '../components/FolderIcon'
 import { locale, t } from '../i18n'
 
 interface Props {
@@ -25,6 +26,10 @@ export function HistoryPanel({ event }: Props) {
   const assetsRef = useRef<Record<string, Asset[]>>({})
   const [selected, setSelected] = useState<Asset | null>(null)
   const [filter, setFilter] = useState('all')
+  // Ordner (seit 0.5.15, Nutzer 27.10.2026: „dann soll Verlauf auch die Unterordner von Studio miteinbeziehen“):
+  // 'all' = alles samt Projektordnern (Vorgabe), '' = nur der allgemeine Verlauf, sonst ein Projektordner
+  const [folder, setFolder] = useState('all')
+  const [folders, setFolders] = useState<AssetFolder[]>([])
   const [confirmJob, setConfirmJob] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -50,7 +55,8 @@ export function HistoryPanel({ event }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
 
   const load = useCallback(async () => {
-    const js = await api.jobs(limit + 1, 0, 'download')
+    const js = await api.jobs(limit + 1, 0, 'download', folder === 'all' ? undefined : folder)
+    api.assetFolders().then(setFolders).catch(() => {})
     setHasMore(js.length > limit)
     const list = js.slice(0, limit)
     setJobs(list)
@@ -64,7 +70,7 @@ export function HistoryPanel({ event }: Props) {
     for (const [id, list] of pairs) next[id] = list
     assetsRef.current = next
     setAssets(next)
-  }, [limit])
+  }, [limit, folder])
 
   useEffect(() => {
     load()
@@ -164,9 +170,20 @@ export function HistoryPanel({ event }: Props) {
               {f.label}
             </button>
           ))}
+          {folders.length > 0 && (
+            <select className="history-folder" value={folder} onChange={(e) => setFolder(e.target.value)}
+              title={t('Ordner: alles, nur der allgemeine Verlauf oder der Ordner eines Studio-Projekts',
+                'Folder: everything, only the general history or the folder of a Studio project')}>
+              <option value="all">{t('Alle Ordner', 'All folders')}</option>
+              <option value="">{t('Nur Verlauf (ohne Studio)', 'History only (no Studio)')}</option>
+              {folders.map((f) => (
+                <option key={f.path} value={f.path}>Studio: {f.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
-        {jobs.length > 0 &&
+        {jobs.length > 0 && (folder === 'all' || folder === '') &&
           (confirmClear ? (
             <span className="confirm">
               <span className="muted small">
@@ -179,6 +196,8 @@ export function HistoryPanel({ event }: Props) {
                       `Alle ${shown.length} ${filter}-Einträge löschen?`,
                       `Delete all ${shown.length} ${filter} entries?`,
                     )}
+                {folders.length > 0 && t(' Projektordner des Studios und was ein Projekt nutzt, bleiben.',
+                  ' Studio project folders and anything a project uses stay.')}
               </span>
               <button className="btn small danger" onClick={clearAll} disabled={busy}>
                 {t('Ja, löschen', 'Yes, delete')}
@@ -209,6 +228,7 @@ export function HistoryPanel({ event }: Props) {
 
       {shown.map((job) => {
         const list = assets[job.id] ?? []
+        const inFolder = list.find((a) => a.folder)?.folder
         // Bild→3D-Jobs haben keinen eigenen Prompt; sie erben den des Quellbilds.
         const prompt =
           String(job.params.prompt ?? '') ||
@@ -239,6 +259,11 @@ export function HistoryPanel({ event }: Props) {
                 </span>
               ) : (
                 <span className="prompt"><em>{t('ohne Prompt', 'no prompt')}</em></span>
+              )}
+              {inFolder && (
+                <span className="history-folder-tag" title={t(`Im Ordner ${inFolder}`, `In the folder ${inFolder}`)}>
+                  <FolderIcon size={12} /> {inFolder.split('/').pop()}
+                </span>
               )}
               <span className="muted small">
                 {new Date(job.created_at * 1000).toLocaleString(locale())}

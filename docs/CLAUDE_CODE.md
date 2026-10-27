@@ -769,7 +769,7 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   for word the same in every scene; (3) make 2–3 variants per line and let the user listen, since Claude cannot hear;
   (4) leave a shot without a face silent, or cut the chosen line out of a variant with her face and lay it on A1 under
   that shot (no lips to sync there); (5) do not expect a line added later in a clip of its own to sound the same.
-  **Locking a voice** (development state, coming with the next release): cut an approved line out of its take, upload
+  **Locking a voice** (since 0.5.14): cut an approved line out of its take, upload
   it as WAV and pass it to new clips as `audio_asset_id`. `_stage_audio` now accepts uploaded sound (WAV, MP3, FLAC …)
   and the Studio passes `audio_asset_id` on from the scene parameters (before, it was dropped there and one clip came
   out with a stranger's voice). In the vertical Short every one of the four spoken clips carried exactly her line
@@ -877,7 +877,7 @@ Workflow:
 Times are seconds with the suffix `_s` (`start_s`, `duration_s`, `at_s`, `in_s`, `to_s`) or ticks
 (254 016 000 000 per second, as in FilmCraft, which divides every frame and sample rate).
 
-Editing tools (development state after 0.5.13, modeled on FilmCraft):
+Editing tools (since 0.5.14, modeled on FilmCraft):
 
 - **Speed:** `clip.update` with `speed` (1.0 = 100 %, 0.1 to 10). In and out stay media time, the clip's length
   on the timeline is (out − in) / speed; the export keeps the pitch of the sound (atempo). If a slower clip
@@ -892,6 +892,19 @@ Editing tools (development state after 0.5.13, modeled on FilmCraft):
   `muted` (sound off, on video tracks the sound of their clips); both apply to the export.
 - **Groups:** `clip.move` with `moves=[{id, start_s, track}]` moves several clips as one block; `batch` with
   `commands=[{command, params}]` runs several commands as one undo step.
+
+Project folders (since 0.5.15): every project has its own folder `assets/Studio/<name>`
+(`folder` in `studio_get`, as an absolute path); renaming the project renames the folder. Takes, exports, last
+frames for chains and uploads made in the folder land there; the web UI's History shows them with the folder
+name and can filter by folder (`GET /api/jobs?folder=`). `list_assets(folder="Studio/<name>")` lists them,
+`folder=""` the general History, without `folder` everything. Images, videos, sound and restored photos made for
+a project outside its scenes (start images, reference images, a voice line) go straight into its folder with
+`project_id` on `generate_image`, `generate_video`, `generate_audio` and `restore_image`; the result names the
+`folder`. The web UI's Generate tab has the same as "Save to".
+On the first start after the update, media that only one project uses (takes, clips, start and end images,
+given sound, exports, last frames, uploads) moves into its folder; media shared by several projects, or that a
+History job needs as a reference, stays. "Clear history" (`clear_history`) leaves project folders and anything a
+project uses alone. `copy_asset` copies the file without the folder part.
 
 How a scene becomes a job:
 

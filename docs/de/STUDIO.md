@@ -57,11 +57,34 @@ Papierkorb des Studios (`studio\papierkorb` im Datenordner).
 
 ## Material
 
-Die Liste links enthält alles aus dem Verlauf, neueste zuerst: kompakt als Liste oder als Kacheln, mit
-Filter für Bilder, Videos und Ton und einem Suchfeld. Sie bleibt von selbst aktuell: Fertige Aufträge,
-Hochgeladenes und Gelöschtes erscheinen sofort. ◆ zeigt ein Video mit verlustfreier Kopie, ● Material,
-das im Schnitt liegt. Geladen werden je 100; „Weitere 100 laden“ am Ende holt die nächsten, und Filter und
-Suche gehen über dein ganzes Material, nicht nur über das Geladene.
+Die Liste links enthält dein Material, neueste zuerst: kompakt als Liste oder als Kacheln, mit Filter für
+Bilder, Videos und Ton und einem Suchfeld. Sie bleibt von selbst aktuell: Fertige Aufträge, Hochgeladenes
+und Gelöschtes erscheinen sofort. ◆ zeigt ein Video mit verlustfreier Kopie, ● Material, das im Schnitt
+liegt. Geladen werden je 100; „Weitere 100 laden“ am Ende holt die nächsten, und Filter und Suche gehen über
+dein ganzes Material, nicht nur über das Geladene. Die Linie rechts neben der Liste macht sie breiter, wenn
+du sie ziehst; ein Doppelklick auf die Linie stellt sie zurück.
+
+**Jedes Projekt hat seinen eigenen Ordner** (seit 0.5.15), auf der Platte im Datenordner
+unter `assets\Studio\<Projektname>`; benennst du das Projekt um, heißt der Ordner mit. Was das Studio für ein
+Projekt erzeugt, landet dort: Takes, Exporte, die letzten Bilder für Anschlüsse und was du hochlädst, während
+der Ordner offen ist. Der Verlauf führt, was dort erzeugt oder exportiert wurde, mit dem Namen des Ordners, und
+sein Ordnerfilter zeigt alles, nur den allgemeinen Verlauf oder ein Projekt. Bilder, Videos, Ton und restaurierte Fotos, die du im Generator für ein
+Projekt machst, kommen ebenfalls gleich in seinen Ordner: unter „Ablegen in“ über dem Generieren-Knopf das Projekt
+wählen (Claude: `project_id`). Der Ordner-Knopf neben dem Hochladen-Knopf blendet
+die Ordner ein und aus: Auf der obersten Ebene stehen die Projektordner (der des offenen Projekts grün),
+darunter der allgemeine Verlauf; „..“ oben in einem Ordner geht eine Ebene hoch, ein Doppelklick öffnet einen
+Ordner, und ein Rechtsklick auf einen Ordner bietet „Speicherort öffnen“. Wechselst du das Projekt, öffnet
+sich sein Ordner. Ausblenden versteckt nur diese Ordnereinträge: Die Liste bleibt in dem Ordner, den du offen
+hast. Die Suche sucht immer in allen Ordnern und zeigt, wo eine Datei liegt.
+
+![Das Material mit Ordnern: auf der obersten Ebene die Projektordner und der allgemeine Verlauf, im Projektordner führt „..“ eine Ebene hoch](../images/studio-folders-de.jpg)
+
+Beim ersten Start von 0.5.15 wandert das Material bestehender Projekte in deren Ordner: Takes, Clips,
+Start- und Endbilder, vorgegebener Ton, Exporte, letzte Bilder und Hochgeladenes, das nur dieses Projekt
+nutzt. Was mehrere Projekte nutzen oder ein Auftrag im Verlauf als Vorlage braucht, bleibt, wo es ist.
+„Verlauf leeren“ lässt die Projektordner in Ruhe und ebenso alles, was ein Projekt nutzt; einen einzelnen
+Eintrag zu löschen löscht seine Dateien auch im Projektordner, außer ein Projekt nutzt sie. Ein gelöschtes
+Projekt behält seinen Ordner samt Material; ein leerer verschwindet.
 
 **Anklicken** macht den Monitor zum Quellmonitor: Videos und Ton laufen mit eigenen Bedienelementen,
 Bilder stehen in voller Größe. Die Eigenschaften zeigen Modell, Länge, Größe, Bildrate, Seed und Datum,
@@ -169,9 +192,9 @@ oder geteilten tauscht das Studio nur, wenn du ihn ankreuzt, und behält dabei d
 Start- und Endbilder, vorgegebener Ton und die Vorschauen, auf Wunsch auch die verlustfreien Kopien (in
 1080p rund 32 MB je Sekunde). Das Menü zeigt die Größe vorher. **„Projekt importieren“** liest ein solches
 Paket oder eine Projektdatei (.json) ein, auch auf einem anderen Rechner. Material, das es dort schon gibt,
-wird nicht doppelt kopiert; heißt schon ein Projekt so, bekommt das neue eine Nummer. Gemessen: das
-Hochkant-Tutorial mit 17 Dateien ergibt 63 MB, gepackt in 0,5 s, ohne Kompression, weil Videos schon
-komprimiert sind.
+wird nicht doppelt kopiert; heißt schon ein Projekt so, bekommt das neue eine Nummer. Das importierte
+Projekt bekommt seinen eigenen Ordner, sein Material landet dort. Gemessen: das Hochkant-Tutorial mit 17
+Dateien ergibt 63 MB, gepackt in 0,5 s, ohne Kompression, weil Videos schon komprimiert sind.
 
 ## Qualität: 1080p ohne Verluste unterwegs
 

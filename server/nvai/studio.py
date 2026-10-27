@@ -15,7 +15,8 @@ Sekunden (`start_s`, `duration_s`, `at_s` …), wie FilmCraft `time`/`seconds`.
 
 Jede Aenderung ist ein Befehl (`apply`); Oberflaeche, REST und MCP nutzen dieselben. Rueckgaengig/Wiederholen haelt
 je Projekt bis zu 100 Staende im Speicher (Sitzungszustand wie bei FilmCraft). Projekte liegen als JSON in
-DATA_DIR/studio/, Geloeschtes wandert nach studio/papierkorb/.
+DATA_DIR/studio/, Geloeschtes wandert nach studio/papierkorb/. Ihr Material liegt seit 0.5.15 je Projekt in einem
+eigenen Ordner assets/Studio/<Projektname> (siehe „Projektordner“).
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ import subprocess
 import shutil
 import threading
 import time
+import traceback
 import zipfile
 from pathlib import Path
 from typing import Any, Callable
@@ -111,17 +113,10 @@ def _path(pid: str) -> Path:
 
 
 def _replace(tmp: Path, path: Path) -> None:
-    """os.replace mit kurzem Wiederholen. Unter Windows scheitert es mit WinError 5, solange ein anderer die Datei
-    offen hat: Gemessen 27.10.2026 im Funktionstest von 0.5.14 las die offene Weboberfläche gerade die Projektliste
-    (`list_projects`), als der nächste Befehl das eben angelegte Projekt speicherte (500 statt 200)."""
-    for attempt in range(40):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:
-            if attempt == 39:
-                raise
-            time.sleep(0.05)
+    """os.replace mit kurzem Wiederholen (db.replace_file). Unter Windows scheitert es mit WinError 5, solange ein
+    anderer die Datei offen hat: Gemessen 27.10.2026 im Funktionstest von 0.5.14 las die offene Weboberfläche gerade
+    die Projektliste (`list_projects`), als der nächste Befehl das eben angelegte Projekt speicherte (500 statt 200)."""
+    db.replace_file(tmp, path)
 
 
 def _save(p: dict[str, Any]) -> None:
@@ -140,16 +135,29 @@ def load(pid: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_project(f: Path) -> dict[str, Any] | None:
+    """Eine Projektdatei, oder None. Neben den Projekten liegt während eines Exports dessen Plan (<job>.plan.json):
+    Vor 0.5.15 brach die Projektliste daran mit KeyError ab."""
+    try:
+        p = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return p if isinstance(p, dict) and p.get("id") and isinstance(p.get("scenes"), list) else None
+
+
+def _all_projects() -> list[dict[str, Any]]:
+    return [p for f in _dir().glob("*.json") if (p := _read_project(f)) is not None]
+
+
 def list_projects() -> list[dict[str, Any]]:
     out = []
     for f in sorted(_dir().glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
-        try:
-            p = json.loads(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        p = _read_project(f)
+        if p is None:
             continue
         out.append({"id": p["id"], "name": p["name"], "updated_at": p.get("updated_at"),
                     "scenes": len(p.get("scenes", [])), "clips": len(p.get("clips", [])),
-                    "duration_s": round(seconds(edit_duration(p)), 2)})
+                    "duration_s": round(seconds(edit_duration(p)), 2), "folder": p.get("folder")})
     return out
 
 
@@ -168,21 +176,228 @@ def create(name: str = "", width: int = 1920, height: int = 1080, fps: tuple[int
                       "sample_rate": 48000, "video_quality": "dfr"},
          "scenes": [], "markers": [], "tracks": copy.deepcopy(TRACKS), "clips": [], "media": {}}
     with _lock:
+        project_folder(p)
         _save(p)
     return p
 
 
 def delete(pid: str) -> None:
-    """In den Papierkorb des Studios, nicht endgueltig."""
+    """In den Papierkorb des Studios, nicht endgueltig. Der Projektordner bleibt samt Material (im Material dann ohne
+    Projekt); ist er leer, verschwindet er."""
     path = _path(pid)
     if not path.exists():
         raise NotFound(t(f"Unbekanntes Projekt: {pid}", f"Unknown project: {pid}"))
     trash = _dir() / "papierkorb"
     trash.mkdir(exist_ok=True)
+    folder = (_read_project(path) or {}).get("folder")
     with _lock:
         _replace(path, trash / f"{pid}-{int(time.time())}.json")
         _undo.pop(pid, None)
         _redo.pop(pid, None)
+        target = db.asset_file(folder) if folder and not db.folder_counts().get(folder) else None
+        if target is not None:
+            try:
+                target.rmdir()  # nur ein wirklich leerer Ordner
+            except OSError:
+                pass
+
+
+# ------------------------------------------------------------------------------ Projektordner (seit 0.5.15)
+#
+# Nutzer 27.10.2026: „jedes Projekt in Studio soll einen eigenen Unterordner für seine Assets bekommen, sonst wird es
+# sehr unübersichtlich. Es ist egal, wenn die dann nicht im Verlauf erscheinen.“ Echte Ordner unter
+# assets/Studio/<Projektname>; Umbenennen nimmt den Ordner mit. Was das Studio für ein Projekt erzeugt (Takes),
+# exportiert, als letztes Bild für einen Anschluss ablegt oder was im Projektordner hochgeladen wird, landet dort; der
+# Verlauf zeigt es mit dem Ordnernamen (später gewünscht: „dann soll Verlauf auch die Unterordner von Studio
+# miteinbeziehen“), und Erzeugtes mit project_id kommt ebenfalls hinein. Beim ersten Start mit Ordnern (migrate_folders) wandert, was nur ein Projekt nutzt,
+# hinein; was mehrere Projekte nutzen oder ein Auftrag im Verlauf als Vorlage braucht, bleibt.
+
+FOLDER_ROOT = "Studio"
+_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+# Projekte, deren Ordner noch den alten Namen trägt (Windows gab ihn beim Umbenennen nicht frei, etwa während eines
+# Exports): Projekt-ID -> Zeit des letzten Versuchs; refresh versucht es wieder
+_rename_later: dict[str, float] = {}
+RENAME_RETRY_SECONDS = 30.0
+# Asset-IDs in den Parametern eines Auftrags (ast_…, auch Uploads und Importiertes)
+ASSET_ID = re.compile(r"\b[a-z]{2,5}_[0-9a-f]{12}\b")
+
+
+def _folder_label(name: str) -> str:
+    """Ordnername aus dem Projektnamen: ohne Zeichen, die Windows nicht erlaubt, höchstens 60 Zeichen."""
+    label = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", name).strip().rstrip(". ")[:60].rstrip(". ") or "Projekt"
+    if label.split(".")[0].upper() in _RESERVED:
+        label += "_"
+    return label
+
+
+def _known_folders(projects: list[dict[str, Any]] | None = None) -> set[str]:
+    """Belegte Projektordner: auf der Platte, in der Datenbank und in den Projekten."""
+    root = config.ASSET_DIR / FOLDER_ROOT
+    found = {f"{FOLDER_ROOT}/{d.name}" for d in root.iterdir() if d.is_dir()} if root.is_dir() else set()
+    found |= {f for f in db.folder_counts() if f.startswith(FOLDER_ROOT + "/") and f.count("/") == 1}
+    found |= {p["folder"] for p in (projects if projects is not None else _all_projects()) if p.get("folder")}
+    return found
+
+
+def _free_folder(label: str, current: str | None = None) -> str:
+    """Ein Ordner unter Studio/, den noch kein anderes Projekt hat (Windows unterscheidet keine Groß- und
+    Kleinschreibung): „Name“, sonst „Name (2)“ …"""
+    taken = {f.casefold() for f in _known_folders() if f != current}
+    for n in range(1, 10_000):
+        candidate = f"{FOLDER_ROOT}/{label}" + (f" ({n})" if n > 1 else "")
+        if candidate.casefold() not in taken:
+            return candidate
+    raise StudioError(t("Kein freier Ordnername.", "No free folder name."))
+
+
+def project_folder(p: dict[str, Any]) -> str:
+    """Der Ordner des Projekts relativ zum Asset-Ordner (Studio/<Name>), angelegt, wenn er fehlt. Einen neu vergebenen
+    Namen trägt die Funktion in p ein; speichern muss der Aufrufer."""
+    if not p.get("folder"):
+        p["folder"] = _free_folder(_folder_label(p["name"]))
+    path = db.asset_file(p["folder"])
+    if path is not None:
+        path.mkdir(parents=True, exist_ok=True)
+    return p["folder"]
+
+
+def _follow_name(p: dict[str, Any]) -> None:
+    """Den Ordner nach dem Projektnamen umbenennen. Gibt Windows ihn nicht frei (eine Datei darin ist gerade offen,
+    etwa beim Export), bleibt der alte Name, und refresh versucht es später wieder."""
+    current = project_folder(p)
+    wanted = _free_folder(_folder_label(p["name"]), current)
+    if wanted != current:
+        try:
+            db.rename_folder(current, wanted)
+        except OSError:
+            _rename_later[p["id"]] = time.time()
+            return
+        p["folder"] = wanted
+    _rename_later.pop(p["id"], None)
+
+
+def folder_list() -> list[dict[str, Any]]:
+    """Die Projektordner fürs Material, nach Namen: auch leere und die gelöschter Projekte (dann ohne Projekt)."""
+    projects = _all_projects()
+    by_folder = {p["folder"]: p for p in projects if p.get("folder")}
+    counts = db.folder_counts()
+    out = []
+    for folder in sorted(_known_folders(projects), key=str.casefold):
+        p = by_folder.get(folder)
+        items, last = counts.get(folder, (0, None))
+        if p is None and not items:
+            continue  # leer und ohne Projekt
+        out.append({"path": folder, "name": folder.split("/", 1)[1], "items": items, "updated_at": last,
+                    "project_id": p["id"] if p else None, "project_name": p["name"] if p else None})
+    return out
+
+
+def used_asset_ids() -> set[str]:
+    """Alles, was ein Studio-Projekt benutzt (Clips, Takes, Vorlagen): Den Verlauf zu leeren löscht es nicht mit."""
+    return {a for p in _all_projects() for a in _used_assets(p)}
+
+
+def _place_job_assets(job: Job, asset_ids: list[str]) -> None:
+    """Haken für jobs.place_assets, bevor job.done rausgeht: Was ein Auftrag des Studios erzeugt hat (Takes,
+    Exporte), liegt danach im Projektordner. Unter der Sperre, damit kein Umbenennen dazwischenkommt."""
+    pid = (job.params or {}).get("studio_project")
+    if not pid:
+        return
+    with _lock:
+        try:
+            p = load(pid)
+        except NotFound:
+            return  # Projekt inzwischen gelöscht: bleibt im Verlauf
+        if not p.get("folder"):
+            project_folder(p)
+            _save(p)
+        folder = project_folder(p)
+        for asset_id in asset_ids:
+            try:
+                db.move_asset(asset_id, folder)
+            except (OSError, ValueError):
+                traceback.print_exc()  # bleibt im Verlauf
+
+
+jobs.place_assets = _place_job_assets
+
+
+def migration_plan(projects: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Was der Umzug in die Projektordner verschieben würde: je Projekt-ID die Asset-IDs, die nur dieses Projekt nutzt
+    (auch die Vorlagen seiner Aufträge, Exporte, letzte Bilder), ohne was ein Auftrag im Verlauf als Vorlage braucht
+    und ohne was schon in einem Ordner liegt. Liest nur die Datenbank."""
+    assets = {a.id: a for a in db.list_assets(limit=10_000_000)}
+    refs: dict[str, set[str]] = {}
+
+    def ref(asset_id: str, pids: set[str]) -> None:
+        refs.setdefault(asset_id, set()).update(pids)
+
+    for p in projects:  # Clips, Takes, Start- und Endbilder, vorgegebener Ton, Referenzen
+        for asset_id in _used_assets(p):
+            ref(asset_id, {p["id"]})
+    # Aufträge des Studios: neue tragen studio_project, ältere erkennt man an ihren Takes. Ihre Vorlagen (etwa das
+    # letzte Bild der Szene davor) gehören zum Projekt; was ein Auftrag im Verlauf braucht, bleibt im Verlauf.
+    takes = {a for p in projects for s in p["scenes"] for a in s.get("takes") or []}
+    studio_jobs = {assets[a].job_id for a in takes if a in assets and assets[a].job_id}
+    history_needs: set[str] = set()
+    for job in db.list_jobs(limit=10_000_000):
+        if job.kind == "download":
+            continue
+        found = set(ASSET_ID.findall(json.dumps(job.params))) - set(job.asset_ids)
+        if job.id in studio_jobs or job.params.get("studio_project") or job.kind == "studio_export":
+            owners = set().union(*(refs.get(a, set()) for a in job.asset_ids))
+            for asset_id in found:
+                ref(asset_id, owners)
+        else:
+            history_needs |= found
+    for a in assets.values():
+        meta = a.meta or {}
+        if meta.get("studio_project"):  # Export
+            ref(a.id, {meta["studio_project"]})
+        if meta.get("studio_last_frame_of"):  # letztes Bild für einen Anschluss, auch wenn der Auftrag scheiterte
+            ref(a.id, refs.get(meta["studio_last_frame_of"], set()))
+    plan: dict[str, list[str]] = {p["id"]: [] for p in projects}
+    for asset_id, owners in refs.items():
+        a = assets.get(asset_id)
+        if len(owners) != 1 or asset_id in history_needs or a is None or a.folder \
+                or a.kind not in ("image", "video", "audio", "upload"):
+            continue
+        (owner,) = owners
+        if owner in plan:
+            plan[owner].append(asset_id)
+    return plan
+
+
+def migrate_folders() -> dict[str, int]:
+    """Beim Start: Projekte von vor 0.5.15 bekommen ihren Ordner, und was nur sie nutzen, wandert hinein (Nutzer
+    27.10.2026: „Hineinverschieben“, migration_plan). Es bleibt, wo es ist: was mehrere Projekte nutzen, was ein
+    Auftrag im Verlauf als Vorlage braucht (Startbild, Referenz …) und was schon in einem Ordner liegt. Gibt je Projekt
+    die Zahl der verschobenen Assets zurück."""
+    projects = _all_projects()
+    todo = [p for p in projects if not p.get("folder")]
+    if not todo:
+        return {}
+    plan = migration_plan(projects)
+    moved: dict[str, int] = {}
+    for old in todo:
+        path = _path(old["id"])
+        with _lock:
+            p = _read_project(path)
+            if p is None or p.get("folder"):
+                continue
+            folder = project_folder(p)
+            count = 0
+            for asset_id in plan.get(p["id"], []):
+                try:
+                    db.move_asset(asset_id, folder)
+                    count += 1
+                except (OSError, ValueError):
+                    continue  # unter Windows gerade offen oder die Datei fehlt: bleibt im Verlauf
+            mtime = path.stat().st_mtime
+            _save(p)
+            os.utime(path, (mtime, mtime))  # die Projektliste sortiert nach Änderung: Reihenfolge behalten
+            moved[p["name"]] = count
+    return moved
 
 
 # -------------------------------------------------------------------------------------------- Medien
@@ -309,6 +524,7 @@ def undo(pid: str) -> dict[str, Any]:
         current = load(pid)
         p = stack.pop()
         _keep_generation(p, current)
+        _keep_folder(p, current)
         _redo.setdefault(pid, []).append(current)
         p["updated_at"] = time.time()
         _save(p)
@@ -323,6 +539,7 @@ def redo(pid: str) -> dict[str, Any]:
         current = load(pid)
         p = stack.pop()
         _keep_generation(p, current)
+        _keep_folder(p, current)
         _undo.setdefault(pid, []).append(current)
         p["updated_at"] = time.time()
         _save(p)
@@ -349,6 +566,14 @@ def _keep_generation(restored: dict[str, Any], current: dict[str, Any]) -> None:
     restored["media"] = {**restored.get("media", {}), **current.get("media", {})}
 
 
+def _keep_folder(restored: dict[str, Any], current: dict[str, Any]) -> None:
+    """Der Ordner ist kein Befehl: Er liegt auf der Platte, wie ihn der letzte Stand benannt hat, und folgt dann dem
+    zurückgeholten Namen."""
+    if current.get("folder"):
+        restored["folder"] = current["folder"]
+    _follow_name(restored)
+
+
 def history(pid: str) -> dict[str, int]:
     return {"undo": len(_undo.get(pid) or []), "redo": len(_redo.get(pid) or [])}
 
@@ -357,6 +582,7 @@ def history(pid: str) -> dict[str, int]:
 def _project_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     if "name" in a:
         p["name"] = str(a["name"]).strip() or p["name"]
+        _follow_name(p)
     s = p["settings"]
     for key in ("width", "height"):
         if key in a:
@@ -1026,6 +1252,12 @@ def refresh(pid: str) -> dict[str, Any]:
             if s.get("waiting_for") and s["id"] not in _chain_tasks:
                 s.pop("waiting_for")
                 changed = True
+        folder = p.get("folder")
+        if not folder:
+            project_folder(p)
+        elif pid in _rename_later and time.time() - _rename_later[pid] > RENAME_RETRY_SECONDS:
+            _follow_name(p)
+        changed = changed or p.get("folder") != folder
         if changed:
             for s in p["scenes"]:
                 for asset_id in s["takes"]:
@@ -1071,10 +1303,11 @@ def _image_size(p: dict[str, Any], params: dict[str, Any]) -> dict[str, int]:
     return {"width": max(256, int(w * scale) // 16 * 16), "height": max(256, int(h * scale) // 16 * 16)}
 
 
-def _last_frame_asset(asset_id: str, title: str = "") -> str:
-    """Letztes Bild eines Videos als Upload-Asset (Startbild für „Anschluss“), in der Medienleiste beschriftet."""
+def _last_frame_asset(asset_id: str, title: str = "", folder: str = "") -> str:
+    """Letztes Bild eines Videos als Upload-Asset (Startbild für „Anschluss“), in der Medienleiste beschriftet; liegt
+    im Projektordner."""
     path = _source_path(asset_id)
-    name = f"{db.new_id('upl')}.png"
+    name = f"{folder}/{db.new_id('upl')}.png" if folder else f"{db.new_id('upl')}.png"
     script = Path(__file__).with_name("video_tools.py")
     proc = subprocess.run([str(comfy.comfy_python()), "-I", str(script), "last-frame", str(path),
                            str(config.ASSET_DIR / name)], capture_output=True, text=True, timeout=300,
@@ -1108,14 +1341,14 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
                                    seconds=round(min(secs, 300.0), 2),
                                    **{k: v for k, v in params.items() if k in ("seed", "bpm", "key_scale",
                                                                                "time_signature", "steps", "cfg")})
-        return "txt2audio", req.model_dump()
+        return "txt2audio", {**req.model_dump(), "studio_project": p["id"]}
     if s["kind"] == "image":
         model_id = _known_model(s.get("model_id"), "image")
         req = GenerateImageRequest(prompt=s["prompt"], model_id=model_id, **_image_size(p, params),
                                    **{k: v for k, v in params.items() if k in ("seed", "steps", "cfg",
                                                                                "negative_prompt",
                                                                                "reference_asset_ids", "loras")})
-        return "txt2img", req.model_dump()
+        return "txt2img", {**req.model_dump(), "studio_project": p["id"]}
     model_id = _known_model(s.get("model_id"), "video")
     fps = 24 if (model_id or "").startswith("ltx") else 16
     step = 8 if (model_id or "").startswith("ltx") else 4
@@ -1138,10 +1371,10 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         if not source.get("take"):
             raise StudioError(t("Für den Anschluss braucht die vorherige Szene erst ein Video.",
                                 "For the chain, the previous scene needs a video first."))
-        image_id = _last_frame_asset(source["take"], source.get("title") or "")
+        image_id = _last_frame_asset(source["take"], source.get("title") or "", project_folder(p))
     req = GenerateVideoRequest(prompt=s["prompt"], model_id=model_id, frames=frames, fps=fps,
                                image_asset_id=image_id, **_video_size(model_id, p, params), **extra)
-    return "txt2video", req.model_dump()
+    return "txt2video", {**req.model_dump(), "studio_project": p["id"]}
 
 
 def _resolve_chain_markers(p: dict[str, Any]) -> None:
@@ -1341,7 +1574,7 @@ async def make_preview(asset_id: str) -> None:
         if asset is None or (asset.meta or {}).get("preview"):
             return
         src = config.ASSET_DIR / asset.filename
-        name = f"{src.stem}.preview.mp4"
+        name = f"{asset.folder}/{src.stem}.preview.mp4" if asset.folder else f"{src.stem}.preview.mp4"
         script = Path(__file__).with_name("video_tools.py")
         proc = await asyncio.create_subprocess_exec(
             str(comfy.comfy_python()), "-I", str(script), "preview", str(src), str(config.ASSET_DIR / name),
@@ -1407,7 +1640,7 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
 async def export(pid: str, preset: str) -> Job:
     p = await asyncio.to_thread(load, pid)
     await asyncio.to_thread(render_plan, p, preset)  # Fehler sofort, nicht erst im Auftrag
-    return await jobs.submit("studio_export", {"project_id": pid, "preset": preset})
+    return await jobs.submit("studio_export", {"project_id": pid, "preset": preset, "studio_project": pid})
 
 
 # ------------------------------------------------------------------------ Projekt als Paket (Nutzer 27.10.2026)
@@ -1448,8 +1681,11 @@ def _package_files(p: dict[str, Any], masters: bool) -> tuple[list[dict[str, Any
         names = [n for n in names if (config.ASSET_DIR / n).exists()]
         if meta.get("preview") not in names:
             meta.pop("preview", None)
-        assets.append({"id": asset.id, "kind": asset.kind, "filename": asset.filename, "prompt": asset.prompt,
-                       "model_id": asset.model_id, "meta": meta, "created_at": asset.created_at})
+        for key in ("preview", "master"):  # im ZIP liegen alle Dateien unter files/<Name>, ohne Projektordner
+            if meta.get(key):
+                meta[key] = Path(meta[key]).name
+        assets.append({"id": asset.id, "kind": asset.kind, "filename": Path(asset.filename).name,
+                       "prompt": asset.prompt, "model_id": asset.model_id, "meta": meta, "created_at": asset.created_at})
         files += [config.ASSET_DIR / n for n in names]
     return assets, files
 
@@ -1480,11 +1716,16 @@ def build_package(pid: str, masters: bool = False) -> tuple[Path, str]:
     return path, f"{slug}.nvai-studio.zip"
 
 
-def _unique_name(name: str) -> str:
+def _unique_name(name: str, folder: str = "") -> str:
+    """Ein freier Dateiname im Ordner, relativ zum Asset-Ordner."""
     stem, suffix = Path(name).stem, Path(name).suffix
-    while (config.ASSET_DIR / name).exists():
+
+    def rel(n: str) -> str:
+        return f"{folder}/{n}" if folder else n
+
+    while (config.ASSET_DIR / rel(name)).exists():
         name = f"{stem}-{db.new_id('imp')[4:12]}{suffix}"
-    return name
+    return rel(name)
 
 
 def import_package(path: Path) -> dict[str, Any]:
@@ -1497,8 +1738,9 @@ def import_package(path: Path) -> dict[str, Any]:
                 raise StudioError(t("Kein Studio-Paket: nvai-studio.json fehlt.",
                                     "Not a Studio package: nvai-studio.json is missing.")) from None
             members = set(z.namelist())
+            p = _imported_project(manifest)
             for a in manifest.get("assets") or []:
-                _import_asset(z, members, a)
+                _import_asset(z, members, a, p["folder"])
     else:
         try:
             manifest = json.loads(path.read_text(encoding="utf-8"))
@@ -1507,6 +1749,14 @@ def import_package(path: Path) -> dict[str, Any]:
                                 "Neither a Studio package (.zip) nor a project (.json).")) from None
         if "project" not in manifest:  # eine nackte Projektdatei aus studio/
             manifest = {"format": PACKAGE_FORMAT, "project": manifest}
+        p = _imported_project(manifest)
+    with _lock:
+        _save(p)
+    return p
+
+
+def _imported_project(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Das Projekt aus einem Paket mit neuer ID, freiem Namen und eigenem Ordner (noch nicht gespeichert)."""
     p = manifest.get("project")
     if manifest.get("format") != PACKAGE_FORMAT or not isinstance(p, dict) or not isinstance(p.get("clips"), list):
         raise StudioError(t("Das ist kein Studio-Projekt.", "This is not a Studio project."))
@@ -1523,12 +1773,12 @@ def import_package(path: Path) -> dict[str, Any]:
     for s in p["scenes"]:  # Aufträge gehören zur anderen Installation
         s["jobs"] = []
         s.pop("waiting_for", None)
-    with _lock:
-        _save(p)
+    p.pop("folder", None)  # der Ordner der anderen Installation
+    project_folder(p)
     return p
 
 
-def _import_asset(z: zipfile.ZipFile, members: set[str], a: dict[str, Any]) -> None:
+def _import_asset(z: zipfile.ZipFile, members: set[str], a: dict[str, Any], folder: str = "") -> None:
     """Ein Asset aus dem Paket: vorhandenes bleibt, sonst Dateien kopieren und unter derselben ID eintragen."""
     asset_id = str(a.get("id", ""))
     if not re.fullmatch(r"[a-z]{2,5}_[0-9a-f]{6,32}", asset_id) or a.get("kind") not in ("image", "video", "audio",
@@ -1549,7 +1799,7 @@ def _import_asset(z: zipfile.ZipFile, members: set[str], a: dict[str, Any]) -> N
                 return  # ohne Datei kein Asset
             meta.pop(key, None)
             continue
-        target = _unique_name(str(name))
+        target = _unique_name(str(name), folder)
         with z.open(f"files/{name}") as src, open(config.ASSET_DIR / target, "wb") as dst:
             shutil.copyfileobj(src, dst, 1 << 20)
         renamed[key] = target
@@ -1572,7 +1822,7 @@ def _import_extras(z: zipfile.ZipFile, members: set[str], a: dict[str, Any], exi
             continue
         if not SAFE_NAME.match(str(name)) or f"files/{name}" not in members:
             continue
-        target = _unique_name(str(name))
+        target = _unique_name(str(name), existing.folder)  # neben das vorhandene Asset
         with z.open(f"files/{name}") as src, open(config.ASSET_DIR / target, "wb") as dst:
             shutil.copyfileobj(src, dst, 1 << 20)
         changes[key] = target
@@ -1601,7 +1851,7 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
             assets[asset_id] = {"url": asset.url, "kind": p.get("media", {}).get(asset_id, {}).get("kind", asset.kind),
                                 "prompt": asset.prompt[:120]}
             if (asset.meta or {}).get("preview"):
-                assets[asset_id]["preview"] = f"/files/{asset.meta['preview']}"
+                assets[asset_id]["preview"] = db.file_url(asset.meta["preview"])
     out["assets"] = assets
     for c in out["clips"]:
         c["missing"] = c["asset_id"] not in assets  # Datei gelöscht: Clip rot, Export nennt ihn
@@ -1614,6 +1864,7 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
     _resolve_chain_markers(p)
     return {
         "id": p["id"], "name": p["name"], "settings": p["settings"],
+        "folder": str(config.ASSET_DIR / p["folder"]) if p.get("folder") else None,
         "scenes": [{"id": s["id"], "lane": s["lane"], "start_s": round(seconds(s["start"]), 3),
                     "duration_s": round(seconds(s["duration"]), 3), "title": s["title"], "prompt": s["prompt"],
                     "kind": s["kind"], "model_id": s.get("model_id"), "chain_from": s.get("chain_from"),
