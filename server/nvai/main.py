@@ -41,7 +41,10 @@ from .schemas import (
     ModelInfo,
     RestoreImageRequest,
     VersionInfo,
+    VhsAnalyzeRequest,
+    VhsRequest,
 )
+from . import vhs  # noqa: E402  (registriert die Auftraege vhs und vhs_clean)
 
 
 @asynccontextmanager
@@ -100,6 +103,8 @@ API_FEATURES = [
     "studio",          # /api/studio/*: Projekte mit Komposition (Szenen, Marker) und Schnitt, Befehle, Export
     "asset_folders",   # Projektordner im Material: GET /api/folders, folder an Assets und Upload,
                        # GET /api/assets?folder= und /api/jobs?folder=, project_id beim Erzeugen (seit 0.5.15)
+    "vhs",             # POST /api/vhs/analyze und /api/vhs/process: VHS-Videos aufwerten (seit 0.5.16)
+    "studio_scale",    # Studio: scale, anchor, scale_keys an Clips und der Befehl clip.key (seit 0.5.16)
 ]
 
 
@@ -706,6 +711,33 @@ async def restore_image(req: RestoreImageRequest) -> Job:
                                    "Schärfen.", "Please choose at least one step: remove damage, colorize or "
                                    "sharpen."))
     return await jobs.submit("restore", _job_params(req))
+
+
+@app.post("/api/vhs/analyze")
+async def vhs_analyze(req: VhsAnalyzeRequest) -> dict[str, Any]:
+    """Format, Verflechtung, Halbbild-Reihenfolge und Raender eines digitalisierten Videos, dazu Vorgaben und eine
+    grobe Zeitschaetzung (vhs.analyze)."""
+    try:
+        return await vhs.analyze(req.asset_id)
+    except FileNotFoundError:
+        raise HTTPException(404, t(f"Video nicht gefunden: {req.asset_id}", f"Video not found: {req.asset_id}"))
+    except RuntimeError as exc:
+        raise HTTPException(422, str(exc))
+
+
+@app.post("/api/vhs/process", response_model=Job)
+async def vhs_process(req: VhsRequest) -> Job:
+    """VHS-Video aufwerten: klassisch (Auftrag vhs_clean) oder mit KI (Auftrag vhs, SeedVR2)."""
+    asset = db.get_asset(req.asset_id)
+    if asset is None:
+        raise HTTPException(404, t(f"Video nicht gefunden: {req.asset_id}", f"Video not found: {req.asset_id}"))
+    if req.ai and not any(getattr(m, "installed", False) for m in registry.list_models("upscale")):
+        raise HTTPException(409, t("Für die KI fehlt SeedVR2: unter „Modelle“ laden.",
+                                   "SeedVR2 is missing for the AI step: download it under “Models”."))
+    if req.smooth and not vhs.rife_installed():
+        raise HTTPException(409, t("Für „Takt glätten“ fehlt RIFE 4.26 (23 MB): im Reiter VHS oder unter „Modelle“ laden.",
+                                   "“Smooth cadence” needs RIFE 4.26 (23 MB): download it in the VHS tab or under “Models”."))
+    return await vhs.submit(_job_params(req))
 
 
 @app.post("/api/generate/audio", response_model=Job)

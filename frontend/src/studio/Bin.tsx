@@ -24,7 +24,7 @@ import { decimal } from './time'
 type Filter = 'all' | 'image' | 'video' | 'audio'
 type View = 'list' | 'grid'
 // wie db.UPLOAD_VIDEO / UPLOAD_AUDIO auf dem Server
-const VIDEO = /\.(mp4|webm|mov|mkv|avi|wmv|flv|mxf|mts|m2ts|ts)$/i
+const VIDEO = /\.(mp4|webm|mov|mkv|avi|wmv|flv|mxf|mts|m2ts|ts|mpg|mpeg|m2v|vob|dv|m4v)$/i
 const AUDIO = /\.(mp3|wav|flac|ogg|m4a|aac|opus)$/i
 const KEY_VIEW = 'nvai-studio-bin-view'
 const KEY_FOLDERS = 'nvai-studio-bin-folders'
@@ -39,7 +39,7 @@ export function mediaKind(a: Asset): 'image' | 'video' | 'audio' | null {
   return 'image'
 }
 
-const NO_BROWSER = /\.(mkv|mov|avi|wmv|flv|mxf|mts|m2ts|ts)$/i
+const NO_BROWSER = /\.(mkv|mov|avi|wmv|flv|mxf|mts|m2ts|ts|mpg|mpeg|m2v|vob|dv)$/i
 
 /** Was der Browser abspielt: die Datei selbst oder, bei MKV, MOV & Co., ihre H.264-Vorschau (meta.preview). FFV1
  * und ProRes spielt kein Browser; NVAI-open legt die Vorschau beim Export bzw. nach dem Hochladen an. */

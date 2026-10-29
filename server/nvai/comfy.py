@@ -332,7 +332,10 @@ def stage_input(src: Path) -> str:
             pass
 
     name = f"nvai_{uuid.uuid4().hex[:8]}{src.suffix.lower() or '.png'}"
-    shutil.copy2(src, dest_dir / name)
+    # copyfile statt copy2: Die Kopie bekommt die jetzige Zeit. Mit copy2 trug sie das Datum der Quelle, und war
+    # die aelter als einen Tag, loeschte das Aufraeumen oben sie beim naechsten Ablegen gleich wieder -- im selben
+    # Auftrag (zweite Referenz, Endbild nach Startbild): "Invalid image file" (28.10.2026).
+    shutil.copyfile(src, dest_dir / name)
     return name
 
 

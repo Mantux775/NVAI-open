@@ -277,6 +277,28 @@ kbd {
 .restore-sub .seg button { border: none; border-left: 1px solid var(--border, rgba(127,127,127,.35)); background: none; color: inherit; padding: 3px 10px; cursor: pointer; font: inherit; font-size: 12px; }
 .restore-sub .seg button:first-child { border-left: none; }
 .restore-sub .seg button.on { background: var(--accent); color: #fff; }
+/* VHS-Reiter (seit 0.5.16) */
+.vhs-source { display: flex; gap: 8px; align-items: center; }
+.vhs-source select { flex: 1; min-width: 0; }
+.vhs-info { margin-top: 8px; }
+.vhs-thumb { position: relative; display: inline-block; max-width: 100%; }
+.vhs-thumb img { display: block; max-width: 100%; max-height: 260px; border-radius: 6px; }
+.vhs-crop { position: absolute; border: 2px dashed var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
+.vhs-thumb { overflow: hidden; border-radius: 6px; }
+.vhs-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.vhs-label { min-width: 120px; }
+.vhs-row .seg, .vhs-compare .seg { display: inline-flex; border: 1px solid var(--border, rgba(127,127,127,.35)); border-radius: 6px; overflow: hidden; }
+.vhs-row .seg button, .vhs-compare .seg button { border: none; border-left: 1px solid var(--border, rgba(127,127,127,.35)); background: none; color: inherit; padding: 3px 10px; cursor: pointer; font: inherit; font-size: 12px; }
+.vhs-row .seg button:first-child, .vhs-compare .seg button:first-child { border-left: none; }
+.vhs-row .seg button.on, .vhs-compare .seg button.on { background: var(--accent); color: #fff; }
+.vhs-num { display: inline-flex; align-items: center; gap: 4px; }
+.vhs-num input { width: 64px; }
+.vhs-hint { margin: 0 0 4px 132px; }
+.vhs-compare { display: flex; flex-direction: column; gap: 6px; }
+.vhs-compare-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.vhs-compare-pair figure { margin: 0; }
+.vhs-compare-pair video, .vhs-single { width: 100%; border-radius: 6px; background: #000; }
+@media (max-width: 900px) { .vhs-compare-pair { grid-template-columns: 1fr; } .vhs-hint { margin-left: 0; } }
 
 .mode-switch {
   display: grid;
@@ -930,6 +952,16 @@ kbd {
 .st-stage { flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; }
 .st-screen { position: relative; width: min(100cqw, 100cqh * var(--ar)); height: min(100cqh, 100cqw / var(--ar)); background: #000; overflow: hidden; }
 .st-screen video, .st-screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Skalieren (seit 0.5.16): Werkzeug Z im Monitor, Fokuspunkt als Kreuz, Wert und Hinweis unten */
+.st-screen.st-scaling { cursor: ns-resize; touch-action: none; }
+.st-anchor { position: absolute; z-index: 90; width: 18px; height: 18px; margin: -9px 0 0 -9px; pointer-events: none;
+  border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #000; }
+.st-anchor::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; margin: -1px 0 0 -1px; background: #fff; }
+.st-scale-hud { position: absolute; z-index: 91; left: 8px; right: 8px; bottom: 8px; padding: 4px 8px; border-radius: 6px;
+  background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 12px; pointer-events: none; }
+.st-key { position: absolute; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; transform: rotate(45deg);
+  background: #ffd34d; border: 1px solid #5a4500; z-index: 3; cursor: pointer; }
+.st-key:hover { background: #fff3c4; }
 .st-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--muted); font-size: 13px; }
 .st-monitor-bar { display: flex; gap: 8px; align-items: baseline; padding: 4px 10px; border-top: 1px solid var(--line); background: var(--panel); }
 .st-timecode { font-family: ui-monospace, Consolas, monospace; font-size: 15px; }

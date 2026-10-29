@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.15",
+  "version": "0.5.16",
   "x-api-version": 1
  },
  "paths": {
@@ -1052,6 +1052,86 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/RestoreImageRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/vhs/analyze": {
+   "post": {
+    "summary": "Vhs Analyze",
+    "description": "Format, Verflechtung, Halbbild-Reihenfolge und Raender eines digitalisierten Videos, dazu Vorgaben und eine\ngrobe Zeitschaetzung (vhs.analyze).",
+    "operationId": "vhs_analyze_api_vhs_analyze_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VhsAnalyzeRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Vhs Analyze Api Vhs Analyze Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/vhs/process": {
+   "post": {
+    "summary": "Vhs Process",
+    "description": "VHS-Video aufwerten: klassisch (Auftrag vhs_clean) oder mit KI (Auftrag vhs, SeedVR2).",
+    "operationId": "vhs_process_api_vhs_process_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VhsRequest"
        }
       }
      },
@@ -2975,7 +3055,8 @@
        "3d",
        "controlnet",
        "lora",
-       "upscale"
+       "upscale",
+       "interpolate"
       ],
       "title": "Kind",
       "default": "image"
@@ -3994,7 +4075,9 @@
        "download",
        "expand_prompt",
        "restore",
-       "studio_export"
+       "studio_export",
+       "vhs",
+       "vhs_clean"
       ],
       "title": "Kind"
      },
@@ -4182,7 +4265,8 @@
        "3d",
        "controlnet",
        "lora",
-       "upscale"
+       "upscale",
+       "interpolate"
       ],
       "title": "Kind"
      },
@@ -4715,6 +4799,275 @@
     ],
     "title": "VersionInfo",
     "description": "GET /api/version -- ohne Token abrufbar."
+   },
+   "VhsAnalyzeRequest": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id",
+      "description": "Das digitalisierte Video (POST /api/upload oder ein Video-Asset)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "VhsAnalyzeRequest"
+   },
+   "VhsRequest": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id",
+      "description": "Das digitalisierte Video"
+     },
+     "preview": {
+      "type": "boolean",
+      "title": "Preview",
+      "description": "Nur ein Abschnitt (duration, Vorgabe 10 s) ab start, dazu derselbe Abschnitt nur entflochten zum Vergleich (meta.vhs_before)",
+      "default": false
+     },
+     "start": {
+      "type": "number",
+      "minimum": 0.0,
+      "title": "Start",
+      "description": "Beginn in Sekunden",
+      "default": 0.0
+     },
+     "duration": {
+      "anyOf": [
+       {
+        "type": "number",
+        "exclusiveMinimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration",
+      "description": "Laenge in Sekunden; None = bis zum Ende"
+     },
+     "deinterlace": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "double",
+       "single",
+       "off"
+      ],
+      "title": "Deinterlace",
+      "description": "double = jedes Halbbild ein Bild (50 bzw. 60 Bilder/s, fluessig wie das Original), single = 25 bzw. 30 Bilder/s, halbe Rechenzeit fuer die KI; auto nach der Analyse",
+      "default": "auto"
+     },
+     "parity": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "tff",
+       "bff"
+      ],
+      "title": "Parity",
+      "description": "Halbbild-Reihenfolge; auto nach der Analyse",
+      "default": "auto"
+     },
+     "crop": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array",
+        "maxItems": 4,
+        "minItems": 4
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Crop",
+      "description": "[links, oben, rechts, unten] in Pixeln der Quelle; None = Vorschlag der Analyse (Kopfumschalt-Stoerung unten, schwarze Raender)"
+     },
+     "aspect": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "source",
+       "4:3",
+       "16:9"
+      ],
+      "title": "Aspect",
+      "description": "Seitenverhaeltnis des Ergebnisses: source = wie die Datei (bzw. der Ausschnitt), 4:3 = eine vom Wandler auf 16:9 gezogene Aufnahme entzerren, 16:9 = anamorph; auto nach der Analyse",
+      "default": "auto"
+     },
+     "denoise": {
+      "type": "string",
+      "enum": [
+       "off",
+       "light",
+       "medium",
+       "strong"
+      ],
+      "title": "Denoise",
+      "description": "light: zeitlich, staerker in der Farbe (schnell); medium: dazu FFT (rund 50 Bilder/s); strong: Non-local Means (rund 20 Bilder/s)",
+      "default": "light"
+     },
+     "chroma_denoise": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "string",
+        "enum": [
+         "off",
+         "clean",
+         "strong"
+        ]
+       }
+      ],
+      "title": "Chroma Denoise",
+      "description": "Farbflecken mindern: clean (auch true) = die Farbe zeitlich nur dort glaetten, wo die Helligkeit ruht (kein Nachziehen), und per Guided Filter an die Helligkeitskanten legen, rund 35 Bilder/s in 960 x 720; strong = der Filter vom 28.10. nachmittags (15 Bilder + chromanr), glaetter, zieht in Bewegung nach",
+      "default": false
+     },
+     "deblock": {
+      "type": "boolean",
+      "title": "Deblock",
+      "description": "Blockkanten der Kompression glaetten (deblock, im Raster der Aufnahme); Vorschlag der Analyse, wenn blocky",
+      "default": false
+     },
+     "sharpen": {
+      "type": "string",
+      "enum": [
+       "off",
+       "light",
+       "medium",
+       "strong"
+      ],
+      "title": "Sharpen",
+      "description": "Nachschaerfen ohne KI (unsharp, stark mit CAS), nur Helligkeit, nach dem Entrauschen; erfindet nichts dazu, anders als die KI",
+      "default": "off"
+     },
+     "chroma_shift": {
+      "type": "integer",
+      "maximum": 8.0,
+      "minimum": -8.0,
+      "title": "Chroma Shift",
+      "description": "Farbversatz in Pixeln waagerecht ausgleichen",
+      "default": 0
+     },
+     "levels": {
+      "type": "boolean",
+      "title": "Levels",
+      "description": "Helligkeit und Kontrast automatisch strecken",
+      "default": false
+     },
+     "deflicker": {
+      "type": "boolean",
+      "title": "Deflicker",
+      "description": "Helligkeitsflackern mindern",
+      "default": false
+     },
+     "stabilize": {
+      "type": "boolean",
+      "title": "Stabilize",
+      "description": "Verwackeln mindern (deshake, rund 90 Bilder/s)",
+      "default": false
+     },
+     "smooth": {
+      "type": "boolean",
+      "title": "Smooth",
+      "description": "Takt glaetten: Aufnahmen, die ein 50-Hz-Band mit 30 Bildern/s aufnehmen (Analyse cadence.kind = 50to30), mit RIFE-Zwischenbildern auf 50 Bilder/s; braucht rife-4.26 (Art 'interpolate') und laeuft in der GPU-Warteschlange",
+      "default": false
+     },
+     "ai": {
+      "type": "boolean",
+      "title": "Ai",
+      "description": "Mit SeedVR2 aufbessern (Modellart 'upscale'); rund 1,2 s je Bild in 720p, 2 s in 1080p auf einer RTX 5060 Ti",
+      "default": false
+     },
+     "ai_size": {
+      "type": "string",
+      "enum": [
+       "720",
+       "1080",
+       "original"
+      ],
+      "title": "Ai Size",
+      "description": "Zielhoehe der KI im Seitenverhaeltnis",
+      "default": "720"
+     },
+     "upscale_model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Upscale Model Id",
+      "description": "SeedVR2-Fassung; None = 7B, wenn installiert"
+     },
+     "frames_per_chunk": {
+      "type": "integer",
+      "maximum": 97.0,
+      "minimum": 1.0,
+      "title": "Frames Per Chunk",
+      "description": "Bilder je SeedVR2-Stueck (4n+1); 1 = Einzelbild",
+      "default": 1
+     },
+     "audio_denoise": {
+      "type": "boolean",
+      "title": "Audio Denoise",
+      "description": "Bandrauschen im Ton mindern (afftdn)",
+      "default": true
+     },
+     "loudnorm": {
+      "type": "boolean",
+      "title": "Loudnorm",
+      "description": "Ton auf -16 LUFS bringen, Grenze -1 dBFS",
+      "default": true
+     },
+     "codec": {
+      "type": "string",
+      "enum": [
+       "h264",
+       "hevc"
+      ],
+      "title": "Codec",
+      "description": "Kodierung des Ergebnisses (NVENC, sonst Software)",
+      "default": "h264"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id",
+      "description": "Studio-Projekt: Ergebnis gleich in seinen Ordner"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "VhsRequest",
+    "description": "VHS-Video aufwerten (seit 0.5.16, vhs.py): klassisch (entflechten, beschneiden, entrauschen, Farbe,\nstabilisieren, Ton) und auf Wunsch mit KI (SeedVR2) in Abschnitten. Vorgaben aus POST /api/vhs/analyze."
    }
   }
  }

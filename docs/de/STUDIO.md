@@ -2,7 +2,7 @@
 
 *English: [../STUDIO.md](../STUDIO.md)*
 
-Das Studio ist ein eigener Reiter, der das ganze Fenster einnimmt. Oben komponierst du: Szenen mit
+Das Studio ist ein eigener Reiter, der das ganze Fenster einnimmt; es ist der erste Reiter und beim Start offen. Oben komponierst du: Szenen mit
 Prompt auf Bahnen für Bild, Sprecher, Musik und Klang, dazu Marker, die sagen, was wohin kommt. Unten
 schneidest du die echten Clips: schneiden, trimmen, überblenden, Lautstärke. Ist der Schnitt fertig,
 exportiert das Studio mit dem Video-Encoder deiner Grafikkarte. Es ist auf hochwertiges 1080p ausgelegt:
@@ -158,6 +158,28 @@ Strg+D an den gewählten Clips oder am Schnitt beim Abspielkopf, oder mit einem 
 Clip läuft dafür über sein Ende hinaus weiter; reicht sein Material nicht, steht sein letztes Bild. Ohne
 vorigen Clip auf derselben Spur blendet der Clip über dem Bild darunter bzw. über Schwarz auf.
 
+## Skalieren und zoomen mit Keyframes (seit 0.5.16)
+
+![Das Werkzeug Skalieren: der Clip auf 150 % um den Fokuspunkt vergrößert, Keyframes als Rauten auf dem Clip](../images/studio-scale-de.jpg)
+
+Jeder Videoclip lässt sich von 10 bis 800 % skalieren. Ein **Fokuspunkt** bleibt dabei an seiner Stelle, so
+geht ein Zoom auf das Gesicht oder die Grafikkarte zu statt in die Mitte. Unter 100 % wird der Clip über der
+Spur darunter kleiner: Bild im Bild.
+
+Mit dem **Werkzeug Skalieren** (Z) arbeitest du direkt im Monitor: nach oben ziehen vergrößert, nach unten
+verkleinert; beim Loslassen entsteht am Abspielkopf ein **Keyframe**. Ein Klick ohne Ziehen setzt den
+Fokuspunkt, das Mausrad skaliert fein. Ein Klick mit dem Werkzeug auf einen Clip wählt ihn und setzt den
+Abspielkopf dorthin. Zwischen zwei Keyframes ändert sich die Skalierung gleichmäßig, vor dem ersten und nach
+dem letzten gilt ihr Wert. Keyframes stehen als Rauten auf dem Clip: Klick springt hin, Doppelklick löscht.
+Die Eigenschaften des Clips haben dasselbe unter „Skalieren“: den Wert am Abspielkopf, Fokuspunkt X und Y,
+Keyframe setzen und löschen, zum vorigen oder nächsten springen, alle löschen. Ohne Keyframes gilt der Wert
+für den ganzen Clip.
+
+Keyframes hängen am Material, wie In und Out: Schneidest du einen Clip, behalten beide Teile den Zoom; bei
+anderem Tempo bleibt der Zoom an derselben Stelle im Material. Vorschau und Export rechnen dasselbe. Gemessen
+an einem Testmuster: Der Fokuspunkt blieb im Export auf einen halben Pixel genau stehen, und der Abstand
+zweier Marken wuchs genau mit der Skalierung (100, 150, 200 %).
+
 ## Marker
 
 | Marker | Was er bewirkt |
@@ -218,7 +240,7 @@ Dateien ergibt 63 MB, gepackt in 0,5 s, ohne Kompression, weil Videos schon komp
 | Taste | |
 |---|---|
 | Leertaste | Abspielen und anhalten |
-| V / C | Werkzeug Auswahl / Schneiden |
+| V / C / Z | Werkzeug Auswahl / Schneiden / Skalieren |
 | S | Magnet an und aus |
 | Umschalt (⇧) beim Ziehen | Andocken, auch ohne Magnet |
 | Strg+K | Am Abspielkopf schneiden (sind Clips gewählt, nur auf ihren Spuren) |
@@ -285,8 +307,8 @@ mit dem Standardweg und rund einen Tag mit DFR. Standbilder mit Musik und Sprech
 ## Was noch fehlt
 
 - Sprecherstimme (Sprachausgabe). Bis dahin eine aufgenommene Tondatei auf die Sprecher-Szene ziehen.
-- Titel, Untertitel, Kamerafahrten auf Standbildern, Wellenformen, Export als PNG-Einzelbilder, WAV oder
-  SRT, Austausch mit anderen Schnittprogrammen (OpenTimelineIO).
+- Titel, Untertitel, Schwenks (Bild verschieben; Zoomen gibt es seit 0.5.16), Wellenformen, Export als
+  PNG-Einzelbilder, WAV oder SRT, Austausch mit anderen Schnittprogrammen (OpenTimelineIO).
 - Das Studio in NVAI-open für Mac.
 
 ## Making of

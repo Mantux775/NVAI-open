@@ -2,7 +2,7 @@
 
 *Deutsch: [de/STUDIO.md](de/STUDIO.md)*
 
-The Studio is a tab of its own that fills the whole window. At the top you compose: scenes with a
+The Studio is a tab of its own that fills the whole window; it is the first tab and open when NVAI-open starts. At the top you compose: scenes with a
 prompt on lanes for picture, voice, music and sound, and markers that say what goes where. At the
 bottom you edit the real clips: cut, trim, dissolve, set the volume. When the edit is done, the Studio
 exports with the video encoder of your graphics card. It aims at high-quality 1080p: video scenes are
@@ -155,6 +155,27 @@ selected clips or at the cut near the playhead, or with a transition marker. The
 its end for it; if its material runs out, its last frame holds. Without a previous clip on the same track,
 the clip fades in over the picture below, or over black.
 
+## Scale and zoom with keyframes (since 0.5.16)
+
+![The Scale tool: the clip zoomed to 150 % around the focus point, keyframes as diamonds on the clip](images/studio-scale.jpg)
+
+Every video clip can be scaled from 10 to 800 %. A **focus point** stays in place while scaling, so a zoom
+goes towards the face or the graphics card instead of the middle. Below 100 % the clip shrinks over the track
+below: picture in picture.
+
+With the **Scale tool** (Z) you work right in the monitor: drag up to make the clip larger, down to make it
+smaller; letting go sets a **keyframe** at the playhead. A click without dragging sets the focus point, the
+mouse wheel scales finely. Clicking a clip with the tool selects it and moves the playhead there. Between two
+keyframes the scale changes evenly; before the first and after the last one their value holds. Keyframes
+show as diamonds on the clip: a click jumps there, a double click deletes. The clip's properties have the
+same under "Scale": the value at the playhead, focus point X and Y, set and delete keyframes, jump to the
+previous or next one, delete all. Without keyframes the value applies to the whole clip.
+
+Keyframes stick to the material, like in and out: when you cut a clip, both parts keep the zoom; with a
+different speed the zoom stays on the same moment of the material. Preview and export compute the same.
+Measured on a test pattern: the focus point stayed within half a pixel in the export, and the distance of two
+marks grew exactly with the scale (100, 150, 200 %).
+
 ## Markers
 
 | Marker | What it does |
@@ -213,7 +234,7 @@ videos are compressed already.
 | Key | |
 |---|---|
 | Space | Play and pause |
-| V / C | Selection / Razor tool |
+| V / C / Z | Selection / Razor / Scale tool |
 | S | Magnet on and off |
 | Shift (⇧) while dragging | Dock, also without the magnet |
 | Ctrl+K | Cut at the playhead (with clips selected, only on their tracks) |
@@ -281,8 +302,8 @@ cheaper.
 ## Not there yet
 
 - Voice (text-to-speech). Until then, drag a recorded audio file onto the voice scene.
-- Titles, subtitles, camera moves on still images, waveforms, export as PNG frames, WAV or SRT,
-  exchange with other editors (OpenTimelineIO).
+- Titles, subtitles, panning (moving the picture, zoom exists since 0.5.16), waveforms, export as PNG frames,
+  WAV or SRT, exchange with other editors (OpenTimelineIO).
 - The Studio in NVAI-open for Mac.
 
 ## Making of

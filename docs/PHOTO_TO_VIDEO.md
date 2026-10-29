@@ -79,6 +79,14 @@ LTX-2.5 makes the video with speech and sound.
 
 ## Tips from our tests
 
+- **Hold the face with an end image.** Tick "Loop: the start image is also the end image" and keep the
+  camera still, or give an end image that FLUX 3 edited from the start image. In a close-up looking into the
+  lens, the face stayed the person's for the whole 5 s (similarity to the start image 0.80–1.0); with the
+  start image alone, the camera pushed in after a second despite "static camera", and LTX-2.5 redrew the face
+  (0.3–0.4).
+- **With a real photo, use the photo itself.** FLUX 3 makes faces a little slimmer and younger. Under
+  "Image → Extend an existing image (outpainting)", FLUX 3 extends the photo to the video format and puts the
+  original back pixel for pixel, so the first frame is exactly the person.
 - **Keep the person facing the camera.** If they turn away, LTX-2.5 redraws the face afterwards and it
   looks less like the photo.
 - **Say exactly what the camera does.** "The camera holds a steady medium shot" keeps the framing;
@@ -97,4 +105,5 @@ The same in two calls: `generate_image` with `flux3-klein-nvfp4`, the photo in `
 `batch_size=4`, the video size (`width=1280, height=704`) and the prompt "Cinematic film still. The
 person from the first image, with exactly the same face, eyes, nose, mouth and hair color: <role>.
 Medium shot from the waist up, the face clearly visible." Then `generate_video` with the chosen image
-as `image_asset_id`. More in [CLAUDE_CODE.md](CLAUDE_CODE.md#person-from-a-photo-since-058).
+as `image_asset_id`. To keep the face to the end, also pass `loop=True` (still camera) or the same image as
+`end_image_asset_id`. More in [CLAUDE_CODE.md](CLAUDE_CODE.md#person-from-a-photo-since-058).

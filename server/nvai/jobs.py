@@ -52,7 +52,7 @@ _job_lang: dict[str, str] = {}
 
 IO_KINDS = {"download"}
 TEXT_KINDS = {"expand_prompt"}
-RENDER_KINDS = {"studio_export"}
+RENDER_KINDS = {"studio_export", "vhs_clean"}  # Render: laeuft neben GPU-Auftraegen
 
 # Wohin die Dateien eines fertigen Auftrags gehören, bevor job.done rausgeht: Das Studio legt die seiner Projekte in
 # deren Ordner (seit 0.5.15; studio.py setzt den Haken, jobs.py kennt das Studio nicht). Läuft in einem Thread.

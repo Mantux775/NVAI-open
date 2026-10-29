@@ -65,7 +65,8 @@ After an NVAI-open update, a running Claude Code session only sees the new tool 
 | `list_models(kind="lora")` | Downloaded LoRAs with their family and trigger words; pass them as `loras=[{model_id, strength}]` to `generate_image` / `generate_video` (the model's `lora_bases` says which fit) |
 | `expand_prompt` | A few words → full prompt for every image model; `target` = video, video_sound, video_start, sfx, music or 3d for the other kinds (needs FLUX 3 downloaded) |
 | `generate_audio` | SFX or music → file paths |
-| `generate_video` | Short clip → file paths |
+| `generate_video` | Short clip → file paths; `wait=False` returns the `job_id` at once |
+| `job_status` | State of a job (`wait_s` up to 600 waits for it); once done the same result as the `generate_*` call |
 | `image_to_3d` | Image asset → GLB mesh |
 | `text_to_3d` | Text → image → GLB mesh in one go |
 | `restore_image` | Old photo → repaired, colorized and/or sharpened photo (since 0.5.11) |
@@ -73,7 +74,20 @@ After an NVAI-open update, a running Claude Code session only sees the new tool 
 | `copy_asset` | Copy an asset to `Assets/Generated/` or similar |
 | `studio_*` | Studio projects: compose scenes, generate them, conform, cut and export a whole video (since 0.5.13, see [Studio](#studio-whole-videos-from-scenes-since-0513)) |
 
-All `generate_*` tools **block until done** and return absolute file paths.
+All `generate_*` tools **block until done** and return absolute file paths. Internally the MCP server polls the
+REST API and sends MCP progress notifications. Limits: 65 min of render time for a video job (the server itself
+stops a video workflow after 60 min), 30 min for everything else, and up to an hour in the queue; queue time does
+not count as render time. A call that runs past its limit does not fail: it returns `pending: true` with the
+`job_id`, the job keeps running on the server and lands in the history. Never submit it again; call
+`job_status(job_id, wait_s=600)` until it is done.
+
+For long renders use the non-blocking form right away: `generate_video(..., wait=False)` returns the `job_id`,
+then `job_status(job_id, wait_s=600)` until `status` is `done`. Worth it from about 10 minutes: 1080p with
+`quality="dfr"` takes ~13 min for 5 s and ~25 min for 6 s with a start image, and an 8 s DFR clip at 1920 × 832
+that spilled over 16 GB took 20 to over 60 minutes. `progress` counts sampling passes equally, not time, so
+`job_status` gives no ETA; estimate from the [run times](#run-times-measured-on-an-rtx-5060-ti-16-gb).
+Before 0.5.16 a blocking call gave up after 30 minutes counted from submission, queue time included, while the
+server allowed a video job 60 minutes, and the result never reached Claude.
 
 ## Workflow
 
@@ -94,15 +108,20 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 |---|---|---|
 | Final image asset, text in the image | `qwen-image-2512-nvfp4`, 50 steps, full English sentences, text in quotation marks | Letter-perfect crate lettering; rope handles drawn through drilled holes where Lightning laid them on the wood |
 | Edit an image, keep a character consistent | `flux3-klein-nvfp4` with `reference_asset_ids`; say what changes and what stays | Only the handles changed, the rest stayed; 13–30 s |
+| Exact construction, counts or gaze with FLUX 3 | `upsample_prompt=False` with a full prompt in whole sentences | With the upsampler a second fishing line appeared in 4 of 6 images, without it in 0 of 2 (same seed) |
 | Photographic look | `krea2-turbo-nvfp4`, state the framing ("medium shot from the waist up, his whole head inside the frame") | Without the framing the head was cut off in 3 of 3 images, with it in 0 of 2; ~20 s |
 | Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | Text letter-perfect in every test; rope handles through drilled holes in 3 of 3 with 50 steps, 2 of 3 with 25; ~51 s |
 | Size | Standing figure 832 × 1216, vehicle 1216 × 832, object 1024² | In a square, figures lose their feet more often |
 | Choosing | `batch_size=4`, compare at full resolution | One model load instead of four; anatomy errors are a failure rate |
 | Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS |
+| Long video render (from ~10 min) | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min, 6 s with a start image ~25 min; a blocking call that runs out of time returns `pending` with the `job_id`, never resubmit |
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
 | Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
-| A recognizable person in video | Start image with FLUX 3 and a frontal, sharp reference, medium shot or closer (face 250 px or more), few extras; an end image edited from the start image to hold framing and face; no `extend_asset_id`; on 16 GB at most 6 s at 1920 × 832 | "Static camera" still pushed in (3 of 3); with the end image the last frame matched (similarity 0.98); faces of 100–200 px and running extras melted; 8 s DFR took 20–60 min |
+| A small reaction in video (a start, a glance) | Describe it small and physical, avoid "fright", "flinch", "jerk", and say what does not move | "he flinches briefly, his head and shoulders jerk back a little" looked like a sneeze to the user; "his head lifts by a few centimeters" became a clear look up in one of two clips; "his upper body twitches back" came with a lean forward first in 2 of 2 |
+| A recognizable person in video | Start image with FLUX 3 and a frontal, sharp reference, medium shot or closer (face 250 px or more), few extras; an end image edited from the start image to hold framing and face; no `extend_asset_id`; on 16 GB at most 6 s at 1920 × 832. Most faithful: the real photo itself as the start image, outpainted to 16:9 with FLUX 3, with `loop=True` or as end image too. For an action with objects: the end image is the start image with only the result filled in by a mask (FLUX 3), and say what the hands do not do | "Static camera" still pushed in (3 of 3); with the end image the last frame matched (similarity 0.98); faces of 100–200 px and running extras melted; 8 s DFR took 20–60 min; close-up from the photo: similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the start image only; fishing gag with a masked end image: one fish with one tail and the hands on the rod in 2 of 2 seeds, the action played out although start and end differed only by the fish |
+| A character from a reference sheet instead of a start image (IC-LoRA Ingredients; ComfyUI test setup, not in NVAI-open) | Not for a recognizable person. If used: sheet as a guide on frame 0, LoRA 1.5 with `euler_ancestral_cfg_pp` at 960 × 544; a second stage for 1080p needs the IC-LoRA and the sheet again | The user recognized the character in none of the clips; refined without the IC-LoRA the face became a stranger's; a frontal close-up made the LoRA copy the sheet for all 5 s |
 | Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join, conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
+| Zoom on a clip in the Studio | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and at the end (e.g. 1.5) | The focus point stayed within 0.5 px in the export, the zoom grew exactly as keyed (test pattern) |
 | Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt at about 2 words per second, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; 15 spoken words ran past the end of a 6 s shot, 11 fit; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
 | Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
 | Sound effects / instrumental music | Stable Audio Open / Stable Audio 3 Medium | Describe the sound for SFX; Stable Audio 3 up to 5 min, one sentence with BPM, no vocals (ACE-Step was removed in 0.5.13) |
@@ -274,7 +293,13 @@ Krea 2), not with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`
   have to be right. If the image is wrong, read `caption` first: if the error was already there,
   extend the prompt instead of rerolling. Use `upsample_prompt=False` only when the prompt itself
   is already a full description in this style — without the upsampler, the test crate came out
-  plainer.
+  plainer. **For exact construction, counts and gaze, switch it off:** a fishing rod seen from
+  the side got a second line from the upsampler in 4 of 6 images (one under the rod that ended in
+  the air in front of the hands, or two at the tip) plus once a swivel halfway down the line;
+  without it, with the same seed, 0 of 2: exactly one bare line. The upsampler also dropped the
+  sentence about the light on the face and turned "looks along the line" into a straight gaze.
+  In the same series a float that "floats on the water" hung taut in mid-air in 4 of 4, while
+  "lies on the surface … half under water, with small rings" lay on the water in 4 of 4.
 - **FLUX 3 with reference images** (`reference_asset_ids`, up to 10): say "the first image",
   "the second image" in the prompt. Editing = say what changes and what stays the same.
 - **FLUX 3 boxes:** append a table to the end of the prompt:
@@ -716,6 +741,12 @@ the framing longer. If the person turns away, LTX redraws the face afterwards an
 "keeps facing the camera" keeps it in view, but on a push-in LTX still smooths it toward an average
 face. The voice is generated by LTX, never the person's real one.
 
+To keep the face to the end, pass the start image as the end image too (`loop=True` with a still camera, or
+`end_image_asset_id`). With a real photo, the photo itself makes the most faithful start image: outpaint it to
+the video size with FLUX 3, the face stays pixel for pixel. Measured in a close-up (see "Close-up with the photo
+as start and end image" below): similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the
+start image only.
+
 ### LTX-2.5: keeping faces, voices and characters (measured 27 October 2026)
 
 The user on eight comedy clips with one soldier: all of them had problems, "above all the face", the eyes in
@@ -775,7 +806,9 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   out with a stranger's voice). In the vertical Short every one of the four spoken clips carried exactly her line
   (correlation 1.000) and LTX moved the lips to it (257 s per clip at 1088 × 1920, standard). The length comes from
   the sound (8n+1 frames up to its length), so add a little tail when the clip needs 0.5 s after the cut. Later: a
-  narrator voice from a voice sample for new lines (Studio stage 3).
+  narrator voice from a voice sample for new lines (Studio stage 3). Not tested yet: ComfyUI 0.42.1 ships the node
+  `LTXVReferenceAudio` ("LTXV Reference Audio (ID-LoRA)"), which transfers a speaker's identity from about 5 s of
+  reference audio and needs a matching ID-LoRA; a possible way to keep one voice across clips.
 - **Start image without a face** (over the shoulder, from behind): when the person turns to the camera, LTX invents a
   face, here with darker skin, other glasses and heavier brows (the user: she should not turn around "because the face
   does not match"). Options: (1) keep her turned away ("She keeps facing the monitor the whole time and never turns
@@ -783,9 +816,92 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   LTX lands on the right face (similarity 0.98 with the soldier); (3) a start image in profile or three-quarter view
   that shows part of the face; (4) cut instead of turning: a separate shot with her face; (5) a chain of clean stills
   with a start and an end image per part.
+- **Restore IC-LoRA with a face reference: rejected** (27 October, evening; the user after the test: "no, it doesn't
+  get better", "it creates new artifacts and even jumps"). Lightricks' `ltx-2.5-22b-ic-lora-restore-1.0` (1.6 GB, gated)
+  is meant for archive footage; per its card a face reference on a grey background goes in as a second guide before
+  the first frame. Tested on an extended fishing clip (a different man from 7 s on), a 960 × 544 crop at full
+  resolution (the training tile), 97 frames from 5–9 s, 8 steps `euler`, CFG 1, in a ComfyUI test copy: 113–154 s per
+  run, up to 15.1 GB. Without a reference it got sharper (edge sharpness in the face 7.8 instead of 5.5) and more
+  contrasty, the haze disappeared (the mood changed), and the wrong face stayed. With the start image or a frontal
+  reference it was almost unchanged (NCC to the reference 0.50–0.51, like the input). Only with the head blurred in the
+  input did the reference act (narrower face, brows and nose closer), and it was still a different man. Traps: the
+  core `LTXVAddGuide` counts a negative `frame_idx` from the end (the reference landed on the last frame), Lightricks'
+  `LTXAddVideoICLoRAGuide` puts -1 before the first frame; `LTXVAddLatentGuide` takes negative values only in whole
+  latent frames (-1 = frame -8).
+- **IC-LoRA Ingredients** (27/28 October; test setup in a ComfyUI copy, not built into NVAI-open). Lightricks'
+  `ltx-2.5-22b-ic-lora-ingredients-0.9` (1.22 GB, gated) takes a reference sheet instead of a start image: per
+  character a face close-up and a turnaround, then props and a location panel, on black, no text. The sheet is repeated
+  over all frames and pinned as a guide at frame 0, so it does not become the first frame; the prompt has two parts,
+  "Reference sheet: …" naming the panels by their position, then "Generated video: …". Built from core nodes
+  (`LoraLoaderModelOnly`, `RepeatImageBatch`, `LTXVAddGuide`, `LTXVCropGuides`). Lightricks' `LTXICLoRALoaderModelOnly`
+  and `LTXAddVideoICLoRAGuide` (ComfyUI-LTXVideo, `iclora.py`) do the same as these core nodes of ComfyUI 0.42.1; the
+  loader also reads `reference_downscale_factor` from the file's metadata (1 here).
+  - **Single stage at 960 × 544** (sheet scaled to a shorter side of 544, as in Lightricks' template), 121 frames,
+    8 distilled steps, CFG 1, seed 42: 165–235 s, up to 15.8 GB. Strength and sampler decide. 1.0 with
+    `euler_ancestral` turned the sheet itself into the video (the face on it blinked); 1.3 with
+    `euler_ancestral_cfg_pp` showed the sheet for 1.5 s and then cut to the scene; 1.5 with `euler_ancestral_cfg_pp`
+    gave the whole clip as the scene. There the character sat in the crater from the location panel, with bucket and
+    stool from the props panel and the turnaround's clothes, the same man throughout, but his face was only about
+    90 px tall and soft. Lightricks' template `LTX-2.5_ICLoRA_Ingredients_Single_Stage_Distilled` uses 1.0 with
+    `euler_ancestral_cfg_pp` (cfg_pp switches off ComfyUI's shortcut at CFG 1 and evaluates the negative prompt too);
+    that exact combination is still untested. Single stage at 1280 × 704 (473 s) showed the sheet for the first 1.5 s
+    again.
+  - **Two stages to 1080p** (28 October): stage 1 as above, then latent ×2 (`LTXVLatentUpsampler`) and refine at
+    1920 × 1088 with the sound from stage 1. Refined like NVAI-open's standard path (base model without the IC-LoRA,
+    only the "Generated video" part, sigmas 0.85/0.725/0.4219/0, `euler_ancestral`; 407 s, up to 15.7 GB), the eyes
+    were sharp for the whole clip at a face height of about 250 px, but it was a different man (the user: "looks ok
+    already, but it is a stranger's face … surely something is missing with the LoRAs"). Lightricks' two-stage IC-LoRA
+    templates (`LTX-2.5_ICLoRA_Inpaint_Two_Stage_Distilled`) run stage 2 with the same model including the IC-LoRA and
+    with the conditioning of stage 1, from 0.725 (sigmas 0.725/0.4219/0, `euler`). Done that way, hair and beard came
+    closer (168 s for stage 2). With the sheet also pinned at full size as a guide in stage 2 and the full two-part
+    prompt, hair and beard came closer still, the eyes were sharp at 1:1, and the sheet never showed in the
+    picture: 324 s for stage 2, up to 15.6 GB. Stage 1 was still in ComfyUI's cache for these two
+    runs; from scratch that makes an estimated 9 min for 5 s. Rule: **a second stage after an IC-LoRA needs the
+    IC-LoRA and its reference again; refining with the plain model redraws the face.**
+  - **Sound** came out almost silent in every Ingredients run (mean −60 to −65 dB, peaks −23 to −40 dBFS), also after
+    the sound sentence got more explicit ("a clear creak", "a soft plop"); no loud source was named in the prompt.
+  - **Building the sheet** (all with FLUX 3, four variants per panel to choose from, about 3 min each): the face from
+    a portrait, its background faded softly into black; the turnaround with that portrait as reference; the props as
+    product shots; the location empty and **seen from the direction of the later shot**. "a spot where a man could
+    sit" put a person into the location panel in 4 of 4 images.
+  - **The user's verdict** (28 October, night): "he is not recognizable … in none of the clips is it him", B
+    included; my judgement by hair and beard had been too generous, the distinctive features of the portrait were
+    missing everywhere. Likely cause: in every clip he is seen in three-quarter view or from the side, and that view
+    comes from the turnaround, whose profile FLUX had already invented (the user: "from the side he is already
+    estranged"). A second sheet with three real head shots taken from the original video instead of the turnaround
+    (two three-quarter views, one profile), together with a frontal close-up looking into the lens, gave no scene at
+    all: the LoRA (1.5, cfg_pp, two stages like B) turned the sheet itself into the video for all 5 s (518.6 s, up
+    to 15.6 GB); a frontal close-up looks too much like the face panel. With loud sources named ("a steady cold
+    wind blowing loudly", "crows cawing nearby", "a heavy artillery explosion booming") the sound came up to
+    −31 dB instead of −60 dB. **Here the start image carries a recognizable face, not Ingredients** (next point).
+- **Close-up with the photo as start and end image** (28 October, night; the user: "test a scene where he looks
+  straight into the camera, close"): the portrait (745 × 1092) outpainted to 1920 × 1088 with FLUX 3
+  (`outpaint=[588, 0, 587, 0]`, two variants in 110 s; the face stays pixel for pixel, one variant got a smeared strip
+  along the top edge), then LTX-2.5 at 1920 × 1088, 5 s, seed 42, "Static camera, a locked-off close-up …; the man
+  keeps facing the camera and looks straight into the lens the whole time …"; similarity = normalized
+  cross-correlation of the head crop with the start image. **Start image only** (standard path, 320.5 s): 0.73 after
+  1 s, then the camera pushed in anyway and LTX redrew the face (0.29–0.44; mouth open at 4 s, eyes closed at 5 s).
+  **Start and end image = the photo** (`loop=True`, keyframe path at full resolution, 503.6 s): the framing held,
+  similarity 0.80–0.997 throughout, first and last frame 4.2 and 4.4 of 255 from the start image; sound around
+  −45 dB, the explosion did not come through loudly.
+- **A scene with real side views as FLUX references** (28 October, night; the user: "yes, try it with the
+  fishing scene"): start images with FLUX 3 at 1920 × 1088 from four references: the portrait, two real head
+  shots of the same man taken from his original video (three-quarter view and profile, uploaded as images) and the
+  chosen location; prompt "The man from the first image, the same man as in the second and third images, with
+  exactly the same face, eyes, eyebrows, nose, ears, mouth, beard and hair …", "He faces the camera and looks
+  straight into the lens", "Medium shot from the waist up". Two images per 220 s, the face about 330 px tall; all
+  four looked clearly more like him than the earlier FLUX images. **Trap:** five references with `batch_size=4`
+  at 1920 × 1088 do not fit into 16 GB: 165–177 s per step (ComfyUI streams the model, the GPU drew only 69 W),
+  stopped after 12 min; with four references and `batch_size=2` it ran normally. Video: the chosen image as start
+  and end image (`loop=True`), 1920 × 1088, 5 s, seed 42, 454.9 s: similarity of the head crop to the start image
+  0.93–0.995 (a blink at 4 s), first and last frame 4.8 and 5.0 of 255 from the start image. Instead of the rod
+  tip twitching ("the man does not react") he jerked the rod up at 2–2.5 s and lowered it again, rings on the
+  water at 3–3.5 s, the rod stayed intact. Sound quiet up to 3.5 s (−56 to −47 dB), then the explosion from 4 s
+  (peak −3 dBFS); the wind described as loud did not come through loudly.
 - **Short rules for one character over several clips** (soldier and explainer together):
   1. Frontal, unobstructed face reference, sharpened with SeedVR2; start images with FLUX 3. MOSS-Image takes no
-     reference and draws a different person.
+     reference and draws a different person. Most faithful is the real photo itself as the start image, outpainted to
+     the video format with FLUX 3 (the face stays pixel for pixel). Ingredients never gave a recognizable face here.
   2. Face 250 px or more (medium shot or closer), few extras far in the back.
   3. Hold camera and face with an end image; "static camera" in the prompt alone still pushed in.
   4. No extending; build longer scenes from parts with clean start and end images; on 16 GB at most 6 s per clip at
@@ -793,6 +909,98 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   5. Nothing in front of the face (explosions, dirt, darkness); a teacup in front of the mouth did no harm.
   6. Speech only with the face in the picture and the same voice description; several variants per line to listen to.
   7. Start image without a face: keep the person turned away, or give an end image with the face.
+  8. Pin down an action with objects through the end image: the start image with only the result of the action
+     filled in by a mask (FLUX 3), so the face and everything else stay pixel for pixel; keep edges that must not
+     change outside the mask. Say explicitly what the hands do not do. Simplify props (a rod without a reel) and get
+     their construction right in the start and end image. If the pose changes (bent over), edit with references
+     instead of a mask: the image with the result first, the face second.
+  9. Describe reactions small and physical and say what does not move: LTX exaggerates ("flinches briefly … jerk
+     back" looked like a sneeze to the user, "his upper body twitches back" came with a lean forward first).
+  10. Name what must be seen (the incoming shell) with its size and place, say explicitly where he does not look, and
+      pin down counts ("exactly one fish … there is no second fish").
+- **Fishing gag as the user directed it** (29 October, night): seen from the side, a bare line from the tip of a
+  bamboo pole, the shell hits the crater, the fish flies into the empty bucket, he does not flinch, then bends over to
+  look at it; a short pause, the tail slaps, he startles slightly. Each step as four variants for the user to choose.
+  What carried it: start image (FLUX 3, one face reference, `upsample_prompt=False`) → end image with the result
+  (fish by mask: the mask height above the rim sets how far it sticks out, 200 px gave 85–90 %, 115 px about 40 %; the
+  bent pose by editing with references) → part 1 with start and end image (5 s, 300–315 s) → part 2 as a loop over the
+  end image (4 s, 234 s), so every seam lies on a clean frame. Part 1: the fish flew in and stayed one fish with one
+  tail, the hands stayed on the pole with seed 42, but with seed 202 he took a hand off the pole towards the bucket
+  despite "his hands stay on the pole"; the incoming shell only appeared once the prompt described it, first too large
+  and too close (spray over his face) and he turned his head towards it. Part 2: "he flinches briefly, his head and
+  shoulders jerk back a little" was too much. Sound stayed silent before the event (−71 to −75 dB); a "quiet cold
+  wind" never came through.
+- **Fishing gag rebuilt with a masked end image** (28 October, late evening; the user about the first version: the
+  face was not recognizable later, the fish had two tails, he reached into the bucket oddly, line and reel were
+  distorted and physically wrong). The old clip frame by frame: the shell hit the same crater right next to him, the
+  fish appeared on his lap under his hand (white, no head, two dark ends), he put it into the bucket and left his hand
+  in it for 3.3 s (the prompt only said "looks down into the bucket"), the reel was a shapeless blob that changed every
+  second with a second loop of line into nothing, and from 6.5 s (the extended part) a different man. Rebuilt: start
+  image with FLUX 3 at 1920 × 832 from the four references above, "a plain one-piece bamboo cane pole of the simplest
+  kind … the fishing line tied directly to the tip" (no reel in 4 of 4), bucket on an upturned ammunition crate so it
+  stays in the frame; "medium shot from the thighs up" still gave a shot from the knees up, face about 190 px. The
+  float hung taut above the shore: refilled with a mask, it floats on the water, 0.0 of 255 difference outside the
+  mask. **End image by mask, not by editing:** only the fish in the bucket. A mask over the opening and the upper wall
+  gave a correct carp but a rim redrawn about 55 px higher; a mask only above the rim and inside the opening (front
+  rim, rim ends and wall outside) gave one carp head first with one forked tail fin, everything else identical to the
+  start image. LTX-2.5 with start and end image, 6 s, 1920 × 832, seeds 42 and 202, 376–395 s: although start and end
+  differ only by the fish, both clips played the whole action (explosion on the left behind the bucket, the fish drops
+  into the bucket, one fish with one tail from then on); "His hands stay on the fishing pole the whole time and he
+  does not touch the bucket or the fish" held in both, rod, line and float stayed intact. Head crop 0.99 at the start,
+  0.47–0.62 while he looks into the bucket (turned away), 0.98 at the end. Sound: the explosion up to −2 dBFS, almost
+  silent from 3.5 s; the wind at the end of the sound sentence did not come.
+
+### Kandinsky 6 (tested 27 October 2026, not built in)
+
+The user: "I want to try Kandinsky 6 … what variants are there, even if it only just runs on my hardware"; after the
+test: "Pro meets the expectations, Lite produces artifacts, the fishing rod falls apart". **Decision:** "back to
+LTX-2.5, that is the best we have right now; Kandinsky 6 Pro takes too long, only for emergencies." The upscaler test
+was dropped and all 55 GB of Kandinsky files were deleted; for an emergency, download them again as described here.
+- **Model:** Kandinsky Lab (Sber), MIT, since 6 October 2026. Picture and sound (44 kHz, lip-synced, speech as
+  `<S>…<E>`) in one pass, 5 s at 864 × 480, 24 fps (121 frames); full HD only through the super-resolution model
+  `kandinsky-6-sr` (2×, 2.25× = 1944 × 1080, 4×). Lite 3B and Pro 29B, each normal (50 steps, CFG 5) and distilled
+  (PiFlow, 10 steps, CFG 1, the negative prompt has no effect); the pretrain versions are only for further training.
+- **Files:** bf16 Lite 6.96 / Lite distilled 5.94 / Pro 64.95 (gated) / Pro distilled 56.2 GB. INT8 ConvRot by t8star
+  (Lite 4.5 / Lite distilled 3.5 / Pro distilled 32.6 GB, for the node `kandinsky-t8`) and by kabachuha (for ComfyUI
+  PR 16825). Shared: Qwen2.5-VL 7B (Qwen-Image's fp8 works), CLIP-L, the HunyuanVideo VAE, the audio VAE `v1-44.pth`
+  (MMAudio) and BigVGAN, 2.3 GB new in total; SR 16.3 GB (DiT 3.0, latent upscaler 6.8, KVAE 6.5). Pro in bf16 does
+  not fit into 64 GB of RAM next to Windows and the text encoder.
+- **ComfyUI:** the official node `kandinsky6` 1.0.2 (plus `kandinsky6-sr`) loads only bf16; `kandinsky-t8` 0.1.4
+  (T8mars, linked by Kandinsky Lab) takes INT8 and was checked on Windows with torch 2.14.1+cu130. It needs librosa,
+  loguru and omegaconf, which NVAI-open's ComfyUI does not have. Without extra nodes only once ComfyUI PR 16825 is
+  merged. In ComfyUI only text → video + sound and start image → video + sound; end image, sound → video and
+  video → sound exist only in Kandinsky's own Python pipeline.
+- **Measured** (RTX 5060 Ti, ComfyUI test copy 0.42.1, node T8 with INT8, 864 × 480, 5 s with sound, seed 42):
+
+  | Run | Time | VRAM | Free RAM at least |
+  |---|---|---|---|
+  | Lite distilled, blacksmith (text), first run | 499 s | 16.0 GB | – |
+  | Lite distilled, fishing with a start image (fresh start) | 250–254 s | 16.0 GB | 44.0 GB |
+  | Pro distilled, blacksmith (text), with loading | 966 s | – | – |
+  | Pro distilled, fishing with a start image | 928 s | 15.9 GB | 17.6 GB |
+  | Super-resolution 2.25× (1944 × 1080) on the Pro fishing clip | about 10 min per tile, 9 tiles; stopped, test dropped | 15.8–16.0 GB | 16.4 GB |
+
+  Kandinsky Lab quotes 174 s (Lite distilled) and 718 s (Pro distilled) for this card, with SageAttention,
+  torch.compile and Qwen in NF4, none of which ComfyUI has. Cross-check with LTX-2.5, same start image and action
+  (1280 × 704, standard path, seed 42): 114 s; it put a fish into the bucket without reeling in the line, the face
+  stayed, and the sound was almost silent up to 3.5 s (−62 dB).
+- **Findings:** **Pro** met the expectations: a blacksmith with tongs, a big shower of sparks at the first blow and
+  speech into the camera; the fishing scene reeled in the line and put the catch into the bucket, the face in
+  three-quarter view the same man throughout. **Lite** produced artifacts and the rod fell apart; its blacksmith held
+  the glowing iron in his bare hand, and the angler put the rod down without a fish.
+  - "cinematic" in the prompt put black letterbox bars into Pro's picture (39 rows at the top and bottom); the
+    negative prompt does nothing in the distilled versions, so leave the word out.
+  - Sound was quiet: blacksmith peaks −8 to −9 dBFS, fishing −16 (Pro) and −28 dBFS (Lite). Name loud sources.
+  - **Super-resolution** in the ComfyUI node ran out of memory twice while decoding (also with `--lowvram`): the node
+    decodes a fixed 16 frames per piece (6.4 GB) and ComfyUI unloads nothing for it ("0 models unloaded"). Patched
+    into the test copy: `KVAE_DECODE_SEG=4` as in Kandinsky Lab's own pipeline for the 5060 Ti, and an unload before
+    decoding. After that it no longer ran out, but KVAE (3.4 GB) and the latent upscaler (4.3 GB) are convolutions and
+    stay loaded; the card sat at 15.8–16.0 GB and decoding ran at 37–45 W instead of 127–146 W. 2.25× to 1944 × 1080
+    splits 5 s into 9 tiles (3 × 3, 512 × 768 each), measured about 10 min per tile, roughly 1.5 h for 5 s, and the
+    finished tiles pile up in RAM (16 instead of 34 GB free). Kandinsky Lab quotes about 7 min with their own pipeline.
+- **License:** the models are MIT; the video VAE comes from HunyuanVideo (Tencent, not valid in the EU, the UK and
+  South Korea, as with Kandinsky 5); the audio VAE from MMAudio is CC BY-NC 4.0 and the bundled NVIDIA code
+  (`edm2_utils.py`) CC BY-NC-SA 4.0, so the sound cannot be used commercially.
 
 ### Other video models
 
@@ -809,7 +1017,8 @@ prompt: "a burning torch mounted on a dark stone wall, flame flickering,
   for Unity if needed.
 
 Without LTX-2.5: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for quality (13 GB
-VRAM — don't keep anything else loaded).
+VRAM — don't keep anything else loaded). Kandinsky 6 was tested and not built in, see
+[Kandinsky 6](#kandinsky-6-tested-27-october-2026-not-built-in).
 
 ### Image to video
 
@@ -847,7 +1056,7 @@ with text-to-video, and tell the user beforehand.
 A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four
 lanes, `video` (video clips or still images), `voice`, `music` and `sfx`, plus markers that say what goes
 where. The **edit** holds the real clips on the tracks V1, V2 (above V1) … and A1, A2 …, with in and out
-points, speed, gain and transitions; tracks can be added, hidden and muted. The web UI (tab "Studio") uses the
+points, speed, gain and transitions; tracks can be added, hidden and muted. The web UI (tab "Studio", the first tab and open when the app starts) uses the
 same commands as the MCP tools, so the user sees every change live and can undo it. User guide with
 screenshots: [STUDIO.md](STUDIO.md).
 
@@ -887,6 +1096,16 @@ Editing tools (since 0.5.14, modeled on FilmCraft):
 - **Transitions:** `transition={kind, duration_s}` with `dissolve`, `dip_black`, `dip_white` or `wipe`,
   computed classically in preview and export. A `transition` marker acts at once on the video clip that
   starts at it (± 0.5 s) and moves the transition along when the marker moves.
+- **Scale and zoom (since 0.5.16):** on video tracks `clip.update` takes `scale` (1.0 = 100 %, 0.1 to 8, used
+  when there are no keyframes), `anchor` [x, y] (focus point 0 to 1 that stays in place, like CSS
+  transform-origin; default center) and `scale_keys` [{at_s, value}] (all keyframes at once, in media time).
+  `clip.key` sets one keyframe: `id`, `at_s` (timeline position inside the clip) and `value`; `delete=true`
+  removes it, `clear=true` all of them. Linear between keyframes, the first and last value hold before and
+  after; below 1.0 the clip lies over the track below (picture in picture). Keyframes live in media time like
+  in/out, so a cut keeps them on both parts and a different speed keeps the zoom on the same moment. Measured
+  on a test pattern: the focus point stayed within 0.5 px in the export, the distance of two marks grew exactly
+  with the scale (100, 150, 200 %), picture in picture at 50 % sat in the corner of its focus point. In the web
+  UI: tool Z, drag in the monitor (a keyframe at the playhead), click for the focus point.
 - **Tracks:** `track.add` (`video`: new top track, `audio`: new bottom track), `track.delete` (not V1/A1;
   the clips go with it, the tracks above move down a number), `track.update` with `hidden` (picture off) and
   `muted` (sound off, on video tracks the sound of their clips); both apply to the export.

@@ -29,6 +29,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'controlnet', label: 'ControlNet' },
   { id: 'lora', label: 'LoRA' },
   { id: 'upscale', label: t('Hochskalieren', 'Upscale') },
+  { id: 'interpolate', label: t('Zwischenbilder', 'Frame interpolation') },
 ]
 
 // Namen der Zusatzfunktionen hinter optionalen Dateien (catalog: "optional")

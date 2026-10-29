@@ -6,7 +6,7 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
 /** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. Ebenso 'upscale'
  * (SeedVR2): es schärft beim Restaurieren. */
-export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale'
+export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale' | 'interpolate'
 
 /** Eine LoRA beim Generieren: Katalog-ID (kind 'lora') und Stärke. */
 export interface LoraRef {
@@ -406,6 +406,80 @@ export interface RestoreParams {
   project_id?: string | null
 }
 
+/** VHS-Bereich (seit 0.5.16): Ergebnis von POST /api/vhs/analyze (server/nvai/vhs_tools.py analyze) */
+export interface VhsInfo {
+  width: number
+  height: number
+  fps: [number, number]
+  seconds: number | null
+  codec: string
+  standard: 'PAL' | 'NTSC' | 'other'
+  interlaced: boolean
+  parity: 'tff' | 'bff'
+  aspect: '4:3' | '16:9'
+  square_size: [number, number]
+  crop: { left: number; top: number; right: number; bottom: number }
+  out_fps: [number, number]
+  audio: { codec: string; rate: number; channels: number } | null
+  sar?: [number, number] | null
+  /** 16:9-Datei ohne seitliche Säulen: vom Wandler vermutlich von 4:3 in die Breite gezogen */
+  stretched?: boolean
+  suggest_aspect?: 'source' | '4:3'
+  /** Bildtakt einer 30-fps-Aufnahme: 50to30 = aus 50 Halbbildern/s ausgewählt (Schritte 40/40/20 ms) */
+  cadence?: { kind: 'unknown' | 'native' | 'even' | 'mixed' | '50to30' | '25to30'; windows: number }
+  /** Sprung an 8-px-Rastergrenzen gegen dazwischen; über 1,1 = sichtbare Blockkanten */
+  blockiness?: number
+  blocky?: boolean
+}
+
+export type VhsAspect = 'auto' | 'source' | '4:3' | '16:9'
+export type VhsDeinterlace = 'auto' | 'double' | 'single' | 'off'
+export type VhsDenoise = 'off' | 'light' | 'medium' | 'strong'
+export type VhsAiSize = '720' | '1080' | 'original'
+export type VhsSharpen = 'off' | 'light' | 'medium' | 'strong'
+export type VhsChroma = 'off' | 'clean' | 'strong'
+
+export interface VhsSettings {
+  deinterlace: VhsDeinterlace
+  parity: 'auto' | 'tff' | 'bff'
+  crop: [number, number, number, number]
+  aspect: VhsAspect
+  denoise: VhsDenoise
+  /** Farbflecken: clean = neue Farbstufe (auch true), strong = Filter vom 28.10. nachmittags, off */
+  chroma_denoise: boolean | VhsChroma
+  /** Blockkanten der Kompression glätten (Vorschlag der Analyse) */
+  deblock: boolean
+  sharpen: VhsSharpen
+  /** Takt glätten: 30 fps aus einem 50-Hz-Band mit RIFE-Zwischenbildern auf 50 fps (cadence 50to30) */
+  smooth: boolean
+  chroma_shift: number
+  levels: boolean
+  deflicker: boolean
+  stabilize: boolean
+  ai: boolean
+  ai_size: VhsAiSize
+  audio_denoise: boolean
+  loudnorm: boolean
+  codec: 'h264' | 'hevc'
+}
+
+export interface VhsAnalysis {
+  asset_id: string
+  info: VhsInfo
+  defaults: VhsSettings
+  thumb_url: string
+  estimate: { frames: number; classic_s: number; ai_s: number; total_s: number }
+}
+
+export interface VhsParams extends VhsSettings {
+  asset_id: string
+  preview: boolean
+  start: number
+  duration?: number | null
+  upscale_model_id?: string | null
+  project_id?: string | null
+}
+
 export interface Mesh3DParams {
   image_asset_id: string
   model_id?: string | null
@@ -603,6 +677,9 @@ export const api = {
   /** Foto restaurieren (seit 0.5.11): Schäden entfernen, einfärben, schärfen. */
   restoreImage: (p: RestoreParams) =>
     req<Job>('/api/image/restore', { method: 'POST', body: JSON.stringify(p) }),
+  vhsAnalyze: (asset_id: string) =>
+    req<VhsAnalysis>('/api/vhs/analyze', { method: 'POST', body: JSON.stringify({ asset_id }) }),
+  vhsProcess: (p: VhsParams) => req<Job>('/api/vhs/process', { method: 'POST', body: JSON.stringify(p) }),
 
   /** Bild-Upload als Quelle für Bild→3D. Kein JSON — FormData. `folder`: ein Projektordner (Material im Studio). */
   upload: async (file: File, folder?: string) => {
@@ -743,6 +820,7 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   controlnet: 'ControlNet',
   lora: 'LoRA',
   upscale: t('Hochskalieren', 'Upscale'),
+  interpolate: t('Zwischenbilder', 'Frame interpolation'),
 }
 
 /** Anzeigenamen der LoRA-Basen (server: loras.BASES). */
@@ -819,6 +897,12 @@ export interface StudioClip {
   muted: boolean
   /** Übergang am Anfang; marker: kommt von einem Übergang-Marker (wandert mit ihm) */
   transition: { kind: StudioTransitionKind; duration: number; marker?: string } | null
+  /** Skalieren (seit 0.5.16): 1 = 100 %, gilt ohne Keyframes */
+  scale?: number
+  /** Fokuspunkt [x, y] von 0 bis 1: bleibt beim Skalieren an seiner Stelle (Vorgabe Mitte) */
+  anchor?: [number, number]
+  /** Keyframes der Skalierung, `at` in Ticks Medienzeit wie in/out; dazwischen linear */
+  scale_keys?: { at: number; value: number }[]
 }
 
 export type StudioTransitionKind = 'dissolve' | 'dip_black' | 'dip_white' | 'wipe'

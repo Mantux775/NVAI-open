@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt", "restore", "studio_export"]
+                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
 # (SeedVR2): es schaerft beim Restaurieren, erzeugt aber selbst nichts.
-ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora", "upscale"]
+ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora", "upscale", "interpolate"]
 
 
 class LoraRef(BaseModel):
@@ -255,6 +255,59 @@ class RestoreImageRequest(BaseModel):
     project_id: str | None = Field(
         None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
                           "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
+
+
+class VhsAnalyzeRequest(BaseModel):
+    asset_id: str = Field(..., description="Das digitalisierte Video (POST /api/upload oder ein Video-Asset)")
+
+
+class VhsRequest(BaseModel):
+    """VHS-Video aufwerten (seit 0.5.16, vhs.py): klassisch (entflechten, beschneiden, entrauschen, Farbe,
+    stabilisieren, Ton) und auf Wunsch mit KI (SeedVR2) in Abschnitten. Vorgaben aus POST /api/vhs/analyze."""
+    asset_id: str = Field(..., description="Das digitalisierte Video")
+    preview: bool = Field(False, description="Nur ein Abschnitt (duration, Vorgabe 10 s) ab start, dazu derselbe "
+                                             "Abschnitt nur entflochten zum Vergleich (meta.vhs_before)")
+    start: float = Field(0.0, ge=0.0, description="Beginn in Sekunden")
+    duration: float | None = Field(None, gt=0.0, description="Laenge in Sekunden; None = bis zum Ende")
+    deinterlace: Literal["auto", "double", "single", "off"] = Field(
+        "auto", description="double = jedes Halbbild ein Bild (50 bzw. 60 Bilder/s, fluessig wie das Original), "
+                            "single = 25 bzw. 30 Bilder/s, halbe Rechenzeit fuer die KI; auto nach der Analyse")
+    parity: Literal["auto", "tff", "bff"] = Field("auto", description="Halbbild-Reihenfolge; auto nach der Analyse")
+    crop: list[int] | None = Field(None, min_length=4, max_length=4,
+                                   description="[links, oben, rechts, unten] in Pixeln der Quelle; None = Vorschlag "
+                                               "der Analyse (Kopfumschalt-Stoerung unten, schwarze Raender)")
+    aspect: Literal["auto", "source", "4:3", "16:9"] = Field(
+        "auto", description="Seitenverhaeltnis des Ergebnisses: source = wie die Datei (bzw. der Ausschnitt), 4:3 = eine "
+                            "vom Wandler auf 16:9 gezogene Aufnahme entzerren, 16:9 = anamorph; auto nach der Analyse")
+    denoise: Literal["off", "light", "medium", "strong"] = Field(
+        "light", description="light: zeitlich, staerker in der Farbe (schnell); medium: dazu FFT (rund 50 Bilder/s); "
+                             "strong: Non-local Means (rund 20 Bilder/s)")
+    chroma_denoise: bool | Literal["off", "clean", "strong"] = Field(False, description="Farbflecken mindern: clean (auch true) = die Farbe zeitlich nur dort glaetten, wo die "
+                                                    "Helligkeit ruht (kein Nachziehen), und per Guided Filter an die "
+                                                    "Helligkeitskanten legen, rund 35 Bilder/s in 960 x 720; strong = der Filter vom "
+                                                    "28.10. nachmittags (15 Bilder + chromanr), glaetter, zieht in Bewegung nach")
+    deblock: bool = Field(False, description="Blockkanten der Kompression glaetten (deblock, im Raster der Aufnahme); "
+                                             "Vorschlag der Analyse, wenn blocky")
+    sharpen: Literal["off", "light", "medium", "strong"] = Field(
+        "off", description="Nachschaerfen ohne KI (unsharp, stark mit CAS), nur Helligkeit, nach dem Entrauschen; "
+                           "erfindet nichts dazu, anders als die KI")
+    chroma_shift: int = Field(0, ge=-8, le=8, description="Farbversatz in Pixeln waagerecht ausgleichen")
+    levels: bool = Field(False, description="Helligkeit und Kontrast automatisch strecken")
+    deflicker: bool = Field(False, description="Helligkeitsflackern mindern")
+    stabilize: bool = Field(False, description="Verwackeln mindern (deshake, rund 90 Bilder/s)")
+    smooth: bool = Field(False, description="Takt glaetten: Aufnahmen, die ein 50-Hz-Band mit 30 Bildern/s aufnehmen "
+                                            "(Analyse cadence.kind = 50to30), mit RIFE-Zwischenbildern auf 50 Bilder/s; "
+                                            "braucht rife-4.26 (Art 'interpolate') und laeuft in der GPU-Warteschlange")
+    ai: bool = Field(False, description="Mit SeedVR2 aufbessern (Modellart 'upscale'); rund 1,2 s je Bild in 720p, "
+                                        "2 s in 1080p auf einer RTX 5060 Ti")
+    ai_size: Literal["720", "1080", "original"] = Field("720", description="Zielhoehe der KI im Seitenverhaeltnis")
+    upscale_model_id: str | None = Field(None, description="SeedVR2-Fassung; None = 7B, wenn installiert")
+    frames_per_chunk: int = Field(1, ge=1, le=97, description="Bilder je SeedVR2-Stueck (4n+1); 1 = Einzelbild")
+    audio_denoise: bool = Field(True, description="Bandrauschen im Ton mindern (afftdn)")
+    loudnorm: bool = Field(True, description="Ton auf -16 LUFS bringen, Grenze -1 dBFS")
+    codec: Literal["h264", "hevc"] = Field("h264", description="Kodierung des Ergebnisses (NVENC, sonst Software)")
+    seed: int | None = None
+    project_id: str | None = Field(None, description="Studio-Projekt: Ergebnis gleich in seinen Ordner")
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",

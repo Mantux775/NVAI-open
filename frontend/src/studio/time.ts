@@ -15,6 +15,27 @@ export const clipEnd = (c: StudioClip) => c.start + clipLength(c)
 /** Medienzeit (Ticks), die `offset` Ticks nach dem Clipanfang läuft. */
 export const mediaAt = (c: StudioClip, offset: number) => c.in + Math.round(offset * clipSpeed(c))
 
+/** Grenzen des Skalierens wie studio.SCALE_MIN/SCALE_MAX (10 bis 800 %). */
+export const SCALE_MIN = 0.1
+export const SCALE_MAX = 8
+
+/** Skalierung zur Medienzeit `media` (Ticks): linear zwischen den Keyframes, davor und danach der erste bzw. letzte
+ * Wert, ohne Keyframes `scale` (wie studio.clip_scale_at und studio_render.scale_of). */
+export function clipScaleAt(c: StudioClip, media: number): number {
+  const keys = c.scale_keys ?? []
+  if (!keys.length) return c.scale ?? 1
+  if (media <= keys[0].at) return keys[0].value
+  for (let i = 1; i < keys.length; i++) {
+    const a = keys[i - 1]
+    const b = keys[i]
+    if (media <= b.at) return a.value + ((b.value - a.value) * (media - a.at)) / Math.max(1, b.at - a.at)
+  }
+  return keys[keys.length - 1].value
+}
+
+/** Position eines Keyframes auf der Zeitleiste (Ticks), aus seiner Medienzeit. */
+export const keyTime = (c: StudioClip, media: number) => c.start + Math.round((media - c.in) / clipSpeed(c))
+
 /** Ein Bild in Ticks bei der Bildrate des Projekts. */
 export const frameTicks = (p: StudioProject) => Math.round((TPS * p.settings.fps[1]) / p.settings.fps[0])
 

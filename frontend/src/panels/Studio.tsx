@@ -480,6 +480,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
               track: target, asset_id: c.asset_id, start: at + (c.start - cb.anchor), in: c.in, out: c.out, speed: clipSpeed(c),
               gain_db: c.gain_db, muted: c.muted, scene_id: alive.has(c.id) ? null : c.scene_id,
               transition: c.transition ? { kind: c.transition.kind, duration: c.transition.duration } : null,
+              // Skalieren nur auf Videospuren (der Server lehnt es auf Tonspuren ab)
+              ...(kind === 'video' && (c.scale !== undefined || c.anchor || c.scale_keys?.length)
+                ? { scale: c.scale ?? 1, anchor: c.anchor ?? [0.5, 0.5], scale_keys: c.scale_keys ?? [] } : {}),
             },
           }
         }),
@@ -795,6 +798,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
         setTool('select')
       } else if (key === 'c') {
         setTool('razor')
+      } else if (key === 'z') {
+        setTool('scale')
       } else if (key === 's') {
         setMagnet(!magnet)
       } else if (key === 'm') {
@@ -983,6 +988,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
               onStop={() => setPlaying(false)}
               source={selection?.type === 'asset' ? source : null}
               onCloseSource={() => setSelection(null)}
+              tool={tool}
+              selectedClip={selection?.type === 'clip' ? selection.id : null}
+              onCommand={run}
             />
             <div className="st-side">
               <Inspector
@@ -996,6 +1004,10 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
                 playhead={playhead}
                 onDeleteAsset={deleteAsset}
                 onSpeed={requestSpeed}
+                onPlayhead={(x) => {
+                  setPlaying(false)
+                  setPlayhead(x)
+                }}
               />
             </div>
           </div>

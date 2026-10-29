@@ -51,6 +51,18 @@ such ("according to BFL").
 
 Without a `model_id`, NVAI-open uses the active image model.
 
+### Tested, not included (October 2026)
+
+- **Kandinsky 6** (Kandinsky Lab, MIT; picture and sound in one pass, 5 s at 864 × 480, full HD only with an
+  extra super-resolution model): Pro distilled met the expectations but took 928–966 s per 5 s clip on a
+  16 GB card (LTX-2.5 with the same start image: 114 s at 1280 × 704), Lite fell apart, and super-resolution
+  would have taken about 1.5 h for 5 s. Its audio parts are non-commercial, and its video VAE (Tencent) is not
+  licensed in the EU. Details: [CLAUDE_CODE.md](CLAUDE_CODE.md#kandinsky-6-tested-27-october-2026-not-built-in)
+- **LTX-2.5 IC-LoRAs Restore and Ingredients** (Lightricks): Restore did not bring back a face that had
+  changed and added artifacts; Ingredients (a reference sheet instead of a start image) did not keep a real
+  person recognizable in any test. For a recognizable person the start image carries the face, held with an
+  end image or "Loop" ([PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md#tips-from-our-tests)).
+
 ### New in 0.5.13
 
 **Studio:** a full-screen editor for whole videos. Scenes with a prompt on lanes for picture, voice, music and sound,

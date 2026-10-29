@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 
-export type RecommendationMode = 'image' | 'audio' | 'video' | '3d' | 'restore'
+export type RecommendationMode = 'image' | 'audio' | 'video' | '3d' | 'restore' | 'vhs'
 
 // Empfohlene Einstellungen je Reiter (seit 0.5.11, Nutzerwunsch): nur Gemessenes, Zahlen von einer RTX 5060 Ti.
 // Quelle und Belege: CLAUDE.md bzw. docs/CLAUDE_CODE.md ("Recommended settings at a glance") -- beide
@@ -43,6 +43,16 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'Konstruktion ausdrücklich („rope handles pass through drilled holes“). Keine (wort:1.3)-Klammern.',
         'Style first, then the subject with material and condition, then light and background. Text in quotation '
           + 'marks, construction spelled out (“rope handles pass through drilled holes”). No (word:1.3) brackets.',
+      ),
+    },
+    {
+      head: t('FLUX 3: genaue Bauweise ohne Ausbauer', 'FLUX 3: exact construction without the upsampler'),
+      text: t(
+        'Müssen Bauweise, Anzahl oder Blickrichtung genau stimmen, „Prompt ausbauen lassen“ abschalten und den Prompt in '
+          + 'ganzen Sätzen schreiben: Mit Ausbauer bekam eine Angelrute in 4 von 6 Bildern eine zweite Schnur, ohne ihn '
+          + 'in 0 von 2.',
+        'If construction, counts or gaze must be exact, switch off “Expand the prompt” and write the prompt in whole '
+          + 'sentences: with the upsampler a fishing rod got a second line in 4 of 6 images, without it in 0 of 2.',
       ),
     },
     {
@@ -178,6 +188,28 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'dasselbe.',
         '“Static camera” in the prompt still pushed in (3 of 3). With an end image that FLUX 3 edits from the start '
           + 'image (same face, same framing), the camera stayed put and the face was the same again at the end.',
+      ),
+    },
+    {
+      head: t('Erkennbare Person: Startbild auch als Endbild', 'Recognizable person: start image as end image too'),
+      text: t(
+        'Nahaufnahme aus einem Porträt mit Blick ins Objektiv: Mit „Schleife“ blieb das Gesicht 5 s lang erkennbar '
+          + '(Ähnlichkeit 0,80–1,0), nur mit Startbild fuhr die Kamera nach 1 s heran, und das Gesicht änderte sich '
+          + '(0,3–0,4). Ein echtes Foto mit „Vorhandenes Bild erweitern“ aufs Videoformat bringen: Es bleibt pixelgleich.',
+        'A close-up from a portrait looking into the lens: with “Loop” the face stayed recognizable for 5 s '
+          + '(similarity 0.80–1.0); with the start image alone the camera pushed in after 1 s and the face changed '
+          + '(0.3–0.4). Bring a real photo to the video format with “Extend an existing image”: it stays pixel for pixel.',
+      ),
+    },
+    {
+      head: t('Handlung über das Endbild festlegen', 'Pin down the action with the end image'),
+      text: t(
+        'Endbild = Startbild, in dem per Maske nur das Ergebnis ergänzt ist (Fisch im Eimer): Gesicht und Rest bleiben '
+          + 'pixelgleich, LTX spielt die Handlung dazwischen nach dem Prompt (2 von 2: ein Fisch mit einer Schwanzflosse). '
+          + 'Sagen, was die Hände nicht tun („does not touch the bucket“), und Requisiten einfach halten (Rute ohne Rolle).',
+        'End image = the start image with only the result filled in by a mask (a fish in the bucket): the face and the '
+          + 'rest stay pixel for pixel, LTX plays the action in between from the prompt (2 of 2: one fish with one tail). '
+          + 'Say what the hands do not do (“does not touch the bucket”) and keep props simple (a rod without a reel).',
       ),
     },
     {
@@ -339,6 +371,76 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       text: t(
         'Kleine Zeichen, die FLUX weglässt (Bindestrich, Komma), fehlen danach in beiden Arten.',
         'Small marks that FLUX leaves out (a hyphen, a comma) are missing afterwards in both modes.',
+      ),
+    },
+  ],
+  vhs: [
+    {
+      head: t('Erst die Vorschau', 'Preview first'),
+      text: t(
+        '10 s an einer typischen Stelle aufwerten und vorher/nachher vergleichen, dann das ganze Video. Die Schätzung '
+          + 'neben dem Knopf rechnet mit den Messwerten unten.',
+        'Enhance 10 s at a typical spot and compare before/after, then the whole video. The estimate next to the '
+          + 'button uses the measurements below.',
+      ),
+    },
+    {
+      head: t('Klassisch ist schnell, die KI ist langsam', 'Classic is fast, the AI is slow'),
+      text: t(
+        'Gemessen auf einer RTX 5060 Ti: Entflechten und leichtes Entrauschen rund 700 Bilder/s, mittleres '
+          + 'Entrauschen rund 46, Stabilisieren rund 90. SeedVR2 7B rund 1,1 s je Bild in 720p und 1,9 s in 1080p: '
+          + 'Eine Stunde Band mit 25 Bildern/s braucht in 720p rund 26 h. Die KI deshalb für die besten Stellen nehmen '
+          + 'oder über Nacht laufen lassen; ein abgebrochener Lauf setzt mit denselben Einstellungen fort.',
+        'Measured on an RTX 5060 Ti: deinterlacing and light denoising about 700 frames/s, medium denoising about 46, '
+          + 'stabilizing about 90. SeedVR2 7B about 1.1 s per frame at 720p and 1.9 s at 1080p: an hour of tape at 25 '
+          + 'frames/s takes about 26 h at 720p. Use the AI for the best parts or let it run overnight; a stopped run '
+          + 'continues with the same settings.',
+      ),
+    },
+    {
+      head: t('Vor der KI entrauschen', 'Denoise before the AI'),
+      text: t(
+        'SeedVR2 holte im Test Krone, Gesicht und Stoff heraus, ließ aber buntes Farbrauschen stehen. „Leicht“ oder '
+          + '„mittel“ entrauschen vorher; 720p reicht für VHS (rund 250 Zeilen echte Auflösung), 1080p kostet das '
+          + 'Doppelte.',
+        'In the test SeedVR2 brought out crown, face and fabric but left colored noise in place. Denoise “light” or '
+          + '“medium” first; 720p is enough for VHS (about 250 lines of real resolution), 1080p costs twice the time.',
+      ),
+    },
+    {
+      head: t('Weiche Aufnahme: erst nachschärfen', 'Soft recording: sharpen first'),
+      text: t(
+        'Die KI malte am echten Band in eine unscharfe weite Einstellung kantige Splitter; besser gefiel klassisch mit Farbfilter und '
+          + '50 Bilder/s. „Nachschärfen“ verstärkt nur vorhandene Kanten: Gesichtsschärfe 49 → 92 (leicht), 129 (mittel), '
+          + '188 (stark), stark wird etwas körnig.',
+        'On a real tape the AI painted angular shards into a blurry wide shot; classic with color filter and '
+          + '50 fps looked better. “Sharpen” only strengthens existing edges: face sharpness 49 → 92 (light), 129 (medium), '
+          + '188 (strong), strong gets a little grainy.',
+      ),
+    },
+    {
+      head: t('Farbflecken mindern', 'Reduce color blotches'),
+      text: t(
+        'Glättet nur die Farbe: über die Zeit nur dort, wo das Bild ruht, und an die Kanten der Helligkeit gelegt. Am echten '
+          + 'Band Farbunruhe 1,27 → 0,18 ohne Nachziehen. Der frühere Filter mittelte auch bei Bewegung, die Farbe zog nach: '
+          + 'das waren Schlieren. Dazu „Blockkanten glätten“ bei Aufnahmen mit sichtbaren Kompressionsblöcken.',
+        'Smooths only the color: over time only where the picture is still, and aligned to the brightness edges. On a real '
+          + 'tape color unrest 1.27 → 0.18 without trailing. The earlier filter also averaged during motion, the color trailed: '
+          + 'those were smears. Add “Smooth block edges” for recordings with visible compression blocks.',
+      ),
+    },
+    {
+      head: t('Aufnahmen vom Wandler (720p, 30 Bilder/s)', 'Captures from a converter (720p, 30 fps)'),
+      text: t(
+        'Gemessen an zwei echten Bändern: Der Wandler hatte das 4:3-Bild auf 16:9 gezogen (runde Gegenstände 1,3- bis '
+          + '1,5-mal breiter als hoch), dann „4:3 entzerren“ (960 × 720). Er nahm das 50-Hz-Band mit 30 Bildern/s auf, '
+          + 'Schwenks ruckeln deshalb leicht. „Takt glätten“ rechnet mit RIFE die fehlenden Zwischenbilder (50 Bilder/s, gemessen: Schwenkschritte 1,29 / 1,40 / 0,48 → 0,48–0,62 px). Beim nächsten Band besser gleich am Wandler 4:3 und in der Aufnahme 50 oder 25 Bilder/s '
+          + 'einstellen. Volle Helligkeitsskala wird jetzt richtig umgerechnet.',
+        'Measured on two real tapes: the converter had stretched the 4:3 picture to 16:9 (round objects 1.3 to 1.5 times '
+          + 'wider than high), so use “correct to 4:3” (960 × 720). It recorded the 50 Hz tape at 30 fps, so pans judder '
+          + 'slightly. “Smooth cadence” computes the missing in-between frames with RIFE (50 fps, measured: pan steps 1.29 / 1.40 / 0.48 → '
+          + '0.48–0.62 px). For the next tape better set the converter to 4:3 and record at 50 or 25 fps. Full-range brightness is '
+          + 'converted correctly now.',
       ),
     },
   ],

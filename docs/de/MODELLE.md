@@ -52,6 +52,19 @@ Herstellerangabe gekennzeichnet.
 
 Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 
+### Getestet, nicht aufgenommen (Oktober 2026)
+
+- **Kandinsky 6** (Kandinsky Lab, MIT; Bild und Ton in einem Durchgang, 5 s in 864 × 480, Full HD nur mit einem
+  zusätzlichen Super-Resolution-Modell): Pro destilliert traf die Erwartungen, brauchte auf einer 16-GB-Karte
+  aber 928–966 s je 5-s-Clip (LTX-2.5 mit demselben Startbild: 114 s in 1280 × 704), Lite zerfiel, und die
+  Super-Resolution hätte für 5 s rund 1,5 h gebraucht. Die Tonteile sind nicht kommerziell nutzbar, der
+  Video-VAE (Tencent) gilt nicht in der EU. Einzelheiten:
+  [CLAUDE_CODE.md](../CLAUDE_CODE.md#kandinsky-6-tested-27-october-2026-not-built-in) (englisch)
+- **IC-LoRAs Restore und Ingredients für LTX-2.5** (Lightricks): Restore holte ein verändertes Gesicht nicht
+  zurück und brachte neue Artefakte; Ingredients (ein Referenzblatt statt eines Startbilds) hielt eine echte
+  Person in keinem Test erkennbar. Für eine erkennbare Person trägt das Startbild das Gesicht, gehalten mit einem
+  Endbild oder der „Schleife“ ([FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md#tipps-aus-unseren-tests)).
+
 ### Neu in 0.5.13
 
 **Studio:** ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Szenen mit Prompt auf Bahnen für Bild,

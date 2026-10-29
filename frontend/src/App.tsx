@@ -8,14 +8,19 @@ import { GeneratePanel } from './panels/Generate'
 import { HistoryPanel } from './panels/History'
 import { ModelsPanel } from './panels/Models'
 import { StudioPanel } from './panels/Studio'
+import { VhsPanel } from './panels/Vhs'
 
-type Tab = 'generate' | 'studio' | 'history' | 'models'
+type Tab = 'generate' | 'studio' | 'vhs' | 'history' | 'models'
 
+// Studio vorn und beim Start offen (Nutzer 27.10.2026: „die App soll zukünftig mit Studio in der ersten Position und
+// gleich offen starten, danach folgen Generate, History und Models“); VHS seit 28.10. als eigener Reiter (Nutzer:
+// „Eigener Reiter VHS“), ganz hinten hinter den Modellen (Nutzer 28.10. abends: „schiebe VHS Abschnitt ganz nach hinten“)
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'studio', label: t('Studio', 'Studio') },
   { id: 'generate', label: t('Generieren', 'Generate') },
   { id: 'history', label: t('Verlauf', 'History') },
   { id: 'models', label: t('Modelle', 'Models') },
-  { id: 'studio', label: t('Studio', 'Studio') },
+  { id: 'vhs', label: t('VHS', 'VHS') },
 ]
 
 // Sprachnamen stehen in ihrer eigenen Sprache, damit man sie in jeder Einstellung findet.
@@ -25,7 +30,7 @@ const LANGS: { id: Lang; label: string; name: string }[] = [
 ]
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('generate')
+  const [tab, setTab] = useState<Tab>('studio')
   const [health, setHealth] = useState<Health | null>(null)
   const [events, setEvents] = useState<ServerEvent | null>(null)
   // Eigener Platz: Studio speichert oft, das darf ein job.done im gemeinsamen Platz nicht verdrängen
@@ -285,6 +290,7 @@ export function App() {
         {tab === 'generate' && (
           <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
         )}
+        {tab === 'vhs' && <VhsPanel event={events} downloads={downloads} onShowModels={() => setTab('models')} />}
         {tab === 'history' && <HistoryPanel event={events} />}
         {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} />}
         {tab === 'studio' && <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} />}

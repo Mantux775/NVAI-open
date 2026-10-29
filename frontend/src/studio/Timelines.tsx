@@ -12,14 +12,14 @@
 import { useEffect, useRef, useState, type DragEvent, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { TPS, type StudioClip, type StudioLane, type StudioMarker, type StudioProject, type StudioScene, type StudioTrack } from '../api'
 import { t } from '../i18n'
-import { clipEnd, clipLength, clipSpeed, decimal, frameTicks, sec, shortTime, snapFrame, tracksOf } from './time'
+import { clipEnd, clipLength, clipSpeed, decimal, frameTicks, keyTime, sec, shortTime, snapFrame, tracksOf } from './time'
 
 export type SelType = 'scene' | 'clip' | 'marker' | 'asset' | 'transition'
 /** Auswahl; `ids` bei mehreren Objekten derselben Art (enthält `id`). Ein Übergang hat die ID seines Clips. */
 export type Selection = { type: SelType; id: string; ids?: string[] } | null
 export const selIds = (s: Selection, type: SelType): string[] => (s && s.type === type ? s.ids ?? [s.id] : [])
 export const ASSET_MIME = 'application/x-nvai-asset'
-export type Tool = 'select' | 'razor'
+export type Tool = 'select' | 'razor' | 'scale'
 
 /** Was ein Rechtsklick getroffen hat; `at` ist die Zeit an der Maus (auf ganze Bilder). */
 export type MenuTarget =
@@ -97,6 +97,14 @@ const ICON = {
     <>
       <path d="M4 2.5v5.6a4 4 0 0 0 8 0V2.5" strokeWidth="2.6" />
       <path d="M2.6 5.2h2.8M10.6 5.2h2.8" strokeWidth="1.2" />
+    </>
+  ),
+  // Skalieren: kleiner Rahmen in einem großen, Pfeil nach außen
+  scale: (
+    <>
+      <rect x="1.8" y="1.8" width="12.4" height="12.4" rx="1.2" />
+      <rect x="1.8" y="8.6" width="5.6" height="5.6" fill="currentColor" stroke="none" />
+      <path d="M8.4 7.6 12.6 3.4M9.4 3.2h3.4v3.4" />
     </>
   ),
   eye: (
@@ -515,6 +523,13 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
             onCommand('clip.razor', e.shiftKey ? { at } : { at, track: c.track })
             return
           }
+          if (tool === 'scale') {
+            // Skalieren: Clip wählen und den Abspielkopf an die Stelle setzen, dann im Monitor ziehen
+            e.stopPropagation()
+            onSelect({ type: 'clip', id: c.id })
+            onPlayhead(snapFrame(p, timeAt(e.clientX)))
+            return
+          }
           const group = pick(e, 'clip', c.id)
           if (group) begin(e, 'clip-move', c.id, group)
           else e.stopPropagation()
@@ -523,6 +538,18 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
       >
         {track.kind === 'video' && thumb(c.asset_id)}
         <span className="st-label">{label}</span>
+        {track.kind === 'video' && (c.scale_keys ?? []).filter((k) => k.at >= c.in && k.at <= c.out).map((k) => {
+          const at = keyTime(c, k.at)
+          return (
+            <span key={k.at} className="st-key" style={{ left: sec(at - c.start) * zoom }}
+              title={`${t('Keyframe', 'Keyframe')} ${Math.round(k.value * 100)} % · ${t('Klick: hinspringen, Doppelklick: löschen', 'Click: jump there, double click: delete')}`}
+              onPointerDown={(e) => { e.stopPropagation(); onSelect({ type: 'clip', id: c.id }); onPlayhead(at) }}
+              onDoubleClick={(e) => { e.stopPropagation(); onCommand('clip.key', { id: c.id, at, delete: true }) }} />
+          )
+        })}
+        {track.kind === 'video' && !(c.scale_keys ?? []).length && (c.scale ?? 1) !== 1 && (
+          <span className="st-speed">{Math.round((c.scale ?? 1) * 100)} % ⤢</span>
+        )}
         {speed !== 1 && <span className="st-speed">{decimal(String(Math.round(speed * 1000) / 10))} %</span>}
         {c.gain_db !== 0 && <span className="st-gain">{c.gain_db > 0 ? '+' : ''}{c.gain_db} dB</span>}
         {tool === 'select' && <span className="st-edge st-edge-start" onPointerDown={(e) => { e.stopPropagation(); onSelect({ type: 'clip', id: c.id }); begin(e, 'clip-start', c.id) }} />}
@@ -621,6 +648,11 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
       <button className={`st-tool${tool === 'razor' ? ' active' : ''}`} onClick={() => onTool('razor')}
         title={t('Schneiden (C): Klick teilt den Clip, mit Umschalt alle Spuren. Am Abspielkopf: Strg+K', 'Razor (C): a click cuts the clip, with Shift all tracks. At the playhead: Ctrl+K')}>
         <Icon name="razor" /><kbd>C</kbd>
+      </button>
+      <button className={`st-tool${tool === 'scale' ? ' active' : ''}`} onClick={() => onTool('scale')}
+        title={t('Skalieren (Z): im Monitor ziehen setzt einen Keyframe am Abspielkopf, Klick setzt den Fokuspunkt. Rauten auf dem Clip: Klick springt hin, Doppelklick löscht',
+          'Scale (Z): dragging in the monitor sets a keyframe at the playhead, a click sets the focus point. Diamonds on the clip: a click jumps there, a double click deletes')}>
+        <Icon name="scale" /><kbd>Z</kbd>
       </button>
       <button className={`st-tool${magnet ? ' active' : ''}`} onClick={() => onMagnet(!magnet)}
         title={magnet

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,12 @@ server = MCPServer(
         "Local asset generation on the user's own GPU (NVIDIA; AMD Radeon experimental). "
         "All generate_* tools "
         "block until done and return absolute file paths that can be used directly in "
-        "Unity or Blender. Call health() first: it shows the backend, the active models "
-        "and the queue. On an AMD Radeon the -nvfp4 ids below are the wrong choice: use the "
+        "Unity or Blender. A call that runs too long (video: 65 min of render time, others 30 min; "
+        "queue time does not count) returns pending=true with a job_id instead: the job keeps "
+        "running, never submit it again, call job_status(job_id, wait_s=600) until it is done. For "
+        "long video renders (1080p dfr: 13-25 min) or several clips in a row, use "
+        "generate_video(wait=False) and job_status. Call health() first: it shows the backend, the "
+        "active models and the queue. On an AMD Radeon the -nvfp4 ids below are the wrong choice: use the "
         "versions list_models marks as recommended (FP8 or bf16 on a Radeon RX 9000, INT8 "
         "on other Radeons). FLUX 3 and LTX-2.5 need the license accepted on Hugging Face and "
         "a stored token; if download_model reports 'No access ... gated', send the user to "
@@ -50,7 +55,10 @@ server = MCPServer(
         "description (returned as 'caption') -- a short, complete description is enough, "
         "but name the STYLE FIRST (otherwise it becomes a photo) and specify everything "
         "that has to be right (clothing, fastenings) explicitly: whatever is left open, the "
-        "upsampler invents. The negative prompt has no effect. LICENSE: FLUX Kommunity "
+        "upsampler invents. When construction, counts or gaze must be exact, pass "
+        "upsample_prompt=False with a full prompt in whole sentences: the upsampler added a "
+        "second fishing line in 4 of 6 images, without it 0 of 2 (same seed). The negative "
+        "prompt has no effect. LICENSE: FLUX Kommunity "
         "License -- images may be used commercially only below US$5M annual revenue, and "
         "every image must be reviewed before publishing; point this out for final assets.\n"
         "3. krea2-turbo-nvfp4 (Krea 2 Turbo, 8 steps, ~20 s at 1 MP, 37 s at 2 MP): the most "
@@ -84,7 +92,8 @@ server = MCPServer(
         "identity lock and works on 32-px cells, so keep a person's face large (medium shot or "
         "closer; faces of 100-200 px and running extras melted), make the start image with "
         "flux3-klein-* from a frontal, sharp reference, hold framing and face with an end image "
-        "edited from the start image ('static camera' alone still pushed in, 3 of 3), never "
+        "edited from the start image ('static camera' alone still pushed in, 3 of 3; for an action "
+        "with objects fill only its result into the start image with a mask), never "
         "extend a clip whose face matters, and keep 1920x832 to 6 s on 16 GB (8 s with dfr: "
         "20-60 min). VOICES: the voice changes per clip; let people speak only with their face in "
         "the shot and the same voice description, and offer 2-3 variants per line to listen to. "
@@ -150,20 +159,53 @@ async def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(base_url=API, timeout=60.0)
 
 
-async def _wait_for_job(job_id: str, ctx: Context | None = None, timeout: float = 1800.0) -> dict[str, Any]:
+# Wie lange ein blockierender Aufruf wartet (seit 28.10.2026). Die Uhr fuer die Rechenzeit laeuft ab dem Start
+# des Auftrags (started_at), nicht ab dem Absenden: Vorher zaehlte die Schlange mit, und nach 30 min gab das Werkzeug
+# auf, obwohl der Server einem Videolauf 60 min laesst (jobs.py) und weiterrechnete. Wird es zu lang, kommt kein
+# Fehler mehr, sondern der laufende Auftrag mit job_id zurueck (_pending), und job_status holt spaeter das Ergebnis.
+RUN_LIMIT = 1800.0
+RUN_LIMIT_VIDEO = 3600.0 + 300.0  # Zeitgrenze des Servers fuer ComfyUI plus Laden, Speichern, Anhaengen
+QUEUE_LIMIT = 3600.0
+FINISHED = ("done", "error", "cancelled")
+
+
+async def _wait_for_job(job_id: str, ctx: Context | None = None, run_limit: float = RUN_LIMIT,
+                        queue_limit: float = QUEUE_LIMIT) -> dict[str, Any]:
+    """Wartet, bis der Auftrag fertig ist. Laeuft er laenger als run_limit oder wartet er laenger als queue_limit
+    in der Schlange, kommt der unfertige Auftrag zurueck (status queued/running); der Server rechnet weiter."""
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
+    begin = loop.time()
     last_progress = -1.0
     async with await _client() as c:
-        while loop.time() < deadline:
+        while True:
             job = (await c.get(f"/api/jobs/{job_id}")).json()
             if ctx and job["progress"] != last_progress:
                 last_progress = job["progress"]
                 await ctx.report_progress(job["progress"], 1.0)
-            if job["status"] in ("done", "error", "cancelled"):
+            if job["status"] in FINISHED:
+                return job
+            if job.get("started_at"):
+                if time.time() - job["started_at"] > run_limit:
+                    return job
+            elif loop.time() - begin > queue_limit:
                 return job
             await asyncio.sleep(POLL_INTERVAL)
-    raise TimeoutError(f"Job {job_id} not finished after {timeout}s")
+
+
+def _pending(job: dict[str, Any]) -> dict[str, Any]:
+    """Antwort fuer einen Auftrag, der noch laeuft oder wartet: kein Fehler, damit Claude ihn nicht neu absetzt."""
+    started = job.get("started_at")
+    return {
+        "ok": True,
+        "pending": True,
+        "job_id": job["id"],
+        "status": job["status"],
+        "progress": round(job.get("progress") or 0.0, 3),
+        "stage": job.get("stage", ""),
+        "elapsed_s": round(time.time() - started) if started else 0,
+        "hint": "Not finished yet; it keeps running on the server and its result lands in the history. Do not "
+                "submit it again: call job_status(job_id) (wait_s up to 600) until status is done.",
+    }
 
 
 def _asset_paths(assets: list[dict[str, Any]]) -> list[str]:
@@ -172,18 +214,27 @@ def _asset_paths(assets: list[dict[str, Any]]) -> list[str]:
     return [str(config.ASSET_DIR / a["filename"]) for a in assets]
 
 
-async def _generate(path: str, payload: dict[str, Any], ctx: Context) -> dict[str, Any]:
+async def _generate(path: str, payload: dict[str, Any], ctx: Context | None, wait: bool = True) -> dict[str, Any]:
     """Job absetzen, auf das Ende warten, Ergebnispfade zurueckgeben.
-    Gemeinsamer Kern von generate_image / _audio / _video."""
+    Gemeinsamer Kern von generate_image / _audio / _video. wait=False gibt gleich die job_id zurueck."""
     async with await _client() as c:
         r = await c.post(path, json=payload)
         if r.status_code >= 400:
             return {"ok": False, "error": r.text[:500]}
         job = r.json()
+    if not wait:
+        return _pending(job)
 
-    result = await _wait_for_job(job["id"], ctx)
-    if result["status"] != "done":
-        return {"ok": False, "error": result.get("error") or result["status"]}
+    run_limit = RUN_LIMIT_VIDEO if path.endswith("/video") else RUN_LIMIT
+    return await _job_output(await _wait_for_job(job["id"], ctx, run_limit))
+
+
+async def _job_output(job: dict[str, Any]) -> dict[str, Any]:
+    """Ergebnis eines Auftrags wie bei den generate_*-Werkzeugen: Pfade, IDs, Seed, Beschreibung."""
+    if job["status"] not in FINISHED:
+        return _pending(job)
+    if job["status"] != "done":
+        return {"ok": False, "job_id": job["id"], "error": job.get("error") or job["status"]}
 
     async with await _client() as c:
         assets = (await c.get(f"/api/jobs/{job['id']}/assets")).json()
@@ -219,6 +270,37 @@ async def health() -> dict[str, Any]:
     """NVAI-open status: is the GPU backend running, which model is active, how full is the queue."""
     async with await _client() as c:
         return (await c.get("/api/health")).json()
+
+
+@server.tool()
+async def job_status(job_id: str, wait_s: int = 0, ctx: Context | None = None) -> dict[str, Any]:
+    """State of a job, for generate_video(wait=False) or any tool that came back with pending=true.
+
+    Done: the same result as the generate_* tool (files, asset_ids, seed, caption, lossless_files). Still queued or
+    running: pending=true with status, progress (0-1) and stage, e.g. 'Pass 2/3 · Step 4/8'; the progress counts
+    sampling passes equally, not time, so no ETA is given -- estimate from the measured times instead (5 s LTX-2.5
+    at 1920x1088: ~4 min standard, ~13 min dfr). Error or cancelled: ok=false with the reason.
+
+    Args:
+        job_id: The job_id from the earlier call.
+        wait_s: Wait up to this many seconds (at most 600) for the job to finish before answering; 0 = answer
+            right away. Saves polling: for a long video, call it with 300-600 until it is done.
+    """
+    async with await _client() as c:
+        r = await c.get(f"/api/jobs/{job_id}")
+        if r.status_code >= 400:
+            return {"ok": False, "error": f"unknown job: {job_id}"}
+        job = r.json()
+    if wait_s > 0 and job["status"] not in FINISHED:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + min(wait_s, 600)
+        async with await _client() as c:
+            while job["status"] not in FINISHED and loop.time() < deadline:
+                await asyncio.sleep(POLL_INTERVAL)
+                job = (await c.get(f"/api/jobs/{job_id}")).json()
+                if ctx:
+                    await ctx.report_progress(job["progress"], 1.0)
+    return await _job_output(job)
 
 
 @server.tool()
@@ -288,9 +370,11 @@ async def download_model(model_id: str, ctx: Context) -> dict[str, Any]:
     """
     async with await _client() as c:
         job = (await c.post("/api/models/download", json={"model_id": model_id})).json()
-    result = await _wait_for_job(job["id"], ctx)
-    if result["status"] == "error":
-        return {"ok": False, "error": result["error"]}
+    result = await _wait_for_job(job["id"], ctx, run_limit=3600.0)
+    if result["status"] not in FINISHED:
+        return {**_pending(result), "model_id": model_id}
+    if result["status"] != "done":
+        return {"ok": False, "error": result.get("error") or result["status"]}
     return {"ok": True, "model_id": model_id}
 
 
@@ -628,11 +712,16 @@ async def generate_video(
     extend_asset_id: str | None = None,
     master: bool = True,
     project_id: str | None = None,
+    wait: bool = True,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
 
     Takes one to several minutes, depending on the model. The frame count is rounded to the
-    grid the model requires (Wan 4n+1, LTX 8n+1).
+    grid the model requires (Wan 4n+1, LTX 8n+1). Blocks until done (up to 65 min of render time;
+    queue time does not count). Long renders -- 1080p with quality='dfr' takes ~13 min for 5 s and
+    ~25 min for 6 s with a start image -- or several clips in a row: pass wait=False, which returns the
+    job_id at once, then call job_status(job_id, wait_s=600) until done. A blocking call that runs
+    out of time also returns pending=true with the job_id instead of an error; never submit again.
 
     RECOMMENDED: LTX-2.5 (ltx25-distilled-nvfp4, or ltx25-distilled-int8 on RTX 20/30/40):
     picture and sound in one pass, MP4. Use fps=24, sizes from its features.sizes: 1920x1088
@@ -665,6 +754,20 @@ async def generate_video(
         image (start image as the first reference, face as the second, "Change only this: ...,
         keep his face ... the framing and everything else exactly as in the first image"): the
         camera stayed put and the last frame matched (similarity to the starting face 0.98);
+      - an action with objects (a fish landing in a bucket): make the end image by filling only the
+        result into the start image with a mask (generate_image with flux3-klein-*, image_asset_id,
+        mask_asset_id, denoise=1.0; keep edges that must not change, like the front rim of the
+        bucket, outside the mask). Face and everything else stay pixel for pixel, and LTX still
+        played the whole action in between (2 of 2 seeds, one fish with one tail). Say what the
+        hands must not do ("his hands stay on the fishing pole ... he does not touch the bucket or
+        the fish"); keep props simple (a cane pole without a reel kept one straight line). If the
+        pose changes in the end image (bent over the bucket), edit with references instead (the
+        image with the result first, the face second): a mask cannot take a face reference. A
+        second part can loop over that end image (loop=True), so every seam lies on a clean frame;
+      - what must be seen (an incoming shell) only appears when described with size and place; say
+        where the person does not look, and pin down counts ("exactly one fish ... there is no
+        second fish"). LTX exaggerates reactions: "he flinches briefly, his head and shoulders jerk
+        back" looked like a sneeze, so describe them small and physical;
       - no extend_asset_id (see there); keep explosions, flying dirt and hands away from the face;
       - on a 16 GB card at most 6 s (145 frames) at 1920x832: 8 s with quality='dfr' took 20
         minutes once and hit the one-hour limit another time. Build longer scenes from parts.
@@ -703,7 +806,9 @@ async def generate_video(
             the start image to the end image (transition); without it, it ends on it.
         loop: LTX-2.5: the start image is also the end image -- a seamless loop. Keep the
             camera still and describe a repeating motion (flames, water, breathing); with a
-            camera move the last frames fell apart in the test.
+            camera move the last frames fell apart in the test. It also holds a person's face:
+            a close-up from a portrait kept similarity 0.80-1.0 to the start image over 5 s; with
+            the start image alone the camera pushed in after ~1 s and the face changed (0.3-0.4).
         quality: LTX-2.5: 'standard' or 'dfr' (Diffusion Fidelity Rendering: detail
             keyframes plus a detail IC-LoRA). Measured at 1080p: faces and fabric stay sharp over
             the whole clip (face 2.5 to 3 times the edge sharpness of 'standard' after 2 s), at
@@ -740,6 +845,8 @@ async def generate_video(
             False saves the space when only the MP4 is needed (e.g. straight into Unity).
         project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
             History, e.g. start images or a voice line made for that project. Unknown project: error.
+        wait: False = return right away with pending=true and the job_id; job_status(job_id) gives progress
+            and, once done, the same result as a blocking call.
     """
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
@@ -751,7 +858,7 @@ async def generate_video(
         "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id, "master": master,
         "project_id": project_id,
     }
-    return await _generate("/api/generate/video", payload, ctx)
+    return await _generate("/api/generate/video", payload, ctx, wait=wait)
 
 
 # Zusaetze, die ein Bild fuer die 3D-Rekonstruktion brauchbar machen. Ohne sie
@@ -868,6 +975,10 @@ async def text_to_3d(
         "width": 1024, "height": 1024, "model_id": image_model_id,
         "steps": None, "seed": seed, "batch_size": 1,
     }, ctx)
+    if image.get("pending"):
+        # Das Bild ist noch nicht fertig: dann image_to_3d mit seinem Asset, sobald job_status es liefert
+        return {**image, "stage": "image",
+                "hint": image["hint"] + " Then run image_to_3d on its asset_ids[0]."}
     if not image.get("ok"):
         return {"ok": False, "stage": "image", "error": image.get("error")}
 
@@ -882,6 +993,8 @@ async def text_to_3d(
         "clean_specks": True, "remove_background": True, "steps": 50,
         "project_front": project_front,
     }, ctx)
+    if mesh.get("pending"):
+        return {**mesh, "stage": "mesh", "image": image.get("files")}
     if not mesh.get("ok"):
         return {"ok": False, "stage": "mesh", "error": mesh.get("error"),
                 "image": image.get("files")}
@@ -1079,7 +1192,12 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
       clip.razor    at_s, track (all tracks if omitted);  clip.delete ids, ripple
       clip.update   id, gain_db, muted, transition ({kind: dissolve|dip_black|dip_white|wipe, duration_s} or
                     null), speed (1.0 = 100 %, 0.1 to 10; in/out stay media time, the length changes; if the
-                    longer clip runs into the next one, add overlap: clamp | ripple | overwrite)
+                    longer clip runs into the next one, add overlap: clamp | ripple | overwrite); on video
+                    tracks also scale (1.0 = 100 %, 0.1 to 8, used without keyframes), anchor [x, y] (focus
+                    point 0 to 1 that stays in place, default center), scale_keys [{at_s (media time), value}]
+      clip.key      scale keyframe: id + at_s (timeline position) + value sets or replaces it, + delete=true
+                    removes it, clear=true removes all; linear in between, below 1.0 the track below shows
+                    (picture in picture). Keyframes stick to media time, so cuts and speed keep them in place
       track.add     kind (video: new top track, audio: new bottom track); track.delete id (not V1/A1);
       track.update  id, hidden (video picture off), muted (sound off) -- both also apply to the export
       batch         commands=[{command, params}] as one undo step
@@ -1113,7 +1231,8 @@ async def studio_generate(project_id: str, scene_ids: list[str] | None = None, w
         project_id: The project.
         scene_ids: Scenes to generate (again); None = all without a take.
         wait: Block until all scenes are finished, chained ones included (video takes about 60-250 s per clip on an
-            RTX 5060 Ti).
+            RTX 5060 Ti), for at most an hour; scenes still running then come back under 'pending'. For long runs
+            (several dfr scenes) use wait=False and poll studio_get.
     """
     async with await _client() as c:
         r = await c.post(f"/api/studio/projects/{project_id}/generate", json={"scene_ids": scene_ids} if scene_ids else {})
@@ -1133,8 +1252,13 @@ async def studio_generate(project_id: str, scene_ids: list[str] | None = None, w
             await asyncio.sleep(POLL_INTERVAL * 3)
     errors = dict(out["errors"])
     errors.update({s["id"]: s["error"] for s in project["scenes"] if s["id"] in ids and s["status"] == "error"})
-    return {"ok": not errors, "jobs": out["jobs"], "waiting": out.get("waiting", {}), "errors": errors,
-            "project": project}
+    result = {"ok": not errors, "jobs": out["jobs"], "waiting": out.get("waiting", {}), "errors": errors,
+              "project": project}
+    if busy:
+        # Nach einer Stunde (oder mit wait=False) laufen Szenen weiter: sagen, welche, statt still "ok"
+        result["pending"] = [s["id"] for s in busy]
+        result["hint"] = "These scenes are still generating; poll studio_get and conform once they have takes."
+    return result
 
 
 @server.tool()
@@ -1153,6 +1277,8 @@ async def studio_export(project_id: str, preset: str = "youtube-1080p", ctx: Con
             return {"ok": False, "error": r.text[:400]}
         job = r.json()
     result = await _wait_for_job(job["id"], ctx)
+    if result["status"] not in FINISHED:
+        return _pending(result)
     if result["status"] != "done":
         return {"ok": False, "error": result.get("error") or result["status"]}
     async with await _client() as c:

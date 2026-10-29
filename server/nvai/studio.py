@@ -55,6 +55,7 @@ MAX_TRACKS = 8  # je Art
 # Schwarz bzw. Weiß, Wischblende von links. Der Ton blendet bei allen über.
 TRANSITION_KINDS = ("dissolve", "dip_black", "dip_white", "wipe")
 SPEED_MIN, SPEED_MAX = 0.1, 10.0  # 10 bis 1000 %
+SCALE_MIN, SCALE_MAX = 0.1, 8.0  # Skalieren (seit 0.5.16): 10 bis 800 %
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 DEFAULT_IMAGE_SECONDS = 5.0
 
@@ -894,6 +895,61 @@ def _check_speed(value: Any) -> float:
     return speed
 
 
+# ------------------------------------------------------------------------------------------ Skalieren
+# Seit 0.5.16 (Nutzer 29.10.2026: „Studio braucht ‚scale‘ tool. und keypoints um scale animation zu setzen“). Ein Clip
+# hat eine Skalierung (1.0 = 100 %), einen Fokuspunkt (anchor, 0 bis 1 je Achse: der Punkt bleibt beim Skalieren an
+# seiner Stelle, wie transform-origin im Browser) und wahlweise Keyframes. Die Keyframes hängen an der Medienzeit
+# (wie in/out), damit sie beim Schneiden, Trimmen und bei anderem Tempo am Inhalt bleiben; dazwischen linear, davor
+# und danach gilt der erste bzw. letzte Wert. Ohne Keyframes gilt `scale`.
+
+def _check_scale(value: Any) -> float:
+    try:
+        scale = float(value)
+    except (TypeError, ValueError):
+        raise StudioError(t("scale ist eine Zahl (1.0 = 100 %).", "scale is a number (1.0 = 100 %).")) from None
+    if not SCALE_MIN <= scale <= SCALE_MAX:
+        raise StudioError(t(f"Skalierung {SCALE_MIN * 100:.0f} bis {SCALE_MAX * 100:.0f} %.",
+                            f"Scale {SCALE_MIN * 100:.0f} to {SCALE_MAX * 100:.0f} %."))
+    return scale
+
+
+def _check_anchor(value: Any) -> list[float]:
+    try:
+        x, y = (float(v) for v in value)
+    except (TypeError, ValueError):
+        raise StudioError(t("anchor ist [x, y] mit Werten von 0 bis 1 (0.5, 0.5 = Mitte).",
+                            "anchor is [x, y] with values from 0 to 1 (0.5, 0.5 = center).")) from None
+    return [min(1.0, max(0.0, x)), min(1.0, max(0.0, y))]
+
+
+def _check_keys(value: Any) -> list[dict[str, Any]]:
+    """Keyframes aus einer Liste [{at: Medienzeit in Ticks oder at_s, value}], nach Zeit sortiert, ohne Doppel."""
+    if not isinstance(value, list):
+        raise StudioError(t("scale_keys ist eine Liste [{at_s, value}].", "scale_keys is a list [{at_s, value}]."))
+    keys: dict[int, float] = {}
+    for k in value:
+        at = _time(k, "at") if isinstance(k, dict) else None
+        if at is None:
+            raise StudioError(t("Jeder Keyframe braucht at oder at_s (Medienzeit).",
+                                "Each keyframe needs at or at_s (media time)."))
+        keys[at] = _check_scale(k.get("value"))
+    return [{"at": at, "value": keys[at]} for at in sorted(keys)]
+
+
+def clip_scale_at(c: dict[str, Any], media: int) -> float:
+    """Skalierung zur Medienzeit `media` (Ticks): linear zwischen Keyframes, sonst `scale`."""
+    keys = c.get("scale_keys") or []
+    if not keys:
+        return float(c.get("scale") or 1.0)
+    if media <= keys[0]["at"]:
+        return keys[0]["value"]
+    for a, b in zip(keys, keys[1:]):
+        if media <= b["at"]:
+            f = (media - a["at"]) / max(1, b["at"] - a["at"])
+            return a["value"] + (b["value"] - a["value"]) * f
+    return keys[-1]["value"]
+
+
 def _new_clip(p: dict[str, Any], track: str, asset_id: str, start: int, length: int | None = None,
               in_point: int = 0, scene_id: str | None = None, speed: Any = 1.0,
               out_point: int | None = None) -> dict[str, Any]:
@@ -935,7 +991,8 @@ def _transition(p: dict[str, Any], c: dict[str, Any], spec: dict[str, Any] | Non
 
 @command("clip.add", "Clip auf eine Spur legen (überschreibt Darunterliegendes): track (V1, V2 … A1, A2 …), asset_id, "
          "start/start_s, in/in_s, duration/duration_s (Länge auf der Zeitleiste) oder out/out_s (Medienzeit); "
-         "wahlweise speed, gain_db, muted, transition, scene_id (beim Einfügen eines ausgeschnittenen Clips)")
+         "wahlweise speed, gain_db, muted, transition, scale, anchor, scale_keys, scene_id (beim Einfügen eines "
+         "ausgeschnittenen Clips)")
 def _clip_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     clip = _new_clip(p, a.get("track", "V1"), a.get("asset_id", ""), _time(a, "start", edit_duration(p)),
                      _time(a, "duration"), _time(a, "in", 0), speed=a.get("speed", 1.0), out_point=_time(a, "out"))
@@ -943,6 +1000,7 @@ def _clip_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
         clip["gain_db"] = max(-60.0, min(12.0, float(a["gain_db"])))
     if "muted" in a:
         clip["muted"] = bool(a["muted"])
+    _apply_scale(p, clip, a)
     if a.get("scene_id") and any(s["id"] == a["scene_id"] for s in p["scenes"]):
         clip["scene_id"] = a["scene_id"]
     if a.get("transition"):
@@ -1091,21 +1149,60 @@ def _clip_label(p: dict[str, Any], c: dict[str, Any]) -> str:
     return label if len(label) <= 40 else label[:39].rstrip() + "…"
 
 
+def _apply_scale(p: dict[str, Any], c: dict[str, Any], a: dict[str, Any]) -> None:
+    """scale, anchor und scale_keys aus einem Befehl übernehmen (nur Videospuren)."""
+    if not any(k in a for k in ("scale", "anchor", "scale_keys")):
+        return
+    if _track(p, c["track"])["kind"] != "video":
+        raise StudioError(t("Skalieren geht nur auf Videospuren.", "Scaling only works on video tracks."))
+    if "scale" in a:
+        c["scale"] = _check_scale(a["scale"])
+    if "anchor" in a:
+        c["anchor"] = _check_anchor(a["anchor"])
+    if "scale_keys" in a:
+        c["scale_keys"] = _check_keys(a["scale_keys"] or [])
+
+
 @command("clip.update", "Clip ändern: id, gain_db, muted, transition (Übergang am Anfang: {kind: dissolve|dip_black|"
          "dip_white|wipe, duration/duration_s} oder null), speed (0.1 bis 10, 1.0 = 100 %) mit overlap "
-         "(clamp|ripple|overwrite), falls der längere Clip an den nächsten stößt")
+         "(clamp|ripple|overwrite), falls der längere Clip an den nächsten stößt; Videospuren auch scale (0.1 bis 8, "
+         "1.0 = 100 %, gilt ohne Keyframes), anchor [x, y] (Fokuspunkt 0 bis 1, Vorgabe Mitte) und scale_keys "
+         "(alle Keyframes neu: [{at/at_s Medienzeit, value}], [] löscht sie)")
 def _clip_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
     if "gain_db" in a:
         c["gain_db"] = max(-60.0, min(12.0, float(a["gain_db"])))
     if "muted" in a:
         c["muted"] = bool(a["muted"])
+    _apply_scale(p, c, a)
     if "speed" in a:
         _set_speed(p, c, a["speed"], a.get("overlap"))
     if "transition" in a:
         c["transition"] = _transition(p, c, a["transition"])
     elif c.get("transition"):  # die Länge kann sich geändert haben
         c["transition"]["duration"] = min(c["transition"]["duration"], clip_length(c))
+
+
+@command("clip.key", "Keyframe der Skalierung: id und at/at_s (Position auf der Zeitleiste) mit value (0.1 bis 8, "
+         "1.0 = 100 %) setzt oder ersetzt ihn, mit delete=true löscht ihn; clear=true löscht alle Keyframes des Clips")
+def _clip_key(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
+    c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
+    if _track(p, c["track"])["kind"] != "video":
+        raise StudioError(t("Skalieren geht nur auf Videospuren.", "Scaling only works on video tracks."))
+    keys = list(c.get("scale_keys") or [])
+    if a.get("clear"):
+        c["scale_keys"] = []
+        return {"keys": 0}
+    at = _time(a, "at")
+    if at is None or not c["start"] <= at <= clip_end(c):
+        raise StudioError(t("at oder at_s muss im Clip liegen.", "at or at_s must lie inside the clip."))
+    media = _media_at(c, at - c["start"])
+    near = int(round(frame_ticks(p) * clip_speed(c) / 2))  # innerhalb eines halben Bildes gilt als derselbe
+    keys = [k for k in keys if abs(k["at"] - media) > near]
+    if not a.get("delete"):
+        keys.append({"at": media, "value": _check_scale(a.get("value", clip_scale_at(c, media)))})
+    c["scale_keys"] = sorted(keys, key=lambda k: k["at"])
+    return {"keys": len(c["scale_keys"]), "at": media}
 
 
 # ---------------------------------------------------------------------------------------- Übernehmen
@@ -1546,6 +1643,9 @@ def render_plan(p: dict[str, Any], preset: str) -> dict[str, Any]:
         clips.append({"track": c["track"], "path": str(path), "media": media["kind"], "audio": media.get("audio", False),
                       "start": seconds(c["start"]), "in": seconds(c["in"]), "out": seconds(c["out"]),
                       "speed": clip_speed(c), "gain_db": c.get("gain_db", 0.0),
+                      # Skalieren: Keyframes in Sekunden Medienzeit, wie in/out
+                      "scale": float(c.get("scale") or 1.0), "anchor": c.get("anchor") or [0.5, 0.5],
+                      "scale_keys": [{"t": seconds(k["at"]), "v": k["value"]} for k in c.get("scale_keys") or []],
                       # stumm geschaltete Spur: ihr Ton fehlt, auch der Ton von Videoclips
                       "muted": bool(c.get("muted") or track.get("muted")),
                       "transition": ({"kind": c["transition"]["kind"],
@@ -1560,7 +1660,8 @@ def render_plan(p: dict[str, Any], preset: str) -> dict[str, Any]:
 
 
 # Dateien, die kein Browser abspielt: Sie bekommen eine H.264-Vorschau (meta.preview)
-NO_BROWSER = {".mkv", ".mov", ".avi", ".wmv", ".flv", ".mxf", ".mts", ".m2ts", ".ts"}
+NO_BROWSER = {".mkv", ".mov", ".avi", ".wmv", ".flv", ".mxf", ".mts", ".m2ts", ".ts",
+              ".mpg", ".mpeg", ".m2v", ".vob", ".dv"}  # MPEG-2 und DV aus VHS-Aufnahmen (seit 0.5.16)
 _previews: set[str] = set()
 
 
@@ -1877,6 +1978,10 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
         "clips": [{"id": c["id"], "track": c["track"], "start_s": round(seconds(c["start"]), 3),
                    "end_s": round(seconds(clip_end(c)), 3), "asset_id": c["asset_id"], "scene_id": c.get("scene_id"),
                    **({"speed": clip_speed(c)} if clip_speed(c) != 1.0 else {}),
+                   **({"scale": c["scale"]} if c.get("scale") not in (None, 1.0) else {}),
+                   **({"anchor": c["anchor"]} if c.get("anchor") and c["anchor"] != [0.5, 0.5] else {}),
+                   **({"scale_keys": [{"at_s": round(seconds(k["at"]), 3), "value": k["value"]}
+                                      for k in c["scale_keys"]]} if c.get("scale_keys") else {}),
                    "transition": c.get("transition") and {"kind": c["transition"]["kind"],
                                                           "seconds": round(seconds(c["transition"]["duration"]), 3)}}
                   for c in p["clips"]],

@@ -353,6 +353,42 @@ def _previous(plan: dict[str, Any], clip: dict[str, Any]) -> dict[str, Any] | No
 WIPE_EDGE = 0.04  # weiche Kante der Wischblende, Anteil der Bildbreite
 
 
+def scale_of(c: dict[str, Any], media_t: float) -> float:
+    """Skalierung zur Medienzeit (Sekunden): linear zwischen den Keyframes, davor und danach der erste bzw. letzte
+    Wert, ohne Keyframes `scale` (wie studio.clip_scale_at und clipScaleAt im Monitor)."""
+    keys = c.get("scale_keys") or []
+    if not keys:
+        return float(c.get("scale") or 1.0)
+    if media_t <= keys[0]["t"]:
+        return float(keys[0]["v"])
+    for a, b in zip(keys, keys[1:]):
+        if media_t <= b["t"]:
+            f = (media_t - a["t"]) / max(1e-9, b["t"] - a["t"])
+            return float(a["v"] + (b["v"] - a["v"]) * f)
+    return float(keys[-1]["v"])
+
+
+def place(img: np.ndarray, s: float, anchor: Any, under: np.ndarray) -> np.ndarray:
+    """Skalieren um den Fokuspunkt wie transform-origin im Browser: Der Punkt (ax, ay) bleibt an seiner Stelle.
+    Über 1 wird ein Ausschnitt vergrößert (Bicubic mit Bruchteil-Versatz, ruckelt beim Zoomen nicht), unter 1 liegt
+    das verkleinerte Bild über dem Bild darunter (Bild im Bild)."""
+    if abs(s - 1.0) < 1e-4:
+        return img
+    h, w = img.shape[:2]
+    ax, ay = (float(v) for v in (anchor or (0.5, 0.5)))
+    if s > 1.0:
+        x0, y0 = ax * (w - w / s), ay * (h - h / s)
+        out = Image.fromarray(img).transform((w, h), Image.AFFINE, (1 / s, 0, x0, 0, 1 / s, y0),
+                                             resample=Image.BICUBIC)
+        return np.asarray(out)
+    nw, nh = max(2, int(round(w * s))), max(2, int(round(h * s)))
+    small = np.asarray(Image.fromarray(img).resize((nw, nh), Image.BICUBIC))
+    x, y = int(round(ax * (w - nw))), int(round(ay * (h - nh)))
+    out = under.copy()
+    out[y:y + nh, x:x + nw] = small
+    return out
+
+
 def blend(base: np.ndarray, img: np.ndarray, a: float, kind: str) -> np.ndarray:
     """Übergang bei Fortschritt a (0 → 1) von `base` (voriger Clip, Bild darunter oder Schwarz) zu `img`."""
     b, i = base.astype(np.float32), img.astype(np.float32)
@@ -422,18 +458,23 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
                 continue
             c = plan["clips"][i]
             local = t - c["start"]
-            img = source(i).frame_at(c["in"] + local * speed_of(c))
+            media_t = c["in"] + local * speed_of(c)
+            img = source(i).frame_at(media_t)
             if img is None:
                 continue
+            under = canvas if canvas is not None else black
+            img = place(img, scale_of(c, media_t), c.get("anchor"), under)
             tr = c.get("transition")
             if tr and tr["seconds"] > 0 and local < tr["seconds"]:
                 prev = _previous(plan, c)
                 if prev is not None:
                     j = plan["clips"].index(prev)
-                    before = source(j).frame_at(prev["out"] + local * speed_of(prev))
-                    base = before if before is not None else (canvas if canvas is not None else black)
+                    prev_t = prev["out"] + local * speed_of(prev)
+                    before = source(j).frame_at(prev_t)
+                    base = place(before, scale_of(prev, prev_t), prev.get("anchor"), under) \
+                        if before is not None else under
                 else:
-                    base = canvas if canvas is not None else black
+                    base = under
                 img = blend(base, img, local / tr["seconds"], tr.get("kind", "dissolve"))
             canvas = img
         for sink in sinks:

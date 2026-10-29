@@ -19,7 +19,7 @@ import {
 } from '../api'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
-import { clipLength, clipSpeed, decimal, sec, tracksOf, trackOrHighest } from './time'
+import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, tracksOf, trackOrHighest } from './time'
 import { selIds, TRANSITION_LABEL, type Selection } from './Timelines'
 
 interface Props {
@@ -35,6 +35,8 @@ interface Props {
   onDeleteAsset: (a: Asset) => Promise<void>
   /** Geschwindigkeit setzen; fragt nach, wenn der längere Clip an den nächsten stößt */
   onSpeed: (c: StudioClip, speed: number) => void
+  /** Abspielkopf setzen (Springen zwischen Keyframes) */
+  onPlayhead: (t: number) => void
 }
 
 /** Formate für bestehende Projekte (neue beginnen mit 1920 × 1080) */
@@ -128,7 +130,7 @@ function Seconds({ label, value, onCommit, min = 0 }: { label: string; value: nu
   )
 }
 
-export function Inspector({ project, selection, models, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed }: Props) {
+export function Inspector({ project, selection, models, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead }: Props) {
   const p = project
   if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
   if (selection.type === 'asset') {
@@ -141,7 +143,7 @@ export function Inspector({ project, selection, models, onCommand, onGenerate, o
   }
   if (selection.type === 'clip') {
     const c = p.clips.find((x) => x.id === selection.id)
-    return c ? <ClipProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} onSpeed={onSpeed} /> : null
+    return c ? <ClipProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} onSpeed={onSpeed} playhead={playhead} onPlayhead={onPlayhead} /> : null
   }
   if (selection.type === 'transition') {
     const c = p.clips.find((x) => x.id === selection.id)
@@ -504,12 +506,14 @@ function Speed({ c, onSpeed }: { c: StudioClip; onSpeed: Props['onSpeed'] }) {
   )
 }
 
-function ClipProps({ p, c, onCommand, onSelect, onSpeed }: {
+function ClipProps({ p, c, onCommand, onSelect, onSpeed, playhead, onPlayhead }: {
   p: StudioProject
   c: StudioClip
   onCommand: Props['onCommand']
   onSelect: Props['onSelect']
   onSpeed: Props['onSpeed']
+  playhead: number
+  onPlayhead: (t: number) => void
 }) {
   const media = p.media[c.asset_id]
   const scene = c.scene_id ? p.scenes.find((s) => s.id === c.scene_id) : undefined
@@ -567,6 +571,9 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed }: {
           />
         </div>
       )}
+      {p.tracks.find((tr) => tr.id === c.track)?.kind === 'video' && (
+        <ScaleSection p={p} c={c} playhead={playhead} onCommand={onCommand} onPlayhead={onPlayhead} />
+      )}
       <div className="st-actions">
         <button className="btn small ghost" onClick={() => onCommand('clip.delete', { ids: [c.id] })}>{t('Löschen', 'Delete')}</button>
         <button className="btn small ghost" onClick={() => onCommand('clip.delete', { ids: [c.id], ripple: true })}>
@@ -574,6 +581,94 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed }: {
         </button>
       </div>
     </div>
+  )
+}
+
+/** Regler, der erst beim Loslassen meldet: ein Schritt im Rückgängig statt eines je Pixel. */
+function CommitRange({ value, min, max, onCommit }: { value: number; min: number; max: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState<number | null>(null)
+  const commit = () => {
+    if (draft !== null && draft !== value) onCommit(draft)
+    setDraft(null)
+  }
+  return (
+    <input type="range" min={min} max={max} step={1} value={draft ?? value}
+      onChange={(e) => setDraft(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+  )
+}
+
+/** Skalieren (seit 0.5.16): Wert am Abspielkopf, Fokuspunkt, Keyframes. */
+function ScaleSection({ p, c, playhead, onCommand, onPlayhead }: {
+  p: StudioProject
+  c: StudioClip
+  playhead: number
+  onCommand: Props['onCommand']
+  onPlayhead: (t: number) => void
+}) {
+  const keys = c.scale_keys ?? []
+  const inside = playhead >= c.start && playhead <= clipEnd(c)
+  const at = inside ? playhead : c.start
+  const media = mediaAt(c, at - c.start)
+  const value = clipScaleAt(c, media)
+  const near = (frameTicks(p) * clipSpeed(c)) / 2
+  const keyHere = keys.some((k) => Math.abs(k.at - media) <= near)
+  const anchor = c.anchor ?? [0.5, 0.5]
+  const times = keys.map((k) => keyTime(c, k.at)).filter((x) => x >= c.start && x <= clipEnd(c))
+  const prev = [...times].reverse().find((x) => x < playhead - near)
+  const next = times.find((x) => x > playhead + near)
+  const setValue = (percent: number) => {
+    const v = Math.min(SCALE_MAX, Math.max(SCALE_MIN, percent / 100))
+    if (keys.length && inside) onCommand('clip.key', { id: c.id, at, value: v })
+    else if (!keys.length) onCommand('clip.update', { id: c.id, scale: v })
+  }
+  const setAnchor = (i: 0 | 1, percent: number) => {
+    const a: [number, number] = [anchor[0], anchor[1]]
+    a[i] = percent / 100
+    onCommand('clip.update', { id: c.id, anchor: a })
+  }
+  return (
+    <>
+      <h4>{t('Skalieren', 'Scale')}</h4>
+      <label className="st-field">
+        <span>
+          {t('Skalierung', 'Scale')}: {Math.round(value * 100)} %
+          {keys.length > 0 && (keyHere ? ' ◆' : inside ? t(' (zwischen Keyframes)', ' (between keyframes)') : t(' (Abspielkopf außerhalb)', ' (playhead outside)'))}
+        </span>
+        <CommitRange value={Math.round(value * 100)} min={10} max={400} onCommit={setValue} />
+      </label>
+      <div className="st-grid2">
+        <label className="st-field">
+          <span>{t('Fokuspunkt X', 'Focus point X')}: {Math.round(anchor[0] * 100)} %</span>
+          <CommitRange value={Math.round(anchor[0] * 100)} min={0} max={100} onCommit={(v) => setAnchor(0, v)} />
+        </label>
+        <label className="st-field">
+          <span>{t('Fokuspunkt Y', 'Focus point Y')}: {Math.round(anchor[1] * 100)} %</span>
+          <CommitRange value={Math.round(anchor[1] * 100)} min={0} max={100} onCommit={(v) => setAnchor(1, v)} />
+        </label>
+      </div>
+      <div className="st-actions">
+        <button className="btn small" disabled={!inside} onClick={() => onCommand('clip.key', { id: c.id, at, value })}
+          title={t('Keyframe mit dem jetzigen Wert am Abspielkopf', 'Keyframe with the current value at the playhead')}>
+          ◆ {t('Keyframe setzen', 'Set keyframe')}
+        </button>
+        <button className="btn small ghost" disabled={!keyHere || !inside} onClick={() => onCommand('clip.key', { id: c.id, at, delete: true })}>
+          {t('Keyframe löschen', 'Delete keyframe')}
+        </button>
+        <button className="btn small ghost" disabled={prev === undefined} onClick={() => prev !== undefined && onPlayhead(prev)}
+          title={t('Voriger Keyframe', 'Previous keyframe')}>◀ ◆</button>
+        <button className="btn small ghost" disabled={next === undefined} onClick={() => next !== undefined && onPlayhead(next)}
+          title={t('Nächster Keyframe', 'Next keyframe')}>◆ ▶</button>
+        {keys.length > 0 && (
+          <button className="btn small ghost" onClick={() => onCommand('clip.key', { id: c.id, clear: true })}>
+            {t(`Alle ${keys.length} Keyframes löschen`, `Delete all ${keys.length} keyframes`)}
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        {t('Werkzeug Skalieren (Z): im Monitor ziehen setzt einen Keyframe am Abspielkopf, ein Klick den Fokuspunkt. Zwischen zwei Keyframes läuft die Skalierung gleichmäßig; unter 100 % scheint die Spur darunter durch. Keyframes hängen am Material und wandern beim Schneiden mit.',
+          'Scale tool (Z): dragging in the monitor sets a keyframe at the playhead, a click the focus point. Between two keyframes the scale changes evenly; below 100 % the track underneath shows through. Keyframes stick to the material and move with it when you cut.')}
+      </p>
+    </>
   )
 }
 

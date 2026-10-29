@@ -261,7 +261,8 @@ def get_asset(asset_id: str) -> Asset | None:
 
 
 # Hochgeladenes nach Endung (Uploads tragen keine Art), wie Bin.tsx `mediaKind`
-UPLOAD_VIDEO = (".mp4", ".webm", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".mxf", ".mts", ".m2ts", ".ts")
+UPLOAD_VIDEO = (".mp4", ".webm", ".mov", ".mkv", ".avi", ".wmv", ".flv", ".mxf", ".mts", ".m2ts", ".ts",
+                ".mpg", ".mpeg", ".m2v", ".vob", ".dv", ".m4v")  # VHS-Aufnahmen (seit 0.5.16)
 UPLOAD_AUDIO = (".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac", ".opus")
 
 

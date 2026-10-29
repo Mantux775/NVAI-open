@@ -1745,6 +1745,73 @@ def seedvr2_graph(entry: dict[str, Any], image: str, width: int, height: int, se
     }
 
 
+def seedvr2_video_graph(entry: dict[str, Any], video: str, width: int, height: int, fps: float, seed: int,
+                        frames_per_chunk: int = 1, color_correction: str = SEEDVR2_COLOR) -> Graph:
+    """SeedVR2 auf ein Videostueck (VHS-Bereich, seit 0.5.16): nach ComfyUIs Vorlage
+    utility_seedvr2_3b_int8_upscale_video.json, Ausgabe nur verlustfrei (NVAISaveMaster), vhs_tools.py part kodiert.
+
+    Gemessen 28.10. an 100 Bildern eines kuenstlichen VHS-Clips (768 x 576, 50 Bilder/s): Die Zeit steckt im VAE, das
+    Modell selbst rechnet je Stueck gut 1 s. Kacheln 1024/64 statt 512/128 (Vorlage) 247 statt 278 s (3B, 1080p).
+    7B 1440 x 1080 1,9 s je Bild, 960 x 720 1,1 s. frames_per_chunk: 1 (Einzelbild) war bei 720p gleich schnell wie 33
+    (111 / 105 s), schaerfer und auf ruhiger Wand nicht unruhiger (4,6 gegen 5,5/255; Eingang 6,6). Die automatische
+    Stueckwahl nahm 1 Bild, solange der VAE noch Speicher hielt; deshalb fest. Die Konditionierung entsteht je Stueck
+    (SeedVR2Conditioning hinter SeedVR2TemporalChunk), sonst passen ihre Masse nicht zum Stueck."""
+    chunking = ({"chunking_mode": "manual", "chunking_mode.frames_per_chunk": int(frames_per_chunk)}
+                if frames_per_chunk else {"chunking_mode": "auto"})
+    return {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "3": {"class_type": "LoadVideo", "inputs": {"file": video}},
+        "4": {"class_type": "GetVideoComponents", "inputs": {"video": ["3", 0]}},
+        "5": {"class_type": "ImageScale", "inputs": {
+            "image": ["4", 0], "upscale_method": "lanczos", "width": int(width), "height": int(height),
+            "crop": "disabled"}},
+        "6": {"class_type": "SeedVR2Preprocess", "inputs": {"resized_images": ["5", 0]}},
+        "7": {"class_type": "VAEEncodeTiled", "inputs": {
+            "pixels": ["6", 0], "vae": ["2", 0], "tile_size": 1024, "overlap": 64,
+            "temporal_size": 128, "temporal_overlap": 8}},
+        "8": {"class_type": "SeedVR2TemporalChunk", "inputs": {
+            "latent": ["7", 0], "temporal_overlap": 0 if int(frames_per_chunk) == 1 else 2, **chunking}},
+        "9": {"class_type": "SeedVR2Conditioning", "inputs": {"model": ["1", 0], "vae_conditioning": ["8", 0]}},
+        "10": {"class_type": "KSampler", "inputs": {
+            "seed": int(seed), "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple",
+            "denoise": 1.0, "model": ["1", 0], "positive": ["9", 0], "negative": ["9", 1],
+            "latent_image": ["8", 0]}},
+        "11": {"class_type": "SeedVR2TemporalMerge", "inputs": {"latents": ["10", 0], "temporal_overlap": ["8", 1]}},
+        "12": {"class_type": "VAEDecodeTiled", "inputs": {
+            "samples": ["11", 0], "vae": ["2", 0], "tile_size": 1024, "overlap": 64,
+            "temporal_size": 128, "temporal_overlap": 8}},
+        "13": {"class_type": "SeedVR2PostProcessing", "inputs": {
+            "images": ["12", 0], "original_resized_images": ["5", 0], "color_correction_method": color_correction}},
+        "14": {"class_type": "NVAISaveMaster", "inputs": {
+            "images": ["13", 0], "fps": float(fps), "filename_prefix": "nvai_vhs"}},
+    }
+
+
+def add_interpolation(graph: Graph, model_file: str) -> Graph:
+    """Zwischenbilder vor die verlustfreie Ausgabe haengen (VHS „Takt glaetten“, seit 0.5.16): FrameInterpolate aus
+    dem ComfyUI-Kern (RIFE 4.26) mit multiplier 2 rechnet die Mitte zwischen allen Nachbarbildern; welche davon bleiben,
+    waehlt vhs_tools.py part. Gemessen 28.10. am echten Band (600 Bilder 960 x 720): gleichmaessige Schritte statt
+    40/40/20 ms, keine sichtbaren Fehler in Gesichtern."""
+    save = next(k for k, n in graph.items() if n["class_type"] == "NVAISaveMaster")
+    graph["90"] = {"class_type": "FrameInterpolationModelLoader", "inputs": {"model_name": model_file}}
+    graph["91"] = {"class_type": "FrameInterpolate", "inputs": {
+        "interp_model": ["90", 0], "images": graph[save]["inputs"]["images"], "multiplier": 2}}
+    graph[save]["inputs"]["images"] = ["91", 0]
+    return graph
+
+
+def interpolate_video_graph(video: str, fps: float, model_file: str) -> Graph:
+    """Nur Zwischenbilder (VHS „Takt glaetten“ ohne KI-Aufbessern): Video laden, FrameInterpolate, verlustfrei."""
+    return add_interpolation({
+        "1": {"class_type": "LoadVideo", "inputs": {"file": video}},
+        "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+        "3": {"class_type": "NVAISaveMaster", "inputs": {
+            "images": ["2", 0], "fps": float(fps), "filename_prefix": "nvai_vhs"}},
+    }, model_file)
+
+
 # ------------------------------------------------------------- Dispatch
 
 FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}

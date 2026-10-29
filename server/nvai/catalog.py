@@ -2503,6 +2503,32 @@ UPSCALE_MODELS: list[dict[str, Any]] = [
         "pros": SEEDVR2_PROS,
         "cons": SEEDVR2_CONS + ["Laut Hersteller weniger Detail als 7B"],
     },
+    {
+        "id": "seedvr2-3b-nvfp4",
+        "name": "SeedVR2 3B (NVFP4, klein)",
+        "kind": "upscale",
+        "family": "seedvr2",
+        "workflow": "seedvr2",
+        "files": [
+            {"repo": "Comfy-Org/SeedVR2", "file": "diffusion_models/seedvr2_3b_nvfp4.safetensors",
+             "target": "diffusion_models"},
+            SEEDVR2_VAE,
+        ],
+        "size_gb": 2.5,
+        "model_gb": 2.0,
+        "vram_gb": 6,
+        "license": SEEDVR2_LICENSE,
+        "commercial_ok": True,
+        "best_for": "SeedVR2 klein für RTX 50",
+        "features": {"scales": [1, 2, 4], "scale": 2, "max_pixels": 16_000_000},
+        "description": (
+            "Die kleine Fassung mit 3 Mrd. Parametern in NVFP4 (2,0 GB) für RTX 50. Gemessen 28.10. an einem "
+            "VHS-Testclip (100 Bilder auf 1440 × 1080): nicht schneller als 7B, weil der VAE die Zeit bestimmt "
+            "(3B 247 s, 7B 188 s); für Video deshalb 7B nehmen, 3B nur bei knappem Grafikspeicher."
+        ),
+        "pros": SEEDVR2_PROS,
+        "cons": SEEDVR2_CONS + ["Laut Hersteller weniger Detail als 7B", "Gemessen nicht schneller als 7B"],
+    },
 ]
 
 
@@ -2605,13 +2631,47 @@ _variant(
 )
 
 
+# Zwischenbilder (seit 0.5.16, VHS „Takt glätten“): ComfyUI 0.42.1 rechnet RIFE und FILM im Kern (FrameInterpolate,
+# Vorlage utility_video_frame_interpolation.json). Eigene Art, damit es nie als Modell zum Aufbessern gewählt wird.
+INTERPOLATE_MODELS: list[dict[str, Any]] = [
+    {
+        "id": "rife-4.26",
+        "name": "RIFE 4.26 (Zwischenbilder)",
+        "kind": "interpolate",
+        "family": "rife",
+        "workflow": "interpolate",
+        "files": [
+            {"repo": "Comfy-Org/Frame-Interpolation", "file": "frame_interpolation/rife_v4.26.safetensors",
+             "target": "frame_interpolation"},
+        ],
+        "size_gb": 0.02,
+        "model_gb": 0.02,
+        "vram_gb": 2,
+        "license": "MIT",
+        "commercial_ok": True,
+        "best_for": "VHS-Aufnahmen mit 30 Bildern/s aus einem 50-Hz-Band ruckelfrei auf 50 Bilder/s bringen",
+        "description": (
+            "RIFE (Practical-RIFE von hzwer, MIT) rechnet Zwischenbilder aus dem Bewegungsfluss zweier Nachbarbilder. "
+            "Im VHS-Bereich glättet es Aufnahmen von Wandlern, die ein 50-Hz-Band mit 30 Bildern/s aufnehmen: Die "
+            "Bilder liegen dort 40, 40 und 20 ms auseinander, Schwenks ruckeln. Mit den fehlenden Zwischenbildern "
+            "entsteht wieder ein gleichmäßiger Takt von 50 Bildern/s; drei von fünf Bildern bleiben echte.\n\n"
+            "Gemessen am echten Band (20 s, 960 × 720): Schwenkschritte vorher 1,29 / 1,40 / 0,48 Pixel, nachher "
+            "0,48 bis 0,62, in Gesichtern keine sichtbaren Fehler."
+        ),
+        "pros": ["MIT, kommerziell frei", "23 MB, rechnet im ComfyUI-Kern ohne Erweiterung",
+                 "Drei von fünf Bildern bleiben echte Bilder"],
+        "cons": ["Zwischenbilder sind gerechnet: bei schnellen Bewegungen und Verdeckungen können Kanten wabern"],
+    },
+]
+
+
 ALL_MODELS: list[dict[str, Any]] = (
     IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
-    + UPSCALE_MODELS
+    + UPSCALE_MODELS + INTERPOLATE_MODELS
 )
 
 KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
-               "controlnet": "ControlNet", "upscale": "Hochskalieren"}
+               "controlnet": "ControlNet", "upscale": "Hochskalieren", "interpolate": "Zwischenbilder"}
 
 
 # Empfehlung nach Grafikkarte (registry.gpu_advice). RTX 50 rechnet NVFP4 in Hardware;

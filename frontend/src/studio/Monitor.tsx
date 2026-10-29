@@ -6,12 +6,17 @@
 // Bei fast gleichem Seitenverhältnis füllt das Bild den Rahmen (LTX-2.5 rechnet 1080p als 1920 × 1088).
 // Ein Klick im Material macht ihn zum Quellmonitor: Das Asset läuft mit eigenen Bedienelementen, bis wieder etwas im
 // Schnitt gewählt wird.
+// Skalieren (seit 0.5.16): jede Ebene mit transform: scale() um ihren Fokuspunkt (transform-origin), wie
+// studio_render.place. Mit dem Werkzeug „Skalieren“ (Z) zieht man im Bild: nach oben größer, nach unten kleiner; das
+// setzt beim Loslassen einen Keyframe am Abspielkopf. Ein Klick ohne Ziehen setzt den Fokuspunkt, das Mausrad
+// skaliert fein.
 
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react'
 import { api, TPS, type Asset, type StudioClip, type StudioProject } from '../api'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind, previewUrl } from './Bin'
-import { clipAt, clipSpeed, previousClip, sec, timecode, tracksOf } from './time'
+import { SCALE_MAX, SCALE_MIN, clipAt, clipScaleAt, clipSpeed, previousClip, sec, timecode, tracksOf } from './time'
+import type { Tool } from './Timelines'
 
 interface Props {
   project: StudioProject
@@ -22,6 +27,11 @@ interface Props {
   /** Angeklicktes Material: der Monitor zeigt dann dieses statt des Schnitts */
   source: Asset | null
   onCloseSource: () => void
+  /** Werkzeug der Zeitleiste: „scale“ macht das Bild zur Fläche zum Skalieren */
+  tool?: Tool
+  /** gewählter Clip: den skaliert das Werkzeug, wenn er am Abspielkopf liegt */
+  selectedClip?: string | null
+  onCommand?: (command: string, params: Record<string, unknown>) => Promise<any>
 }
 
 const COVER_TOLERANCE = 0.05
@@ -39,6 +49,17 @@ interface Layer {
   hidden: boolean
   /** stumme Spur oder stummer Clip */
   muted: boolean
+  /** Skalierung zu dieser Zeit (1 = 100 %) und Fokuspunkt */
+  scale: number
+  anchor: [number, number]
+}
+
+const CENTER: [number, number] = [0.5, 0.5]
+
+/** CSS für Skalierung um den Fokuspunkt, wie studio_render.place. */
+function scaleStyle(scale: number, anchor: [number, number]): CSSProperties {
+  if (Math.abs(scale - 1) < 1e-4) return { transform: '', transformOrigin: '' }
+  return { transform: `scale(${scale})`, transformOrigin: `${anchor[0] * 100}% ${anchor[1] * 100}%` }
 }
 
 /** Abblende über Schwarz oder Weiß: Farbfläche über einer Spur */
@@ -83,12 +104,15 @@ function layersAt(p: StudioProject, t: number): { layers: Layer[]; dips: Dip[] }
       }
       const prev = previousClip(p, c)
       if (prev) {
-        layers.push({ clip: prev, mediaTime: sec(prev.out + local * clipSpeed(prev)), opacity: prevOpacity, volume: 1 - a,
-          order, hidden, muted: !!(track.muted || prev.muted) })
+        const prevMedia = prev.out + local * clipSpeed(prev)
+        layers.push({ clip: prev, mediaTime: sec(prevMedia), opacity: prevOpacity, volume: 1 - a,
+          order, hidden, muted: !!(track.muted || prev.muted), scale: clipScaleAt(prev, prevMedia),
+          anchor: prev.anchor ?? CENTER })
       }
     }
-    layers.push({ clip: c, mediaTime: sec(c.in + local * clipSpeed(c)), opacity: track.kind === 'video' ? opacity : 1, volume,
-      order, wipe, hidden, muted: !!(track.muted || c.muted) })
+    const media = c.in + local * clipSpeed(c)
+    layers.push({ clip: c, mediaTime: sec(media), opacity: track.kind === 'video' ? opacity : 1, volume,
+      order, wipe, hidden, muted: !!(track.muted || c.muted), scale: clipScaleAt(c, media), anchor: c.anchor ?? CENTER })
   }
   return { layers, dips }
 }
@@ -108,11 +132,16 @@ function upcoming(p: StudioProject, t: number): StudioClip[] {
 
 const gain = (db: number) => Math.min(1, Math.pow(10, db / 20))
 
-export function Monitor({ project, playhead, playing, onPlayhead, onStop, source, onCloseSource }: Props) {
+export function Monitor({ project, playhead, playing, onPlayhead, onStop, source, onCloseSource, tool, selectedClip, onCommand }: Props) {
   const els = useRef(new Map<string, HTMLMediaElement>())
   const clock = useRef({ wall: 0, tick: 0 })
   const now = useRef(playhead)
   const p = project
+  // Skalieren im Bild: Vorschau während des Ziehens, erst beim Loslassen ein Befehl (ein Schritt im Rückgängig)
+  const [preview, setPreview] = useState<{ id: string; scale: number } | null>(null)
+  const dragRef = useRef<{ id: string; y: number; x: number; start: number; moved: boolean } | null>(null)
+  const wheelTimer = useRef<number | undefined>(undefined)
+  const scaleOf = (l: Layer) => (preview && preview.id === l.clip.id ? preview.scale : l.scale)
   // MKV, MOV & Co. spielt der Browser über ihre H.264-Vorschau
   const urlOf = (c: StudioClip) => p.assets[c.asset_id]?.preview ?? p.assets[c.asset_id]?.url ?? ''
   const kindOf = (c: StudioClip) => p.media[c.asset_id]?.kind ?? 'video'
@@ -138,7 +167,7 @@ export function Monitor({ project, playhead, playing, onPlayhead, onStop, source
       }
       if (el instanceof HTMLVideoElement) {
         el.style.opacity = String(layer.hidden ? 0 : layer.opacity)
-        Object.assign(el.style, layer.wipe !== undefined ? wipeMask(layer.wipe) : NO_MASK)
+        Object.assign(el.style, layer.wipe !== undefined ? wipeMask(layer.wipe) : NO_MASK, scaleStyle(scaleOf(layer), layer.anchor))
       }
       el.muted = layer.muted
       el.volume = Math.max(0, Math.min(1, gain(layer.clip.gain_db) * layer.volume))
@@ -246,10 +275,53 @@ export function Monitor({ project, playhead, playing, onPlayhead, onStop, source
   const ratio = p.settings.width / p.settings.height
   const bottomUp = [...tracksOf(p, 'video')].reverse().map((tr) => tr.id)
 
+  // Werkzeug „Skalieren“: der gewählte Clip, wenn er am Abspielkopf zu sehen ist, sonst der oberste sichtbare
+  const scaling = tool === 'scale' && !playing && !!onCommand
+  const shown = visual.filter((l) => !l.hidden)
+  const target = shown.find((l) => l.clip.id === selectedClip) ?? shown.reduce<Layer | undefined>((top, l) => (!top || l.order >= top.order ? l : top), undefined)
+  const clampScale = (v: number) => Math.min(SCALE_MAX, Math.max(SCALE_MIN, v))
+  const commitScale = async (id: string, value: number) => {
+    await onCommand?.('clip.key', { id, at: playhead, value: Math.round(value * 1000) / 1000 })
+    setPreview(null)
+  }
+  const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scaling || !target || e.button !== 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = { id: target.clip.id, y: e.clientY, x: e.clientX, start: scaleOf(target), moved: false }
+  }
+  const onMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current
+    if (!d) return
+    if (Math.abs(d.y - e.clientY) > 3 || Math.abs(d.x - e.clientX) > 3) d.moved = true
+    if (d.moved) setPreview({ id: d.id, scale: clampScale(d.start * Math.exp((d.y - e.clientY) / 200)) })
+  }
+  const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current
+    dragRef.current = null
+    if (!d) return
+    if (!d.moved) {
+      // Klick ohne Ziehen: dieser Punkt bleibt beim Skalieren stehen
+      const r = e.currentTarget.getBoundingClientRect()
+      const at = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000
+      onCommand?.('clip.update', { id: d.id, anchor: [at((e.clientX - r.left) / r.width), at((e.clientY - r.top) / r.height)] })
+    } else if (preview) {
+      commitScale(d.id, preview.scale)
+    }
+  }
+  const onWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
+    if (!scaling || !target) return
+    const id = target.clip.id
+    const value = clampScale(scaleOf(target) * (e.deltaY < 0 ? 1.05 : 1 / 1.05))
+    setPreview({ id, scale: value })
+    window.clearTimeout(wheelTimer.current)
+    wheelTimer.current = window.setTimeout(() => commitScale(id, value), 350)
+  }
+
   return (
     <div className="st-monitor">
       <div className="st-stage">
-      <div className="st-screen" style={{ '--ar': ratio } as CSSProperties}>
+      <div className={`st-screen${scaling ? ' st-scaling' : ''}`} style={{ '--ar': ratio } as CSSProperties}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onWheel={onWheel}>
         {[...mounted.values()].map((c) => {
           const kind = kindOf(c)
           const visible = visual.find((l) => l.clip.id === c.id)
@@ -258,7 +330,8 @@ export function Monitor({ project, playhead, playing, onPlayhead, onStop, source
           if (kind === 'image') {
             return visible && !visible.hidden ? (
               <img key={c.id} src={urlOf(c)} alt="" draggable={false}
-                style={{ opacity: visible.opacity, zIndex: z, objectFit: fitOf(c), ...(visible.wipe !== undefined ? wipeMask(visible.wipe) : {}) }} />
+                style={{ opacity: visible.opacity, zIndex: z, objectFit: fitOf(c), ...(visible.wipe !== undefined ? wipeMask(visible.wipe) : {}),
+                  ...scaleStyle(scaleOf(visible), visible.anchor) }} />
             ) : null
           }
           if (kind === 'audio' || !videoIds.has(c.track)) {
@@ -291,6 +364,16 @@ export function Monitor({ project, playhead, playing, onPlayhead, onStop, source
         {dips.map((d) => (
           <div key={`dip-${d.order}`} className="st-dip" style={{ background: d.color, opacity: d.opacity, zIndex: 13 + d.order * 10 }} />
         ))}
+        {scaling && target && (
+          <>
+            <div className="st-anchor" style={{ left: `${target.anchor[0] * 100}%`, top: `${target.anchor[1] * 100}%` }} />
+            <div className="st-scale-hud">
+              <b>{Math.round(scaleOf(target) * 100)} %</b>{' '}
+              {t('Ziehen: skalieren (Keyframe am Abspielkopf) · Klick: Fokuspunkt · Mausrad: fein',
+                'Drag: scale (keyframe at the playhead) · Click: focus point · Wheel: fine')}
+            </div>
+          </>
+        )}
         {p.clips.length === 0 && (
           <div className="st-empty">
             {t('Noch nichts im Schnitt. Szenen erzeugen und „Übernehmen“, oder Material auf eine Spur ziehen.',
