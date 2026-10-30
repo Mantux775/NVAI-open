@@ -113,14 +113,17 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | Text letter-perfect in every test; rope handles through drilled holes in 3 of 3 with 50 steps, 2 of 3 with 25; ~51 s |
 | Size | Standing figure 832 × 1216, vehicle 1216 × 832, object 1024² | In a square, figures lose their feet more often |
 | Choosing | `batch_size=4`, compare at full resolution | One model load instead of four; anatomy errors are a failure rate |
-| Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS |
+| Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS; "a heavy explosion" without "loud" stayed silent for 2–2.5 s and then reached −20 to −36 dBFS, "the loud, rising whistle …, then a massive, booming explosion" −10 to −17 dBFS from 0.5–1 s |
 | Long video render (from ~10 min) | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min, 6 s with a start image ~25 min; a blocking call that runs out of time returns `pending` with the `job_id`, never resubmit |
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
-| Video loop | `loop=True` only with a still camera | With a push-in the loop fell apart in the last frames |
+| Video loop | `loop=True` only with a still camera, and only if the background may stand still | With a push-in the loop fell apart in the last frames; water and smoke stood still (see the next row) |
+| Moving background (water, smoke, wind) | Only a start image: no `end_image_asset_id`, no `loop=True`; describe the motion | In a loop, water and smoke changed 0.3–2.0/255 per half second, as little as the static shore, even with a sentence asking them to move; with an end image mostly the same before and after the event. The same scene with only a start image (same prompts and seeds): water 1–9, smoke 1–12, and the camera of that medium-wide side view stayed put in 14 of 18 (four times it pushed in by 5–7 %, always in part 2). Only what the prompt asks for as an event moved, and an explosion's bright veil faded back exactly to the start image |
+| Joining two clips | `chain_asset_id=<clip 1>` (since 0.5.17; `extend_asset_id` does the same and joins both into one file, the Studio does it at a `chain` marker): the last 25 frames of clip 1 go into the new clip as an image batch through `LTXVImgToVideoInplace` (strength 1.0 in both stages, pins 4 latent frames); join with a 25-frame crossfade | The first frame was 2.4–6.4/255 off its start image on every path; at a hard cut the frame step stood out 1.9–2.5× from its neighbours, with the carried frames and crossfade at most 1.4–1.6×, like ordinary motion |
+| A person who should stay still | A short prompt (4–8 sentences in Lightricks' order), the stillness in one positive sentence ("sits perfectly still like a statue … and he stays that way through everything that happens"), the small final reaction named exactly ("his eyes and his chin move slightly down"); rewrite the prompt instead of appending a sentence per correction | 8 instead of 14 sentences (249 instead of 633 words, nearly all of them about the person): 38–49 % less motion in the person's area with the same seeds, background and camera unchanged; "does not reach into the bucket" was ignored twice at CFG 1 |
 | A small reaction in video (a start, a glance) | Describe it small and physical, avoid "fright", "flinch", "jerk", and say what does not move | "he flinches briefly, his head and shoulders jerk back a little" looked like a sneeze to the user; "his head lifts by a few centimeters" became a clear look up in one of two clips; "his upper body twitches back" came with a lean forward first in 2 of 2 |
 | A recognizable person in video | Start image with FLUX 3 and a frontal, sharp reference, medium shot or closer (face 250 px or more), few extras; an end image edited from the start image to hold framing and face; no `extend_asset_id`; on 16 GB at most 6 s at 1920 × 832. Most faithful: the real photo itself as the start image, outpainted to 16:9 with FLUX 3, with `loop=True` or as end image too. For an action with objects: the end image is the start image with only the result filled in by a mask (FLUX 3), and say what the hands do not do | "Static camera" still pushed in (3 of 3); with the end image the last frame matched (similarity 0.98); faces of 100–200 px and running extras melted; 8 s DFR took 20–60 min; close-up from the photo: similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the start image only; fishing gag with a masked end image: one fish with one tail and the hands on the rod in 2 of 2 seeds, the action played out although start and end differed only by the fish |
 | A character from a reference sheet instead of a start image (IC-LoRA Ingredients; ComfyUI test setup, not in NVAI-open) | Not for a recognizable person. If used: sheet as a guide on frame 0, LoRA 1.5 with `euler_ancestral_cfg_pp` at 960 × 544; a second stage for 1080p needs the IC-LoRA and the sheet again | The user recognized the character in none of the clips; refined without the IC-LoRA the face became a stranger's; a frontal close-up made the LoRA copy the sheet for all 5 s |
-| Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join, conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
+| Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join (since 0.5.17 the latent chain with a dissolve), conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
 | Zoom on a clip in the Studio | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and at the end (e.g. 1.5) | The focus point stayed within 0.5 px in the export, the zoom grew exactly as keyed (test pattern) |
 | Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt at about 2 words per second, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; 15 spoken words ran past the end of a 6 s shot, 11 fit; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
 | Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
@@ -633,7 +636,8 @@ Use `fps=24`, sizes from `features.sizes` (multiples of 64; 1280 × 704 is 720p)
 `generate_video` options for LTX-2.5:
 - `image_asset_id`: start image (image to video).
 - `end_image_asset_id`: last frame; with a start image the clip is a transition. `loop=True` uses the
-  start image as the end image too, for a seamless loop.
+  start image as the end image too, for a seamless loop. Both hold whatever is the same in the two images:
+  water and smoke stand still (see "End image and loop freeze the background" below).
 - `quality="dfr"`: Diffusion Fidelity Rendering — detail keyframes plus a detail IC-LoRA, sharper and
   slower; `temporal_upscale=True` doubles the frame rate (48 fps). Not together with an end image.
 - `auto_duration=True`: the model picks the length (1–20 s) from the described action.
@@ -643,11 +647,19 @@ Use `fps=24`, sizes from `features.sizes` (multiples of 64; 1280 × 704 is 720p)
   Control LoRA and a start image.
 - Several shots in one clip: no parameter — write every cut out in prose ("A hard cut transitions to a
   close-up of …"), 2–4 shots; `expand_prompt(target="video_multishot")` writes that form.
-- `extend_asset_id` (since 0.5.10): continue an existing video. Its last frame becomes the start image,
-  size and frame rate come from it, and the new part is appended with its sound as a new asset
-  (`meta.extended_from`). The prompt describes what happens next, `frames` the length of the new part.
-  Not together with a start image, a loop or a given sound. Measured at 1080p: 5 s + 4 s → 9.04 s in
-  255 s, no visible seam.
+- `extend_asset_id` (since 0.5.10): continue an existing video. Since 0.5.17 the new part starts with the
+  video's last 25 frames (1 s at 24 fps), carried in latent space (see "Chaining two clips in latent space"
+  below), and is appended with a 25-frame crossfade, the sound with 40 ms; with 48 fps, an end image or automatic
+  length the last frame becomes the start image as before. Size and frame rate come from the video, the result is a
+  new asset (`meta.extended_from`, `meta.carry_frames`). The prompt describes what happens next, `frames` the length
+  of the new part. Not together with a start image, a loop or a given sound. Measured at 1080p with the last frame
+  (0.5.10): 5 s + 4 s → 9.04 s in 255 s.
+- `chain_asset_id` (since 0.5.17): the same latent chain without joining. The new clip starts with the last 25
+  frames of the given video and is `frames` + 24 frames long; size and frame rate come from the video
+  (`meta.chain_asset_id`, `meta.carry_frames`). Lay it 25 frames before the end of the source and crossfade over
+  those frames; the Studio's `edit.conform` does that. LTX-2.5 only, up to 30 fps; not with a start or end image,
+  a loop, a given sound, 48 fps or automatic length. Use it when the parts are cut separately, `extend_asset_id`
+  for one file.
 
 DFR, automatic length and 48 fps need small optional files; the detail IC-LoRA for DFR sits in its own
 gated repo. If something is missing, `features.missing` names the Hugging Face page.
@@ -709,6 +721,54 @@ already pulses to a given sound without it.
   second and faces turned soft during big moves, but the ending matched the end image sharply. The
   standard path moves at once and keeps faces sharper during the motion. Use the end image when the
   face has to be right at the end (zoom, ending at rest).
+- **End image and loop freeze the background** (measured 30 October 2026 on the lossless copies of a
+  scene with a water-filled crater and smoke on the horizon, mean luma change per region over 0.5 s,
+  0–255): in a loop, water and smoke changed 0.3–2.0 over the whole clip, as little as the static
+  shore; with an end image they stood just as still before the event and in the last half second
+  (water 1.8, smoke 0.9–1.3, shore 1.7), in two of five clips a little motion remained at the end
+  (water 5–8.5 with the shore at 2–5.7). A sentence asking them to
+  move ("the smoke keeps rising and swirling, small waves run across the water") made no difference:
+  a loop without that sentence measured the same. Only the event the prompt asked for moved (a shell
+  hitting the water, a fish flying into a bucket, a man bending over); the explosion's bright veil
+  (the far shore from 80 to 197) faded back exactly to the start image's values by the end. The
+  counter-test without end image and loop (same prompts and seeds, DFR, three chains of two parts):
+  water 8–9 before the event instead of 0.5, in the last second 5.4–6.9 (with the end image 2.7 and
+  8.5, see above); in part 2 water 1–5.5 and smoke 1–12 instead of 0.3–2. The camera stayed put in all six clips (scale 1.000–1.005 against
+  the first frame); in two more rounds with more sentences about the hands, the fish and the head it
+  pushed in in two of three part-2 clips each time (scale 1.045–1.070 at 4 s), so 14 of 18 overall,
+  all four push-ins in part 2. The seam fell to 3.2–3.7. The price: part 2 ended 15.6–16.4 away from its first
+  frame (2.4–2.7 as a loop), and in part 2 the banks, which stood still before, changed 2–6 too
+  (content, not brightness). The reason for the frozen background: the
+  water and smoke are pixel for pixel the same in start and end image, so LTX has to land on them
+  again and leaves them where they are. The earlier loop test with a king in front of torches points
+  the same way: 28 % of the picture moved with the loop, 82–84 % without (where the camera also
+  pushed in). For a moving background give only a start image and hold the framing with the prompt
+  alone (which still pushed in, see above).
+- **No path takes the start image exactly:** the first frame was 2.4–5.6/255 off the start image on
+  the standard path and 4.6–6.4 with an end image or loop; two neighbouring frames inside a clip
+  differ by 0.3–0.4. A chain of clips (the last frame of one as the start image of the next) shows a
+  small jump at every seam (4.8/255 measured), with or without an end image.
+- **Chaining two clips in latent space** (measured 30 October 2026 as a ComfyUI graph, built into NVAI-open since
+  0.5.17 as `chain_asset_id`, in `extend_asset_id` and in the Studio's chain; Lightricks' own `ltx-pipelines` chain
+  windows the same way): decode the last 25 frames of clip 1 from its lossless copy and pass
+  them as an image batch to `LTXVImgToVideoInplace` in both stages of the standard path with strength 1.0. The node
+  encodes the batch as video and pins the first 4 latent frames (noise mask 0). Clip 2 gets 121 frames, 25 carried and
+  96 new; then join clip 1, a linear 25-frame crossfade and the rest of clip 2, with a 40 ms equal-power crossfade for
+  the sound. The seam no longer stood out: the largest frame step in the crossfade was 1.4–1.6× its neighbours, against
+  1.9–2.5× at a hard cut, and within the range of ordinary motion. 158–177 s per 5 s clip 2 at 1920 × 832. Measured
+  in NVAI-open 0.5.17 (a sailboat crossing a lake, 1280 × 704, 2 s + 2 s, same prompts and seeds): with only the last
+  frame the change per frame fell at the seam from 5.4 to 2.1/255, the new clip started a calmer motion of its own;
+  with the latent chain it went on at 4.4 (5.2 before). The chained clip (73 frames) took 66 s, its first 25 frames
+  were 3.4/255 off the originals. Note that
+  `LTXVAddGuide` and `LTXVAddLatentGuide` do not replace frames in place; they append guide tokens (noise mask
+  max(0, 1 − strength)), so on the end-image path frame 0 is regenerated at 0.7.
+- **Timing words are followed only roughly:** clip 2 asked for "the first two and a half seconds" of stillness; the fish
+  slapped its tail 1.25–1.75 s in with all three seeds.
+- **Masked end image** (measured 30 October 2026): `LTXVAddGuide` takes an `attention_mask` (ComfyUI 0.42.1). An end image
+  masked to the person, stool and bucket (27 % of the frame), with the start image pinned by `LTXVImgToVideoInplace` 1.0:
+  the person and bucket in the last frame were nearly as close to the end image as without a mask (11 against 9/255),
+  the water kept moving (15 against 3–8 in the last second), the first frame was 5 instead of 6.4/255 off the start
+  image. The user saw no visible benefit over leaving the end image out, so it is not in NVAI-open.
 - **Prompt traps** (a speaking person in front of a crowd, two seeds each): "shouts" gives grimaces
   ("says firmly in a rough, deep voice" is calmer). A gesture that "may rise out of the top of the
   frame" makes the camera follow it. "The camera holds a medium close-up" became a push-in to an
@@ -745,7 +805,8 @@ To keep the face to the end, pass the start image as the end image too (`loop=Tr
 `end_image_asset_id`). With a real photo, the photo itself makes the most faithful start image: outpaint it to
 the video size with FLUX 3, the face stays pixel for pixel. Measured in a close-up (see "Close-up with the photo
 as start and end image" below): similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the
-start image only.
+start image only. The price: the background stands still too (water, smoke, see "End image and loop freeze the
+background"); say so before rendering.
 
 ### LTX-2.5: keeping faces, voices and characters (measured 27 October 2026)
 
@@ -775,7 +836,9 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   ltx.io belongs to Lightricks' hosted API.
 - **Extending loses the face:** the new part only sees the last frame, and in several extended clips a different man
   appeared in it. When the face matters, build longer shots from a chain of clean stills (FLUX 3, same face and
-  framing) with a start and an end image per part, so every seam lands on a clean frame.
+  framing) with a start and an end image per part, so every seam lands on a clean frame. The picture still jumps
+  slightly at each seam (the first frame is 2.4–6.4/255 off its start image), and the end images freeze water and
+  smoke.
 - **Occlusion:** an explosion right behind the person, flying dirt or sudden darkness gave a different face one second
   later (similarity 0.22). Keep explosions far in the back and nothing in front of the face. A teacup in front of the
   mouth did no harm; the same face came back after the sip.
@@ -903,7 +966,8 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
      reference and draws a different person. Most faithful is the real photo itself as the start image, outpainted to
      the video format with FLUX 3 (the face stays pixel for pixel). Ingredients never gave a recognizable face here.
   2. Face 250 px or more (medium shot or closer), few extras far in the back.
-  3. Hold camera and face with an end image; "static camera" in the prompt alone still pushed in.
+  3. Hold camera and face with an end image; "static camera" in the prompt alone still pushed in. The price: water
+     and smoke then stand as still as the shore, a sentence in the prompt does not change that; say so beforehand.
   4. No extending; build longer scenes from parts with clean start and end images; on 16 GB at most 6 s per clip at
      1920 × 832.
   5. Nothing in front of the face (explosions, dirt, darkness); a teacup in front of the mouth did no harm.
@@ -924,7 +988,9 @@ clips and three new ones (similarity = normalized cross-correlation of the face 
   What carried it: start image (FLUX 3, one face reference, `upsample_prompt=False`) → end image with the result
   (fish by mask: the mask height above the rim sets how far it sticks out, 200 px gave 85–90 %, 115 px about 40 %; the
   bent pose by editing with references) → part 1 with start and end image (5 s, 300–315 s) → part 2 as a loop over the
-  end image (4 s, 234 s), so every seam lies on a clean frame. Part 1: the fish flew in and stayed one fish with one
+  end image (4 s, 234 s), so every seam lies on a clean frame. The user on 30 October: "the water doesn't move", "the
+  smoke doesn't move either"; measured, both stood as still as the shore in every clip with an end image or loop (see
+  "End image and loop freeze the background"), and the seam from part 1 to part 2 still jumped by 4.8/255. Part 1: the fish flew in and stayed one fish with one
   tail, the hands stayed on the pole with seed 42, but with seed 202 he took a hand off the pole towards the bucket
   despite "his hands stay on the pole"; the incoming shell only appeared once the prompt described it, first too large
   and too close (spray over his face) and he turned his head towards it. Part 2: "he flinches briefly, his head and
@@ -1051,6 +1117,12 @@ Rules that make the difference:
 details). That costs a model switch in the middle of the run — expect considerably more time than
 with text-to-video, and tell the user beforehand.
 
+Measured on 16 GB (RTX 5060 Ti, fp8 experts, 1280 × 560, 81 frames = 5 s at 16 fps, 30 October 2026): with
+lightx2v's 4-step LoRA pair (`Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1`, Apache-2.0, strength 1.0, cfg 1) 384–396 s,
+but the motion looked like slow motion; without the LoRA (20 steps, cfg 3.5) 3281 s, and the motion still looked slow.
+lightx2v's own workflow uses shift 5 (NVAI-open: 8). For the person-in-a-scene use case LTX-2.5 stayed the better
+choice on 16 GB. HunyuanVideo 1.5 is not an option in the EU: its licence excludes the EU, UK and South Korea.
+
 ## Studio: whole videos from scenes (since 0.5.13)
 
 A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four
@@ -1134,8 +1206,12 @@ How a scene becomes a job:
 - **Music and sound:** the scene's length (up to 300 s), lyrics from the scene.
 - **Voice:** no text-to-speech yet; the job fails with a hint. Add a recorded audio file as a take
   (`scene.take` with `asset_id`).
-- **Chain:** a video scene with `chain_from`, or starting at a `chain` marker (± 0.5 s), gets the last
-  frame of the earlier scene as its start image. If that scene is generated in the same run, the
+- **Chain:** a video scene with `chain_from`, or starting at a `chain` marker (± 0.5 s), continues the
+  earlier scene. With LTX-2.5 (since 0.5.17; not with an end image, a loop, a given sound or 48 fps) it gets the
+  last 25 frames of the earlier take (`chain_asset_id`, the job adds them to the scene's frames), and `edit.conform`
+  lays the new take exactly where those frames run in the earlier take (25 frames before the scene start, one frame
+  later when that take is one frame longer than its scene, as 8n+1 makes it) with a dissolve over exactly those
+  frames; the earlier clip ends there, the edit keeps the length of the scenes. Otherwise the last frame of the earlier scene becomes the start image. If that scene is generated in the same run, the
   chained one has the status `waiting` and is submitted as soon as its source is done; if the source
   fails, the chained scene gets an error instead of waiting forever.
 - **Order in the GPU queue:** sound first, then still images, then videos grouped by model, chained
@@ -1272,7 +1348,7 @@ blank stare in absurd war situations), eight gags of 8–9 s, 68 s in all, as on
    joke lands"): `generate_video(extend_asset_id=…, frames=73, quality="dfr")` adds 3 s of aftermath (146–150 s per
    clip, the seam 2.4–3.4 of 255). Then `scene.take` with that `asset_id`, lay the scenes out again, delete the old
    clips and run `edit.conform` (connected clips keep their in and out otherwise). Later finding: the face changed in
-   several appended parts, because the new part only sees the last frame. When the face matters, use parts of at
+   several appended parts, because the new part only saw the last frame (up to 0.5.16). When the face matters, use parts of at
    most 6 s with a start and an end image from FLUX 3 instead.
 6. **Cutting it together with the original.** Upload the original, make a separate project at 24 fps, and lay out
    the pieces of the original at its own cuts with the new scenes in between, all with `clip.add` (`start_s`, `in_s`,

@@ -1544,16 +1544,17 @@ async def _video_tool(*args: Any) -> dict[str, Any]:
 
 
 async def _prepare_extension(job: Job, p: dict[str, Any], entry: dict[str, Any]) -> tuple[Any, Path]:
-    """Video verlaengern (seit 0.5.10): Der letzte Frame des Originals wird Startbild, Format und Bildrate
-    kommen vom Original, damit sich das neue Stueck nahtlos anfuegen laesst (_txt2video haengt es an)."""
+    """Video verlaengern (seit 0.5.10): Seit 0.5.17 beginnt das neue Stueck mit der letzten Sekunde des Originals
+    (Latent-Kette, _stage_carry), sonst wird der letzte Frame Startbild. Format und Bildrate kommen vom Original, damit
+    sich das neue Stueck nahtlos anfuegen laesst (_txt2video haengt es an)."""
     if entry.get("family") != "ltx25":
         raise RuntimeError(t("Verlängern geht mit LTX-2.5.", "Extending works with LTX-2.5."))
     if p.get("image_asset_id") or p.get("loop") or p.get("audio_asset_id"):
         raise RuntimeError(t(
-            "Beim Verlängern ist der letzte Frame des Videos das Startbild; ein eigenes Startbild, eine "
-            "Schleife oder ein vorgegebener Ton gehen dabei nicht.",
-            "When extending, the last frame of the video is the start image; your own start image, a loop or "
-            "a given sound cannot be used with it."))
+            "Beim Verlängern ist das Ende des Videos der Anfang; ein eigenes Startbild, eine Schleife oder ein "
+            "vorgegebener Ton gehen dabei nicht.",
+            "When extending, the end of the video is the beginning; your own start image, a loop or a given sound "
+            "cannot be used with it."))
     source = db.get_asset(p["extend_asset_id"])
     if source is None or source.kind != "video":
         raise RuntimeError(t(f"Video nicht gefunden: {p['extend_asset_id']}",
@@ -1575,6 +1576,9 @@ async def _prepare_extension(job: Job, p: dict[str, Any], entry: dict[str, Any])
         p["fps"] = info["fps"]
     p["width"] = max(256, int(info["width"]) // 64 * 64)
     p["height"] = max(256, int(info["height"]) // 64 * 64)
+    if _carry_possible(p):
+        await _stage_carry(job, p, source, path)  # seit 0.5.17: die letzte Sekunde statt des letzten Bildes
+        return source, path
     frame = config.DATA_DIR / "tmp" / f"{job.id}_last_frame.png"
     frame.parent.mkdir(parents=True, exist_ok=True)
     # Startbild aus dem verlustfreien Master, sonst wanderten die H.264-Fehler ins neue Stueck
@@ -1586,6 +1590,61 @@ async def _prepare_extension(job: Job, p: dict[str, Any], entry: dict[str, Any])
     return source, path
 
 
+def _carry_possible(p: dict[str, Any]) -> bool:
+    """Die Latent-Kette (seit 0.5.17) geht im Standardweg und mit DFR; nicht mit 48 fps (Stufe 3 rechnet mit doppelter
+    Bildrate), Endbild, Schleife, vorgegebenem Ton, automatischer Laenge oder dem einstufigen Versuchsweg „full“."""
+    return not (p.get("temporal_upscale") or p.get("end_image_asset_id") or p.get("loop") or p.get("audio_asset_id")
+                or p.get("auto_duration") or p.get("quality") == "full")
+
+
+async def _stage_carry(job: Job, p: dict[str, Any], source: Any, path: Path) -> None:
+    """Die letzten LTX25_CARRY_FRAMES Bilder aus dem verlustfreien Master (sonst aus dem MP4) als verlustfreies MP4 in
+    ComfyUIs input/; workflows._LTX.carry schreibt sie als erste Latent-Bilder fest."""
+    n = workflows.LTX25_CARRY_FRAMES
+    tmp = config.DATA_DIR / "tmp" / f"{job.id}_carry.mp4"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    await _video_tool("last-frames", master_path(source) or path, tmp, n)
+    try:
+        p["carry_video"] = comfy.stage_input(tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+    p["carry_frames"] = n
+
+
+async def _prepare_chain(job: Job, p: dict[str, Any], entry: dict[str, Any]) -> Any:
+    """Latent-Kette ohne Anhaengen (seit 0.5.17, chain_asset_id): Der neue Clip beginnt mit der letzten Sekunde eines
+    vorhandenen Videos, fest uebernommen; Format und Bildrate kommen von dort. Zusammengefuegt wird im Schnitt (Studio:
+    Ueberblendung ueber genau diese Bilder) oder von Hand."""
+    if entry.get("family") != "ltx25":
+        raise RuntimeError(t("Anschließen geht mit LTX-2.5.", "Chaining works with LTX-2.5."))
+    if (p.get("image_asset_id") or p.get("end_image_asset_id") or p.get("loop") or p.get("audio_asset_id")
+            or p.get("extend_asset_id")):
+        raise RuntimeError(t(
+            "Beim Anschließen ist die letzte Sekunde des Videos der Anfang; ein eigenes Start- oder Endbild, eine "
+            "Schleife, ein vorgegebener Ton oder Verlängern gehen dabei nicht.",
+            "When chaining, the last second of the video is the beginning; your own start or end image, a loop, a "
+            "given sound or extending cannot be used with it."))
+    if not _carry_possible(p):
+        raise RuntimeError(t("Anschließen geht nicht mit 48 fps, automatischer Länge oder dem Versuchsweg „full“.",
+                             "Chaining does not work with 48 fps, automatic length or the experimental “full” path."))
+    source = db.get_asset(p["chain_asset_id"])
+    if source is None or source.kind != "video":
+        raise RuntimeError(t(f"Video nicht gefunden: {p['chain_asset_id']}",
+                             f"Video not found: {p['chain_asset_id']}"))
+    path = config.ASSET_DIR / source.filename
+    if not path.exists():
+        raise RuntimeError(t(f"Videodatei fehlt: {path}", f"Video file missing: {path}"))
+    info = await _video_tool("info", path)
+    if info["fps"] > 30:
+        raise RuntimeError(t(f"Das Video hat {info['fps']:g} fps; anschließen geht bis 30 fps.",
+                             f"The video has {info['fps']:g} fps; chaining works up to 30 fps."))
+    p["fps"] = info["fps"]
+    p["width"] = max(256, int(info["width"]) // 64 * 64)
+    p["height"] = max(256, int(info["height"]) // 64 * 64)
+    await _stage_carry(job, p, source, path)
+    return source
+
+
 @register("txt2video")
 async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     p = job.params
@@ -1593,8 +1652,15 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     wf = entry["workflow"]
     _check_video_options(p, entry)
     extension = await _prepare_extension(job, p, entry) if p.get("extend_asset_id") else None
+    if p.get("chain_asset_id") and extension is None:
+        await _prepare_chain(job, p, entry)
     fps = float(p.get("fps", 16))
     frames = workflows.normalize_frames(int(p.get("frames", 49)), wf)
+    carry = int(p.get("carry_frames") or 0)
+    if carry:
+        # Die uebernommenen Bilder kommen vor die verlangten neuen; aus 8n+1 und 8m+1 wird wieder 8k+1.
+        frames += carry - 1
+        p["auto_duration"] = False
 
     # Bild-zu-Video: das Startbild muss in ComfyUIs input/ liegen, damit LoadImage
     # es findet. Der Workflow-Builder bekommt nur den Dateinamen.
@@ -1635,25 +1701,37 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         "audio_asset_id": p.get("audio_asset_id"),
         "motion_speed": float(p.get("motion_speed") or 1.0),
         "extend_asset_id": p.get("extend_asset_id"),
+        # Latent-Kette: so viele Bilder am Anfang stammen vom Video chain_asset_id (das Studio blendet darueber)
+        "chain_asset_id": p.get("chain_asset_id") if extension is None else None,
+        "carry_frames": carry or None,
     })
     if extension is None:
         return ids
-    # Neues Stueck anfuegen: dessen erster Frame ist der letzte des Originals und faellt weg.
+    # Neues Stueck anfuegen. Latent-Kette: seine ersten `carry` Bilder sind die letzten des Originals, neu gerechnet;
+    # sie werden ueberblendet statt gedoppelt. Sonst ist nur sein erster Frame der letzte des Originals und faellt weg.
     source, source_path = extension
     segment = db.get_asset(ids[0])
     ctx.progress(0.995, t("fügt an", "joining"))
     out_name = f"{Path(segment.filename).stem}_extended.mp4"
     crf = p.get("crf") if p.get("crf") is not None else workflows.VIDEO_CRF
-    joined = await _video_tool("concat", source_path, config.ASSET_DIR / segment.filename,
-                               config.ASSET_DIR / out_name, crf, 1)
+    if carry:
+        joined = await _video_tool("concat-xfade", source_path, config.ASSET_DIR / segment.filename,
+                                   config.ASSET_DIR / out_name, crf, carry)
+    else:
+        joined = await _video_tool("concat", source_path, config.ASSET_DIR / segment.filename,
+                                   config.ASSET_DIR / out_name, crf, 1)
     meta = {"model_name": _name(entry), "extended_from": source.id, "segment_asset": segment.id,
             "seconds": joined["seconds"], "frames": joined["frames"], "fps": joined["fps"],
             "width": joined["width"], "height": joined["height"], "audio": joined["audio"],
-            "duration_s": joined["seconds"]}
+            "duration_s": joined["seconds"], "carry_frames": carry or None}
     first_master, second_master = master_path(source), master_path(segment)
     if first_master and second_master:
         master_name = f"{Path(segment.filename).stem}_extended_master.mkv"
-        await _video_tool("concat-master", first_master, second_master, config.ASSET_DIR / master_name, 1)
+        if carry:
+            await _video_tool("concat-xfade-master", first_master, second_master, config.ASSET_DIR / master_name,
+                              carry)
+        else:
+            await _video_tool("concat-master", first_master, second_master, config.ASSET_DIR / master_name, 1)
         meta["master"] = master_name
     combined = db.create_asset(
         kind="video", filename=out_name, job_id=job.id, prompt=p.get("prompt", ""), model_id=entry["id"],

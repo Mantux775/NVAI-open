@@ -182,16 +182,27 @@ marks grew exactly with the scale (100, 150, 200 %).
 |---|---|
 | Place | On conform, the chosen scene goes here, on the chosen track (V2 lies above V1) |
 | Transition | The video clip that starts here gets this transition (kind and length): at once if it is already in the edit, otherwise on conform. Move the marker and the transition moves along |
-| Chain | On generate, the video scene that starts here begins with the last frame of the scene before it: a seamless join |
+| Chain | On generate, the video scene that starts here continues the scene before it. With LTX-2.5 it takes over that scene's last second (25 frames), and conform dissolves between the two over exactly those frames; with an end image, a loop or another model it begins with the last frame |
 | Audio from here | On conform, the chosen audio scene (music, voice, sound) starts here |
 | AI task | A task for Claude: it reads it over MCP, does it and ticks it off |
 | Note | Just a note |
 
-In our test a knight walks through a misty forest (3 s). A chain marker at 3 s makes the clearing
-scene start with the last frame of the forest scene, and a transition marker at 6 s dissolves to the
-castle in 0.75 s. The exported video, frame by frame:
+In our test (0.5.13, still with the last frame) a knight walks through a misty forest (3 s). A chain
+marker at 3 s makes the clearing scene start with the last frame of the forest scene, and a transition
+marker at 6 s dissolves to the castle in 0.75 s. The exported video, frame by frame:
 
 ![Top: the last two frames of the forest scene and the first two of the clearing scene, the same knight in the same pose. Bottom: the clearing, the dissolve, the castle](images/studio-export-frames.jpg)
+
+**Since 0.5.17 the chain carries the last second over.** With LTX-2.5 the chained scene begins with the
+last 25 frames of the scene before it, generated again, and continues their motion; the job renders one
+second more for that. Conform lays its take exactly where those frames run in the take before (that take
+is usually one frame longer than its scene), ends the clip before it there and dissolves over the 25
+frames, so the edit keeps the length of the scenes. With an end image, a loop, a given sound or another
+model the chain stays with the last frame as the start image. Measured with a sailboat crossing a lake:
+with only the last frame, the change per frame fell at the seam from 5.4 to 2.1, the second clip started
+a calmer motion of its own; with the last second carried over, it went on at 4.4.
+
+![Change per frame where two clips meet: with the latent chain the motion goes on, with only the last frame it drops by more than half at the seam](images/latent-chain.png)
 
 ## Conform without surprises
 
@@ -221,7 +232,7 @@ videos are compressed already.
   1080p: 786 instead of 241 s). The project setting "Video scenes" switches to "Standard, faster".
 - **Lossless copy of every AI video:** next to the MP4, NVAI-open stores every generated video
   frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it, and
-  a chain scene takes its start image from it. Measured against the original, a YouTube 1080p export
+  a chain scene takes its last second (or its start image) from it. Measured against the original, a YouTube 1080p export
   made from the MP4 reached 37.7 dB PSNR, made from the lossless copy 42.3 dB at the same file size; a
   chain start image from the copy is pixel-exact. It costs space: about 32 MB per second at 1080p
   (5 s: 162 instead of 10 MB). The switch "Lossless copy for editing" under "Generate → Video" turns it off.

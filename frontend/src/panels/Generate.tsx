@@ -1137,12 +1137,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   <p className="hint small">
                     {t('Das Foto oben als Startbild wählen oder hochladen, am besten nur Kopf und Schultern. Hier '
                       + 'beschreiben, wer die Person sein soll: Stil, Kleidung, Ort. FLUX 3 behält das Gesicht und '
-                      + 'erzeugt vier Startbilder im Videoformat. Das ähnlichste oben auswählen, dann unten Bewegung '
-                      + 'und Gesprochenes beschreiben.',
+                      + 'erzeugt vier Startbilder im Videoformat. Die vier in voller Größe vergleichen (anklicken), '
+                      + 'das ähnlichste oben auswählen, dann unten Bewegung und Gesprochenes beschreiben.',
                     'Pick or upload the photo as the start image above, head and shoulders work best. Describe here '
                       + 'who the person should be: style, clothing, place. FLUX 3 keeps the face and creates four start '
-                      + 'images in the video format. Pick the most similar one above, then describe the motion and what '
-                      + 'is said below.')}
+                      + 'images in the video format. Compare the four at full size (click them), pick the most similar '
+                      + 'one above, then describe the motion and what is said below.')}
                   </p>
                   <textarea
                     value={roleText}
@@ -1193,10 +1193,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                     </label>
                     {loop && (
                       <p className="hint small">
-                        {t('Die Kamera ruhig lassen und eine wiederkehrende Bewegung beschreiben (Flammen, Wasser, Atem). '
-                          + 'Mit Kamerafahrt zerfiel im Test der Schluss.',
-                        'Keep the camera still and describe a repeating motion (flames, water, breathing). '
-                          + 'With a camera move the ending fell apart in the test.')}
+                        {t('Die Kamera ruhig lassen, mit Kamerafahrt zerfiel im Test der Schluss. Mit Schleife bewegt '
+                          + 'sich nur die beschriebene Handlung: Wasser und Rauch standen so still wie das Ufer, auch '
+                          + 'wenn der Prompt sie bewegen sollte.',
+                        'Keep the camera still, with a camera move the ending fell apart in the test. With a loop only '
+                          + 'the described action moves: water and smoke stood as still as the shore, even when the '
+                          + 'prompt asked them to move.')}
                       </p>
                     )}
                     {!loop && (
@@ -1224,9 +1226,13 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                           'End image and loop only work without “Best quality (DFR)”; choosing one switches to '
                             + 'standard quality.')
                         : t('Mit Endbild läuft das Video vom Startbild zum Endbild (Übergang). Eine Stufe in '
-                            + 'voller Auflösung, deshalb langsamer als ohne.',
+                            + 'voller Auflösung, deshalb langsamer als ohne. Was in beiden Bildern gleich ist, '
+                            + 'steht dazwischen still (Wasser und Rauch im Test wie das Ufer); für bewegten '
+                            + 'Hintergrund ohne Endbild.',
                           'With an end image the video runs from the start image to the end image (a '
-                            + 'transition). One stage at full resolution, so slower than without.')}
+                            + 'transition). One stage at full resolution, so slower than without. Whatever is the '
+                            + 'same in both images stands still in between (water and smoke as still as the shore '
+                            + 'in the test); for a moving background, leave it out.')}
                     </p>
                   </>
                 )}
@@ -1460,11 +1466,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   <span className="muted small">
                     {t(
                       '— der mitgelieferte Upsampler schreibt daraus die lange Bildbeschreibung, '
-                        + 'auf die das Modell trainiert ist. Nur abschalten, wenn der Prompt schon '
-                        + 'eine volle Beschreibung ist.',
+                        + 'auf die das Modell trainiert ist. Abschalten, wenn der Prompt schon eine volle '
+                        + 'Beschreibung ist oder Bauweise, Anzahl und Blickrichtung genau stimmen müssen: '
+                        + 'Bei FLUX 3 kam mit Ausbauer in 4 von 6 Bildern eine zweite Angelschnur dazu, '
+                        + 'ohne in 0 von 2.',
                       '— the bundled upsampler turns it into the long image description the model '
-                        + 'was trained on. Only switch this off if the prompt already is a full '
-                        + 'description.',
+                        + 'was trained on. Switch it off if the prompt already is a full description or '
+                        + 'construction, counts and gaze have to be exact: with FLUX 3 a second fishing '
+                        + 'line appeared in 4 of 6 images with the upsampler, in 0 of 2 without.',
                     )}
                   </span>
                 </span>
@@ -1890,12 +1899,16 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 </select>
                 {extendId && (
                   <p className="hint small">
-                    {t('Der letzte Frame des Videos wird Startbild, Format und Bildrate kommen vom Video, das neue '
-                        + 'Stück wird samt Ton angehängt. Der Prompt beschreibt, was als Nächstes passiert; die Länge '
-                        + 'gilt für das neue Stück. Startbild, Schleife und vorgegebener Ton bleiben dabei außen vor.',
-                      'The last frame of the video becomes the start image, size and frame rate come from the video, '
-                        + 'and the new part is appended with its sound. The prompt describes what happens next; the '
-                        + 'length applies to the new part. Start image, loop and given sound are not used.')}
+                    {t('Die letzte Sekunde des Videos steht fest am Anfang des neuen Stücks, es setzt die Bewegung '
+                        + 'fort und wird mit einer Überblendung über diese Sekunde angehängt (Latent-Kette, seit '
+                        + '0.5.17; im Test ragte die Naht nicht mehr heraus). Format und Bildrate kommen vom Video. Der '
+                        + 'Prompt beschreibt, was als Nächstes passiert; die Länge gilt für das neue Stück. Startbild, '
+                        + 'Schleife und vorgegebener Ton bleiben dabei außen vor.',
+                      'The last second of the video is pinned at the start of the new part, which continues the '
+                        + 'motion and is appended with a crossfade over that second (latent chain, since 0.5.17; in '
+                        + 'our test the seam no longer stood out). Size and frame rate come from the video. The prompt '
+                        + 'describes what happens next; the length applies to the new part. Start image, loop and '
+                        + 'given sound are not used.')}
                   </p>
                 )}
 

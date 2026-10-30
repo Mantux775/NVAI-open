@@ -186,16 +186,27 @@ zweier Marken wuchs genau mit der Skalierung (100, 150, 200 %).
 |---|---|
 | Platzieren | Beim Übernehmen kommt die gewählte Szene an diese Stelle, auf die gewählte Spur (V2 liegt über V1) |
 | Übergang | Der Videoclip, der hier beginnt, bekommt diesen Übergang (Art und Dauer): sofort, wenn er schon im Schnitt liegt, sonst beim Übernehmen. Wandert der Marker, wandert der Übergang mit |
-| Anschluss | Beim Erzeugen beginnt die Videoszene an dieser Stelle mit dem letzten Bild der Szene davor: ein nahtloser Übergang |
+| Anschluss | Beim Erzeugen setzt die Videoszene an dieser Stelle die Szene davor fort. Mit LTX-2.5 übernimmt sie deren letzte Sekunde (25 Bilder), und Übernehmen blendet zwischen beiden über genau diese Bilder; mit Endbild, Schleife oder einem anderen Modell beginnt sie mit dem letzten Bild |
 | Ton ab hier | Beim Übernehmen beginnt die gewählte Ton-Szene (Musik, Sprecher, Klang) an dieser Stelle |
 | KI-Auftrag | Ein Auftrag für Claude: Es liest ihn per MCP, arbeitet ihn ab und hakt ihn ab |
 | Notiz | Nur eine Notiz |
 
-Im Test geht ein Ritter durch einen Nebelwald (3 s). Ein Anschluss-Marker bei 3 s lässt die Szene auf der
-Lichtung mit dem letzten Bild der Waldszene beginnen, ein Übergang-Marker bei 6 s blendet in 0,75 s auf die
-Burg über. Das exportierte Video, Bild für Bild:
+Im Test (0.5.13, noch mit dem letzten Bild) geht ein Ritter durch einen Nebelwald (3 s). Ein
+Anschluss-Marker bei 3 s lässt die Szene auf der Lichtung mit dem letzten Bild der Waldszene beginnen, ein
+Übergang-Marker bei 6 s blendet in 0,75 s auf die Burg über. Das exportierte Video, Bild für Bild:
 
 ![Oben: die letzten zwei Bilder der Waldszene und die ersten zwei der Lichtung, derselbe Ritter in derselben Haltung. Unten: die Lichtung, die Überblendung, die Burg](../images/studio-export-frames.jpg)
+
+**Seit 0.5.17 übernimmt der Anschluss die letzte Sekunde.** Mit LTX-2.5 beginnt die Anschluss-Szene mit den
+letzten 25 Bildern der Szene davor, neu gerechnet, und setzt deren Bewegung fort; der Auftrag rechnet dafür
+eine Sekunde mehr. Übernehmen legt ihren Take genau dorthin, wo diese Bilder im Take davor laufen (der ist
+meist ein Bild länger als seine Szene), lässt den Clip davor dort enden und blendet über die 25 Bilder,
+so behält der Schnitt die Länge der Szenen. Mit Endbild, Schleife, vorgegebenem Ton oder einem anderen
+Modell bleibt es beim letzten Bild als Startbild. Gemessen an einem Segelboot auf einem See: Nur mit dem
+letzten Bild fiel die Änderung je Bild an der Naht von 5,4 auf 2,1, der zweite Clip begann eine eigene,
+ruhigere Bewegung; mit der übernommenen Sekunde lief sie mit 4,4 weiter.
+
+![Änderung je Bild, wo zwei Clips aneinanderstoßen: Mit der Latent-Kette läuft die Bewegung weiter, nur mit dem letzten Bild fällt sie an der Naht auf weniger als die Hälfte](../images/latent-chain-de.png)
 
 ## Übernehmen ohne Überraschungen
 
@@ -226,7 +237,7 @@ Dateien ergibt 63 MB, gepackt in 0,5 s, ohne Kompression, weil Videos schon komp
   schneller“.
 - **Verlustfreie Kopie jedes KI-Videos:** Neben dem MP4 speichert NVAI-open jedes erzeugte Video Bild für
   Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus, und eine
-  Anschluss-Szene nimmt ihr Startbild daraus. Gegen das Original gemessen: Ein YouTube-1080p-Export aus dem
+  Anschluss-Szene nimmt ihre letzte Sekunde (oder ihr Startbild) daraus. Gegen das Original gemessen: Ein YouTube-1080p-Export aus dem
   MP4 kam auf 37,7 dB PSNR, aus der verlustfreien Kopie auf 42,3 dB bei gleicher Dateigröße; ein
   Anschluss-Startbild aus der Kopie ist pixelgenau. Das kostet Platz: rund 32 MB je Sekunde bei 1080p (5 s:
   162 statt 10 MB). Der Schalter „Verlustfreie Kopie für den Schnitt“ unter „Generieren → Video“ schaltet

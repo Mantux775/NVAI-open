@@ -470,11 +470,12 @@ def _texts_from_output(node_output: dict[str, Any]) -> list[str]:
 def _files_from_output(node_output: dict[str, Any]) -> list[dict[str, Any]]:
     """Sammelt Dateiverweise aus einem Node-Output. Je nach Save-Node heisst der
     Schluessel images, audio, video oder 3d -- wir nehmen alles, was wie eine
-    Datei aussieht."""
+    Datei aussieht. Ausser Eingaben: LoadVideo meldet sein Eingangsvideo als
+    Vorschau mit type "input" (Latent-Kette, 0.5.17), das ist kein Ergebnis."""
     found: list[dict[str, Any]] = []
     for key in OUTPUT_KEYS:
         for item in node_output.get(key) or []:
-            if isinstance(item, dict) and "filename" in item:
+            if isinstance(item, dict) and "filename" in item and item.get("type") != "input":
                 found.append(item)
     for item in node_output.get(MASTER_KEY) or []:
         if isinstance(item, dict) and "filename" in item:

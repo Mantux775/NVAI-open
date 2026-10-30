@@ -34,8 +34,10 @@ def options(spec):
     return None
 
 
-# Zusatzwege, die ein eigener Graph sind: Krea 2 mit Stilvorlage (seit 0.5.10).
-VARIANTS = {"krea2_turbo": [("Stilvorlage", {"reference_images": ["dummy.png", "dummy2.png"]})]}
+# Zusatzwege, die ein eigener Graph sind: Krea 2 mit Stilvorlage (seit 0.5.10), LTX-2.5 mit Latent-Kette (seit 0.5.17).
+CARRY = {"carry_video": "dummy.mp4", "carry_frames": 25}
+VARIANTS = {"krea2_turbo": [("Stilvorlage", {"reference_images": ["dummy.png", "dummy2.png"]})],
+            "ltx25": [("Latent-Kette", CARRY), ("Latent-Kette DFR", {**CARRY, "quality": "dfr"})]}
 
 
 def check(graph):

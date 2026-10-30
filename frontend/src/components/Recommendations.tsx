@@ -183,11 +183,29 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
     {
       head: t('Kamera mit Endbild festhalten', 'Hold the camera with an end image'),
       text: t(
-        '„Static camera“ im Prompt fuhr trotzdem heran (3 von 3). Mit einem Endbild, das FLUX 3 aus dem Startbild '
-          + 'bearbeitet (gleiches Gesicht, gleicher Ausschnitt), stand die Kamera, und das Gesicht war am Ende wieder '
-          + 'dasselbe.',
-        '“Static camera” in the prompt still pushed in (3 of 3). With an end image that FLUX 3 edits from the start '
-          + 'image (same face, same framing), the camera stayed put and the face was the same again at the end.',
+        '„Static camera“ im Prompt fuhr in einer halbnahen Einstellung trotzdem heran (3 von 3); in einer Halbtotalen '
+          + 'von der Seite stand die Kamera ohne Endbild meist (14 von 18). Mit einem Endbild, das FLUX 3 aus dem '
+          + 'Startbild bearbeitet (gleiches Gesicht, gleicher Ausschnitt), stand sie, und das Gesicht war am Ende '
+          + 'wieder dasselbe.',
+        '“Static camera” in the prompt still pushed in on a medium close shot (3 of 3); on a medium-wide side view '
+          + 'the camera mostly stayed put without an end image (14 of 18). With an end image that FLUX 3 edits from the '
+          + 'start image (same face, same framing), it stayed put and the face was the same again at the end.',
+      ),
+    },
+    {
+      head: t('Endbild und Schleife halten auch den Hintergrund fest',
+        'End image and loop also freeze the background'),
+      text: t(
+        'Was in Start- und Endbild gleich ist, bleibt dazwischen stehen: In der Schleife änderten sich Wasser und '
+          + 'Rauch so wenig wie das Ufer (0,3–2 von 255 je halbe Sekunde), auch mit einem Satz im Prompt, der sie '
+          + 'bewegen sollte; mit Endbild vor und nach dem Ereignis meist ebenso. Dieselbe Szene nur mit Startbild: '
+          + 'Wasser 1–9, Rauch 1–12. Es bewegt sich nur, was der Prompt als Ereignis verlangt. Für bewegten '
+          + 'Hintergrund ohne Endbild und ohne Schleife.',
+        'Whatever is the same in the start and end image stays put in between: in a loop, water and smoke changed '
+          + 'as little as the shore (0.3–2 out of 255 per half second), even with a sentence in the prompt that asked '
+          + 'them to move; with an end image mostly the same before and after the event. The same scene with only a '
+          + 'start image: water 1–9, smoke 1–12. Only what the prompt asks for as an event moves. For a moving '
+          + 'background, use neither an end image nor a loop.',
       ),
     },
     {
@@ -213,6 +231,21 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Ruhige Figur: kurzer Prompt', 'A still person: a short prompt'),
+      text: t(
+        'Über viele Korrekturen war der Prompt auf 14 Sätze gewachsen, fast alle über die Figur, und sie bewegte sich '
+          + 'zu viel. Mit 8 Sätzen in Lightricks’ Reihenfolge und der Stille in einem Satz („sits perfectly still like a '
+          + 'statue … through everything that happens“) bewegte sie sich bei gleichem Seed 38–49 % weniger. Ohne Endbild '
+          + 'wirkten Verbote nicht („does not reach into the bucket“): beschreiben, was sie tut. Korrekturen '
+          + 'einarbeiten, nicht anhängen.',
+        'Over many corrections the prompt had grown to 14 sentences, nearly all about the person, and the person moved '
+          + 'too much. With 8 sentences in Lightricks’ order and the stillness in one sentence (“sits perfectly still '
+          + 'like a statue … through everything that happens”) the person moved 38–49 % less with the same seed. '
+          + 'Without an end image, bans did not work (“does not reach into the bucket”): describe what the person does. '
+          + 'Work corrections in instead of appending them.',
+      ),
+    },
+    {
       head: t('Gleiche Stimme in mehreren Clips', 'The same voice across clips'),
       text: t(
         'LTX erfindet die Stimme in jedem Clip neu. Sie passte, wenn das Gesicht im Bild war und die Beschreibung '
@@ -234,10 +267,22 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Zwei Clips nahtlos: Verlängern oder Anschluss', 'Two clips without a seam: extend or chain'),
+      text: t(
+        'Mit dem letzten Bild als Startbild sprang das Bild an der Naht (der Bildschritt dort 1,9–2,5-fach so groß wie '
+          + 'seine Nachbarn). „Video verlängern“ und der Anschluss im Studio übernehmen seit 0.5.17 die letzte Sekunde '
+          + 'fest und blenden über diese Bilder: höchstens 1,4–1,6-fach, wie normale Bewegung. Ein Anschluss rechnet '
+          + 'dafür eine Sekunde mehr.',
+        'With the last frame as the start image, the picture jumped at the seam (the frame step there 1.9–2.5 times '
+          + 'its neighbours). Since 0.5.17 “Extend a video” and the Studio chain pin the last second and crossfade over '
+          + 'it: at most 1.4–1.6 times, like ordinary motion. A chained clip renders one second more for that.',
+      ),
+    },
+    {
       head: t('Schleife nur mit ruhiger Kamera', 'Loop only with a still camera'),
       text: t(
-        'Mit Heranfahren zerfiel die Schleife in den letzten Frames.',
-        'With a push-in, the loop fell apart in the last frames.',
+        'Mit Heranfahren zerfiel die Schleife in den letzten Frames. Wasser und Rauch stehen mit Schleife still.',
+        'With a push-in, the loop fell apart in the last frames. Water and smoke stand still in a loop.',
       ),
     },
     {
@@ -259,8 +304,10 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
     {
       head: t('Endbild', 'End image'),
       text: t(
-        'Wenn das Gesicht am Schluss stimmen muss (Herauszoomen, Ende im Stand). Für Bewegung von Anfang an ohne Endbild.',
-        'When the face has to be right at the end (zoom out, ending at rest). For motion from the start, leave it out.',
+        'Wenn das Gesicht am Schluss stimmen muss (Herauszoomen, Ende im Stand). Für Bewegung von Anfang an und für '
+          + 'bewegten Hintergrund (Wasser, Rauch) ohne Endbild.',
+        'When the face has to be right at the end (zoom out, ending at rest). For motion from the start and a moving '
+          + 'background (water, smoke), leave it out.',
       ),
     },
   ],

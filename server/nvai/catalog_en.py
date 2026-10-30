@@ -76,7 +76,8 @@ _LTX25_WAYS = (
     "• Text to video or with a start image: two stages, first at half resolution, then upscaled "
     "and refined.\n"
     "• Start and end image: a transition between two images. With \"Loop\" the start image is also "
-    "the end image, for seamless loops.\n"
+    "the end image, for seamless loops. Whatever is the same in both images stays put in between "
+    "(water, smoke).\n"
     "• Best quality (DFR, Diffusion Fidelity Rendering): detail keyframes and a detail IC-LoRA, "
     "optionally at 48 fps.\n"
     "• Automatic length: a small extra head estimates the duration from the described action.\n"
@@ -94,7 +95,10 @@ _LTX25_FEATURES_EN = {
         "Spoken lines in quotation marks. Several shots: write every cut out (\"A hard cut "
         "transitions to …\"), 2 to 4 shots. People: keep the face large and frontal in the start "
         "image and don't let them turn away; let them speak only with their face in the shot and the "
-        "same voice description, otherwise the voice changes."),
+        "same voice description, otherwise the voice changes. Describe reactions small and physical "
+        "and say what stays still (LTX exaggerates); name what must be seen with its size and place; "
+        "pin down counts (\"exactly one …\"). With an end image or a loop only the described action "
+        "moves; for water, smoke and wind use only a start image."),
 }
 
 

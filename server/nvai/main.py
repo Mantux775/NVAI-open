@@ -105,6 +105,8 @@ API_FEATURES = [
                        # GET /api/assets?folder= und /api/jobs?folder=, project_id beim Erzeugen (seit 0.5.15)
     "vhs",             # POST /api/vhs/analyze und /api/vhs/process: VHS-Videos aufwerten (seit 0.5.16)
     "studio_scale",    # Studio: scale, anchor, scale_keys an Clips und der Befehl clip.key (seit 0.5.16)
+    "latent_chain",    # LTX-2.5: chain_asset_id, Verlaengern mit Uebertrag und Ueberblendung, Studio-Anschluss
+                       # mit Ueberblendung beim Uebernehmen (seit 0.5.17)
 ]
 
 

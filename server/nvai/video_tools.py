@@ -8,11 +8,18 @@ Kein ffmpeg-Programm nötig; PyAV bringt ComfyUI für SaveVideo ohnehin mit. Aus
     python video_tools.py last-frame <video> <bild.png>
     python video_tools.py concat <erster.mp4> <zweiter.mp4> <ziel.mp4> <crf> [<frames_ueberspringen>]
     python video_tools.py concat-master <erster.mkv> <zweiter.mkv> <ziel.mkv> [<frames_ueberspringen>]
+    python video_tools.py last-frames <video> <ziel.mp4> <anzahl>   (die letzten Bilder verlustfrei, seit 0.5.17)
+    python video_tools.py concat-xfade <erster> <zweiter> <ziel.mp4> <crf> <bilder>
+    python video_tools.py concat-xfade-master <erster.mkv> <zweiter.mkv> <ziel.mkv> <bilder>
     python video_tools.py preview <video> <vorschau.mp4>   (H.264 für den Browser, höchstens 1920 breit)
 
 Beim Anhängen fällt der erste Frame des zweiten Clips weg (er ist der letzte des ersten, das Startbild), samt
 dem Ton dieser Bilddauer, damit Bild und Ton synchron bleiben. Kodiert wird wie SaveVideo: H.264, CRF, AAC;
 concat-master hängt die verlustfreien Master (FFV1/MKV, comfy_nodes/nvai_video.py) genauso verlustfrei aneinander.
+
+Latent-Kette (seit 0.5.17): Der zweite Clip beginnt mit den letzten <bilder> Bildern des ersten (fest übernommen,
+last-frames liefert sie). concat-xfade blendet diese Überlappung linear über, der Ton wechselt mit 40 ms gleich lauter
+Überblendung (cos/sin) an der Stelle, an der der zweite Clip neue Bilder zeigt; Bild und Ton bleiben gleich lang.
 """
 from __future__ import annotations
 
@@ -183,6 +190,153 @@ def concat_master(first: str, second: str, out: str, skip: int = 1) -> dict[str,
             "height": height, "audio": with_audio, "skipped": skip}
 
 
+def last_frames(path: str, out: str, n: int) -> dict[str, Any]:
+    """Die letzten n Bilder als verlustfreies MP4 (H.264 qp 0 in 4:4:4) mit der Bildrate des Videos: der Übertrag einer
+    Latent-Kette, den ComfyUIs LoadVideo liest (MKV listet es nicht als Video)."""
+    from collections import deque
+
+    a = info(path)
+    fps = Fraction(a["fps"]).limit_denominator(1001)
+    tail: deque = deque(maxlen=max(1, int(n)))
+    with av.open(path) as c:
+        for frame in c.decode(video=0):
+            tail.append(frame.to_ndarray(format="rgb24"))
+    if not tail:
+        raise SystemExit("Video ohne Bild")
+    height, width = tail[0].shape[:2]
+    with av.open(out, "w") as dst:
+        vs = dst.add_stream("libx264", rate=fps)
+        vs.width, vs.height, vs.pix_fmt = width, height, "yuv444p"
+        vs.options = {"qp": "0", "preset": "medium"}
+        for i, rgb in enumerate(tail):
+            vf = av.VideoFrame.from_ndarray(rgb, format="rgb24").reformat(format="yuv444p")
+            vf.pts, vf.time_base = i, 1 / fps
+            for p in vs.encode(vf):
+                dst.mux(p)
+        for p in vs.encode(None):
+            dst.mux(p)
+    return {"frames": len(tail), "width": width, "height": height, "fps": float(fps)}
+
+
+def _audio_all(path: str, rate: int) -> np.ndarray | None:
+    """Der ganze Ton als float32 [2, Proben] mit der gewünschten Rate (für die Überblendung; Clips sind kurz)."""
+    with av.open(path) as c:
+        if not c.streams.audio:
+            return None
+        resampler = av.AudioResampler(format="fltp", layout="stereo", rate=rate)
+        parts = []
+        for frame in c.decode(audio=0):
+            parts += [af.to_ndarray() for af in resampler.resample(frame)]
+        parts += [af.to_ndarray() for af in resampler.resample(None)]
+    return np.concatenate(parts, axis=1).astype(np.float32) if parts else None
+
+
+def _xfade_audio(first: np.ndarray, second: np.ndarray, overlap_s: float, rate: int) -> np.ndarray:
+    """Ton des ersten Clips bis zu seinem Ende, dann der des zweiten ab der Stelle, an der er neue Bilder zeigt
+    (overlap_s); die letzten 40 ms des ersten gehen gleich laut (cos/sin) in die 40 ms davor des zweiten über.
+    Länge = erster + zweiter − Überlappung, wie das Bild."""
+    s1, s2 = first.shape[1], min(second.shape[1], int(round(overlap_s * rate)))
+    fade = max(1, min(int(0.04 * rate), s1, s2))
+    k = np.linspace(0.0, np.pi / 2, fade, dtype=np.float32)
+    mixed = first[:, s1 - fade:] * np.cos(k) + second[:, s2 - fade:s2] * np.sin(k)
+    return np.concatenate([first[:, :s1 - fade], mixed, second[:, s2:]], axis=1)
+
+
+def _xfade_frames(first: str, second: str, n: int):
+    """Bilder (rgb24) von erstem + zweitem Clip, die n überlappenden linear überblendet; gestreamt bis auf die n Bilder
+    am Ende des ersten. Liefert (Anzahl Überblendbilder, Generator)."""
+    from collections import deque
+
+    n = max(1, min(int(n), info(first)["frames"] or n, info(second)["frames"] or n))
+
+    def gen():
+        held: deque = deque()
+        with av.open(first) as c:
+            for frame in c.decode(video=0):
+                held.append(frame.to_ndarray(format="rgb24"))
+                if len(held) > n:
+                    yield held.popleft()
+        with av.open(second) as c:
+            for i, frame in enumerate(c.decode(video=0)):
+                rgb = frame.to_ndarray(format="rgb24")
+                if held:
+                    if rgb.shape != held[0].shape:
+                        rgb = frame.reformat(width=held[0].shape[1], height=held[0].shape[0]).to_ndarray(format="rgb24")
+                    w = (i + 1) / (n + 1)
+                    rgb = np.clip(held.popleft().astype(np.float32) * (1 - w) + rgb.astype(np.float32) * w + 0.5,
+                                  0, 255).astype(np.uint8)
+                yield rgb
+        while held:  # zweiter Clip kürzer als die Überlappung
+            yield held.popleft()
+
+    return n, gen()
+
+
+def concat_xfade(first: str, second: str, out: str, crf: float, n: int) -> dict[str, Any]:
+    """Latent-Kette anhängen: die n Bilder, die der zweite Clip vom ersten übernommen hat, überblenden statt doppeln."""
+    a, b = info(first), info(second)
+    fps = Fraction(a["fps"]).limit_denominator(1001)
+    width, height = a["width"], a["height"]
+    n, frames = _xfade_frames(first, second, n)
+    rate, audio = 0, None
+    if a["audio"] and b["audio"]:
+        with av.open(first) as c:
+            rate = c.streams.audio[0].codec_context.sample_rate or 48000
+        one, two = _audio_all(first, rate), _audio_all(second, rate)
+        if one is not None and two is not None:
+            audio = _xfade_audio(one, two, n / float(fps), rate)
+    count = 0
+    with av.open(out, "w", options={"movflags": "+faststart"}) as dst:
+        vs = dst.add_stream("libx264", rate=fps)
+        vs.width, vs.height, vs.pix_fmt = width, height, "yuv420p"
+        vs.options = {"crf": f"{crf:g}", "preset": "medium"}
+        ast = dst.add_stream("aac", rate=rate, layout="stereo") if audio is not None else None
+        for rgb in frames:
+            vf = av.VideoFrame.from_ndarray(rgb, format="rgb24").reformat(format="yuv420p")
+            vf.pts, vf.time_base = count, 1 / fps
+            count += 1
+            for p in vs.encode(vf):
+                dst.mux(p)
+        for p in vs.encode(None):
+            dst.mux(p)
+        if ast is not None:
+            for start in range(0, audio.shape[1], 1024):
+                af = av.AudioFrame.from_ndarray(np.ascontiguousarray(audio[:, start:start + 1024]), format="fltp",
+                                                layout="stereo")
+                af.sample_rate, af.pts, af.time_base = rate, start, Fraction(1, rate)
+                for p in ast.encode(af):
+                    dst.mux(p)
+            for p in ast.encode(None):
+                dst.mux(p)
+    return {"frames": count, "fps": float(fps), "seconds": round(count / float(fps), 3), "width": width,
+            "height": height, "audio": audio is not None, "xfade": n}
+
+
+def concat_xfade_master(first: str, second: str, out: str, n: int) -> dict[str, Any]:
+    """Wie concat_xfade, aber verlustfrei: zwei Master zu einem neuen Master, Ton als Float-PCM."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "comfy_nodes"))
+    import nvai_video
+
+    a, b = info(first), info(second)
+    fps = Fraction(a["fps"]).limit_denominator(1001)
+    n, frames = _xfade_frames(first, second, n)
+    rate, audio = 0, None
+    if a["audio"] and b["audio"]:
+        with av.open(first) as c:
+            rate = c.streams.audio[0].codec_context.sample_rate or 48000
+        one, two = _audio_all(first, rate), _audio_all(second, rate)
+        if one is not None and two is not None:
+            audio = _xfade_audio(one, two, n / float(fps), rate)
+    with nvai_video.MasterWriter(out, a["width"], a["height"], fps, rate, 2 if audio is not None else 0) as writer:
+        for rgb in frames:
+            writer.add_frame(rgb)
+        if audio is not None:
+            writer.add_audio(audio)
+        count = writer.frames
+    return {"frames": count, "fps": float(fps), "seconds": round(count / float(fps), 3), "width": a["width"],
+            "height": a["height"], "audio": audio is not None, "xfade": n}
+
+
 def preview(src: str, out: str) -> dict[str, Any]:
     """Vorschau zum Ansehen im Browser für Dateien, die er nicht abspielt (FFV1, ProRes, MKV/AVI mit fremden Codecs):
     H.264 mit CRF 20, höchstens 1920 Bildpunkte breit, Ton als AAC."""
@@ -247,6 +401,12 @@ def main(argv: list[str]) -> None:
         result = preview(argv[1], argv[2])
     elif cmd == "concat-master" and len(argv) in (4, 5):
         result = concat_master(argv[1], argv[2], argv[3], int(argv[4]) if len(argv) == 5 else 1)
+    elif cmd == "last-frames" and len(argv) == 4:
+        result = last_frames(argv[1], argv[2], int(argv[3]))
+    elif cmd == "concat-xfade" and len(argv) == 6:
+        result = concat_xfade(argv[1], argv[2], argv[3], float(argv[4]), int(argv[5]))
+    elif cmd == "concat-xfade-master" and len(argv) == 5:
+        result = concat_xfade_master(argv[1], argv[2], argv[3], int(argv[4]))
     else:
         raise SystemExit(__doc__)
     print(json.dumps(result))

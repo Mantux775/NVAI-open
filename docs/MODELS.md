@@ -61,7 +61,8 @@ Without a `model_id`, NVAI-open uses the active image model.
 - **LTX-2.5 IC-LoRAs Restore and Ingredients** (Lightricks): Restore did not bring back a face that had
   changed and added artifacts; Ingredients (a reference sheet instead of a start image) did not keep a real
   person recognizable in any test. For a recognizable person the start image carries the face, held with an
-  end image or "Loop" ([PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md#tips-from-our-tests)).
+  end image or "Loop" ([PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md#tips-from-our-tests)); the background then stands
+  still.
 
 ### New in 0.5.13
 
@@ -259,8 +260,8 @@ on an RTX 5060 Ti at 24 fps with sound; graphics memory is almost full and Comfy
 |---|---|---|
 | Text to video | — | 5 s at 1280 × 704 in 93 s (first run with loading 122 s); 1920 × 1088 in 251 s |
 | Start image | `image_asset_id` | 5 s at 1280 × 704 in 109 s |
-| Start and end image | `end_image_asset_id` | 5 s in 154 s; first and last frame match the two images |
-| Loop | `loop=True` | 4 s in 125 s; first and last frame differ by 3.6/255 on average (12–44 without a loop). Only with a still camera: with a camera move the last frames fell apart |
+| Start and end image | `end_image_asset_id` | 5 s in 154 s; first and last frame match the two images. Whatever is the same in both stands still in between: water and smoke moved as little as the shore, even with a sentence asking them to move (before and after the event mostly as little as in a loop, 0.3–2 out of 255 per half second; the same scene with only a start image: water 1–9, smoke 1–12) |
+| Loop | `loop=True` | 4 s in 125 s; first and last frame differ by 3.6/255 on average (12–44 without a loop). Only with a still camera: with a camera move the last frames fell apart. Water and smoke stand still, as with an end image |
 | Automatic length | `auto_duration=True` | a door that opens slowly: 3 s, in 72 s |
 | Given sound | `audio_asset_id` | 20 s of brass band → a 19.7 s clip at 1024 × 576 in 302 s, the sound unchanged |
 | Several shots | `expand_prompt(target="video_multishot")` | 8 s in 170 s: two shots with a clean cut, the same lighthouse keeper in both |

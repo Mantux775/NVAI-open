@@ -1473,7 +1473,10 @@ LTX25_FEATURES: dict[str, Any] = {
         "Anführungszeichen. Mehrere Einstellungen: jeden Schnitt ausschreiben (\"A hard cut "
         "transitions to …\"), 2 bis 4 Einstellungen. Personen: Gesicht groß und frontal im Startbild, "
         "nicht abwenden lassen; sprechen nur mit Gesicht im Bild und immer gleich beschriebener Stimme, "
-        "sonst klingt sie anders."),
+        "sonst klingt sie anders. Reaktionen klein und körperlich beschreiben und sagen, was still bleibt "
+        "(LTX übertreibt); was zu sehen sein muss, mit Größe und Ort nennen; Anzahlen festlegen "
+        "(\"exactly one …\"). Mit Endbild oder Schleife bewegt sich nur die beschriebene Handlung; für "
+        "Wasser, Rauch und Wind nur ein Startbild."),
     "placeholder": (
         "Cinematic wide shot of a lighthouse on a rocky coast at dusk. Waves crash against the rocks "
         "while the beam sweeps slowly across the dark sea. The camera pushes in slowly. Sound: roaring "
@@ -1490,7 +1493,8 @@ LTX25_WAYS = (
     "• Text zu Video oder mit Startbild: zwei Stufen, erst halbe Auflösung, dann hochskaliert und "
     "nachgerechnet.\n"
     "• Start- und Endbild: ein Übergang zwischen zwei Bildern. Mit „Schleife“ ist das Startbild "
-    "auch das Endbild, für nahtlose Loops.\n"
+    "auch das Endbild, für nahtlose Loops. Was in beiden Bildern gleich ist, bleibt dazwischen "
+    "stehen (Wasser, Rauch).\n"
     "• Höchste Qualität (DFR, Diffusion Fidelity Rendering): Detail-Keyframes und ein "
     "Detail-IC-LoRA, auf Wunsch mit 48 fps.\n"
     "• Länge automatisch: Ein Zusatzkopf schätzt die Dauer aus der beschriebenen Handlung.\n"

@@ -203,9 +203,17 @@ class GenerateVideoRequest(BaseModel):
         True, description="Zusaetzlich verlustfrei speichern (FFV1 in MKV, Ton als Float-PCM, meta.master am "
                           "Asset): Ausgangsmaterial fuer Schnitt und Studio-Export ohne Kompressionsverlust")
     extend_asset_id: str | None = Field(
-        None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Sein letzter Frame wird "
-                          "Startbild, Format und Bildrate kommen von ihm; das neue Stueck wird samt Ton "
-                          "angehaengt. Ergebnis: das verlaengerte Video und das neue Stueck einzeln")
+        None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Seit 0.5.17 als Latent-Kette: "
+                          "Seine letzten 25 Bilder stehen fest am Anfang des neuen Stuecks, das mit einer "
+                          "Ueberblendung ueber diese Bilder angehaengt wird (48-fps-Videos: wie zuvor das letzte "
+                          "Bild als Startbild). Format und Bildrate kommen vom Video. Ergebnis: das verlaengerte "
+                          "Video und das neue Stueck einzeln")
+    chain_asset_id: str | None = Field(
+        None, description="LTX-2.5 (seit 0.5.17): Latent-Kette ohne Anhaengen. Der neue Clip beginnt mit den letzten "
+                          "25 Bildern dieses Videos, fest uebernommen, und setzt dessen Bewegung fort; frames zaehlt "
+                          "die neuen Bilder, der Clip ist 24 Bilder laenger (meta.carry_frames). Zusammenfuegen mit "
+                          "einer Ueberblendung ueber diese Bilder (das Studio macht das beim Uebernehmen). Nicht mit "
+                          "Start- oder Endbild, Schleife, Ton, Verlaengern, 48 fps")
     project_id: str | None = Field(
         None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
                           "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")

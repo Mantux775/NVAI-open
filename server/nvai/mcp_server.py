@@ -98,11 +98,15 @@ server = MCPServer(
         "20-60 min). VOICES: the voice changes per clip; let people speak only with their face in "
         "the shot and the same voice description, and offer 2-3 variants per line to listen to. "
         "Details in generate_video. Prompt as one present-tense "
-        "paragraph: shot, setting and "
+        "paragraph of 4-8 sentences (a prompt grown to 14 sentences about a person made him move "
+        "38-49 % more than 8 sentences; say stillness in one positive sentence, rewrite instead of "
+        "appending corrections, never name a forbidden action, not even negated): shot, setting and "
         "light, the action with verbs, camera movement, then the sound; spoken lines in "
         "quotation marks; name loud sound sources explicitly (sounds described as soft came out "
         "very quiet). generate_video takes, for LTX-2.5 only: a start image, end_image_asset_id "
-        "or loop=True (seamless loop; keep the camera still), quality='dfr' (more detail, "
+        "or loop=True (seamless loop; keep the camera still; both freeze whatever is the same in "
+        "both images: water and smoke stood as still as the shore, so for a moving background "
+        "give only a start image), quality='dfr' (more detail, "
         "slower; temporal_upscale for 48 fps), auto_duration, audio_asset_id (the picture "
         "follows a given sound, e.g. "
         "music from generate_audio) and motion_speed (slow motion with the Slow Motion LoRA). "
@@ -710,6 +714,7 @@ async def generate_video(
     motion_speed: float = 1.0,
     crf: float | None = None,
     extend_asset_id: str | None = None,
+    chain_asset_id: str | None = None,
     master: bool = True,
     project_id: str | None = None,
     wait: bool = True,
@@ -762,8 +767,15 @@ async def generate_video(
         hands must not do ("his hands stay on the fishing pole ... he does not touch the bucket or
         the fish"); keep props simple (a cane pole without a reel kept one straight line). If the
         pose changes in the end image (bent over the bucket), edit with references instead (the
-        image with the result first, the face second): a mask cannot take a face reference. A
-        second part can loop over that end image (loop=True), so every seam lies on a clean frame;
+        image with the result first, the face second): a mask cannot take a face reference. The
+        price of the end image: whatever is the same in start and end image stays put, water and
+        smoke stood as still as the shore although the prompt asked them to move. Join a second part
+        with chain_asset_id (latent chain, see there) and a crossfade over the carried frames: with
+        the last frame as a start image the seam jumped (first frame 2.4-6.4/255 off its start
+        image, neighbouring frames 0.3-0.4), with the chain it no longer stood out;
+      - without an end image the hands still reached into the bucket despite "does not reach into
+        the bucket": describe what the person does, never name the forbidden action; keep the prompt
+        at 4-8 sentences (a 14-sentence prompt about him made him move 38-49 % more);
       - what must be seen (an incoming shell) only appears when described with size and place; say
         where the person does not look, and pin down counts ("exactly one fish ... there is no
         second fish"). LTX exaggerates reactions: "he flinches briefly, his head and shoulders jerk
@@ -780,7 +792,8 @@ async def generate_video(
     Args:
         prompt: What should be visible -- describe it in detail, including motion.
             For image-to-video, describe only the motion; don't retell the image.
-            LTX-2.5: one present-tense paragraph -- shot, setting and light, the action with
+            LTX-2.5: one present-tense paragraph of 4-8 sentences (see the instructions:
+            longer prompts about a person made him move more) -- shot, setting and light, the action with
             verbs, camera movement, last the sound; dialogue in quotation marks. Several
             shots: write each cut out in prose ("A hard cut transitions to a close-up of
             ..."), 2-4 shots; expand_prompt(target='video_multishot') writes that form.
@@ -803,10 +816,16 @@ async def generate_video(
             LoRA only works with a start image and loop=True: measured 6 % of the picture moving
             with a still face, 82-84 % without loop.
         end_image_asset_id: LTX-2.5: last frame. With image_asset_id the clip moves from
-            the start image to the end image (transition); without it, it ends on it.
+            the start image to the end image (transition); without it, it ends on it. Whatever
+            is the same in both images stays put in between: in a loop water and smoke changed
+            0.3-2.0/255 per half second like the static shore, with an end image mostly the same
+            before and after the event, even with a sentence asking them to move. The same scene
+            with only a start image: water 1-9, smoke 1-12, and the camera of that medium-wide side
+            view stayed put in 14 of 18. For a moving background, leave it out.
         loop: LTX-2.5: the start image is also the end image -- a seamless loop. Keep the
-            camera still and describe a repeating motion (flames, water, breathing); with a
-            camera move the last frames fell apart in the test. It also holds a person's face:
+            camera still; with a camera move the last frames fell apart in the test. Only the
+            described action moves, water and smoke stand still (see end_image_asset_id).
+            It also holds a person's face:
             a close-up from a portrait kept similarity 0.80-1.0 to the start image over 5 s; with
             the start image alone the camera pushed in after ~1 s and the face changed (0.3-0.4).
         quality: LTX-2.5: 'standard' or 'dfr' (Diffusion Fidelity Rendering: detail
@@ -832,13 +851,20 @@ async def generate_video(
             veil.
         crf: LTX-2.5: H.264 quality of the MP4 (CRF, lower = better and larger). Empty =
             12; ComfyUI's own default of 18 gave only 6 to 13 Mbit/s at 1080p.
-        extend_asset_id: LTX-2.5: continue an existing video (asset ID of a video). Its last frame
-            becomes the start image, size and frame rate come from it, and the new part is appended
-            with its sound; the prompt describes what happens next, frames/seconds its length. The
-            result lists the extended video first, then the new part on its own. Not together with
-            image_asset_id, loop or audio_asset_id. It loses faces: the new part only sees the last
-            frame, and in several extended clips a different man appeared in it. When a face
-            matters, generate parts with a clean start and end image each (flux3-klein-*) instead.
+        extend_asset_id: LTX-2.5: continue an existing video (asset ID of a video). Since 0.5.17 as a
+            latent chain: its last 25 frames are pinned at the start of the new part (1 s of motion
+            instead of one still frame), and the new part is appended with a crossfade over those
+            frames and a 40 ms sound crossfade (48 fps videos: the old way, last frame as start
+            image). Size and frame rate come from the video; the prompt describes what happens next,
+            frames/seconds the length of the new part. The result lists the extended video first,
+            then the new part on its own. Not together with image_asset_id, loop or audio_asset_id.
+            Measured 30.10.: the seam stood out 1.4-1.6x from the neighbouring frame steps instead of
+            1.9-2.5x. A face can still drift over a long extension.
+        chain_asset_id: LTX-2.5 (since 0.5.17): latent chain without appending. The new clip starts
+            with the last 25 frames of this video, pinned, and continues its motion; frames/seconds
+            count the new part, the clip is 24 frames longer (meta.carry_frames). Join the two with
+            a crossfade over those frames (studio_command edit.conform does that for chained scenes).
+            Not together with a start or end image, loop, sound, extend_asset_id or 48 fps.
         master: Also store the video losslessly (FFV1 in MKV, sound as float PCM); its path comes back
             in 'lossless_files'. Use it for editing and exporting: measured, a YouTube export made from it
             reached 42.3 instead of 37.7 dB PSNR. Costs about 32 MB per second at 1080p, 16 MB at 720p;
@@ -855,7 +881,8 @@ async def generate_video(
         "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
-        "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id, "master": master,
+        "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id,
+        "chain_asset_id": chain_asset_id, "master": master,
         "project_id": project_id,
     }
     return await _generate("/api/generate/video", payload, ctx, wait=wait)
@@ -1174,8 +1201,9 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
                     (default: end of the lane), duration_s (default 5), params (seed, width, height,
                     image_asset_id = start image of a video scene, quality = dfr|standard for LTX-2.5,
                     audio_asset_id = a given sound such as an approved spoken line ...)
-      scene.update  id + any of title, prompt, kind, model_id, lane, chain_from (scene id whose last frame becomes
-                    the start image), params (merged), start_s, duration_s
+      scene.update  id + any of title, prompt, kind, model_id, lane, chain_from (scene id this one continues:
+                    LTX-2.5 carries its last 25 frames over, otherwise its last frame becomes the start image),
+                    params (merged), start_s, duration_s
       scene.delete  id
       scene.take    id, asset_id: choose a take or add any asset as a take
       marker.add    at_s, kind (place|transition|chain|audio|ai|note), name, comment, duration_s, params
@@ -1223,8 +1251,10 @@ async def studio_generate(project_id: str, scene_ids: list[str] | None = None, w
     """Generates scenes with the existing models: video scenes with the active video model (LTX-2.5: frames from
     the duration at 24 fps, 1280 x 704 or 1920 x 1088 depending on the project), still images with the active image
     model, music and sound with the active audio model. Without scene_ids it generates every scene without a take.
-    A scene with chain_from (or behind a 'chain' marker) starts with the last frame of the earlier scene: if that one
-    is generated in the same run, the chained scene has status 'waiting' and follows automatically. The voice lane
+    A scene with chain_from (or behind a 'chain' marker) continues the earlier scene: with LTX-2.5 it starts with its
+    last 25 frames (latent chain; edit.conform then lays the take 25 frames earlier and dissolves over them), with an
+    end image, a loop or another model with its last frame. If the earlier scene is generated in the same run, the
+    chained scene has status 'waiting' and follows automatically. The voice lane
     has no text-to-speech yet: add an audio file as a take instead.
 
     Args:

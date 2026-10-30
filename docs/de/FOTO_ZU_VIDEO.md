@@ -83,7 +83,9 @@ Anführungszeichen mit der Stimme und die Geräusche. Die Länge einstellen (hie
   Kamera ruhig lassen, oder ein Endbild mitgeben, das FLUX 3 aus dem Startbild bearbeitet hat. In einer
   Nahaufnahme mit Blick ins Objektiv blieb das Gesicht die ganzen 5 s das der Person (Ähnlichkeit zum
   Startbild 0,80–1,0); nur mit Startbild fuhr die Kamera trotz „static camera“ nach einer Sekunde heran, und
-  LTX-2.5 zeichnete das Gesicht neu (0,3–0,4).
+  LTX-2.5 zeichnete das Gesicht neu (0,3–0,4). Der Preis: Was in beiden Bildern gleich ist, steht dazwischen
+  still. Wasser und Rauch bewegten sich so wenig wie das Ufer, auch mit einem Satz im Prompt, der sie bewegen
+  sollte; nur mit Startbild bewegten sie sich weiter. Für bewegten Hintergrund weder Schleife noch Endbild.
 - **Bei einem echten Foto das Foto selbst nehmen.** FLUX 3 macht Gesichter etwas schmaler und jünger. Unter
   „Bild → Vorhandenes Bild erweitern (Outpainting)“ erweitert FLUX 3 das Foto aufs Videoformat und setzt das
   Original pixelgleich wieder ein; das erste Bild ist dann genau die Person.
@@ -106,5 +108,6 @@ Dasselbe in zwei Aufrufen: `generate_image` mit `flux3-klein-nvfp4`, dem Foto in
 „Cinematic film still. The person from the first image, with exactly the same face, eyes, nose, mouth
 and hair color: <Rolle>. Medium shot from the waist up, the face clearly visible.“ Danach
 `generate_video` mit dem gewählten Bild als `image_asset_id`. Damit das Gesicht bis zum Schluss bleibt,
-zusätzlich `loop=True` (ruhige Kamera) oder dasselbe Bild als `end_image_asset_id` übergeben. Mehr in
+zusätzlich `loop=True` (ruhige Kamera) oder dasselbe Bild als `end_image_asset_id` übergeben; der Hintergrund
+steht dann still. Mehr in
 [CLAUDE_CODE.md](../CLAUDE_CODE.md#person-from-a-photo-since-058).

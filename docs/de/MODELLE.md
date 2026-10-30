@@ -63,7 +63,8 @@ Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 - **IC-LoRAs Restore und Ingredients für LTX-2.5** (Lightricks): Restore holte ein verändertes Gesicht nicht
   zurück und brachte neue Artefakte; Ingredients (ein Referenzblatt statt eines Startbilds) hielt eine echte
   Person in keinem Test erkennbar. Für eine erkennbare Person trägt das Startbild das Gesicht, gehalten mit einem
-  Endbild oder der „Schleife“ ([FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md#tipps-aus-unseren-tests)).
+  Endbild oder der „Schleife“ ([FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md#tipps-aus-unseren-tests)); der Hintergrund
+  steht dann still.
 
 ### Neu in 0.5.13
 
@@ -265,8 +266,8 @@ lagert aus.
 |---|---|---|
 | Text zu Video | — | 5 s bei 1280 × 704 in 93 s (erster Lauf mit Laden 122 s); 1920 × 1088 in 251 s |
 | Startbild | `image_asset_id` | 5 s bei 1280 × 704 in 109 s |
-| Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erster und letzter Frame treffen die beiden Bilder |
-| Schleife | `loop=True` | 4 s in 125 s; erster und letzter Frame weichen im Mittel um 3,6/255 ab (ohne Schleife 12–44). Nur mit ruhiger Kamera: Mit Kamerafahrt zerfielen die letzten Frames |
+| Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erster und letzter Frame treffen die beiden Bilder. Was in beiden gleich ist, steht dazwischen still: Wasser und Rauch bewegten sich so wenig wie das Ufer, auch mit einem Satz, der sie bewegen sollte (vor und nach dem Ereignis meist so wenig wie in der Schleife, 0,3–2 von 255 je halbe Sekunde; dieselbe Szene nur mit Startbild: Wasser 1–9, Rauch 1–12) |
+| Schleife | `loop=True` | 4 s in 125 s; erster und letzter Frame weichen im Mittel um 3,6/255 ab (ohne Schleife 12–44). Nur mit ruhiger Kamera: Mit Kamerafahrt zerfielen die letzten Frames. Wasser und Rauch stehen still wie mit Endbild |
 | Länge automatisch | `auto_duration=True` | eine Tür, die langsam aufgeht: 3 s, in 72 s |
 | Ton vorgeben | `audio_asset_id` | 20 s Blasmusik → 19,7 s Video bei 1024 × 576 in 302 s, der Ton unverändert |
 | Mehrere Einstellungen | `expand_prompt(target="video_multishot")` | 8 s in 170 s: zwei Einstellungen mit sauberem Schnitt, in beiden derselbe Leuchtturmwärter |

@@ -83,7 +83,9 @@ LTX-2.5 makes the video with speech and sound.
   camera still, or give an end image that FLUX 3 edited from the start image. In a close-up looking into the
   lens, the face stayed the person's for the whole 5 s (similarity to the start image 0.80–1.0); with the
   start image alone, the camera pushed in after a second despite "static camera", and LTX-2.5 redrew the face
-  (0.3–0.4).
+  (0.3–0.4). The price: whatever is the same in both images stands still in between. Water and smoke moved as
+  little as the shore, even with a sentence in the prompt asking them to move; with only a start image they kept
+  moving. For a moving background, use neither a loop nor an end image.
 - **With a real photo, use the photo itself.** FLUX 3 makes faces a little slimmer and younger. Under
   "Image → Extend an existing image (outpainting)", FLUX 3 extends the photo to the video format and puts the
   original back pixel for pixel, so the first frame is exactly the person.
@@ -106,4 +108,5 @@ The same in two calls: `generate_image` with `flux3-klein-nvfp4`, the photo in `
 person from the first image, with exactly the same face, eyes, nose, mouth and hair color: <role>.
 Medium shot from the waist up, the face clearly visible." Then `generate_video` with the chosen image
 as `image_asset_id`. To keep the face to the end, also pass `loop=True` (still camera) or the same image as
-`end_image_asset_id`. More in [CLAUDE_CODE.md](CLAUDE_CODE.md#person-from-a-photo-since-058).
+`end_image_asset_id`; the background then stands still. More in
+[CLAUDE_CODE.md](CLAUDE_CODE.md#person-from-a-photo-since-058).

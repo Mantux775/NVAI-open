@@ -1075,6 +1075,10 @@ LTX25_SIGMAS_DFR3 = "0.975, 0.909375, 0.725, 0.421875, 0.0"
 # sichtbar aus einer anderen Demo stammt ("JUST DO IT", Mikrofon) -- nicht uebernommen.
 LTX25_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly"
 LTX25_MAX_SECONDS = 20.0
+# Latent-Kette (seit 0.5.17): So viele Bilder des vorigen Clips stehen fest am Anfang des neuen (1 + 3 x 8 = 4
+# Latent-Bilder, wie Lightricks' ltx-pipelines verketten). Gemessen 30.10.: Die Naht ragte dann nur 1,4-1,6-fach ueber
+# die Nachbarschritte (harter Schnitt 1,9-2,5-fach).
+LTX25_CARRY_FRAMES = 25
 # Obergrenze der API (schemas.GenerateVideoRequest.frames): 20 s bei 24 fps, 16 s bei 30 fps.
 LTX25_MAX_FRAMES = 481
 # Detail-Keyframes im DFR-Weg: einer je 24 Frames (eine Sekunde bei 24 fps), wie in der Vorlage.
@@ -1200,6 +1204,21 @@ class _LTX:
             self._images[name] = [self.add("LTXVPreprocess", image=[scale, 0], img_compression=18), 0]
         return self._images[name]
 
+    def carry(self) -> Ref | None:
+        """Latent-Kette (seit 0.5.17): die letzten Bilder des vorigen Clips als Stapel (LoadVideo), auf Zielgroesse.
+        LTXVImgToVideoInplace kodiert einen Stapel als Video und schreibt die ersten Latent-Bilder fest (25 Bilder =
+        4 Latent-Bilder); so setzt der Clip die Bewegung fort statt bei einem Standbild neu anzufangen. Ohne
+        LTXVPreprocess: Das sind schon Videobilder, die Kompression fuer Einzelbilder braeuchten sie nicht."""
+        name = self.p.get("carry_video")
+        if not name:
+            return None
+        if "carry" not in self._images:
+            load = self.add("LoadVideo", file=name)
+            parts = self.add("GetVideoComponents", video=[load, 0])
+            self._images["carry"] = [self.add("ImageScale", image=[parts, 0], upscale_method="bicubic",
+                                              width=self.w, height=self.h, crop="center"), 0]
+        return self._images["carry"]
+
     def conditioning(self) -> str:
         return self.add("LTXVConditioning", positive=[self.pos_text, 0], negative=[self.neg_text, 0],
                         frame_rate=self.cond_fps)
@@ -1236,10 +1255,13 @@ class _LTX:
         cond = self.conditioning()
         video: Ref = [self.add("EmptyLTXVLatentVideo", width=self.w // 2, height=self.h // 2,
                                length=length, batch_size=1), 0]
-        image = self.image(start_image) if start_image else None
+        carry = self.carry()
+        image = carry if carry is not None else (self.image(start_image) if start_image else None)
         if image is not None:
+            # Ein Startbild fuehrt in Stufe 1 mit 0,7 (Bewegung kommt in Gang), der Uebertrag einer Latent-Kette mit
+            # 1,0: Er ist schon Bewegung und soll Bild fuer Bild bleiben (so verkettet Lightricks selbst).
             video = [self.add("LTXVImgToVideoInplace", vae=self.vae, image=image, latent=video,
-                              strength=0.7, bypass=False), 0]
+                              strength=1.0 if carry is not None else 0.7, bypass=False), 0]
         if self.is23:
             sampler = self.add("KSamplerSelect", sampler_name="euler")
             guider = self.add("CFGGuider", model=self.model, positive=[cond, 0], negative=[cond, 1], cfg=1.0)
@@ -1296,7 +1318,10 @@ class _LTX:
         # Seed: Gesichtsschaerfe im ersten Frame 14 statt 554 im Standardweg).
         small: Ref | None = None
         pre: Ref | None = None
-        if start_image:
+        carry = self.carry()
+        if carry is not None:  # Latent-Kette: der Bildstapel in allen Stufen, ohne Einzelbild-Vorverarbeitung
+            small = pre = carry
+        elif start_image:
             load = self.add("LoadImage", image=start_image)
             small = [self.add("ImageScale", image=[load, 0], upscale_method="lanczos",
                               width=self.w, height=self.h, crop="center"), 0]

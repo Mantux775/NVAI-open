@@ -1232,7 +1232,6 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     ist der Vorschlag für das Häkchen."""
     q = copy.deepcopy(p)
     targets = _conform_targets(q)
-    frame = frame_ticks(q)
     in_edit = {c["asset_id"] for c in q["clips"]}
     items, without = [], 0
     for s in q["scenes"]:
@@ -1245,7 +1244,7 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
         linked = [c for c in q["clips"] if c.get("scene_id") == s["id"]]
         if linked:
             changed = any(c["asset_id"] != s["take"] for c in linked)
-            edited = len(linked) > 1 or linked[0]["in"] != 0 or abs(clip_length(linked[0]) - s["duration"]) > frame
+            edited = len(linked) > 1 or not _untouched(q, s, start, linked[0])
             items.append({**base, "action": "replace" if changed else "same", "clip_ids": [c["id"] for c in linked],
                           "track": linked[0]["track"], "start_s": round(seconds(linked[0]["start"]), 3),
                           "length_s": round(seconds(sum(clip_length(c) for c in linked)), 3),
@@ -1253,12 +1252,14 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
                           "default": changed and not edited})
             continue
         try:
-            clip = _new_clip(q, track, s["take"], start, s["duration"], 0, s["id"])
+            at = _chain_start(q, track, s["take"], start)
+            clip = _new_clip(q, track, s["take"], at, start + s["duration"] - at, 0, s["id"])
         except StudioError as exc:
             items.append({**base, "action": "error", "error": str(exc), "default": False})
             continue
+        # wie in _conform: die gewollte Überlappung einer Latent-Kette vor dem Szenenanfang ist kein Überdecken
         overlaps = [{"clip_id": c["id"], "title": _clip_label(q, c),
-                     "seconds": round(seconds(min(clip_end(c), clip_end(clip)) - max(c["start"], clip["start"])), 3)}
+                     "seconds": round(seconds(min(clip_end(c), clip_end(clip)) - max(c["start"], start)), 3)}
                     for c in q["clips"] if c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start]
         dup = s["take"] in in_edit
         items.append({**base, "action": "create", "start_s": round(seconds(start), 3),
@@ -1278,7 +1279,10 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
     allowed = set(a.get("overwrite") or [])
     skipped: list[str] = []
     targets = _conform_targets(p)
-    for s in p["scenes"]:
+    # Takes mit übernommenem Anfang (Latent-Kette) zuletzt und nach Zeit: Ihre Vorlage liegt dann schon im Schnitt,
+    # und eine später gelegte Vorlage überdeckt ihren Anfang nicht
+    chained = {s["id"] for s in p["scenes"] if s.get("take") and _carry_ticks(s["take"])}
+    for s in sorted(p["scenes"], key=lambda s: (s["id"] in chained, targets[s["id"]][0] if s["id"] in chained else 0)):
         if not s.get("take") or (only is not None and s["id"] not in only):
             continue
         start, track = targets[s["id"]]
@@ -1293,13 +1297,21 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
                         c["in"] = min(c["in"], max(0, c["out"] - frame_ticks(p)))
                     updated += 1
             continue
-        clip = _new_clip(p, track, s["take"], start, s["duration"], 0, s["id"])
+        # Latent-Kette: Der Take beginnt mit der letzten Sekunde seiner Vorlage; er liegt um diese Bilder früher, der
+        # Clip davor wird dort gekürzt und läuft unter einer Überblendung genau dieser Länge aus (studio_render).
+        carry = _carry_ticks(s["take"])
+        at = _chain_start(p, track, s["take"], start)
+        clip = _new_clip(p, track, s["take"], at, start + s["duration"] - at, 0, s["id"])
+        # Überdecken zählt erst ab dem Szenenanfang: die gewollte Überlappung ist kein Überschreiben
         covers = any(c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start for c in p["clips"])
         if covers and only is not None and s["id"] not in allowed:
             skipped.append(s["id"])  # der Nutzer hat das Überschreiben hier nicht erlaubt
             continue
         p["clips"].append(clip)
         _overwrite(p, clip)
+        if carry and any(c is not clip and c["track"] == track and clip_end(c) == clip["start"] for c in p["clips"]):
+            clip["transition"] = {"kind": "dissolve", "duration": min(carry, clip_length(clip))}
+            transitions += 1
         created += 1
     # Übergang-Marker: Überblendung auf den Clip, der dort (± eine halbe Sekunde) beginnt
     for m in p["markers"]:
@@ -1463,15 +1475,77 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         dfr = wants == "dfr" and registry.features_for(entry).get("dfr") and not extra.get("end_image_asset_id")
         extra["quality"] = "dfr" if dfr else "standard"
     image_id = params.get("image_asset_id")
+    chain_id = None
     if s.get("chain_from"):
         source = _find(p["scenes"], s["chain_from"], t("Szene", "scene"))
         if not source.get("take"):
             raise StudioError(t("Für den Anschluss braucht die vorherige Szene erst ein Video.",
                                 "For the chain, the previous scene needs a video first."))
-        image_id = _last_frame_asset(source["take"], source.get("title") or "", project_folder(p))
+        take = db.get_asset(source["take"])
+        # Latent-Kette (seit 0.5.17): Mit LTX-2.5 beginnt der Anschluss mit der letzten Sekunde der Vorlage (fest
+        # übernommen) und setzt deren Bewegung fort; beim Übernehmen blendet der Schnitt über genau diese Bilder.
+        # Gemessen 30.10.: Die Naht ragte nur 1,4-1,6-fach über die Nachbarschritte, mit dem letzten Bild als
+        # Startbild 1,9-2,5-fach. Sonst (anderes Modell, Endbild, Schleife, Ton, 48 fps) wie bisher das letzte Bild.
+        latent = (entry is not None and entry.get("family") == "ltx25" and take is not None and take.kind == "video"
+                  and float((take.meta or {}).get("fps") or 24) <= 30
+                  and not any(extra.get(k) for k in ("end_image_asset_id", "loop", "audio_asset_id",
+                                                     "temporal_upscale")))
+        if latent:
+            chain_id = source["take"]
+            # Nach den übernommenen Bildern mindestens die ganze Szene neu rechnen (aufrunden statt runden), sonst
+            # fehlten bei Längen, die nicht auf 8 Bilder aufgehen, am Ende Bilder; das Übernehmen schneidet den Rest ab
+            frames = max(9, -(-int(round(secs * fps * 1000)) // (step * 1000)) * step + 1)
+        else:
+            image_id = _last_frame_asset(source["take"], source.get("title") or "", project_folder(p))
     req = GenerateVideoRequest(prompt=s["prompt"], model_id=model_id, frames=frames, fps=fps,
-                               image_asset_id=image_id, **_video_size(model_id, p, params), **extra)
+                               image_asset_id=None if chain_id else image_id, chain_asset_id=chain_id,
+                               **_video_size(model_id, p, params), **extra)
     return "txt2video", {**req.model_dump(), "studio_project": p["id"]}
+
+
+def _carry_ticks(asset_id: str) -> int:
+    """Latent-Kette (seit 0.5.17): Länge des Anfangs, den ein Take von seiner Vorlage übernommen hat (meta.carry_frames
+    mit chain_asset_id, bei der Bildrate des Takes), sonst 0. Verlängerte Videos tragen nur carry_frames, die sind
+    schon zusammengefügt."""
+    a = db.get_asset(asset_id)
+    meta = (a.meta or {}) if a is not None else {}
+    n = int(meta.get("carry_frames") or 0)
+    if not n or not meta.get("chain_asset_id"):
+        return 0
+    return ticks(n / float(meta.get("fps") or 24))
+
+
+def _chain_start(p: dict[str, Any], track: str, asset_id: str, start: int) -> int:
+    """Wo ein Take beim Übernehmen beginnt, dessen Szene bei `start` liegt. Latent-Kette: Seine ersten Bilder sind die
+    letzten seiner Vorlage. Liegt die Vorlage auf derselben Spur und läuft bis dorthin, beginnt er bildgenau, wo diese
+    Bilder in ihr laufen (ihr Take ist mit 8n+1 Bildern meist ein Bild länger als ihre Szene; um ein Bild versetzt
+    zeigte die Überblendung jede Bewegung doppelt), sonst um die Überlappung vor dem Szenenanfang."""
+    carry = _carry_ticks(asset_id)
+    if not carry:
+        return start
+    source = (db.get_asset(asset_id).meta or {}).get("chain_asset_id")
+    for c in p["clips"]:
+        if c["track"] != track or c["asset_id"] != source or clip_speed(c) != 1.0:
+            continue
+        at = c["start"] - c["in"] + (_media(p, source)["duration"] or 0) - carry
+        if c["start"] < at <= clip_end(c) and abs(at - (start - carry)) <= ticks(0.5):
+            return at
+    return start - carry
+
+
+def _untouched(p: dict[str, Any], s: dict[str, Any], start: int, c: dict[str, Any]) -> bool:
+    """Liegt der Clip noch so, wie Übernehmen ihn gelegt hat: ab Medienanfang und so lang wie seine Szene. Latent-Kette:
+    Ein Take mit übernommenem Anfang ist um die Überlappung länger, seine Vorlage endet dort, wo er beginnt."""
+    if c["in"] != 0:
+        return False
+    expected = start + s["duration"] - _chain_start(p, c["track"], c["asset_id"], start)
+    if abs(clip_length(c) - expected) <= frame_ticks(p):
+        return True
+    follower = next((d for d in p["clips"] if d["track"] == c["track"] and d["start"] == clip_end(c)), None)
+    if (follower is None or (follower.get("transition") or {}).get("kind") != "dissolve"
+            or not _carry_ticks(follower["asset_id"]) or clip_length(c) >= expected):
+        return False
+    return (db.get_asset(follower["asset_id"]).meta or {}).get("chain_asset_id") == c["asset_id"]
 
 
 def _resolve_chain_markers(p: dict[str, Any]) -> None:

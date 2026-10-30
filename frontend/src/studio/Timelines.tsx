@@ -497,7 +497,7 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
       <span className="st-label">
         <b>{s.title || t('Szene', 'Scene')}</b> {s.prompt}
       </span>
-      {s.chain_from && <span className="st-chain" title={t('Startbild = letztes Bild der vorigen Szene', 'Start image = last frame of the previous scene')}>⛓</span>}
+      {s.chain_from && <span className="st-chain" title={t('Setzt die vorige Szene fort (LTX-2.5: deren letzte Sekunde, beim Übernehmen überblendet)', 'Continues the previous scene (LTX-2.5: its last second, crossfaded on conform)')}>⛓</span>}
       <span className="st-edge" onPointerDown={(e) => begin(e, 'scene-end', s.id)} />
     </div>
   )

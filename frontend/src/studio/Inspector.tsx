@@ -69,8 +69,12 @@ const MARKER_HINT: Record<StudioMarkerKind, string> = {
     'On conform, the chosen scene goes here, on the chosen track (V2 is above V1).'),
   transition: t('Der Videoclip, der hier beginnt, bekommt diesen Übergang: sofort, wenn er schon im Schnitt liegt, sonst beim Übernehmen. Wandert der Marker, wandert der Übergang mit.',
     'The video clip that starts here gets this transition: right away if it is already in the edit, otherwise on conform. Move the marker and the transition moves along.'),
-  chain: t('Beim Erzeugen beginnt die Videoszene an dieser Stelle mit dem letzten Bild der Szene davor (nahtloser Anschluss).',
-    'On generate, the video scene starting here begins with the last frame of the scene before it (seamless chain).'),
+  chain: t('Beim Erzeugen setzt die Videoszene an dieser Stelle die Szene davor fort: mit LTX-2.5 beginnt sie mit deren '
+    + 'letzter Sekunde, und „Übernehmen“ blendet über diese Sekunde über (Latent-Kette, ohne Sprung an der Naht); sonst mit '
+    + 'deren letztem Bild.',
+    'On generate, the video scene starting here continues the scene before it: with LTX-2.5 it begins with that scene’s '
+    + 'last second, and “Conform” crossfades over that second (latent chain, no jump at the seam); otherwise with its last '
+    + 'frame.'),
   audio: t('Beim Übernehmen beginnt die gewählte Ton-Szene (Musik, Sprecher, Klang) an dieser Stelle.',
     'On conform, the chosen audio scene (music, voice, sound) starts here.'),
   ai: t('Ein Auftrag für Claude: Es liest ihn per MCP, arbeitet ihn ab und hakt ihn ab.',
@@ -293,7 +297,7 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
       </label>
       {s.lane === 'video' && s.kind === 'video' && (
         <label className="st-field">
-          <span>{t('Anschluss: Startbild aus', 'Chain: start image from')}</span>
+          <span>{t('Anschluss an', 'Chain to')}</span>
           <select value={s.chain_from ?? ''} disabled={!!s.chain_marker} onChange={(e) => update({ chain_from: e.target.value || null })}>
             <option value="">{t('— keins —', '— none —')}</option>
             {earlier.map((x) => (
