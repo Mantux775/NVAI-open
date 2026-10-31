@@ -881,6 +881,9 @@ actor JobQueue {
         let seconds = Date().timeIntervalSince(started)
         let peak = sampler.stop()
         MemoryLog.line("after Stable Audio 3")
+        // Abgebrochen, während Stable Audio rechnete (der Durchgang lässt sich nicht unterbrechen): nichts ablegen, sonst
+        // stünde nach dem Abbrechen im Studio trotzdem ein Klang im Verlauf
+        if jobs[id]?.cancelRequested == true { throw CancellationError() }
         var meta: [String: JSONValue] = [
             "seed": .int(Int(seed)), "seconds": .double(req.seconds), "steps": .int(req.steps), "cfg": .double(req.cfg),
             "model_name": .string(AudioCatalog.name), "workflow": .string("stable_audio_3"), "engine": .string("mlx"),

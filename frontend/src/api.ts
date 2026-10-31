@@ -773,6 +773,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(scene_ids ? { scene_ids } : {}),
     }),
+  /** Erzeugen abbrechen: laufende und wartende Aufträge der Szenen, wartende Anschlüsse (seit 0.5.19) */
+  studioCancel: (id: string) =>
+    req<{ cancelled: string[] }>(`/api/studio/projects/${id}/cancel`, { method: 'POST' }),
   studioExport: (id: string, preset: string) =>
     req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
   studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),

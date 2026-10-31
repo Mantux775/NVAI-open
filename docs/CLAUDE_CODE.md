@@ -1180,6 +1180,8 @@ YouTube 1080p/4K, Shorts, project format and ProRes 4444
 | `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; with `wait` it blocks until all are finished, chained ones included, for at most an hour. For long runs (several DFR scenes) use `wait=False` and poll `studio_get` |
 | `studio_export(project_id, preset)` | Renders the edit, returns the MP4 path |
 
+To stop a run (since 0.5.19, Mac 0.5.1), call `POST /api/studio/projects/{id}/cancel` (feature `studio_cancel`): it cancels every queued and running job of the project's scenes and releases chained scenes that are still waiting; finished takes stay. The web UI and the Mac app show the running scene with its percentage next to "Conform" and cancel from there. Never cancel a run the user started without asking.
+
 Workflow:
 
 1. `studio_create`, then one `scene.add` per shot. Write each video prompt like for `generate_video`

@@ -12,7 +12,7 @@ enum APIRouter {
     /// Startbild (`image_asset_id`), wenn dessen Encoder geladen ist (`features.image_to_video` des Modells).
     static var features: [String] {
         ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
-         "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video"]
+         "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel"]
             + (HelperModel.vision.installed ? ["restore_auto"] : [])
     }
 

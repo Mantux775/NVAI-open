@@ -34,7 +34,7 @@ struct StudioInspector: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let p = model.project {
                     switch model.kind {
                     case .scene where model.selected.count > 1: ScenesInspector(model: model, project: p)
@@ -50,7 +50,7 @@ struct StudioInspector: View {
                     }
                 }
             }
-            .padding(10)
+            .padding(.horizontal, 10).padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -79,7 +79,7 @@ struct CommitField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             if !label.isEmpty { Text(label).font(.caption).foregroundStyle(.secondary) }
             TextField("", text: $text)
                 .textFieldStyle(.roundedBorder)
@@ -117,14 +117,14 @@ struct CommitEditor: View {
     let label: String
     let value: String
     var placeholder = ""
-    var lines: CGFloat = 6
+    var lines: CGFloat = 8
     let commit: (String) -> Void
     @State private var text = ""
     @State private var token = UUID()
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text).font(.callout).focused($focused)
@@ -166,7 +166,7 @@ private struct ProjectInspector: View {
     private func update(_ params: StudioParams) { Task { await model.run("project.update", params) } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("Projekt", "Project")).font(.headline)
             CommitField(label: t("Name", "Name"), value: project.name) { v in
                 if !v.trimmingCharacters(in: .whitespaces).isEmpty { update(["name": .string(v)]) }
@@ -230,7 +230,7 @@ private struct SceneInspector: View {
     var body: some View {
         let status = StudioJSON.status(scene)
         let chainMarker = StudioCommands.resolvedChains(project)[scene.id]
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack {
                 Text(t("Szene", "Scene") + " · " + laneName).font(.headline)
                 Spacer()
@@ -376,7 +376,7 @@ private struct ClipInspector: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("Clip", "Clip") + " · " + clip.track).font(.headline)
             if let r = AssetSnapshot.shared.get(clip.assetID) {
                 Text(StudioMaterial.label(r)).font(.caption).foregroundStyle(.secondary).lineLimit(4)
@@ -531,7 +531,7 @@ private struct TransitionInspector: View {
 
     var body: some View {
         if let tr = clip.transition {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text(t("Übergang", "Transition")).font(.headline)
                 Text(t("Blendet am Anfang des Clips vom vorigen Clip derselben Spur über; der vorige läuft dafür über sein Ende hinaus weiter. Der Ton blendet ebenfalls über.",
                        "Blends at the start of the clip from the previous clip on the same track, which runs on past its end. The sound crossfades too."))
@@ -577,7 +577,7 @@ private struct MarkerInspector: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("Marker", "Marker")).font(.headline)
             Picker(t("Art", "Kind"), selection: Binding(get: { marker.kind }, set: { update(["kind": .string($0), "color": .string("")]) })) {
                 ForEach(Studio.markerKinds, id: \.self) { Text(StudioInspector.markerName($0)).tag($0) }
@@ -587,7 +587,7 @@ private struct MarkerInspector: View {
             if marker.kind == "ai" {
                 CommitEditor(label: t("Auftrag an die KI", "Task for the AI"), value: marker.comment,
                              placeholder: t("z. B. „Mach aus Szene 3 eine Nahaufnahme und erzeuge sie neu“", "e.g. \"Turn scene 3 into a close-up and generate it again\""),
-                             lines: 5) { update(["comment": .string($0)]) }
+                             lines: 8) { update(["comment": .string($0)]) }
             } else {
                 CommitField(label: t("Kommentar", "Comment"), value: marker.comment) { update(["comment": .string($0)]) }
             }
@@ -649,7 +649,7 @@ private struct ClipsInspector: View {
         let clips = project.clips.filter { model.selected.contains($0.id) }
         let from = clips.map(\.start).min() ?? 0, to = clips.map(\.end).max() ?? 0
         let allMuted = clips.allSatisfy(\.muted)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("\(clips.count) Clips", "\(clips.count) clips")).font(.headline)
             Text("\(formatSeconds(from)) – \(formatSeconds(to)) s").font(.caption.monospacedDigit())
             Button(allMuted ? t("Alle Ton an", "Unmute all") : t("Alle stumm", "Mute all")) {
@@ -674,7 +674,7 @@ private struct ScenesInspector: View {
 
     var body: some View {
         let scenes = project.scenes.filter { model.selected.contains($0.id) }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("\(scenes.count) Szenen", "\(scenes.count) scenes")).font(.headline)
             Button(t("Alle erzeugen", "Generate all")) {
                 Task { await model.generate(scenes.filter { $0.jobs.isEmpty && $0.waitingFor == nil }.map(\.id)) }
@@ -692,7 +692,7 @@ private struct MarkersInspector: View {
     var body: some View {
         let markers = project.markers.filter { model.selected.contains($0.id) }
         let allDone = markers.allSatisfy(\.done)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 7) {
             Text(t("\(markers.count) Marker", "\(markers.count) markers")).font(.headline)
             Button(allDone ? t("Alle wieder öffnen", "Reopen all") : t("Alle erledigt", "All done")) {
                 Task { await model.batch(markers.map { ("marker.update", ["id": .string($0.id), "done": .bool(!allDone)]) }) }
@@ -722,7 +722,7 @@ private struct MediaInspector: View {
             let media = project.media[r.id] ?? StudioMediaCache.shared.get(r.id)
             let inEdit = project.clips.contains { $0.assetID == r.id }
             let kind = media?.kind ?? (StudioMaterial.symbol(r) == "waveform" ? "audio" : StudioMaterial.symbol(r) == "film" ? "video" : "image")
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     Text(t("Material", "Media") + " · " + (kind == "video" ? t("Video", "Video") : kind == "audio" ? t("Ton", "Audio") : t("Bild", "Image")))
                         .font(.headline)

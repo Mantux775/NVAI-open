@@ -48,6 +48,10 @@ final class StudioModel: ObservableObject {
     @Published var groupDragY: CGFloat = 0
     /// Quellansicht: der Monitor zeigt ein Material statt des Schnitts (Klick in der Materialliste, Esc zurück).
     @Published var source: AssetRecord?
+    /// Stand der laufenden Aufträge der Szenen (Auftrag → Anteil 0…1 und Schritt) für die Anzeige neben „Übernehmen“.
+    @Published var jobProgress: [String: (progress: Double, stage: String)] = [:]
+    /// Wie viele Szenen dieser Lauf hatte (für „fertig/gesamt“); 0, sobald nichts mehr erzeugt wird.
+    @Published var runTotal = 0
 
     private(set) var clipboard: (kind: Kind, items: [JSONValue], cut: Bool)?
 
@@ -66,6 +70,14 @@ final class StudioModel: ObservableObject {
     var fps: Double { project.map { Double($0.settings.fps[0]) / Double($0.settings.fps[1]) } ?? 24 }
     var snapping: Bool { magnet != shiftHeld }
     var busyScenes: Int { project?.scenes.filter { !$0.jobs.isEmpty || $0.waitingFor != nil }.count ?? 0 }
+
+    /// Die Szene, die gerade rechnet, mit ihrem Auftrag (wie unter Windows: die erste mit einem laufenden Auftrag).
+    var currentGeneration: (scene: StudioScene, progress: Double, stage: String)? {
+        for s in project?.scenes ?? [] {
+            for id in s.jobs { if let p = jobProgress[id] { return (s, p.progress, p.stage) } }
+        }
+        return nil
+    }
 
     // MARK: Projekt
 
@@ -296,16 +308,50 @@ final class StudioModel: ObservableObject {
         }
     }
 
-    /// Solange Szenen erzeugt werden: alle 2 s fertige Aufträge als Takes eintragen.
+    /// Erzeugen abbrechen (zweiter Klick in der Leiste): alle laufenden und wartenden Aufträge dieses Projekts.
+    func cancelGenerate() async {
+        guard let id = project?.id else { return }
+        do {
+            let r = try await StudioGenerator.shared.cancel(store, id)
+            let n = r["cancelled"]?.arrayValue?.count ?? 0
+            // Den Stand nicht leeren: Ein laufendes Video endet erst nach dem aktuellen Schritt und bleibt bis dahin
+            // mit „bricht ab“ in der Leiste (die Abfrage jede Sekunde trägt es nach)
+            project = try await store.load(id)
+            notice = t("Erzeugen abgebrochen (\(n) Auftrag/Aufträge). Fertige Takes bleiben.",
+                       "Generation cancelled (\(n) job(s)). Finished takes stay.")
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
+    /// Solange Szenen erzeugt werden: jede Sekunde den Stand der Aufträge lesen, alle 2 s fertige als Takes eintragen.
     private func watchJobs() {
         guard poll == nil, busyScenes > 0 else { return }
+        runTotal = max(runTotal, busyScenes)
         poll = Task { [weak self] in
+            var tick = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                tick += 1
                 guard let self, let id = self.project?.id else { break }
+                var progress: [String: (progress: Double, stage: String)] = [:]
+                var ended = false  // ein Auftrag ist fertig, abgebrochen oder vergessen: gleich eintragen, nicht erst in 2 s
+                for jobID in self.project?.scenes.flatMap(\.jobs) ?? [] {
+                    guard let job = await JobQueue.shared.job(jobID) else { ended = true; continue }
+                    if job.status == "running" {
+                        progress[jobID] = (job.progress, job.stage)
+                    } else if job.status != "queued" {
+                        ended = true
+                    }
+                }
+                self.jobProgress = progress
+                self.runTotal = max(self.runTotal, self.busyScenes)
+                guard ended || tick % 2 == 0 else { continue }
                 let p = try? await StudioGenerator.shared.refresh(self.store, id)
                 if let p, !p.scenes.contains(where: { !$0.jobs.isEmpty || $0.waitingFor != nil }) { break }
             }
+            self?.jobProgress = [:]
+            self?.runTotal = 0
             self?.poll = nil
         }
     }

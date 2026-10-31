@@ -70,6 +70,8 @@ enum StudioRoutes {
         case ("POST", "generate"):
             let ids = req.json?["scene_ids"]?.arrayValue?.compactMap(\.stringValue)
             return .json(try await StudioGenerator.shared.generate(store, id, sceneIDs: ids).any)
+        case ("POST", "cancel"):
+            return .json(try await StudioGenerator.shared.cancel(store, id).any)
         case ("POST", "export"):
             let preset = req.json?["preset"]?.stringValue ?? "youtube-1080p"
             guard StudioRender.preset(preset) != nil else {

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.18",
+  "version": "0.5.19",
   "x-api-version": 1
  },
  "paths": {
@@ -2537,6 +2537,48 @@
          "type": "object",
          "additionalProperties": true,
          "title": "Response Studio Generate Api Studio Projects  Pid  Generate Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/cancel": {
+   "post": {
+    "summary": "Studio Cancel",
+    "description": "Erzeugen abbrechen: laufende und wartende Auftraege der Szenen, wartende Anschluss-Szenen (seit 0.5.19).",
+    "operationId": "studio_cancel_api_studio_projects__pid__cancel_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Cancel Api Studio Projects  Pid  Cancel Post"
         }
        }
       }

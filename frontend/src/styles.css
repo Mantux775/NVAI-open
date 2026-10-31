@@ -893,6 +893,16 @@ kbd {
 .st-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .st-spacer { flex: 1; }
 .st-export { font-size: 12px; color: var(--muted); }
+/* Erzeugen neben „Übernehmen“: Balken der Szene, die gerade rechnet, fertig/gesamt, Abbrechen (Nutzer 31.10.2026) */
+.st-gen { display: inline-flex; align-items: center; gap: 6px; padding: 1px 2px 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); font-size: 12px; max-width: 360px; min-width: 0; }
+.st-gen-bar { width: 64px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; flex: 0 0 auto; }
+.st-gen-bar > span { display: block; height: 100%; background: var(--accent); transition: width .3s; }
+.st-gen-text { display: inline-flex; white-space: nowrap; min-width: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st-gen-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.st-gen-num { flex: 0 0 auto; }
+.st-gen-cancel { border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.st-gen-cancel:hover { color: var(--danger); }
+.st-gen-cancel.armed { color: #2a0a0a; background: var(--danger); }
 .st-export.done a { color: var(--accent); }
 .st-notice { position: absolute; top: 46px; left: 50%; transform: translateX(-50%); z-index: 60; max-width: 70%; padding: 6px 12px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--accent-dim); border-radius: 8px; box-shadow: 0 4px 16px rgba(0, 0, 0, .45); cursor: pointer; }
 .st-start { display: grid; place-items: center; padding: 20px; }
@@ -984,13 +994,17 @@ kbd {
 .st-timecode { font-family: ui-monospace, Consolas, monospace; font-size: 15px; }
 .st-format { margin-left: auto; }
 
-.st-inspector { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.st-inspector h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-.st-inspector h4 { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
-.st-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
-.st-field input, .st-field textarea, .st-field select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: inherit; font-size: 13px; }
-.st-field textarea { resize: vertical; }
-.st-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
+/* Eigenschaften kompakt, Eingaben in normaler Größe (Nutzer 31.10.2026: „mach die einstellungen ein bisschen kompakter
+   promt felder sollten ein kleines bisschen größer werden … auf einem 14 zoll notebook bedienbar. aber nicht zu klein“) */
+.st-inspector { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.st-inspector h3 { margin: 0; font-size: 13.5px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.st-inspector h4 { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+.st-field { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); }
+.st-field input, .st-field textarea, .st-field select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; font: inherit; font-size: 13px; }
+.st-field textarea { resize: vertical; padding: 6px 8px; line-height: 1.45; }
+/* Prompt-Felder etwas größer und mit der Spalte nach unten ziehbar */
+.st-field textarea.st-prompt { min-height: 9.5em; max-height: 70vh; }
+.st-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
 .st-check { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: flex-start; cursor: pointer; }
 .st-check input { width: auto; flex: 0 0 auto; margin: 0; }
 .st-actions { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -1116,3 +1130,19 @@ kbd {
 .st-conform-item { align-items: flex-start; line-height: 1.4; }
 .st-conform-item input { margin-top: 2px; }
 .st-conform-item.warn b { color: #f2c94c; }
+
+/* 14-Zoll-Notebooks (1366–1520 px breit): die Leiste bleibt auch mit der Fortschrittsanzeige einzeilig. Am Dateiende,
+   sonst gewinnt die allgemeine Regel .st-toolbar select (max-width 190px) weiter oben */
+@media (max-width: 1520px) {
+  .st-toolbar { gap: 4px; padding: 6px 8px; }
+  .st-toolbar .btn.small { padding: 5px 8px; }
+  .st-toolbar select, .st-toolbar input { max-width: 140px; }
+  .st-sep { margin: 0 2px; }
+  .st-gen { max-width: 270px; }
+  .st-gen-bar { width: 36px; }
+  .st-wide { display: none; }
+}
+@media (max-width: 1320px) {
+  .st-gen-bar { display: none; }
+  .st-toolbar select, .st-toolbar input { max-width: 120px; }
+}

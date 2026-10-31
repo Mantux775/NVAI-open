@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import json
 import random
+import subprocess
 import time
 import traceback
 import uuid
@@ -611,7 +612,7 @@ async def _align_script(target: Path, *args: Any) -> dict[str, Any]:
     script = Path(__file__).with_name("outpaint_align.py")
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out, err = await proc.communicate()
     if proc.returncode != 0 or not target.exists():
         raise RuntimeError(t(f"Ausrichten fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
@@ -1211,7 +1212,7 @@ async def _restore_script(target: Path, *args: Any) -> dict[str, Any]:
     script = Path(__file__).with_name("restore_tools.py")
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out, err = await proc.communicate()
     if proc.returncode != 0 or not target.exists():
         raise RuntimeError(t(f"Bildbearbeitung fehlgeschlagen: {err.decode(errors='replace')[-300:]}",
@@ -1557,7 +1558,7 @@ async def _video_tool(*args: Any) -> dict[str, Any]:
     script = Path(__file__).with_name("video_tools.py")
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(script), *(str(a) for a in args),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out, err = await proc.communicate()
     if proc.returncode != 0:
         raise RuntimeError(t(f"Videowerkzeug fehlgeschlagen: {err.decode(errors='replace')[-300:]}",

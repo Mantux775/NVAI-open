@@ -89,13 +89,15 @@ function sceneName(p: StudioProject, id?: string | null): string {
   return s ? s.title || s.prompt.slice(0, 40) || s.id : '?'
 }
 
-function Field({ label, value, onCommit, area = false, rows = 4, placeholder }: {
+function Field({ label, value, onCommit, area = false, rows = 4, placeholder, prompt = false }: {
   label: string
   value: string
   onCommit: (v: string) => void
   area?: boolean
   rows?: number
   placeholder?: string
+  /** Prompt-Feld: etwas höher (st-prompt) */
+  prompt?: boolean
 }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
@@ -106,7 +108,8 @@ function Field({ label, value, onCommit, area = false, rows = 4, placeholder }: 
     <label className="st-field">
       <span>{label}</span>
       {area ? (
-        <textarea value={v} rows={rows} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={commit} />
+        <textarea className={prompt ? 'st-prompt' : undefined} value={v} rows={rows} placeholder={placeholder}
+          onChange={(e) => setV(e.target.value)} onBlur={commit} />
       ) : (
         <input
           value={v}
@@ -259,7 +262,8 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         label={s.lane === 'video' ? t('Prompt (was zu sehen ist und wie es sich bewegt)', 'Prompt (what is seen and how it moves)') : t('Prompt (Klang, Stil, Tempo)', 'Prompt (sound, style, tempo)')}
         value={s.prompt}
         area
-        rows={6}
+        prompt
+        rows={8}
         placeholder={s.lane === 'video' ? t(
           'Ein Absatz: Einstellung, Handlung, Kamera, Ton. Personen: Gesicht im Bild lassen, sonst erfindet LTX ein neues; sprechen nur mit Gesicht im Bild, die Stimme immer gleich beschreiben („in a warm, cheerful, clear female voice“).',
           'One paragraph: shot, action, camera, sound. People: keep the face in the picture, or LTX invents a new one; let them speak only with their face in the shot and describe the voice the same way every time ("in a warm, cheerful, clear female voice").',
@@ -748,6 +752,7 @@ function MarkerProps({ p, m, onCommand }: { p: StudioProject; m: StudioMarker; o
         label={m.kind === 'ai' ? t('Auftrag an die KI', 'Task for the AI') : t('Kommentar', 'Comment')}
         value={m.comment}
         area
+        prompt={m.kind === 'ai'}
         rows={m.kind === 'ai' ? 5 : 3}
         placeholder={m.kind === 'ai' ? t('z. B. „Diese Szene ruhiger, die Kamera steht.“', 'e.g. "Calmer here, the camera stays still."') : ''}
         onCommit={(v) => update({ comment: v })}

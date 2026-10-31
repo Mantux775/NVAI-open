@@ -1648,6 +1648,31 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
     return {"jobs": submitted, "waiting": waiting, "errors": errors}
 
 
+async def cancel(pid: str) -> dict[str, Any]:
+    """Erzeugen abbrechen (Knopf neben „Übernehmen“, Nutzer 31.10.2026: „neben dem Übernehmen button soll es den
+    forschritt anzeigen und dor kann ich es auch abrechen“): alle wartenden und laufenden Aufträge der Szenen, dazu die
+    Anschluss-Szenen, die noch auf ihre Vorlage warten. Fertige Takes bleiben."""
+    p = await asyncio.to_thread(refresh, pid)
+    cancelled = []
+    for s in p["scenes"]:
+        for job_id in list(s.get("jobs") or []):
+            job = db.get_job(job_id)
+            if job is not None and job.status in ("queued", "running"):
+                await jobs.cancel_job(job_id)
+                cancelled.append(job_id)
+    with _lock:
+        p = load(pid)
+        for s in p["scenes"]:
+            if s.pop("waiting_for", None) is not None:
+                task = _chain_tasks.pop(s["id"], None)
+                if task is not None:
+                    task.cancel()
+        p["updated_at"] = time.time()
+        _save(p)
+    await asyncio.to_thread(refresh, pid)
+    return {"cancelled": cancelled}
+
+
 async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
     """Wartet, bis die Vorlage einer Anschluss-Szene fertig ist, und schickt dann deren Auftrag ab. Endet still, wenn
     Szene oder Projekt gelöscht oder umgestellt wurden."""
@@ -1803,7 +1828,7 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
     script = Path(__file__).with_name("studio_render.py")
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(script), str(plan_path), str(out), *([str(preview)] if preview else []),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     result: dict[str, Any] = {}
     # stderr nebenher leeren, sonst kann ein voller Puffer den Renderer anhalten
     err_task = asyncio.create_task(proc.stderr.read()) if proc.stderr else None

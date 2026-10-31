@@ -43,13 +43,18 @@ already holds clips, the Studio asks first (see [Conform without surprises](#con
 4. **Generate scenes:** generates every scene that has no take yet, with the model you chose in the
    properties or the active one. Short jobs come first (sound, still images), then the videos; a chained
    scene waits for the scene before it and follows by itself. Finished scenes show their takes in the
-   properties; click a take to use it.
+   properties; click a take to use it. While it runs, the bar next to "Conform" shows the scene being
+   generated with its percentage and how many of this run are done (for example "Far view 63 % · 2/5").
+   "✕ Cancel" next to it (click twice) stops every running and queued job of the project, including chained
+   scenes that are still waiting; finished takes stay.
 5. **Conform.**
 6. **Edit:** with Selection (V), drag clips to move them and drag their edges to trim them; with the
    Razor (C), a click cuts the clip, and Ctrl+K cuts at the playhead. Del deletes, Shift+Del also closes the
    gap. A right-click anywhere shows what you can do; speed, transition, volume and mute are also in the
    properties.
 7. **Export:** pick a format and click "Export". The finished video is also in the History.
+
+![While scenes are generated: next to "Conform" the scene being made with its percentage and how many are done, and Cancel; on the right the properties with the larger prompt field (1366 × 720)](images/studio-progress.jpg)
 
 The Studio saves every change at once. Undo and redo go back up to 100 steps; takes that finish in
 the meantime stay. "Delete" next to the project moves it into the Studio's trash folder
@@ -62,7 +67,9 @@ images, videos and audio and a search field. It stays up to date by itself: fini
 deletions show up right away. ◆ marks a video with a lossless copy, ● media that lies in the edit. It loads
 100 at a time; "Load 100 more" at the end fetches the next ones, and the filter and the search look through
 all your media, not just what is loaded. Drag the line to the right of the list to make it wider; a
-double-click on the line resets it.
+double-click on the line resets it. The properties on the right work the same way (since 0.5.19): drag the
+line to their left, a double-click resets them to 330 pixels. The monitor always keeps at least 320 pixels, so
+the Studio also works on a 14-inch notebook.
 
 **Every project has its own folder** (since 0.5.15), on disk in the data folder under
 `assets\Studio\<project name>`; renaming the project renames the folder. What the Studio makes for a project

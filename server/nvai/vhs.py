@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import json
 import shutil
+import subprocess
 import time
 from fractions import Fraction
 from pathlib import Path
@@ -70,7 +71,7 @@ async def _run_tool(cmd: str, *args: str, ctx: jobs.JobContext | None = None, ba
     """vhs_tools.py im ComfyUI-venv; Fortschrittszeilen gehen an ctx, die letzte Zeile ist das Ergebnis."""
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(_tool_path()), cmd, *args,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     err_task = asyncio.create_task(proc.stderr.read()) if proc.stderr else None
     result: dict[str, Any] = {}
     try:

@@ -110,6 +110,7 @@ API_FEATURES = [
     "recommended",     # features.recommended je Modell (Vorwahl fuers beste Ergebnis); generate/video:
                        # recommended, reference_asset_ids, sparse_attention, int8_attention (seit 0.5.18)
     "model_license",   # license_badge/output_badge/license_confirmed an Modellen, POST /api/models/{id}/license
+    "studio_cancel",   # POST /api/studio/projects/{pid}/cancel: Erzeugen abbrechen (seit 0.5.19)
 ]
 
 
@@ -1083,6 +1084,12 @@ async def studio_redo(pid: str) -> dict[str, Any]:
 async def studio_generate(pid: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     """Auftraege fuer die genannten Szenen (scene_ids), sonst fuer alle ohne Take."""
     return await studio.generate(pid, (body or {}).get("scene_ids"))
+
+
+@app.post("/api/studio/projects/{pid}/cancel")
+async def studio_cancel(pid: str) -> dict[str, Any]:
+    """Erzeugen abbrechen: laufende und wartende Auftraege der Szenen, wartende Anschluss-Szenen (seit 0.5.19)."""
+    return await studio.cancel(pid)
 
 
 @app.post("/api/studio/projects/{pid}/export", response_model=Job)

@@ -3,7 +3,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Das Studio der Mac-Fassung wie panels/Studio.tsx unter Windows: oben die Leiste, darunter Material | Monitor |
-/// Eigenschaften (330 px), ein Teiler, unten die Zeitleisten (Anteil gemerkt, 20–75 %).
+/// Eigenschaften (beide Seiten in der Breite verstellbar, Doppelklick auf den Teiler setzt zurück), ein Teiler, unten
+/// die Zeitleisten (Anteil gemerkt, 20–75 %).
 struct StudioView: View {
     @EnvironmentObject var state: AppState
     @StateObject private var model = StudioModel.shared
@@ -11,6 +12,10 @@ struct StudioView: View {
     @State private var deleteArmed = false
     @AppStorage("studio.split") private var split = 0.44
     @AppStorage("studio.binWidth") private var binWidth = 240.0
+    /// Eigenschaften rechts (Nutzer 31.10.2026: „die rechte Panele … soll auch wie die linke Panelle mit Medien breiten
+    /// verstellbar sein“): 260–640 px, der Monitor behält mindestens 320 px.
+    @AppStorage("studio.sideWidth") private var sideWidth = 330.0
+    @State private var confirmCancel = false
     @State private var dragStart: Double?  // Wert eines Teilers zu Beginn des Ziehens
 
     var body: some View {
@@ -67,7 +72,12 @@ struct StudioView: View {
     private var panes: some View {
         GeometryReader { geo in
             let timeline = geo.size.height * min(0.75, max(0.2, split))
-            let maxBin = max(180, geo.size.width - 330 - 320)
+            // Der Monitor behält mindestens 320 px: Reicht die Breite nicht, geben erst die Eigenschaften nach (bis 260 px),
+            // dann die Materialliste (bis 180 px); zwei Teiler zu je 5 px
+            let spare = geo.size.width - 10 - 320
+            let side = min(640, max(260, min(sideWidth, spare - 180)))
+            let maxBin = max(180, spare - side)
+            let maxSide = min(640, max(260, spare - min(maxBin, max(180, binWidth))))
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
                     StudioMaterial(model: model).frame(width: min(maxBin, max(180, binWidth)), alignment: .leading).clipped()
@@ -81,8 +91,14 @@ struct StudioView: View {
                         }.onEnded { _ in dragStart = nil })
                         .onTapGesture(count: 2) { binWidth = 240 }
                     StudioMonitor(model: model).frame(maxWidth: .infinity)
-                    Divider()
-                    StudioInspector(model: model).frame(width: 330)
+                    splitter(vertical: true)
+                        .gesture(DragGesture(coordinateSpace: .global).onChanged { g in
+                            let start = dragStart ?? side
+                            dragStart = start
+                            sideWidth = min(maxSide, max(260, start - g.translation.width))
+                        }.onEnded { _ in dragStart = nil })
+                        .onTapGesture(count: 2) { sideWidth = 330 }
+                    StudioInspector(model: model).frame(width: side)
                 }
                 .frame(height: geo.size.height - timeline - 6)
                 splitter(vertical: false)
@@ -94,6 +110,51 @@ struct StudioView: View {
                 StudioTimeline(model: model).frame(height: timeline)
             }
         }
+    }
+
+    /// Stand des Erzeugens neben „Übernehmen“: die Szene, die gerade rechnet, mit Prozent, dazu fertig/gesamt dieses
+    /// Laufs, und Abbrechen (der erste Klick fragt nach, lange Läufe). Wie die Leiste unter Windows.
+    private func generation(compact: Bool) -> some View {
+        let current = model.currentGeneration
+        let pct = Int(((current?.progress ?? 0) * 100).rounded())
+        let done = max(0, model.runTotal - model.busyScenes)
+        let name = current.map { $0.scene.title.isEmpty ? t("Szene", "Scene") : $0.scene.title } ?? t("wartet …", "queued …")
+        // bei wenig Platz kürzt sich nur der Name; Prozent und fertig/gesamt bleiben sichtbar
+        var numbers = current == nil ? "" : " \(pct) %"
+        if model.runTotal > 1 { numbers += " · \(done)/\(model.runTotal)" }
+        return HStack(spacing: 6) {
+            if !compact {
+                ProgressView(value: current == nil ? 0 : max(0.02, current!.progress))
+                    .progressViewStyle(.linear).tint(.green).frame(width: 44)
+            }
+            HStack(spacing: 0) {
+                Text(verbatim: name).lineLimit(1).truncationMode(.tail)
+                Text(verbatim: numbers).lineLimit(1).fixedSize().layoutPriority(1)
+            }
+            .font(.callout.monospacedDigit())
+            .frame(maxWidth: compact ? 150 : 190, alignment: .leading)
+            Button {
+                if confirmCancel {
+                    confirmCancel = false
+                    Task { await model.cancelGenerate() }
+                } else {
+                    confirmCancel = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) { confirmCancel = false }
+                }
+            } label: {
+                Text(confirmCancel ? t("Wirklich abbrechen?", "Really cancel?") : t("✕ Abbrechen", "✕ Cancel"))
+            }
+            .controlSize(.small)
+            .foregroundStyle(confirmCancel ? Color.red : Color.primary)
+            .help(t("Alle laufenden und wartenden Aufträge dieses Projekts abbrechen",
+                    "Cancel all running and queued jobs of this project"))
+        }
+        .padding(.leading, 8).padding(.trailing, 3).padding(.vertical, 2)
+        .background(Capsule().fill(Color.green.opacity(0.13)))
+        .overlay(Capsule().stroke(Color.green.opacity(0.35)))
+        .fixedSize()
+        .help(current.map { "\($0.scene.title.isEmpty ? String($0.scene.prompt.prefix(40)) : $0.scene.title) · \($0.stage)" }
+              ?? t("Wartet auf die Grafikkarte", "Waiting for the GPU"))
     }
 
     private func splitter(vertical: Bool) -> some View {
@@ -174,6 +235,7 @@ struct StudioView: View {
             Button(t("Übernehmen ↓", "Conform ↓")) { Task { await model.conform() } }
                 .fixedSize()
                 .help(t("Legt die gewählten Takes in den Schnitt", "Puts the chosen takes into the edit"))
+            if model.busyScenes > 0 { generation(compact: compact) }
             Menu(compact ? "+ ◆" : t("+ Marker", "+ Marker")) {
                 ForEach(Studio.markerKinds, id: \.self) { kind in
                     Button(StudioInspector.markerName(kind)) { Task { await model.addMarker(kind) } }

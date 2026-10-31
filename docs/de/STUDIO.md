@@ -43,13 +43,18 @@ Liegt schon etwas im Schnitt, fragt das Studio vorher nach (siehe [Übernehmen o
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take, mit dem Modell aus den Eigenschaften oder dem
    aktiven. Kurze Aufträge kommen zuerst (Ton, Standbilder), dann die Videos; eine Anschluss-Szene wartet
    auf die Szene davor und folgt von selbst. Fertige Szenen zeigen ihre Takes in den Eigenschaften; ein
-   Klick auf einen Take nimmt ihn.
+   Klick auf einen Take nimmt ihn. Solange erzeugt wird, zeigt die Leiste neben „Übernehmen“ die Szene, die
+   gerade rechnet, mit Prozent und wie viele dieses Laufs fertig sind (etwa „Far view 63 % · 2/5“).
+   „✕ Abbrechen“ daneben (zweimal klicken) beendet alle laufenden und wartenden Aufträge des Projekts, auch
+   Anschluss-Szenen, die noch warten; fertige Takes bleiben.
 5. **Übernehmen.**
 6. **Schneiden:** Mit der Auswahl (V) verschiebst du Clips durch Ziehen und trimmst sie an den Rändern;
    mit dem Schneidewerkzeug (C) teilt ein Klick den Clip, Strg+K schneidet am Abspielkopf. Entf löscht,
    Umschalt+Entf schließt dabei die Lücke. Ein Rechtsklick zeigt überall, was geht; Geschwindigkeit,
    Übergang, Lautstärke und Stumm stehen auch in den Eigenschaften.
 7. **Exportieren:** Format wählen und „Exportieren“ klicken. Das fertige Video steht auch im Verlauf.
+
+![Während Szenen erzeugt werden: neben „Übernehmen“ die Szene, die gerade entsteht, mit Prozent und wie viele fertig sind, und Abbrechen; rechts die Eigenschaften mit dem größeren Prompt-Feld (1366 × 720)](../images/studio-progress-de.jpg)
 
 Das Studio speichert jede Änderung sofort. Rückgängig und Wiederholen reichen 100 Schritte zurück; Takes,
 die in der Zwischenzeit fertig werden, bleiben. „Löschen“ neben dem Projekt verschiebt es in den
@@ -62,7 +67,9 @@ Bilder, Videos und Ton und einem Suchfeld. Sie bleibt von selbst aktuell: Fertig
 und Gelöschtes erscheinen sofort. ◆ zeigt ein Video mit verlustfreier Kopie, ● Material, das im Schnitt
 liegt. Geladen werden je 100; „Weitere 100 laden“ am Ende holt die nächsten, und Filter und Suche gehen über
 dein ganzes Material, nicht nur über das Geladene. Die Linie rechts neben der Liste macht sie breiter, wenn
-du sie ziehst; ein Doppelklick auf die Linie stellt sie zurück.
+du sie ziehst; ein Doppelklick auf die Linie stellt sie zurück. Genauso die Eigenschaften rechts (seit 0.5.19):
+an der Linie links von ihnen ziehen, ein Doppelklick stellt 330 Pixel wieder her. Der Monitor behält immer
+mindestens 320 Pixel, so lässt sich das Studio auch auf einem 14-Zoll-Notebook bedienen.
 
 **Jedes Projekt hat seinen eigenen Ordner** (seit 0.5.15), auf der Platte im Datenordner
 unter `assets\Studio\<Projektname>`; benennst du das Projekt um, heißt der Ordner mit. Was das Studio für ein

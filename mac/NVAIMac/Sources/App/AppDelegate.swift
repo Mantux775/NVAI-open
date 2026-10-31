@@ -44,7 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///
 /// `--snapshot` fotografiert das eigene Fenster (cacheDisplay, keine Bildschirmfreigabe nötig),
 /// `--tab search` öffnet dazu die Modellsuche, `--tab restore` „Generieren“ mit „Foto restaurieren“, `--tab player`
-/// den Verlauf mit dem neuesten Video im Player;
+/// den Verlauf mit dem neuesten Video im Player; mit `--tab studio --studio-generate sc_…[,sc_…]` erzeugt das Studio
+/// diese Szenen und wartet 8 s auf den Stand neben „Übernehmen“, `--studio-cancel` bricht danach ab;
 /// `--report` schreibt den Messbericht. `--restore-kind` stellt jedem Foto (JPEG/PNG, auch in Unterordnern) die Frage
 /// von „Automatisch“ beim Restaurieren (`VisionEngine`) und schreibt Antwort, Wahl und Sekunden nach `--kind-out`.
 /// `--sharpen` schärft ein Bild mit SeedVR2 (`SeedVR2Engine`) und schreibt Zeit und Speicherspitze ins Protokoll.
@@ -132,6 +133,18 @@ enum LaunchOptions {
                 StudioModel.shared.snapshotSelect(pick)
             }
             if tab == "studio", args.contains("--studio-scrub-test") { await scrubTest() }
+            if tab == "studio", let ids = value("--studio-generate") {
+                // Prüfstand für Fortschritt und Abbrechen neben „Übernehmen“ (0.5.1)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                await StudioModel.shared.generate(ids.split(separator: ",").map(String.init))
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                AppLog.info("Studio generate test: \(StudioModel.shared.busyScenes) busy, progress "
+                            + StudioModel.shared.jobProgress.values.map { "\(Int($0.progress * 100)) % \($0.stage)" }.joined(separator: ", "))
+                if args.contains("--studio-cancel") {
+                    await StudioModel.shared.cancelGenerate()
+                    AppLog.info("Studio cancel test: \(StudioModel.shared.notice ?? "-")")
+                }
+            }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
             try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : tab == "player" || tab == "studio" ? 4_000_000_000 : 2_500_000_000)
             // Das Fenster kann länger brauchen (Studio lädt Projekt und Monitorbild): bis zu 10 s auf ein sichtbares warten

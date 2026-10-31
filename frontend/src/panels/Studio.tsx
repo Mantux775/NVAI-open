@@ -38,6 +38,13 @@ const KEY_SPLIT = 'nvai-studio-split'
 const KEY_MAGNET = 'nvai-studio-magnet'
 const KEY_BIN = 'nvai-studio-bin-width'
 const BIN_WIDTH = 240
+// Eigenschaftenspalte rechts, verstellbar wie die Materialspalte (Nutzer 31.10.2026: „die rechte panele mit promts und
+// einstellungen soll auch wie die linke panelle mit medien breiten verstellbar sein“)
+const KEY_SIDE = 'nvai-studio-side-width'
+const SIDE_WIDTH = 330
+const SIDE_MIN = 260
+const SIDE_MAX = 640
+const MONITOR_MIN = 320
 
 function stored(key: string): string | null {
   try {
@@ -94,8 +101,14 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const [playhead, setPlayhead] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [zoom, setZoomState] = useState(() => Number(stored(KEY_ZOOM)) || 40)
-  const [split, setSplit] = useState(() => Number(stored(KEY_SPLIT)) || 44)
+  // Niedrige Fenster (14-Zoll-Notebook): anfangs etwas weniger Zeitleiste, damit Vorschau und Eigenschaften Platz haben
+  const [split, setSplit] = useState(() => Number(stored(KEY_SPLIT)) || (window.innerHeight < 800 ? 38 : 44))
   const [binWidth, setBinWidth] = useState(() => Number(stored(KEY_BIN)) || BIN_WIDTH)
+  const [sideWidth, setSideWidth] = useState(() => Number(stored(KEY_SIDE)) || SIDE_WIDTH)
+  // Erzeugen: Fortschritt je Auftrag aus dem Live-Feed, Anzahl der Szenen dieses Laufs, Rückfrage beim Abbrechen
+  const [jobProgress, setJobProgress] = useState<Record<string, { progress: number; stage: string }>>({})
+  const [runTotal, setRunTotal] = useState(0)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [presets, setPresets] = useState<{ id: string; label: string; ext: string }[]>([])
@@ -216,7 +229,18 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
       }).catch(() => {})
     }
     if (event.type === 'job.done') setBinKey((k) => k + 1)
-    if (['job.done', 'job.error', 'job.cancelled'].includes(event.type) && project?.scenes.some((s) => s.jobs.includes(event.job_id))) {
+    const ofScene = project?.scenes.some((s) => s.jobs.includes(event.job_id))
+    if (ofScene && (event.type === 'job.progress' || event.type === 'job.started')) {
+      const progress = event.type === 'job.progress' ? event.progress : 0
+      const stage = event.type === 'job.progress' ? event.stage : t('startet', 'starting')
+      setJobProgress((m) => ({ ...m, [event.job_id]: { progress, stage } }))
+    }
+    if (['job.done', 'job.error', 'job.cancelled'].includes(event.type) && ofScene) {
+      setJobProgress((m) => {
+        const next = { ...m }
+        delete next[event.job_id]
+        return next
+      })
       reload()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +269,48 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
     },
     [pid, reload],
   )
+
+  // Erzeugen abbrechen: alle laufenden und wartenden Aufträge der Szenen; erster Klick fragt nach (lange Läufe)
+  const cancelGenerate = async () => {
+    if (!pid) return
+    if (!confirmCancel) {
+      setConfirmCancel(true)
+      setTimeout(() => setConfirmCancel(false), 4000)
+      return
+    }
+    setConfirmCancel(false)
+    try {
+      const r = await api.studioCancel(pid)
+      setJobProgress({})
+      await reload()
+      setNotice(t(`Erzeugen abgebrochen (${r.cancelled.length} Auftrag/Aufträge). Fertige Takes bleiben.`,
+        `Generation cancelled (${r.cancelled.length} job(s)). Finished takes stay.`))
+    } catch (e: any) {
+      setNotice(String(e.message ?? e))
+    }
+  }
+
+  // Wie viele Szenen dieser Lauf hat (für „fertig/gesamt“); nach dem Öffnen den Stand laufender Aufträge einmal holen,
+  // bis der Live-Feed die nächste Meldung bringt
+  const busyScenes = project?.scenes.filter((s) => s.status === 'running' || s.status === 'waiting') ?? []
+  useEffect(() => {
+    if (!busyScenes.length) {
+      setRunTotal(0)
+      return
+    }
+    setRunTotal((n) => Math.max(n, busyScenes.length))
+    for (const s of busyScenes) {
+      for (const j of s.jobs) {
+        if (jobProgress[j]) continue
+        api.job(j).then((job) => {
+          if (job.status === 'running') {
+            setJobProgress((m) => (m[j] ? m : { ...m, [j]: { progress: job.progress ?? 0, stage: job.stage ?? '' } }))
+          }
+        }).catch(() => {})
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project])
 
   // „Übernehmen“: erst der Plan; Rückfrage nur, wenn etwas Vorhandenes betroffen ist (Nutzer 27.10.2026)
   const runConform = async (params: Record<string, unknown>) => {
@@ -847,7 +913,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
     if (!box) return
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     const move = (ev: PointerEvent) => {
-      const w = Math.round(Math.max(180, Math.min(ev.clientX - box.left, box.width - 330 - 320)))
+      const w = Math.round(Math.max(180, Math.min(ev.clientX - box.left, box.width - sideWidth - MONITOR_MIN)))
       setBinWidth(w)
       store(KEY_BIN, String(w))
     }
@@ -863,7 +929,35 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
     store(KEY_BIN, String(BIN_WIDTH))
   }
 
+  // Breite der Eigenschaftenspalte rechts ziehen, wie die Materialspalte; Doppelklick stellt sie zurück
+  const dragSide = (e: RPointerEvent) => {
+    const box = upper.current?.getBoundingClientRect()
+    if (!box) return
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      const room = box.width - Math.min(binWidth, box.width / 2) - MONITOR_MIN
+      const w = Math.round(Math.max(SIDE_MIN, Math.min(box.right - ev.clientX, SIDE_MAX, room)))
+      setSideWidth(w)
+      store(KEY_SIDE, String(w))
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  const resetSide = () => {
+    setSideWidth(SIDE_WIDTH)
+    store(KEY_SIDE, String(SIDE_WIDTH))
+  }
+
   const running = project?.scenes.filter((s) => s.status === 'running' || s.status === 'waiting').length ?? 0
+  // Stand des Erzeugens neben „Übernehmen“: die Szene, die gerade rechnet, mit Prozent, dazu fertig/gesamt dieses Laufs
+  const current = project?.scenes.find((s) => s.jobs.some((j) => jobProgress[j]))
+  const currentJob = current?.jobs.find((j) => jobProgress[j])
+  const currentPct = currentJob ? Math.round((jobProgress[currentJob]?.progress ?? 0) * 100) : 0
+  const runDone = Math.max(0, runTotal - running)
   const askNames = speedAsk ? speedAsk.hits.map((c) => project?.scenes.find((s) => s.id === c.scene_id)?.title || project?.assets[c.asset_id]?.prompt?.slice(0, 30) || c.asset_id) : []
 
   return (
@@ -899,6 +993,21 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
         <button className="btn small" disabled={!project} onClick={conform} title={t('Gewählte Takes in den Schnitt legen, Marker auswerten; fragt nach, bevor Vorhandenes überschrieben wird', 'Put the chosen takes into the edit, apply the markers; asks before anything in the edit is overwritten')}>
           {t('Übernehmen', 'Conform')} ↓
         </button>
+        {running > 0 && (
+          <span className="st-gen" title={current ? `${current.title || current.prompt.slice(0, 40)} · ${jobProgress[currentJob!]?.stage ?? ''}` : t('Wartet auf die Grafikkarte', 'Waiting for the GPU')}>
+            <span className="st-gen-bar"><span style={{ width: `${current ? Math.max(2, currentPct) : 0}%` }} /></span>
+            {/* bei wenig Platz kürzt sich nur der Name; Prozent und fertig/gesamt bleiben sichtbar */}
+            <span className="st-gen-text">
+              <span className="st-gen-name">{current ? current.title || t('Szene', 'Scene') : t('wartet …', 'queued …')}</span>
+              {current && <span className="st-gen-num">&nbsp;{currentPct} %</span>}
+              {runTotal > 1 && <span className="st-gen-num">&nbsp;· {runDone}/{runTotal}</span>}
+            </span>
+            <button className={`btn small ghost st-gen-cancel${confirmCancel ? ' armed' : ''}`} onClick={cancelGenerate}
+              title={t('Alle laufenden und wartenden Aufträge dieses Projekts abbrechen', 'Cancel all running and queued jobs of this project')}>
+              {confirmCancel ? t('Wirklich abbrechen?', 'Really cancel?') : t('✕ Abbrechen', '✕ Cancel')}
+            </button>
+          </span>
+        )}
         <select
           value=""
           disabled={!project}
@@ -940,7 +1049,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
         )}
         <span className="st-spacer" />
         <button className="btn small ghost" onClick={toggleFullscreen} title={t('Vollbild', 'Full screen')}>
-          {fullscreen ? t('Vollbild beenden', 'Exit full screen') : t('⛶ Vollbild', '⛶ Full screen')}
+          {fullscreen ? t('Vollbild beenden', 'Exit full screen') : <>⛶<span className="st-wide"> {t('Vollbild', 'Full screen')}</span></>}
         </button>
       </div>
 
@@ -966,7 +1075,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
         </div>
       ) : (
         <>
-          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `min(${binWidth}px, 50vw) 5px minmax(0, 1fr) 330px` }}>
+          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `min(${binWidth}px, 50vw) 5px minmax(0, 1fr) 5px min(${sideWidth}px, 45vw)` }}>
             <Bin
               refreshKey={binKey + assetsVersion}
               selectedId={selection?.type === 'asset' ? selection.id : null}
@@ -992,6 +1101,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
               selectedClip={selection?.type === 'clip' ? selection.id : null}
               onCommand={run}
             />
+            <div className="st-vsplit" onPointerDown={dragSide} onDoubleClick={resetSide}
+              title={t('Ziehen: Breite der Eigenschaften; Doppelklick: zurücksetzen', 'Drag: width of the properties; double-click: reset')} />
             <div className="st-side">
               <Inspector
                 project={project}

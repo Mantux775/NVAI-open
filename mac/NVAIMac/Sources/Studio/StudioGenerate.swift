@@ -167,6 +167,38 @@ actor StudioGenerator {
                         "errors": .object(errors.mapValues(JSONValue.string))])
     }
 
+    // MARK: Abbrechen
+
+    /// Erzeugen abbrechen wie studio.cancel unter Windows (Nutzer 31.10.2026: „neben dem Übernehmen den Fortschritt
+    /// anzeigen und dort kann ich es auch abbrechen“): alle wartenden und laufenden Aufträge der Szenen, dazu die
+    /// Anschluss-Szenen, die noch auf ihre Vorlage warten. Fertige Takes bleiben. Ein laufendes Video endet nach dem
+    /// aktuellen Rechenschritt; bis dahin bleibt die Szene „wird erzeugt“.
+    func cancel(_ store: StudioStore, _ pid: String) async throws -> JSONValue {
+        let p = try await refresh(store, pid)
+        var cancelled: [String] = []
+        for id in p.scenes.flatMap(\.jobs) {
+            guard let job = await JobQueue.shared.job(id), job.status == "queued" || job.status == "running" else { continue }
+            if (try? await JobQueue.shared.cancel(id)) != nil { cancelled.append(id) }
+        }
+        let waiting = p.scenes.filter { $0.waitingFor != nil }.map(\.id)
+        for id in waiting {
+            chainTasks[id]?.cancel()
+            chainTasks[id] = nil
+        }
+        if !waiting.isEmpty {
+            _ = try await store.update(pid) { q in
+                var changed = false
+                for i in q.scenes.indices where q.scenes[i].waitingFor != nil {
+                    q.scenes[i].waitingFor = nil
+                    changed = true
+                }
+                return changed
+            }
+        }
+        _ = try await refresh(store, pid)
+        return .object(["cancelled": .array(cancelled.map(JSONValue.string))])
+    }
+
     /// Wartet, bis die Vorlage einer Anschluss-Szene fertig ist, und schickt dann deren Auftrag ab. Endet still,
     /// wenn Szene oder Projekt gelöscht oder umgestellt wurden.
     private func chainLater(_ store: StudioStore, _ pid: String, sceneID: String, sourceID: String) async {
