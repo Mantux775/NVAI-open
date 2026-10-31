@@ -97,44 +97,62 @@ struct VideoRow: View {
     }
 }
 
-/// LTX-Video 2B unter „Modelle“: laden, Fortschritt, löschen.
+/// Ein Videomodell (LTX-Video 2B oder 13B) unter „Modelle“: laden, Fortschritt, löschen.
 struct VideoModelCard: View {
     @EnvironmentObject var state: AppState
+    let model: VideoModel
 
+    private var installed: Bool { state.videoInstalledIDs.contains(model.id) }
+    /// Wie bei FLUX.2 Klein 8 Bit: unter der Mindestgröße kein Download (er liefe hier nicht); LTX-2 auch nicht vor
+    /// macOS 26.3.
+    private var tooSmall: Bool { SystemInfo.memoryGB < model.minRAMGB }
+    private var osTooOld: Bool { model.isLTX2 && !LTX2Engine.osSupported }
+    private var encoderInstalled: Bool { installed && model.encoderInstalled }
     private var download: JobRecord? {
-        state.jobs.first { $0.downloadModelID == VideoCatalog.id && !$0.isFinished }
+        state.jobs.first { $0.downloadModelID == model.id && !$0.isFinished }
     }
     private var lastError: String? {
-        state.jobs.first { $0.downloadModelID == VideoCatalog.id }.flatMap { $0.status == "error" ? $0.error : nil }
+        state.jobs.first { $0.downloadModelID == model.id }.flatMap { $0.status == "error" ? $0.error : nil }
     }
 
     var body: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(VideoCatalog.name).font(.headline)
-                    Text(ContentRating.label(VideoCatalog.id)).font(.caption)
+                    Text(model.name).font(.headline)
+                    Text(ContentRating.label(VideoModel.ltxv2B.id)).font(.caption)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .overlay(Capsule().stroke(.secondary.opacity(0.5)))
                         .foregroundStyle(.secondary)
-                        .help(ContentRating.help(VideoCatalog.id))
-                    FitBadges(fit: MacFit.of(needGB: MacFit.videoNeedGB),
-                              recommended: MacRecommendations.isRecommended(VideoCatalog.id))
+                        .help(ContentRating.help(VideoModel.ltxv2B.id))
+                    FitBadges(fit: MacFit.of(needGB: model.needGB), recommended: MacRecommendations.isRecommended(model.id))
                     Spacer()
-                    Text(state.videoInstalled ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
-                        .foregroundStyle(state.videoInstalled ? .green : .secondary)
+                    Text(installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
+                        .foregroundStyle(installed ? .green : .secondary)
                 }
-                Text(VideoCatalog.description).font(.callout)
-                Text(String(format: t("Download %.1f GB · ab 8 GB Arbeitsspeicher · LTX-Video Open Weights License",
-                                      "Download %.1f GB · from 8 GB of memory · LTX-Video Open Weights License"),
-                            VideoCatalog.downloadGB))
+                Text(model.description).font(.callout)
+                Text(String(format: t("Download %.1f GB · ab %d GB Arbeitsspeicher · LTX-Video Open Weights License",
+                                      "Download %.1f GB · from %d GB of memory · LTX-Video Open Weights License"),
+                            model.downloadGB, model.minRAMGB))
                     .font(.caption).foregroundStyle(.secondary)
-                if state.videoInstalled {
+                if tooSmall && !installed {
+                    Text(t("Braucht mindestens \(model.minRAMGB) GB Arbeitsspeicher, dieser Mac hat \(SystemInfo.memoryGB) GB.",
+                           "Needs at least \(model.minRAMGB) GB of memory, this Mac has \(SystemInfo.memoryGB) GB."))
+                        .font(.caption).foregroundStyle(.orange)
+                } else if osTooOld && !installed {
+                    Text(t("Braucht macOS 26.3 oder neuer.", "Needs macOS 26.3 or later."))
+                        .font(.caption).foregroundStyle(.orange)
+                } else if model.gated && !installed && Settings.hfToken == nil {
+                    Text(t("Gesperrt auf Hugging Face: Lizenz von Lightricks/LTX-2.5 annehmen und unter „Einstellungen“ ein Token eintragen.",
+                           "Gated on Hugging Face: accept the license of Lightricks/LTX-2.5 and enter a token under \"Settings\"."))
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                if installed {
                     // Wer das Modell vor dem Startbild geladen hat (bis Build 14), holt den Encoder hier nach.
-                    Text(state.videoEncoderInstalled
+                    Text(encoderInstalled
                          ? t("Startbild: bereit (Bild-Encoder geladen).", "Start image: ready (image encoder downloaded).")
                          : t("Startbild: braucht den Bild-Encoder, 1,4 GB Download.", "Start image: needs the image encoder, 1.4 GB download."))
-                        .font(.caption).foregroundStyle(state.videoEncoderInstalled ? .green : .orange)
+                        .font(.caption).foregroundStyle(encoderInstalled ? .green : .orange)
                 }
                 if let download {
                     ProgressView(value: download.progress)
@@ -143,22 +161,22 @@ struct VideoModelCard: View {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }
                 HStack {
-                    if !state.videoInstalled {
+                    if !installed {
                         Button(t("Herunterladen", "Download")) {
-                            Task { _ = await JobQueue.shared.submitVideoDownload() }
+                            Task { _ = await JobQueue.shared.submitVideoDownload(model.id) }
                         }
-                        .disabled(download != nil)
+                        .disabled(download != nil || tooSmall || osTooOld)
                     } else {
-                        if !state.videoEncoderInstalled {
+                        if !encoderInstalled {
                             Button(t("Startbild nachrüsten", "Add start image")) {
-                                Task { _ = await JobQueue.shared.submitVideoDownload() }
+                                Task { _ = await JobQueue.shared.submitVideoDownload(model.id) }
                             }
                             .disabled(download != nil)
                         }
                         Button(t("Löschen", "Delete"), role: .destructive) {
                             Task {
                                 await VideoEngine.shared.unload()
-                                VideoCatalog.delete()
+                                model.delete()
                                 state.refreshModels()
                             }
                         }

@@ -78,9 +78,13 @@ struct ModelsView: View {
                     AudioModelCard()
                 }
 
-                if visible(VideoCatalog.id, installed: state.videoInstalled) {
+                let videos = VideoCatalog.models.filter { visible($0.id, installed: state.videoInstalledIDs.contains($0.id)) }
+                if !videos.isEmpty {
                     Text(t("Video", "Video")).font(.title2.bold()).padding(.top, 10)
-                    VideoModelCard()
+                    Text(t("Empfohlen nach Arbeitsspeicher: unter 16 GB LTX-Video 2B, ab 16 GB der 13B in 4 Bit, ab 24 GB in 8 Bit, ab 32 GB LTX-2.3 mit Ton, ab 64 GB LTX-2.5 mit Ton (LTX-2 ab macOS 26.3).",
+                           "Recommended by memory: below 16 GB LTX-Video 2B, from 16 GB the 13B in 4-bit, from 24 GB in 8-bit, from 32 GB LTX-2.3 with sound, from 64 GB LTX-2.5 with sound (LTX-2 from macOS 26.3)."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(videos) { VideoModelCard(model: $0) }
                 }
 
                 Text(t("Zusätze", "Add-ons")).font(.title2.bold()).padding(.top, 10)

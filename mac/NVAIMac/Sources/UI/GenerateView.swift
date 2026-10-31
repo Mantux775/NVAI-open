@@ -49,7 +49,7 @@ struct GenerateView: View {
     @State private var videoSizeIndex = 0
     @State private var videoFrames = 97
     @State private var videoStartID: String?
-    @AppStorage("video.model") private var videoModelID = VideoCatalog.id
+    @AppStorage("video.model") private var videoModelID = VideoCatalog.recommended.id
 
     private var sizes: [(label: String, w: Int, h: Int)] {
         ModelCatalog.flux2Sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 1024, $0["h"] as? Int ?? 1024) }
@@ -319,7 +319,7 @@ struct GenerateView: View {
     // MARK: Video
 
     private var videoSizes: [(label: String, w: Int, h: Int)] {
-        VideoCatalog.sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 768, $0["h"] as? Int ?? 512) }
+        videoSpec.sizes.map { ($0["label"] as? String ?? "", $0["w"] as? Int ?? 768, $0["h"] as? Int ?? 512) }
     }
 
     private var videoSize: (label: String, w: Int, h: Int) { videoSizes[min(videoSizeIndex, videoSizes.count - 1)] }
@@ -328,25 +328,31 @@ struct GenerateView: View {
         VideoCatalog.choices.first { $0.id == videoModelID } ?? VideoCatalog.choices[0]
     }
 
+    /// Das gewählte Videomodell (2B oder 13B) mit seinen Dateien und Grenzen.
+    private var videoSpec: VideoModel { VideoCatalog.model(videoModel.id) ?? .ltxv2B }
+
+    /// Bild-Encoder des gewählten Modells geladen (fürs Startbild).
+    private var videoEncoderReady: Bool { state.videoInstalledIDs.contains(videoSpec.id) && videoSpec.encoderInstalled }
+
     /// Startbild wählbar: nicht, wenn das Modell keines kann (ausgegraut); ungeprüft (nil) bleibt es wählbar mit
     /// Hinweis; LTX-Video 2B braucht dafür seinen Bild-Encoder.
     private var startImageUsable: Bool {
         switch videoModel.startImage {
         case false?: return false
-        case true?: return state.videoEncoderInstalled
+        case true?: return videoEncoderReady
         case nil: return true
         }
     }
 
     private var videoDownload: JobRecord? {
-        state.jobs.first { $0.downloadModelID == VideoCatalog.id && !$0.isFinished }
+        state.jobs.first { $0.downloadModelID == videoSpec.id && !$0.isFinished }
     }
 
     @ViewBuilder
     private var videoStartBox: some View {
         GroupBox(t("Startbild (optional)", "Start image (optional)")) {
             VStack(alignment: .leading, spacing: 6) {
-                if videoModel.startImage == true && state.videoInstalled && !state.videoEncoderInstalled {
+                if videoModel.startImage == true && state.videoInstalled && !videoEncoderReady {
                     Text(t("Das Startbild braucht den Bild-Encoder von LTX-Video: 1,4 GB Download, danach 0,46 GB auf der Platte.",
                            "A start image needs LTX-Video's image encoder: 1.4 GB download, then 0.46 GB on disk."))
                         .font(.caption).foregroundStyle(.secondary)
@@ -393,9 +399,9 @@ struct GenerateView: View {
         }
     }
 
-    /// Längen, die bei diesem Format auf diesen Mac passen (`VideoJobRequest.maxVoxels`).
+    /// Längen, die bei diesem Format und Modell auf diesen Mac passen (`VideoModel.maxVoxels`).
     private var videoFrameChoices: [Int] {
-        VideoCatalog.frameChoices.filter { videoSize.w * videoSize.h * $0 <= VideoJobRequest.maxVoxels }
+        VideoCatalog.frameChoices.filter { videoSize.w * videoSize.h * $0 <= videoSpec.maxVoxels }
     }
 
     /// Gemessen am Mac mini M1 mit 8 GB (26.10.2026): 512 × 320 × 49 Bilder 40 s, 768 × 512 × 97 Bilder 174 s;

@@ -326,9 +326,12 @@ dieselben Tasten und Rechtsklick-Menüs. Das Projektformat ist dasselbe: Ein als
 
 Was der Mac anders macht:
 
-- **Modelle:** Videoszenen rechnet LTX-Video 2B, ohne Ton. Größe und Länge passen sich dem Speicher des Macs
-  an: Mit 8 GB bleibt Breite × Höhe × Bilder bei höchstens 768 × 512 × 97, etwa 4 s in 768 × 512 oder 2 s in
-  1152 × 640. Standbilder kommen vom aktiven Bildmodell (FLUX.2 Klein, Z-Image Turbo oder Core ML), Musik und
+- **Modelle:** Videoszenen rechnet das Videomodell, das unter „Generieren“ > „Video“ gewählt ist. Seit 0.5.0
+  empfiehlt der Mac eines nach Arbeitsspeicher (LTX-Video 2B, ab 16 GB LTX-Video 13B, ab 32 GB LTX-2.3 und ab 64 GB
+  LTX-2.5 mit Ton, siehe [MODELLE.md](MODELLE.md#neu-in-nvai-open-für-mac-050)); sind mehrere geladen, wählt eine
+  Szene ihres in den Eigenschaften. Größe und Länge passen sich
+  dem Speicher an: Mit 8 GB und dem 2B bleibt Breite × Höhe × Bilder bei höchstens 768 × 512 × 97, etwa 4 s in
+  768 × 512 oder 2 s in 1152 × 640. Standbilder kommen vom aktiven Bildmodell (FLUX.2 Klein, Z-Image Turbo oder Core ML), Musik und
   Klänge von Stable Audio 3. Für die Sprecher-Bahn eine aufgenommene Tondatei auf die Szene ziehen.
 - **Eine Anschluss-Szene** beginnt mit dem letzten Bild der Szene davor. Die Latent-Kette braucht LTX-2.5 und
   bleibt Windows vorbehalten.

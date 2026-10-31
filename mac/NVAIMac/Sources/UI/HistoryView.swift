@@ -178,8 +178,8 @@ struct HistoryView: View {
 
     private func metaRows(_ asset: AssetRecord) -> [(String, String)] {
         // Den Modellnamen in der aktuellen Sprache, nicht wie er beim Erzeugen gespeichert wurde.
-        let modelName = asset.kind == "video" && asset.modelID == VideoCatalog.id ? VideoCatalog.name
-            : Models.find(asset.modelID)?.name ?? asset.meta["model_name"]?.stringValue ?? asset.modelID
+        let modelName = VideoCatalog.model(asset.modelID)?.name
+            ?? Models.find(asset.modelID)?.name ?? asset.meta["model_name"]?.stringValue ?? asset.modelID
         var rows: [(String, String)] = [(t("Modell", "Model"), modelName)]
         if let w = asset.meta["width"]?.intValue, let h = asset.meta["height"]?.intValue { rows.append((t("Größe", "Size"), "\(w) × \(h)")) }
         if let s = asset.meta["seconds"]?.doubleValue { rows.append((t("Länge", "Length"), String(format: "%.1f s", s))) }

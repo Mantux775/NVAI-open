@@ -186,7 +186,7 @@ enum APIRouter {
                     "unified_memory": true],
             "active_models": ["image": active.installed ? active.id as Any : NSNull(),
                               "audio": AudioCatalog.installed ? AudioCatalog.id as Any : NSNull(),
-                              "video": VideoCatalog.installed ? VideoCatalog.id as Any : NSNull(), "3d": NSNull()],
+                              "video": VideoCatalog.anyInstalled ? VideoCatalog.active.id as Any : NSNull(), "3d": NSNull()],
             "queue_depth": await queue.queueDepth,
             "current_job": await queue.currentJobID ?? NSNull(),
             "download_queue_depth": await queue.downloadDepth,
@@ -205,7 +205,7 @@ enum APIRouter {
         let images = kind == nil || kind == "image" ? Models.all.map(\.info) : []
         let loras = kind == nil || kind == "lora" ? LoRACatalog.all.map(\.info) : []
         let audio = kind == nil || kind == "audio" ? [AudioCatalog.info] : []
-        let video = kind == nil || kind == "video" ? [VideoCatalog.info] : []
+        let video = kind == nil || kind == "video" ? VideoCatalog.models.map(\.info) : []
         return images + loras + audio + video + HelperModel.allCases.filter { kind == nil || $0.kind == kind }.map(\.info)
     }
 
@@ -214,7 +214,14 @@ enum APIRouter {
             if let helper = HelperModel.find(id) { return .json(await JobQueue.shared.submitDownload(helper).json) }
             if let lora = LoRACatalog.find(id) { return .json(await JobQueue.shared.submitDownload(lora).json) }
             if id == AudioCatalog.id { return .json(await JobQueue.shared.submitAudioDownload().json) }
-            if id == VideoCatalog.id { return .json(await JobQueue.shared.submitVideoDownload().json) }
+            if let video = VideoCatalog.model(id) {
+                if video.isLTX2 { try LTX2Engine.checkOS() }
+                guard SystemInfo.memoryGB >= video.minRAMGB else {
+                    throw APIError(422, t("\(video.name) braucht mindestens \(video.minRAMGB) GB Arbeitsspeicher, dieser Mac hat \(SystemInfo.memoryGB) GB.",
+                                          "\(video.name) needs at least \(video.minRAMGB) GB of memory, this Mac has \(SystemInfo.memoryGB) GB."))
+                }
+                return .json(await JobQueue.shared.submitVideoDownload(id).json)
+            }
             guard let model = Models.find(id) else { throw APIError(404, t("Unbekanntes Modell: \(id)", "Unknown model: \(id)")) }
             return .json(await JobQueue.shared.submitDownload(model).json)
         }

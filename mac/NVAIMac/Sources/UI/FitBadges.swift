@@ -31,7 +31,7 @@ enum MacRecommendations {
     static func isRecommended(_ id: String) -> Bool {
         if id == ModelCatalog.recommended.id { return true }
         if let z = ZImageCatalog.model(id) { return ZImageCatalog.fits(z) == "ja" }
-        if id == VideoCatalog.id { return MacFit.of(needGB: MacFit.videoNeedGB) != "nein" }
+        if VideoCatalog.model(id) != nil { return VideoCatalog.recommended.id == id }  // eines je Speichergröße
         if id == AudioCatalog.id { return MacFit.of(needGB: MacFit.audioNeedGB) != "nein" }
         if let helper = HelperModel(rawValue: id) { return MacFit.of(needGB: MacFit.helperNeedGB(helper)) != "nein" }
         return false

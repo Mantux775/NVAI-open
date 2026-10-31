@@ -311,8 +311,14 @@ private struct SceneInspector: View {
                 Text(t("aktives Modell", "active model")).tag("")
                 ForEach(Models.all.filter { $0.installed }, id: \.id) { m in Text(m.name).tag(m.id) }
             }
+        } else if scene.lane == "video" && VideoCatalog.installedModels.count > 1 {
+            // mehrere Videomodelle geladen (2B, 13B): je Szene wählbar, ohne Wahl das aktive
+            Picker(t("Modell", "Model"), selection: Binding(get: { scene.modelID ?? "" }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
+                Text(t("aktives Modell", "active model")).tag("")
+                ForEach(VideoCatalog.installedModels) { m in Text(m.name).tag(m.id) }
+            }
         } else {
-            LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? "LTX-Video 2B" : "Stable Audio 3")
+            LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? VideoCatalog.active.name : "Stable Audio 3")
                 .font(.callout)
         }
     }
@@ -706,7 +712,7 @@ private struct MediaInspector: View {
 
     /// Anzeigename des Modells wie im Verlauf (LTX-Video und Stable Audio 3 stehen nicht im Bildkatalog).
     static func modelName(_ r: AssetRecord) -> String {
-        if r.modelID == VideoCatalog.id { return VideoCatalog.name }
+        if let video = VideoCatalog.model(r.modelID) { return video.name }
         if r.modelID == AudioCatalog.id { return AudioCatalog.name }
         return Models.find(r.modelID)?.name ?? r.meta["model_name"]?.stringValue ?? r.modelID
     }

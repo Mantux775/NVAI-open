@@ -134,4 +134,43 @@ enum LTXVTest {
             AppLog.error("LTXV i2v test failed: \((error as? LocalizedError)?.errorDescription ?? String(describing: error))")
         }
     }
+    /// LTX-Video 13B: die ersten zwei Blöcke aus Lightricks' fp8-Datei gegen die Referenz (`reference13b.py`), dazu
+    /// dieselben in bf16 und nach dem Umwandeln in 8 und 4 Bit (wie die App es beim Laden macht).
+    static func run13B(_ dir: String) async {
+        let base = URL(fileURLWithPath: dir)
+        do {
+            let inputs = try MLX.loadArrays(url: base.appendingPathComponent("inputs.safetensors"))
+            let file = base.appendingPathComponent("dit13b-2blocks.safetensors")
+            guard let tokens = inputs["dit_tokens"], let context = inputs["dit_context"], let sigma = inputs["dit_sigma"],
+                  let shape = inputs["dit_shape"] else {
+                AppLog.error("LTXV 13B test: inputs missing")
+                return
+            }
+            let s = shape.asArray(Int32.self).map(Int.init)
+            func run(_ model: LTXTransformer) -> MLXArray {
+                let rope = model.rope(frames: s[0], height: s[1], width: s[2], frameRate: 24)
+                let v = model(tokens, sigma: sigma.item(Float.self), context: context, rope: rope).asType(.float32)
+                eval(v)
+                return v
+            }
+            var out: [String: MLXArray] = [:]
+            for n in [1, 2] {
+                out["dit_out_\(n)"] = run(try LTXWeights.loadTransformer(file: file, config: .ltxv13B, dtype: .float32, layers: n))
+            }
+            out["dit_out_bf16"] = run(try LTXWeights.loadTransformer(file: file, config: .ltxv13B, dtype: .bfloat16, layers: 2))
+            for bits in [8, 4] {
+                let t0 = Date()
+                let shards = try LTXWeights.convertTransformer(source: file, to: base.appendingPathComponent("q\(bits)"),
+                                                               bits: bits, prefix: "dit-q\(bits)")
+                let seconds = Date().timeIntervalSince(t0)
+                let bytes = shards.reduce(0) { $0 + ((try? FileManager.default.attributesOfItem(atPath: $1.path)[.size] as? Int) ?? 0) }
+                out["dit_out_q\(bits)"] = run(try LTXWeights.loadTransformer(files: shards, config: .ltxv13B, dtype: .bfloat16, layers: 2))
+                AppLog.info(String(format: "LTXV 13B test: %d bit, converted in %.1f s, %d MB", bits, seconds, bytes / 1_000_000))
+            }
+            try MLX.save(arrays: out, url: base.appendingPathComponent("swift_out.safetensors"))
+            AppLog.info("LTXV 13B test: written")
+        } catch {
+            AppLog.error("LTXV 13B test failed: \((error as? LocalizedError)?.errorDescription ?? String(describing: error))")
+        }
+    }
 }

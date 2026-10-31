@@ -1,4 +1,5 @@
-// The LTX-Video transformer (Lightricks "Transformer3DModel", 0.9.x 2B): 28 blocks of width 2048 (32 heads of 64)
+// The LTX-Video transformer (Lightricks "Transformer3DModel", 0.9.x 2B and 13B): 2B 28 blocks of width 2048 (32 heads
+// of 64), 13B 48 blocks of width 4096 (32 heads of 128), otherwise the same tensors
 // on single-voxel tokens of the 128-channel latent. Each block: RMS-normed self-attention with 3-axis rotary
 // positions, unnormalized cross-attention to the projected T5 features, RMS-normed GELU feed-forward; shift, scale and
 // gate of self-attention and feed-forward come from the timestep (adaLN-single, PixArt-α).
@@ -19,8 +20,20 @@ public struct LTXTransformerConfiguration: Sendable {
     public var timestepScale: Float = 1000
     /// Latent voxel → pixel: frames × 8, height and width × 32.
     public var vaeScale: (t: Int, h: Int, w: Int) = (8, 32, 32)
+    /// 13B: the causal VAE's first latent frame stands for one pixel frame, so frame f sits at max(0, 8f − 7)
+    /// (Lightricks' `latent_to_pixel_coords(causal_fix=True)`, checkpoint config `causal_temporal_positioning`).
+    public var causalTemporalPositioning = false
     public var dim: Int { heads * headDim }
     public init() {}
+
+    /// LTX-Video 13B 0.9.8: 48 blocks, heads of 128 (width 4096), causal temporal positions.
+    public static var ltxv13B: LTXTransformerConfiguration {
+        var c = LTXTransformerConfiguration()
+        c.headDim = 128
+        c.layers = 48
+        c.causalTemporalPositioning = true
+        return c
+    }
 }
 
 /// Sinusoidal timestep features as in PixArt / diffusers (`flip_sin_to_cos`, no frequency shift): [N, dims].
@@ -233,7 +246,9 @@ public final class LTXTransformer: Module {
         var sinv = [Float](repeating: 0, count: tokens * pairs)
         var token = 0
         for f in 0 ..< frames {
-            let t = Float(f * config.vaeScale.t) / frameRate / config.maxPositions[0] * 2 - 1
+            let pixelFrame = config.causalTemporalPositioning
+                ? max(0, f * config.vaeScale.t + 1 - config.vaeScale.t) : f * config.vaeScale.t
+            let t = Float(pixelFrame) / frameRate / config.maxPositions[0] * 2 - 1
             for y in 0 ..< height {
                 let py = Float(y * config.vaeScale.h) / config.maxPositions[1] * 2 - 1
                 for x in 0 ..< width {

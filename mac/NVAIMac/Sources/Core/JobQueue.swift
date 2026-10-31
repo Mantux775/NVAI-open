@@ -151,14 +151,14 @@ actor JobQueue {
         return job
     }
 
-    /// LTX-Video 2B laden.
-    func submitVideoDownload() -> JobRecord {
-        if let existing = jobs.values.first(where: { $0.downloadModelID == VideoCatalog.id && !$0.isFinished }) {
+    /// Ein Videomodell laden (LTX-Video 2B oder 13B).
+    func submitVideoDownload(_ modelID: String = VideoModel.ltxv2B.id) -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == modelID && !$0.isFinished }) {
             return existing
         }
         let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
-                            params: .object(["model_id": .string(VideoCatalog.id)]),
-                            createdAt: Date().timeIntervalSince1970, downloadModelID: VideoCatalog.id, lang: Lang.current)
+                            params: .object(["model_id": .string(modelID)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: modelID, lang: Lang.current)
         add(job)
         return job
     }
@@ -457,12 +457,12 @@ actor JobQueue {
     }
 
     private func runDownload(_ id: String, modelID: String) async throws {
-        if modelID == VideoCatalog.id {
-            update(id) { $0.stage = t("lädt \(VideoCatalog.name)", "downloading \(VideoCatalog.name)") }
+        if let video = VideoCatalog.model(modelID) {
+            update(id) { $0.stage = t("lädt \(video.name)", "downloading \(video.name)") }
             let report: @Sendable (Double, String) -> Void = { fraction, message in
                 Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
             }
-            let work = Task { try await VideoCatalog.download(progress: report) }
+            let work = Task { try await video.download(progress: report) }
             downloadTask = work
             defer { downloadTask = nil }
             try await work.value
@@ -914,9 +914,10 @@ actor JobQueue {
         let sampler = PeakMemorySampler()
         sampler.start()
         let started = Date()
+        let model = req.model
         let work = Task {
             try await VideoEngine.shared.generate(
-                prompt: req.prompt, width: req.width, height: req.height, frames: req.frames, fps: req.fps, seed: seed,
+                model: model, prompt: req.prompt, width: req.width, height: req.height, frames: req.frames, fps: req.fps, seed: seed,
                 startImage: startImage,
                 onStep: { step, total in
                     Task { await JobQueue.shared.videoProgress(id, phase: 0, done: step, total: total) }
@@ -940,8 +941,9 @@ actor JobQueue {
         var meta: [String: JSONValue] = [
             "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height), "frames": .int(result.frames),
             "fps": .int(req.fps), "seconds": .double((Double(result.frames) / Double(req.fps) * 100).rounded() / 100),
-            "steps": .int(8), "cfg": .double(1), "model_name": .string(VideoCatalog.name),
-            "workflow": .string(req.imageAssetID == nil ? "ltxv_distilled" : "ltxv_distilled_i2v"),
+            "steps": .int(8), "cfg": .double(1), "model_name": .string(req.model.name),
+            "workflow": .string((req.model.isLTX2 ? "ltx2_distilled" : "ltxv_distilled") + (req.imageAssetID == nil ? "" : "_i2v")),
+            "audio": .bool(req.model.hasAudio),
             "engine": .string("mlx"), "format": .string("mp4"),
             "duration_s": .double((seconds * 10).rounded() / 10), "peak_memory_mb": .int(Int(peak)),
             "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
@@ -952,7 +954,7 @@ actor JobQueue {
             meta["image_noise_scale"] = .double((Double(LTXPipeline.imageNoiseScale) * 100).rounded() / 100)
         }
         let asset = try await AssetStore.shared.addVideo(mp4: result.url, jobID: id, prompt: req.prompt,
-                                                         modelID: VideoCatalog.id, meta: meta)
+                                                         modelID: req.model.id, meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
     }
 

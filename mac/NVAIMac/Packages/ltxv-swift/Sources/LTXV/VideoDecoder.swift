@@ -194,10 +194,12 @@ public final class LTXVideoDecoder: Module {
         return (groups, last)
     }
 
-    /// Denormalized channels-last latents: noise mixed in first (x · (1 − s) + n · s), then the channel statistics.
-    func prepare(_ latents: MLXArray, noise: MLXArray?, noiseScale: Float) -> MLXArray {
+    /// Denormalized channels-last latents: noise mixed in first (x · (1 − s) + n · s), then the tone map (13B), then
+    /// the channel statistics – the order of Lightricks' pipeline.
+    func prepare(_ latents: MLXArray, noise: MLXArray?, noiseScale: Float, toneMap: Float = 0) -> MLXArray {
         var z = latents.asType(.float32)
         if let noise { z = z * (1 - noiseScale) + noise.asType(.float32) * noiseScale }
+        if toneMap > 0 { z = LTXPipeline.toneMap(z, compression: toneMap) }
         let shape = [1, -1, 1, 1, 1]
         z = z * statistics.std.asType(.float32).reshaped(shape) + statistics.mean.asType(.float32).reshaped(shape)
         return z.transposed(0, 2, 3, 4, 1)
@@ -218,9 +220,10 @@ public final class LTXVideoDecoder: Module {
     /// `tile` > 0 runs the last stage in tiles of that many pixels at quarter resolution (e.g. 32 → 256 px), with
     /// 7 pixels of context per inner side, which is exactly what its 12 convs reach (identical to one pass).
     public func decode(_ latents: MLXArray, timestep: Float = 0.05, noise: MLXArray? = nil, noiseScale: Float = 0.025,
-                       dtype: DType = .float32, tile: Int = 0, onTile: ((Int, Int) -> Void)? = nil) -> MLXArray {
+                       toneMap: Float = 0, dtype: DType = .float32, tile: Int = 0,
+                       onTile: ((Int, Int) -> Void)? = nil) -> MLXArray {
         let values = timestepValues(timestep, dtype: dtype)
-        var x = convIn(prepare(latents, noise: noise, noiseScale: noiseScale).asType(dtype))
+        var x = convIn(prepare(latents, noise: noise, noiseScale: noiseScale, toneMap: toneMap).asType(dtype))
         for block in upBlocks.dropLast(2) {
             if let res = block as? DecoderResGroup {
                 let index = upBlocks.firstIndex { $0 === res }!

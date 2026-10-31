@@ -1134,8 +1134,10 @@ screenshots: [STUDIO.md](STUDIO.md).
 
 NVAI-open for Mac (0.4.9 and later) has the same Studio with the same REST interface (`/api/studio/*` on
 `http://127.0.0.1:8100`) and the same project and package format; the MCP tools ship with the Windows version.
-On the Mac, video scenes use LTX-Video 2B without sound, a chained scene starts from the last frame (no latent
-chain), and the export offers YouTube 1080p/4K, Shorts, project format and ProRes 4444
+On the Mac, video scenes use the active video model (the one chosen in the app, else the one recommended for the
+Mac's memory: LTX-Video 2B; from 16 GB the 13B, from 32 GB LTX-2.3 and from 64 GB LTX-2.5 with sound;
+`list_models(kind="video")` marks it `recommended`, a scene's `model_id` can pick another installed one), a chained scene starts from the last frame (no latent chain), and the export offers
+YouTube 1080p/4K, Shorts, project format and ProRes 4444
 ([On the Mac](STUDIO.md#on-the-mac-nvai-open-for-mac-049)).
 
 | Tool | Purpose |

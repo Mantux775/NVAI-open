@@ -86,6 +86,34 @@ so both get an H.264 preview.
 **ACE-Step removed:** its music was consistently poor in practice. Music now comes from Stable Audio 3 Medium
 (instrumental, up to 5 minutes); no model sings for now.
 
+### New in NVAI-open for Mac 0.5.0
+
+**Video models by memory.** Under "Models" the Mac recommends one video model for its memory:
+
+| Unified memory | Recommended | Sound | Status |
+|---|---|---|---|
+| below 16 GB | LTX-Video 2B | no | measured: 4 s at 768 × 512 in 174 s on an M1 with 8 GB |
+| 16–23 GB | LTX-Video 13B, 4-bit | no | checked block by block, not run whole |
+| 24–31 GB | LTX-Video 13B, 8-bit | no | checked block by block, not run whole |
+| 32–63 GB | LTX-2.3 distilled, 4-bit | yes | built in, not run; macOS 26.3 |
+| 64 GB and more | LTX-2.5 distilled, 8-bit | yes | built in, not run; macOS 26.3, gated |
+
+- **LTX-Video 13B** runs in NVAI-open's own MLX port: the architecture of the 2B with 48 instead of 28 blocks of width
+  4096. Lightricks' fp8 file (13.2 GB) is converted to 4 or 8 bits on download. Checked against ComfyUI on the first two
+  blocks: float32 within 2.6e-6, 8-bit as close as bf16 (7.3e-3, bf16 6.8e-3), 4-bit 2.3e-2. NVAI-open's test Mac has
+  8 GB, so the whole model was not run there: memory (about 10.5 GB in 4-bit, 17 GB in 8-bit) and times are estimates.
+- **LTX-2.3 and LTX-2.5 with sound** come from [ltx-video-swift-mlx](https://github.com/VincentGourbin/ltx-video-swift-mlx)
+  by Vincent Gourbin (MIT), built in as a local copy: picture and sound in one pass, from text or a start image. The
+  downloads are large (about 46 and 70 GB); LTX-2.5 is gated (accept the license on Hugging Face, enter a token in the
+  settings). Not run on the 8 GB test Mac.
+- Below its minimum memory a model cannot be downloaded, neither in the app nor over REST.
+- **In the [Studio](STUDIO.md#on-the-mac-nvai-open-for-mac-049)** video scenes use the model chosen under "Generate" >
+  "Video" (at first the recommended one, once it is downloaded); with several installed, a scene picks its own in the
+  properties.
+
+Reports from Macs with more memory are welcome as an [issue](https://github.com/Mantux775/NVAI-open/issues): time,
+memory, picture.
+
 ### New in NVAI-open for Mac 0.4.8
 
 **Z-Image Turbo** (Tongyi-MAI, Apache-2.0) is the third image model of the Mac version next to FLUX.2 Klein and

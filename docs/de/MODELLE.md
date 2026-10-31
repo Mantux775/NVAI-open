@@ -89,6 +89,35 @@ ProRes 4444 (MOV); beide spielt kein Browser, deshalb bekommen sie eine H.264-Vo
 **ACE-Step entfernt:** Seine Musik war in der Praxis durchweg schlecht. Musik kommt jetzt von Stable Audio 3 Medium
 (instrumental, bis 5 Minuten); singen kann vorerst kein Modell.
 
+### Neu in NVAI-open für Mac 0.5.0
+
+**Videomodelle nach Arbeitsspeicher.** Unter „Modelle“ empfiehlt der Mac ein Videomodell für seinen Speicher:
+
+| Arbeitsspeicher | Empfohlen | Ton | Stand |
+|---|---|---|---|
+| unter 16 GB | LTX-Video 2B | nein | gemessen: 4 s in 768 × 512 in 174 s auf einem M1 mit 8 GB |
+| 16–23 GB | LTX-Video 13B, 4 Bit | nein | blockweise geprüft, nicht ganz gerechnet |
+| 24–31 GB | LTX-Video 13B, 8 Bit | nein | blockweise geprüft, nicht ganz gerechnet |
+| 32–63 GB | LTX-2.3 distilled, 4 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3 |
+| ab 64 GB | LTX-2.5 distilled, 8 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3, gesperrt |
+
+- **LTX-Video 13B** läuft im eigenen MLX-Port von NVAI-open: der Aufbau des 2B mit 48 statt 28 Blöcken der Breite 4096.
+  Lightricks' fp8-Datei (13,2 GB) wird beim Laden in 4 oder 8 Bit umgewandelt. Gegen ComfyUI an den ersten zwei Blöcken
+  geprüft: float32 auf 2,6e-6 genau, 8 Bit so nah wie bf16 (7,3e-3, bf16 6,8e-3), 4 Bit 2,3e-2. Der Test-Mac von
+  NVAI-open hat 8 GB, das ganze Modell lief dort nicht: Speicher (rund 10,5 GB in 4 Bit, 17 GB in 8 Bit) und Zeiten
+  sind geschätzt.
+- **LTX-2.3 und LTX-2.5 mit Ton** kommen aus [ltx-video-swift-mlx](https://github.com/VincentGourbin/ltx-video-swift-mlx)
+  von Vincent Gourbin (MIT), eingebaut als lokale Kopie: Bild und Ton in einem Durchgang, aus Text oder einem Startbild.
+  Die Downloads sind groß (rund 46 und 70 GB); LTX-2.5 ist gesperrt (Lizenz auf Hugging Face annehmen, Token in den
+  Einstellungen eintragen). Auf dem Test-Mac mit 8 GB nicht gerechnet.
+- Unter seinem Mindestspeicher lässt sich ein Modell nicht laden, weder in der App noch per REST.
+- **Im [Studio](STUDIO.md#auf-dem-mac-nvai-open-für-mac-049)** rechnen Videoszenen mit dem Modell, das unter
+  „Generieren“ > „Video“ gewählt ist (anfangs das empfohlene, sobald es geladen ist); sind mehrere geladen, wählt eine
+  Szene ihres in den Eigenschaften.
+
+Berichte von Macs mit mehr Speicher sind als [Issue](https://github.com/Mantux775/NVAI-open/issues) willkommen: Zeit,
+Speicher, Bild.
+
 ### Neu in NVAI-open für Mac 0.4.8
 
 **Z-Image Turbo** (Tongyi-MAI, Apache-2.0) ist das dritte Bildmodell der Mac-Fassung neben FLUX.2 Klein und Core ML:

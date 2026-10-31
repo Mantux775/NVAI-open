@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///     NVAI-open --sharpen <bild> --sharpen-out <png> [--sharpen-scale 2] [--quit]
 ///     NVAI-open --audio-test <prompt> --audio-out <wav> [--audio-seconds 10] [--quit]
 ///     NVAI-open --ltxv-test <ordner> [--quit]
+///     NVAI-open --ltxv13-test <ordner> [--quit]   (LTX-Video 13B: zwei Blöcke aus der fp8-Datei, auch in 8 und 4 Bit)
 ///     NVAI-open --ltxv-i2v-test <ordner> [--quit]   (Startbild: Encoder und Transformer mit Bedingung)
 ///     NVAI-open --video-test <prompt> --video-out <mp4> [--video-size 768x512] [--video-frames 97] [--video-seed 42]
 ///               [--video-image <bild>] [--video-prep none|blur|compressed] [--video-image-noise 0.15] [--quit]
@@ -66,12 +67,14 @@ enum LaunchOptions {
         let audio = args.firstIndex(of: "--audio-test").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
         let ltxv = value("--ltxv-test")
         let ltxvI2V = value("--ltxv-i2v-test")
+        let ltxv13 = value("--ltxv13-test")
         let video = args.firstIndex(of: "--video-test").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil }
         guard snapshot != nil || report != nil || problem != nil || kindDir != nil || sharpen != nil || audio != nil
-            || ltxv != nil || ltxvI2V != nil || video != nil else { return }
+            || ltxv != nil || ltxvI2V != nil || ltxv13 != nil || video != nil else { return }
 
         if let ltxv { await LTXVTest.run(ltxv) }
         if let ltxvI2V { await LTXVTest.runImageToVideo(ltxvI2V) }
+        if let ltxv13 { await LTXVTest.run13B(ltxv13) }
         if let video, let out = value("--video-out") {
             await videoTest(video, out: out, size: value("--video-size") ?? "768x512",
                             frames: Int(value("--video-frames") ?? "") ?? 97, seed: UInt64(value("--video-seed") ?? "") ?? 42,

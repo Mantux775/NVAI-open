@@ -321,9 +321,12 @@ computer with all its media.
 
 What the Mac does differently:
 
-- **Models:** video scenes run with LTX-Video 2B, without sound. Size and length are fitted to the Mac's
-  memory: on 8 GB, width × height × frames stays within 768 × 512 × 97, for example 4 s at 768 × 512 or 2 s at
-  1152 × 640. Still images come from the active image model (FLUX.2 Klein, Z-Image Turbo or Core ML), music
+- **Models:** video scenes run with the video model chosen under "Generate" > "Video". Since 0.5.0 the Mac
+  recommends one by memory (LTX-Video 2B, from 16 GB LTX-Video 13B, from 32 GB LTX-2.3 and from 64 GB LTX-2.5 with
+  sound, see [MODELS.md](MODELS.md#new-in-nvai-open-for-mac-050)); with several installed, a scene picks its own in
+  the properties. Size and length are fitted to the
+  Mac's memory: on 8 GB with the 2B, width × height × frames stays within 768 × 512 × 97, for example 4 s at
+  768 × 512 or 2 s at 1152 × 640. Still images come from the active image model (FLUX.2 Klein, Z-Image Turbo or Core ML), music
   and sounds from Stable Audio 3. For the voice lane, drag a recorded audio file onto the scene.
 - **A chained scene** starts from the last frame of the scene before it. The latent chain needs LTX-2.5 and
   stays on Windows.

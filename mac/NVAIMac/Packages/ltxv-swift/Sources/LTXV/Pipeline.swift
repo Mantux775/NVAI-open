@@ -63,6 +63,15 @@ public enum LTXPipeline {
         return latents
     }
 
+    /// Lightricks' `tone_map_latents`, applied right before decoding (13B 0.9.8: compression 0.6, in the
+    /// checkpoint's pipeline config): a sigmoid pulls large latent values towards smaller ones, small ones stay.
+    public static func toneMap(_ latents: MLXArray, compression: Float) -> MLXArray {
+        guard compression > 0 else { return latents }
+        let s = compression * 0.75
+        let sigmoidTerm = sigmoid(4 * s * (abs(latents) - 1))
+        return latents * (1 - 0.8 * s * sigmoidTerm)
+    }
+
     /// Decode noise like the reference (`randn_like` · 0.025), drawn from its own seed.
     public static func decodeNoise(like latents: MLXArray, seed: UInt64) -> MLXArray {
         MLXRandom.seed(seed &+ 0x5EED)

@@ -1,0 +1,373 @@
+// LoRALoader.swift - LoRA Weight Loading for LTX-2
+// Copyright 2025
+
+import Foundation
+@preconcurrency import MLX
+import MLXNN
+
+// MARK: - LoRA Loader
+
+/// Loads LoRA weights from SafeTensors files
+class LoRALoader {
+    /// Load LoRA weights from a file
+    ///
+    /// - Parameters:
+    ///   - path: Path to the .safetensors file
+    ///   - config: Optional LoRA configuration
+    /// - Returns: Dictionary of LoRA weight arrays and metadata
+    static func load(
+        from path: String,
+        config: LoRAConfig? = nil
+    ) throws -> LoRAWeights {
+        let url = URL(fileURLWithPath: path)
+
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw LTXError.fileNotFound(path)
+        }
+
+        // Load weights from SafeTensors
+        let weights = try loadSafeTensors(from: url)
+
+        // Parse LoRA structure
+        let loraLayers = parseLoRALayers(from: weights)
+
+        // Get metadata
+        let rank = inferRank(from: weights)
+        let targetModules = inferTargetModules(from: weights)
+
+        let info = LoRAInfo(
+            name: config?.name ?? url.deletingPathExtension().lastPathComponent,
+            path: path,
+            layerCount: loraLayers.count,
+            rank: rank,
+            targetModules: targetModules,
+            hasSchedulerOverrides: config?.schedulerOverrides != nil,
+            fileSizeBytes: try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64
+        )
+
+        return LoRAWeights(
+            weights: weights,
+            layers: loraLayers,
+            info: info,
+            scale: config?.scale ?? 1.0
+        )
+    }
+
+    /// Load SafeTensors file
+    private static func loadSafeTensors(from url: URL) throws -> [String: MLXArray] {
+        // Use MLX's built-in safetensors loading
+        return try MLX.loadArrays(url: url)
+    }
+
+    /// Read the safetensors header `metadata` dict from a LoRA file.
+    /// Returns an empty dict if the file has no metadata.
+    static func loadMetadata(from path: String) throws -> [String: String] {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw LTXError.fileNotFound(path)
+        }
+        let (_, metadata) = try MLX.loadArraysAndMetadata(url: url)
+        return metadata
+    }
+
+    /// Read `reference_downscale_factor` from a LoRA's safetensors metadata.
+    /// Defaults to `1` if the key is missing or unparseable. Used by IC-LoRAs
+    /// (e.g. LipDub) trained with a downscaled reference video.
+    static func referenceDownscaleFactor(from path: String) -> Int {
+        do {
+            let metadata = try loadMetadata(from: path)
+            guard let raw = metadata["reference_downscale_factor"] else { return 1 }
+            return Int(raw) ?? 1
+        } catch {
+            // Treat any IO error as "no metadata" — match Python iclora_utils.read_lora_reference_downscale_factor.
+            return 1
+        }
+    }
+
+    /// The generation a LoRA declares it was trained against, e.g. `"2.3.0"`.
+    /// `nil` when the adapter carries no `model_version` (community LoRAs often don't).
+    static func declaredModelVersion(from path: String) -> String? {
+        (try? loadMetadata(from: path))?["model_version"]
+    }
+
+    /// Warn — never refuse — when a LoRA was trained against another generation.
+    ///
+    /// Measured on this repo's adapters (LipDub 1344 modules, the camera LoRAs 384
+    /// each): every module a 2.3 LoRA targets exists in the 2.5 transformer, so
+    /// fusion is mechanically sound and upstream reports most adapters transfer.
+    /// What cannot be checked statically is behaviour: 2.5's block FFNs are
+    /// bias-free where 2.3's were not, so a delta trained on `ff.net.*` was learned
+    /// against a slightly different base. Hence a warning the user can act on
+    /// rather than a wall they have to work around.
+    static func warnOnGenerationMismatch(loraPath: String, checkpointVersion: String) {
+        guard let declared = declaredModelVersion(from: loraPath) else { return }
+        let loraGeneration = declared.split(separator: ".").prefix(2).joined(separator: ".")
+        let modelGeneration = checkpointVersion.split(separator: ".").prefix(2).joined(separator: ".")
+        guard loraGeneration != modelGeneration else { return }
+        print("[LoRA] \((loraPath as NSString).lastPathComponent) declares LTX-\(loraGeneration), "
+            + "the checkpoint is LTX-\(modelGeneration). Every targeted module exists in both, so it "
+            + "will fuse — check the result before relying on it.")
+    }
+
+    /// Parse LoRA layer structure from weight keys
+    private static func parseLoRALayers(from weights: [String: MLXArray]) -> [LoRALayerInfo] {
+        var layers: [LoRALayerInfo] = []
+        var processedKeys = Set<String>()
+
+        for key in weights.keys {
+            // Look for lora_down patterns (the "A" matrix)
+            guard key.contains("lora_down") || key.contains("lora_A") else { continue }
+            guard !processedKeys.contains(key) else { continue }
+
+            // Find corresponding up key
+            let upKey: String
+            let originalKey: String
+
+            if key.contains("lora_down") {
+                upKey = key.replacingOccurrences(of: "lora_down", with: "lora_up")
+                originalKey = key
+                    .replacingOccurrences(of: ".lora_down.weight", with: "")
+                    .replacingOccurrences(of: ".lora_down", with: "")
+            } else {
+                upKey = key.replacingOccurrences(of: "lora_A", with: "lora_B")
+                originalKey = key
+                    .replacingOccurrences(of: ".lora_A.weight", with: "")
+                    .replacingOccurrences(of: ".lora_A", with: "")
+            }
+
+            guard weights[upKey] != nil else { continue }
+
+            // Infer rank from down matrix shape
+            let downWeight = weights[key]!
+            let rank = downWeight.dim(0)
+
+            // Check for alpha
+            let alphaKey = originalKey + ".alpha"
+            let alpha: Float? = weights[alphaKey].map { Float($0.item(Float.self)) }
+
+            layers.append(LoRALayerInfo(
+                originalKey: originalKey,
+                downKey: key,
+                upKey: upKey,
+                rank: rank,
+                alpha: alpha
+            ))
+
+            processedKeys.insert(key)
+            processedKeys.insert(upKey)
+        }
+
+        return layers
+    }
+
+    /// The adapter's nominal rank — the most common one when ranks vary per module.
+    ///
+    /// Rank is not always uniform: LTX-2.5's distilled LoRA carries 450 on 1360
+    /// modules but 256, 128 and 32 on others. Returning whichever module happened
+    /// to be enumerated first (dictionary order is unspecified) would report a
+    /// different rank run to run. Fusion is per-module and unaffected — this value
+    /// is descriptive, so it reports the dominant rank and nothing depends on it
+    /// being the only one.
+    private static func inferRank(from weights: [String: MLXArray]) -> Int {
+        var counts: [Int: Int] = [:]
+        for (key, value) in weights where key.contains("lora_down") || key.contains("lora_A") {
+            counts[value.dim(0), default: 0] += 1
+        }
+        return counts.max { ($0.value, $1.key) < ($1.value, $0.key) }?.key ?? 0
+    }
+
+    /// Infer target modules from weights
+    private static func inferTargetModules(from weights: [String: MLXArray]) -> [String] {
+        var modules = Set<String>()
+
+        for key in weights.keys {
+            for target in LoRATargetType.allCases {
+                if key.contains(target.rawValue) {
+                    modules.insert(target.rawValue)
+                }
+            }
+        }
+
+        return Array(modules).sorted()
+    }
+}
+
+// MARK: - LoRA Weights Container
+
+/// Container for loaded LoRA weights
+struct LoRAWeights: Sendable {
+    /// Raw weight arrays keyed by parameter name
+    let weights: [String: MLXArray]
+
+    /// Parsed layer information
+    let layers: [LoRALayerInfo]
+
+    /// Metadata about the LoRA
+    let info: LoRAInfo
+
+    /// Scale factor to apply
+    let scale: Float
+
+    /// Get LoRA delta for a specific layer
+    ///
+    /// Computes: scale * (B @ A) where A is down and B is up
+    ///
+    /// - Parameters:
+    ///   - layerKey: The original layer key to get delta for
+    /// - Returns: The LoRA delta matrix, or nil if not found
+    func getDelta(for layerKey: String) -> MLXArray? {
+        guard let layer = layers.first(where: { $0.originalKey == layerKey }) else {
+            return nil
+        }
+
+        guard let down = weights[layer.downKey],
+              let up = weights[layer.upKey] else {
+            return nil
+        }
+
+        // Compute delta: B @ A (up @ down)
+        // LoRA decomposition: W' = W + scale * B @ A
+        let effectiveScale = scale * layer.effectiveScale
+        let delta = MLX.matmul(up, down) * effectiveScale
+
+        return delta
+    }
+
+    /// Check if this LoRA has weights for a given layer
+    func hasLayer(_ layerKey: String) -> Bool {
+        return layers.contains { $0.originalKey == layerKey }
+    }
+}
+
+// MARK: - Weight Key Mapping
+
+/// Maps between LoRA file key format and Swift model parameter key format
+struct LoRAKeyMapper {
+    /// Translate a LoRA originalKey to the flattened model parameter key used by
+    /// MLX Module.parameters().flattened().
+    ///
+    /// LoRA files (ComfyUI / Diffusers format) use keys like:
+    ///   diffusion_model.transformer_blocks.0.attn1.to_out.0
+    ///   diffusion_model.transformer_blocks.0.ff.net.0.proj
+    ///   diffusion_model.transformer_blocks.0.ff.net.2
+    ///
+    /// The Swift model exposes flattened keys like:
+    ///   transformer_blocks.0.attn1.to_out.weight
+    ///   transformer_blocks.0.ff.project_in.proj.weight
+    ///   transformer_blocks.0.ff.project_out.weight
+    ///
+    /// Transformations applied:
+    ///   1. Strip leading "diffusion_model." prefix
+    ///   2. Replace ".to_out.0" with ".to_out"  (list index removed; module key is just "to_out")
+    ///   3. Replace ".ff.net.0.proj" with ".ff.project_in.proj"  (LTXFeedForward key "project_in")
+    ///   4. Replace ".ff.net.2" with ".ff.project_out"  (LTXFeedForward key "project_out")
+    ///   5. Append ".weight" (Linear weight parameter)
+    static func loraKeyToModelKey(_ loraOriginalKey: String) -> String {
+        var key = loraOriginalKey
+
+        // 1. Strip the "diffusion_model." wrapper prefix used by ComfyUI/Diffusers LoRA files
+        if key.hasPrefix("diffusion_model.") {
+            key = String(key.dropFirst("diffusion_model.".count))
+        }
+
+        // 2. emb.timestep_embedder.linear_ -> emb.linear_
+        //    Python: CombinedTimestepTextProjEmbeddings wraps TimestepEmbedding as .timestep_embedder
+        //    Swift: AdaLayerNormSingle.emb is TimestepMLP directly (no wrapper level)
+        key = key.replacingOccurrences(of: ".emb.timestep_embedder.", with: ".emb.")
+
+        // 3. to_out.0 -> to_out
+        //    The Python Sequential wrapper adds the ".0" list index; the Swift module
+        //    LTXAttention declares @ModuleInfo(key: "to_out") with no index.
+        key = key.replacingOccurrences(of: ".to_out.0", with: ".to_out")
+
+        // 4. ff.net.0.proj -> ff.project_in.proj
+        //    Python: FeedForward contains nn.Sequential("net") with [GEGLU(.proj), ..., Linear]
+        //    Swift: LTXFeedForward uses @ModuleInfo(key: "project_in") var projectIn: GELUApprox
+        //           and GELUApprox uses @ModuleInfo var proj: Linear  (default key "proj")
+        //    No leading "." so this matches BOTH the video FFN (`.ff.`) and the audio
+        //    FFN (`_ff.`) used by the dual-stream LTX2TransformerBlock.
+        key = key.replacingOccurrences(of: "ff.net.0.proj", with: "ff.project_in.proj")
+
+        // 5. ff.net.2 -> ff.project_out
+        //    Python: FeedForward's net[2] is the output Linear
+        //    Swift: LTXFeedForward uses @ModuleInfo(key: "project_out") var projectOut: Linear
+        //    Same reason as #4 — drop the leading "." so audio_ff is also matched.
+        key = key.replacingOccurrences(of: "ff.net.2", with: "ff.project_out")
+
+        // 6. Append .weight — all targeted layers are Linear modules whose weight
+        //    parameter is named "weight"
+        key = key + ".weight"
+
+        return key
+    }
+
+    /// Inverse mapping: Swift model path → LoRA save key (ComfyUI/Diffusers format)
+    ///
+    /// This is the reverse of `loraKeyToModelKey()`, used when saving trained LoRA weights.
+    ///
+    /// Transformations applied:
+    ///   1. Remove trailing ".weight" suffix
+    ///   2. Replace ".ff.project_in.proj" with ".ff.net.0.proj"
+    ///   3. Replace ".ff.project_out" with ".ff.net.2"
+    ///   4. Replace ".to_out" with ".to_out.0" (add Sequential index)
+    ///   5. Replace ".emb." with ".emb.timestep_embedder."
+    ///   6. Add "diffusion_model." prefix
+    ///
+    /// For LoRALinear paths, strips the intermediate component names
+    /// (e.g., "transformer_blocks.0.attn1.to_q" from the full path).
+    static func modelKeyToLoraKey(_ swiftPath: String) -> String {
+        var key = swiftPath
+
+        // Strip ".lora_down" / ".lora_up" / ".base" suffixes from LoRALinear paths
+        // The path from extractLoRAWeights is the module path, not parameter path
+        // e.g., "transformer_blocks.0.attn1.to_q" (not "...to_q.lora_down")
+
+        // 1. Remove ".weight" suffix if present
+        if key.hasSuffix(".weight") {
+            key = String(key.dropLast(".weight".count))
+        }
+
+        // 2. ff.project_in.proj → ff.net.0.proj
+        key = key.replacingOccurrences(of: ".ff.project_in.proj", with: ".ff.net.0.proj")
+
+        // 3. ff.project_out → ff.net.2
+        key = key.replacingOccurrences(of: ".ff.project_out", with: ".ff.net.2")
+
+        // 4. to_out → to_out.0
+        key = key.replacingOccurrences(of: ".to_out", with: ".to_out.0")
+
+        // 5. emb. → emb.timestep_embedder.
+        key = key.replacingOccurrences(of: ".emb.", with: ".emb.timestep_embedder.")
+
+        // 6. Add diffusion_model. prefix
+        if !key.hasPrefix("diffusion_model.") {
+            key = "diffusion_model." + key
+        }
+
+        return key
+    }
+
+    /// Legacy camelCase mapper (not used for LoRA fusion, kept for reference)
+    static func mapKey(_ pythonKey: String) -> String {
+        var key = pythonKey
+
+        // Common transformations
+        key = key.replacingOccurrences(of: "transformer_blocks", with: "transformerBlocks")
+        key = key.replacingOccurrences(of: "to_q", with: "toQ")
+        key = key.replacingOccurrences(of: "to_k", with: "toK")
+        key = key.replacingOccurrences(of: "to_v", with: "toV")
+        key = key.replacingOccurrences(of: "to_out.0", with: "toOut")
+        key = key.replacingOccurrences(of: "ff.net.0.proj", with: "ff.projectIn.proj")
+        key = key.replacingOccurrences(of: "ff.net.2", with: "ff.projectOut")
+
+        return key
+    }
+
+    /// Get all possible Swift keys for a Python key
+    static func possibleSwiftKeys(for pythonKey: String) -> [String] {
+        return [
+            mapKey(pythonKey),
+            pythonKey  // Also try unchanged
+        ]
+    }
+}

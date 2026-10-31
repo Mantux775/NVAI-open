@@ -228,15 +228,16 @@ actor StudioGenerator {
             }
             return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
         }
-        // Video: LTX-Video 2B, 24 fps, Bilder 8n+1 aus der Länge; Format im Seitenverhältnis des Projekts, so groß,
-        // wie der Speicher dieses Macs es für die Länge zulässt.
+        // Video: das Modell der Szene, wenn geladen, sonst das aktive (2B oder 13B), 24 fps, Bilder 8n+1 aus der Länge;
+        // Format im Seitenverhältnis des Projekts, so groß, wie der Speicher dieses Macs es für die Länge zulässt.
+        let video = s.modelID.flatMap(VideoCatalog.model).flatMap { $0.installed ? $0 : nil } ?? VideoCatalog.active
         let fps = VideoCatalog.fps
         let frames = min(257, max(9, Int((secs * Double(fps) / 8).rounded(.toNearestOrEven)) * 8 + 1))
-        guard let size = videoSize(p, frames: frames) else {
+        guard let size = videoSize(p, frames: frames, maxVoxels: video.maxVoxels, step: video.sizeStep) else {
             throw StudioError(t("Die Szene ist für diesen Mac zu lang (\(frames) Bilder). Kürzer machen oder in zwei Szenen teilen.",
                                 "The scene is too long for this Mac (\(frames) frames). Shorten it or split it into two scenes."))
         }
-        var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(VideoCatalog.id),
+        var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(video.id),
                                          "width": .int(size.width), "height": .int(size.height),
                                          "frames": .int(frames), "fps": .int(fps)]
         // Was nur LTX-2.5 unter Windows kann (Endbild, Schleife …), lässt parse mit einer Meldung scheitern; die
@@ -266,12 +267,13 @@ actor StudioGenerator {
 
     /// Videoformat im Seitenverhältnis des Projekts: die größte Breite (Vielfache von 32, bis 1280), bei der Fläche ×
     /// Bilder in den Speicher dieses Macs passt (8 GB: 768 × 512 × 97, gemessen). nil, wenn auch 256 px zu groß ist.
-    static func videoSize(_ p: StudioProject, frames: Int) -> (width: Int, height: Int)? {
+    static func videoSize(_ p: StudioProject, frames: Int, maxVoxels: Int = VideoJobRequest.maxVoxels,
+                          step: Int = 32) -> (width: Int, height: Int)? {
         let aspect = Double(p.settings.width) / Double(p.settings.height)
-        for w in stride(from: 1280, through: 256, by: -32) {
-            let h = Int((Double(w) / aspect / 32).rounded()) * 32
+        for w in stride(from: 1280, through: 256, by: -step) {
+            let h = Int((Double(w) / aspect / Double(step)).rounded()) * step
             guard (256...1280).contains(h) else { continue }
-            if w * h * frames <= VideoJobRequest.maxVoxels { return (w, h) }
+            if w * h * frames <= maxVoxels { return (w, h) }
         }
         return nil
     }

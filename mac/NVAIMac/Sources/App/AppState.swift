@@ -20,8 +20,10 @@ final class AppState: ObservableObject {
     @Published var audioInstalled = AudioCatalog.installed
     /// Videos (seit 0.4.8, LTX-Video 2B) und ob das Modell geladen ist; dazu der Bild-Encoder fürs Startbild.
     @Published var videos: [AssetRecord] = []
-    @Published var videoInstalled = VideoCatalog.installed
-    @Published var videoEncoderInstalled = VideoCatalog.encoderInstalled
+    @Published var videoInstalled = VideoCatalog.anyInstalled
+    @Published var videoEncoderInstalled = VideoCatalog.active.encoderInstalled
+    /// Geladene Videomodelle (2B, 13B in 4 oder 8 Bit) für Auswahl und Karten.
+    @Published var videoInstalledIDs = Set(VideoCatalog.installedModels.map(\.id))
     @Published var models: [ModelRow] = []
     @Published var activeModelID: String = Models.active.id
     @Published var modelsDirectory: URL = Settings.modelsDirectory
@@ -204,10 +206,12 @@ final class AppState: ObservableObject {
         if loraRows != loras { loras = loraRows }
         let audioOK = AudioCatalog.installed
         if audioOK != audioInstalled { audioInstalled = audioOK }
-        let videoOK = VideoCatalog.installed
+        let videoOK = VideoCatalog.anyInstalled
         if videoOK != videoInstalled { videoInstalled = videoOK }
-        let encoderOK = VideoCatalog.encoderInstalled
+        let encoderOK = VideoCatalog.active.encoderInstalled
         if encoderOK != videoEncoderInstalled { videoEncoderInstalled = encoderOK }
+        let ids = Set(VideoCatalog.installedModels.map(\.id))
+        if ids != videoInstalledIDs { videoInstalledIDs = ids }
         activeModelID = Models.active.id
     }
 

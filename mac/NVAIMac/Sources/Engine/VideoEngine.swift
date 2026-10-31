@@ -4,8 +4,9 @@ import LTXV
 import MLX
 import Tokenizers
 
-/// LTX-Video 2B über MLX (`VideoCatalog`). Auf Macs bis 16 GB laden Bild-Encoder (nur mit Startbild, 0,9 GB in
-/// float32), T5 (2,8 GB), Transformer (3,7 GB) und Decoder nacheinander; darüber bleiben sie geladen. Der Decoder
+/// LTX-Video 2B und 13B über MLX (`VideoCatalog`). Auf Macs bis 16 GB (13B: unter 48 GB) laden Bild-Encoder (nur mit
+/// Startbild, 0,9 GB in float32), T5 (2,8 GB), Transformer (2B 3,7 GB, 13B 6,8 bzw. 13,3 GB) und Decoder nacheinander;
+/// darüber bleiben sie geladen. Der Decoder
 /// rechnet in float32 und die letzte Stufe in Kacheln (exakt: gleiches Ergebnis wie in einem Stück, siehe
 /// `LTXVideoDecoder.decode(tile:)`).
 actor VideoEngine {
@@ -16,8 +17,8 @@ actor VideoEngine {
     private var transformer: LTXTransformer?
     private var decoder: LTXVideoDecoder?
     private var encoder: LTXImageEncoder?
-
-    private var small: Bool { SystemInfo.memoryGB <= 16 }
+    /// Zu welchem Modell Transformer, Decoder und Encoder gehören.
+    private var loadedID: String?
 
     /// Kachel der letzten Decoder-Stufe in Pixeln bei 1/8 der Auflösung (32 → 256 px), 0 = ein Stück.
     private var decodeTile: Int { SystemInfo.memoryGB <= 8 ? 32 : SystemInfo.memoryGB <= 16 ? 64 : 0 }
@@ -39,13 +40,28 @@ actor VideoEngine {
 
     /// Ein Clip als MP4 im Temp-Ordner. `onStep(schritt, alle)` beim Entrauschen, `onDecode(kachel, alle)` danach.
     /// `startImage`: erstes Bild des Videos (Bild zu Video); `preparation` und `imageNoiseScale` nur für Prüfläufe.
-    func generate(prompt: String, width: Int, height: Int, frames: Int, fps: Int = VideoCatalog.fps, seed: UInt64,
+    func generate(model: VideoModel = VideoCatalog.active, prompt: String, width: Int, height: Int, frames: Int,
+                  fps: Int = VideoCatalog.fps, seed: UInt64,
                   startImage: CGImage? = nil, preparation: VideoStartImage.Preparation = .none,
                   imageNoiseScale: Float = LTXPipeline.imageNoiseScale,
                   onStep: @escaping @Sendable (Int, Int) -> Void,
                   onDecode: @escaping @Sendable (Int, Int) -> Void = { _, _ in }) async throws -> Result {
-        guard VideoCatalog.installed else {
-            throw APIError(409, t("„\(VideoCatalog.name)“ ist nicht geladen.", "\"\(VideoCatalog.name)\" is not downloaded."))
+        guard model.installed else {
+            throw APIError(409, t("„\(model.name)“ ist nicht geladen.", "\"\(model.name)\" is not downloaded."))
+        }
+        if model.isLTX2 {  // LTX-2.3/2.5 mit Ton über das Paket; die Bausteine von LTX-Video vorher freigeben
+            unload()
+            return try await LTX2Engine.shared.generate(model: model, prompt: prompt, width: width, height: height,
+                                                        frames: frames, fps: fps, seed: seed, startImage: startImage,
+                                                        onStep: onStep)
+        }
+        let small = SystemInfo.memoryGB <= 16 || (model.is13B && SystemInfo.memoryGB < 48)
+        if loadedID != model.id {
+            transformer = nil
+            decoder = nil
+            encoder = nil
+            loadedID = model.id
+            Memory.clearCache()
         }
         var timings: [String: Double] = [:]
         if small {
@@ -57,13 +73,13 @@ actor VideoEngine {
         // 0. Startbild: zuschneiden, skalieren, kodieren (rund 1 s mit Laden des Encoders)
         var startLatent: MLXArray?
         if let startImage {
-            guard VideoCatalog.encoderInstalled else {
+            guard model.encoderInstalled else {
                 throw APIError(409, t("Das Startbild braucht den Bild-Encoder von LTX-Video. Unter „Modelle“ nachrüsten.",
                                       "A start image needs LTX-Video's image encoder. Add it under \"Models\"."))
             }
             let pixels = try VideoStartImage.prepare(startImage, width: width, height: height, preparation: preparation)
             if encoder == nil {
-                encoder = try LTXWeights.loadImageEncoder(file: VideoCatalog.encoderFile, config: VideoCatalog.vaeConfig)
+                encoder = try LTXWeights.loadImageEncoder(file: model.encoderFile, config: model.vaeConfig)
             }
             startLatent = encoder!.encode(pixels)
             eval(startLatent!)
@@ -91,7 +107,9 @@ actor VideoEngine {
 
         // 2. Entrauschen
         t0 = Date()
-        if transformer == nil { transformer = try LTXWeights.loadTransformer(file: VideoCatalog.ditFile) }
+        if transformer == nil {
+            transformer = try LTXWeights.loadTransformer(files: model.ditFiles, config: model.transformerConfig)
+        }
         timings["load_transformer"] = Date().timeIntervalSince(t0)
         MemoryLog.line("LTX-Video transformer loaded")
         t0 = Date()
@@ -108,9 +126,9 @@ actor VideoEngine {
 
         // 3. Dekodieren
         t0 = Date()
-        if decoder == nil { decoder = try LTXWeights.loadDecoder(file: VideoCatalog.decoderFile) }
+        if decoder == nil { decoder = try LTXWeights.loadDecoder(file: model.decoderFile) }
         let noise = LTXPipeline.decodeNoise(like: latents, seed: seed)
-        let video = decoder!.decode(latents, noise: noise, dtype: .float32, tile: decodeTile) { done, total in
+        let video = decoder!.decode(latents, noise: noise, toneMap: model.toneMap, dtype: .float32, tile: decodeTile) { done, total in
             onDecode(done, total)
         }
         let rgb = LTXPipeline.frames(video)
