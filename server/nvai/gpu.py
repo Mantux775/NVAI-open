@@ -351,6 +351,14 @@ def strength(card: dict[str, Any]) -> tuple[float, float]:
     return (float(card.get("vram_total_mb") or 0), float(card.get("compute_cap") or 0))
 
 
+def compute_cap(role: str = "image") -> float | None:
+    """CUDA compute capability der Karte fuer eine Aufgabe (8.9 = RTX 40, 12.0 = RTX 50); None bei AMD oder ohne Karte."""
+    index = device_for(role)
+    card = next((c for c in list_gpus() if c["index"] == index), None)
+    cap = card.get("compute_cap") if card else None
+    return float(cap) if cap else None
+
+
 def card_vram_gb(index: int) -> float | None:
     """Grafikspeicher einer Karte in GB, None wenn sie unbekannt ist."""
     card = next((c for c in list_gpus() if c["index"] == index), None)

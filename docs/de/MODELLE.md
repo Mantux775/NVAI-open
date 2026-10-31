@@ -66,6 +66,133 @@ Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
   Endbild oder der „Schleife“ ([FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md#tipps-aus-unseren-tests)); der Hintergrund
   steht dann still.
 
+### MiniMax H3 (seit 0.5.18)
+
+> **⚠️ Ohne eigene Lizenz von MiniMax in der EU, in Großbritannien, Südkorea und den USA nicht erlaubt.** Die
+> MiniMax H3 Community License schließt diese Gebiete aus (Abschnitt I.3 und I.5) und verbietet dort jede Nutzung der
+> Gewichte und ihrer Ergebnisse, auch privat (Abschnitt V.4). **Videos und Bilder daraus dürfen nicht veröffentlicht
+> werden**, auch keine Standbilder oder Screenshots; deshalb steht hier kein Bild. Lizenzanfrage:
+> <https://platform.minimax.io/h3-license>. Die Oberfläche markiert das Modell und jedes Ergebnis rot („Nicht
+> veröffentlichen“), bis unter „Modelle“ der Haken „Ich habe eine Genehmigung erworben“ gesetzt ist. Wer Dritten ein
+> Werkzeug zum Erzeugen mit MiniMax anbietet, muss laut Lizenz (Abschnitt V.5) verbotene Inhalte verhindern; NVAI-open
+> filtert nichts.
+
+Drei Fassungen, alle mit Bild und Stereoton in einem Durchgang, 24 fps, 5 bis 15 s, bis 768p: **Startbild** (FL2VA, Text
+und auf Wunsch ein Startbild), **Referenz** (Ref2VA, bis zu 9 Referenzbilder, im Prompt `<Picture 1>`, `<Picture 2>` …)
+und **FastH3** (fest 8 Schritte, kaum Zeitlupe). Dazu die Turbo-LoRAs von lightx2v (4 oder 8 statt 20 Schritte).
+
+**Vorgewählt** ist der schnellste gemessene Weg ohne Bildsprung: Turbo-LoRA 8 Schritte v1.1, sol-attn und
+INT8-Attention (Startbild 6,9 min, Referenz 6,6 min statt 37). Die Generieren-Seite setzt das beim Wechsel aufs Modell,
+Studio und MCP bekommen es vom Server, solange der Auftrag nichts anderes sagt (`recommended`). Auf Karten ohne sol-attn
+(älter als RTX 30) oder ohne INT8-Attention (älter als RTX 20) und auf AMD fällt der Schalter weg; fehlt die LoRA, rechnet
+es mit 20 Schritten. Veda richtet NVAI-open nicht ein: liegt das Knotenpaket Veda-on-ComfyUI in ComfyUIs `custom_nodes`,
+steht es zur Wahl.
+
+Erster Test auf einer RTX 5060 Ti 16 GB: dieselbe Szene wie mit LTX-2.5 (9,4 s: ein Einschlag, eine Explosion, ein Fisch
+fällt in einen Eimer), einmal ab dem Startbild (FL2VA), einmal aus zwei Referenzbildern und der Beschreibung (Ref2VA).
+MiniMax folgte der Beschreibung genauer als LTX-2.5, und das Gesicht aus den Referenzbildern blieb über den ganzen Clip
+gleich; die Flugbahn des Fischs stimmte noch nicht.
+
+| | MiniMax H3 (INT8, 20 Schritte) | LTX-2.5 (NVFP4, DFR) |
+|---|---|---|
+| Ergebnis | 9,4 s in 1344 × 576 (die offenen Gewichte enden bei 768p) | 9 s in 1920 × 832, zwei Clips per Latent-Kette |
+| Rechenzeit, RTX 5060 Ti 16 GB | 37,3 min ab Startbild, 37,1 min aus Referenzbildern (rund 107 s je Schritt) | rund 7 min (Clip 1 260 s, Clip 2 162–177 s) |
+| Download | 39,1 GB (Startbild-Fassung mit Turbo-LoRA), Referenz-Fassung weitere 19,5 GB, zusammen rund 59 GB | 37,5 GB |
+| Speicher beim Rechnen | Grafikspeicher 14,9 GB, freier Arbeitsspeicher nie unter 31,8 GB (von 64 GB) | nicht verglichen |
+
+Ohne Beschleuniger brauchte MiniMax also gut fünfmal so lange, für knapp die Hälfte der Bildpunkte.
+
+- **Größe:** Das volle Modell hat 33 Mrd. Parameter. Eingebaut ist die beschnittene Fassung (pruned, laut Dateigröße
+  rund 20 Mrd.) in INT8 mit 19,5 GB, dazu der Text-Encoder Qwen3-VL-32B in NVFP4 (14,6 GB), Video- und Ton-VAE (3,2 GB)
+  und die Turbo-LoRA für 8 Schritte (1,8 GB).
+- **NVFP4:** Weder MiniMax noch Comfy-Org bieten den Transformer in NVFP4 an. Comfy-Org empfiehlt `int8_convrot` mit
+  PyTorch cu130, so läuft er hier; nur der Text-Encoder ist NVFP4. Umwandlungen von Dritten gibt es auf Hugging Face,
+  etwa `Abiray/Minimax-H3-nvfp4-INT4-INT8-Convrot` und `MATLOWAI/minimax-h3-nvfp4`: die beschnittene Fassung mit 11,7
+  statt 19,5 GB, für FL2VA und Ref2VA. Ob sie schneller ist und gleich gut aussieht, ist nicht gemessen. Für sie gilt
+  dieselbe Lizenz.
+- **Was im Test auffiel:** Ab dem Startbild blieben Haltung und Gesicht stabil, der Fisch entstand aber im Eimer, statt
+  zu fliegen. Aus den Referenzbildern flog der Fisch, der Ton folgte der Vorgabe fast genau (Stille, Pfiff, Explosion,
+  Flossenschlag), und das Gesicht blieb über den ganzen Clip gleich; die Anordnung wich ab, und der Hintergrund einer
+  Referenz wanderte ins Bild.
+
+**Schneller mit Turbo-LoRAs und Sparse Attention** (Messreihe auf derselben Karte, dieselbe Szene, Seed 42,
+1344 × 576, 9,4 s; Zeit = ganzer Auftrag samt Laden; Bewegung = mittlere Bildänderung je Viertelsekunde):
+
+<!-- messreihe -->
+| Lauf | Fassung | Beschleunigung | Schritte | Rechenzeit | Ton (dBFS RMS) |
+|---|---|---|---|---|---|
+| Messung 1 | Startbild | ohne LoRA | 20 | 37,3 min | Wind von Anfang an (−14 dBFS), Explosion −4,8 bei 2,5 s, kein eigener Flossenschlag |
+| Messung 2 | Referenz | ohne LoRA | 20 | 37,1 min | leiser Anfang (−38), Pfiff, Explosion −5,8, Flossenschlag 6,5 s (−18,8), danach Stille |
+| Test 1 | Startbild | Turbo 8 v1.0 (544p, Shift 12/3, res_multistep wie ComfyUI-Vorlage) | 8 | 15,8 min (2,4-mal so schnell) | laut ab Beginn (−6 bis −9), Explosion −5,2, kleine Spitze bei 6,75 s (+4 dB) |
+| Test 2 | Referenz | Turbo 8 v1.1 768p (Shift 12/3, euler, „match“) | 8 | 16,8 min (2,2-mal so schnell) | Sampling 15:01 (113 s/Schritt); leiser Anfang (−37), Pfiff und Explosion 1,25–2,5 s (−6,0), Aufprall 3,75 s (−23), Stille ab 5,5 s, Flossenschlag 6,5 s (−20,2), danach Stille |
+| Test 3 | Referenz | wie Test 2 + sol-attn (tau 1,3 ab 20 %) | 8 | 8,3 min (4,5-mal so schnell) | Sampling 7:15 (dicht 113, dünn ~34 s/Schritt); Anfang −30, Explosion 1,25–2,5 s (−6,2), Aufprall 3,5 s, Stille ab 5,5 s, Flossenschlag 6,75 s (−19,9) |
+| Test 4 | Startbild | Turbo 8 v1.1 768p (Shift 6/3, euler) | 8 | 15,8 min (2,4-mal so schnell) | Sampling 14:25; laut ab Beginn (−7 bis −9), Explosion 2,25–3 s (−7,2), Abklingen bis −40, kleine Spitze 7,0 s (+3,5 dB) |
+| Test 5 | Startbild | wie Test 4 + sol-attn | 8 | 8,2 min (4,5-mal so schnell) | Sampling 7:22; laut ab Beginn (−7), Explosion 2,25–2,5 s (−7,7), Flossenschlag-Spitze 6,75–7,0 s (+5 dB) |
+| Test 6 | Referenz | Turbo 4 v1.0 768p (Shift 12/3, euler, „match“) | 4 | 8,5 min (4,4-mal so schnell) | Sampling 7:25 (112 s/Schritt); leiser Anfang (−42), Explosion 1,25–2,0 s (−6,7), Stille ab 5 s, Flossenschlag 6,5 s (−21,6), danach Stille |
+| Test 7 | Startbild | Turbo 4 v1.2 768p (Shift 6/3, euler) | 4 | 8,7 min (4,3-mal so schnell) | Sampling 6:53 (103 s/Schritt; erster Lauf nach Neustart, Kaltstart im Gesamtwert); laut ab Beginn (−7), Explosion 1,25–2,5 s (−5,6), Flossenschlag-Spitze 6,75 s (+6 dB) |
+| Test 8 | Referenz | wie Test 6 + sol-attn | 4 | 4,8 min (7,7-mal so schnell) | Sampling 2:39 (dicht 112, dünn ~16 s/Schritt); leiser Anfang (−40), Explosion 1,25–2,0 s (−6,4), Geräusch 5,75–6,5 s (−29), Flossenschlag 6,75 s (−22,3), danach Stille |
+| Test 9 | Startbild | wie Test 7 + sol-attn | 4 | 4,5 min (8,3-mal so schnell) | Sampling 2:29; laut ab Beginn (−8), Explosion ab 1,25 s (−5,3), Spitzen 6,5 und 7,0 s (−27), Geräusch 7,75–8,25 s |
+| Test 10 | Referenz | Turbo 8 v1.0 768p (Shift 12/3, euler, „match“) | 8 | 15,7 min (2,4-mal so schnell) | Sampling 14:21 (109 s/Schritt; samt Modellwechsel im Gesamtwert); Anfang −33, Explosion 1,25–2,5 s (−6,0), Stille ab 5 s, Flossenschlag 6,5 s (−20,5), danach Stille |
+| Test 11 | Referenz | wie Test 3 + INT8-Attention | 8 | 6,6 min (5,6-mal so schnell) | Sampling 5:38; Anfang −27, Explosion 1,25–2,5 s (−6,4), Aufprall 3,5 s, Stille ab 5,5 s, Flossenschlag 6,75 s (−20,7), danach Stille |
+| Test 12 | Referenz | wie Test 2 + INT8-Attention | 8 | 8,3 min (4,5-mal so schnell) | Sampling 7:09 (ohne INT8 15:01); leiser Anfang (−39), Explosion 1,25–2,5 s (−5,8), Aufprall 3,75 s, Stille ab 5,5 s, Flossenschlag 6,5 s (−19,9), danach Stille |
+| Test 13 | Referenz | wie Test 3, sol-attn tau 1,5 | 8 | 8,2 min (4,5-mal so schnell) | Sampling 7:08 (tau 1,3: 7:15); Anfang −28, Explosion 1,25–2,5 s (−6,0), Aufprall 3,5 s, Stille ab 5,5 s, Flossenschlag 6,75 s (−19,4), danach Stille |
+| Test 14 | Referenz | wie Test 2 + Veda (32 Kacheln) | 8 | 6,7 min (5,5-mal so schnell) | Sampling 5:15 (R2VA-Prädiktor; Kaltstart und Kompilieren im Gesamtwert); Bewegung 1–4 s 2,34 statt 1,78 (Test 2), aber Bildsprung bei 7,75 s (5,1); Ton: Stille (−49), Explosion 1,25–2,0 s (−5,4), Flossenschlag 6,5 s (−19,8), danach Stille |
+| Test 15 | Startbild | FastH3 8 Schritte (VSA, Shift 10/3, fest) | 8 | 7,9 min (4,7-mal so schnell) | Sampling 6:50 (Laden des neuen Checkpoints im Gesamtwert); Bewegung 1–4 s 4,21 (andere MiniMax 1,8–2,8, LTX 5,1), Explosion 8,7 bei 2,5 s (LTX 7,5); Ton laut ab Beginn (−6), Explosion 2,25–3,0 s (−3,6), Flossenschlag 7,0 s (+20 dB), danach Stille |
+| Test 16 | Startbild | wie Test 4 + Veda (32 Kacheln) | 8 | 6,1 min (6,1-mal so schnell) | Sampling 5:05 (38 s/Schritt, samt einmaligem Kompilieren der Triton-Kernel); laut ab Beginn (−11), Explosion 1,25–2,25 s (−5,7), Flossenschlag-Spitze 6,75 s (+6 dB), danach Stille (−40); Veda: 28 % Polster-Kacheln bei 1344 × 576; Bildsprung bei 7,75 s (13,2) |
+| Test 17 | Referenz | wie Test 14 + INT8-Attention | 8 | 6,3 min (5,9-mal so schnell) | Sampling 5:13; in Bewegung und Ton identisch mit Test 14: neben Veda wirkt INT8 nicht |
+| Test 18 | Startbild | wie Test 4 + INT8-Attention | 8 | 8,0 min (4,7-mal so schnell) | Sampling 6:46 (ohne INT8 14:25); laut ab Beginn (−8), Explosion 1,25–2,5 s (−6,3), Flossenschlag-Spitze 6,75 s (+5 dB) |
+| Test 19 | Startbild | wie Test 9, Prompt mit Tempo (Echtzeit, schnell, energisch) | 4 | 4,6 min (8,1-mal so schnell) | Sampling 2:29; Bewegung 1–4 s 2,48 statt 2,19 (Test 9), Explosion 6,6 statt 4,3 (LTX 5,1/7,5); Ton laut ab Beginn, Explosion 1,25 s (−4,3), Flossenschlag 7,0 s (+11 dB) |
+| Test 20 | Startbild | wie Test 16, Prompt mit Tempo | 8 | 6,1 min (6,1-mal so schnell) | Sampling 5:05; Bewegung 1–4 s 2,80 statt 2,75 (Test 16); wieder ein Bildsprung am Ende (9,0 s, 10,1); Ton laut ab Beginn, Explosion 1,25 s (−4,8), Flossenschlag 6,75–7,0 s (+9 dB) |
+| Test 21 | Referenz | wie Test 8, Prompt mit Tempo | 4 | 4,8 min (7,7-mal so schnell) | Sampling 2:33; Bewegung 1–4 s 1,78 statt 1,76 (Test 8), Explosion 3,7 statt 2,8; Ton: Anfang lauter (−24 statt −40), Explosion 1,5 s (−6,7), Flossenschlag 6,75 s (−26,6), danach Stille |
+| Test 22 | Referenz | wie Test 14, Prompt mit Tempo | 8 | 6,3 min (5,9-mal so schnell) | Sampling 5:14; Bewegung 1–4 s 2,41 (Test 14: 2,34), Bildsprung bei 9,0 s (6,1); Ton: Anfang −34, Explosion 1,25–2,0 s (−5,0), Flossenschlag 6,5 s (−21,5), danach Stille |
+| Test 23 | Startbild | wie Test 5 + INT8-Attention (Vorgabe-Kandidat) | 8 | 6,9 min (5,4-mal so schnell) | Sampling 5:21 (Test 5 ohne INT8: 7:22); Bewegung: Explosion 2,25 s (4,43), Flossenschlag 7,0–7,25 s (2,0–2,3); Ton: Explosion ab 1,25 s (−5,6), Flossenschlag 7,0 s (−29,0), danach Stille (−40) |
+<!-- /messreihe -->
+
+<!-- zusammenfassung -->
+**Zusammenfassung** (gemessen auf einer RTX 5060 Ti 16 GB mit 64 GB Arbeitsspeicher; dieselbe Szene, 9,4 s in
+1344 × 576, Seed 42; Zeit = ganzer Auftrag samt Laden):
+
+| Ziel | Startbild-Fassung | Referenz-Fassung |
+|---|---|---|
+| Ausgangspunkt | 20 Schritte: 37,3 min | 20 Schritte: 37,1 min |
+| **Vorgewählt:** schnell, ohne Bildsprung | Turbo 8 v1.1 + sol-attn + INT8: **6,9 min** | Turbo 8 v1.1 + sol-attn + INT8: **6,6 min** |
+| Am schnellsten | Turbo 4 v1.2 + sol-attn: **4,5 min** | Turbo 4 v1.0 + sol-attn: **4,8 min** |
+| Wenig Zeitlupe | FastH3 (fest 8 Schritte): **7,9 min**, Bewegung fast wie LTX | – (FastH3 nimmt keine Referenzen) |
+| Nicht empfohlen | Veda bei 1344 × 576 (Bildsprung gegen Ende) | Veda bei 1344 × 576 (Bildsprung gegen Ende) |
+
+- **Engpass ist die Attention, nicht der Speicher.** sol-attn halbiert die Rechenzeit (Sampling 15:01 → 7:15), die
+  INT8-Attention ebenso (→ 7:09), beide zusammen 5:38 (Startbild 5:21). tau 1,5 statt 1,3 bringt nichts (7:08). Neben Veda
+  wirkt INT8 gar nicht (identische Ergebnisse). Veda ist am schnellsten (5:05–5:15), springt bei diesem Format aber gegen
+  Ende (28 % seiner Kacheln sind Polsterung, geplant ist es für 1344 × 768 bzw. 1536 × 768).
+- **Turbo-LoRAs:** Shift laut lightx2v (Startbild-LoRAs in 768p 6/3, Referenz-LoRAs 12/3), euler, simple; v1.0 und v1.1
+  gleich schnell. Mit Turbo trifft die Referenz-Fassung Stille und Flossenschlag weiter, die Startbild-Fassung beginnt laut.
+  Es ist immer nur eine Turbo-LoRA aktiv: Sie legt Schritte und Shift fest.
+- **Zeitlupe:** Alle Dateien haben 24 fps. MiniMax bewegt sich bei der Explosion nur etwa halb so stark wie LTX-2.5
+  (Bildänderung 1,8–2,8 gegen 5,1). Tempo im Prompt macht die Explosion heftiger (+30–55 %), den Rest kaum. FastH3 kommt auf
+  4,2. 24 fps gelten als Untergrenze für flüssige Bewegung (Kino); 16 fps ruckeln, 30–60 fps sind nur über Zwischenbilder
+  möglich, MiniMax rechnet fest mit 24.
+
+**Rat für diese Hardware** (RTX 5060 Ti 16 GB, 64 GB RAM; gemessen):
+- Alltag: die Vorwahl, Turbo 8 + sol-attn + INT8 (6,6–6,9 min). Entwürfe: Turbo 4 + sol-attn (4,5–4,8 min). Viel Bewegung:
+  FastH3 (7,9 min, nur Startbild). Endfassung: 20 Schritte (37 min). Bewegungen immer mit Tempo beschreiben.
+- Grafikspeicher 14,9 GB belegt, der INT8-Transformer (19,5 GB) wird ausgelagert; freier Arbeitsspeicher blieb über 31,8 GB.
+  Weniger als 64 GB RAM ist mit MiniMax knapp.
+
+**Rat für andere Hardware** (laut Quellen, nicht gemessen):
+- **RTX 50 mit mehr Grafikspeicher** (24–32 GB): dieselben Wege. NVFP4-Gewichte bringen auch dort wenig (RTX 5090: 175 statt
+  185 s, ai-muninn.com), weil die Attention bremst. Veda in seinen geplanten Formaten (1344 × 768, 5/10/14 s): auf einer
+  RTX 5070 2,9-mal so schnell wie ohne.
+- **RTX 30/40** (sm80–sm89): sol-attn und INT8-Attention laufen (comfy-kitchen: sol-attn ab sm80, INT8 ab sm75), NVAI-open
+  wählt sie vor. Die INT8-Gewichte (convrot) brauchen PyTorch mit cu130, sonst fp8_scaled (Comfy-Org). Veda nur
+  versuchsweise (triton-windows), kein NVFP4.
+- **RTX 20** (sm75): INT8-Attention ja (vorgewählt), sol-attn und Veda nein.
+- **8–12 GB Grafikspeicher:** Laut Veda-Messung läuft H3 auf einer RTX 5070 mit 12 GB (1344 × 768, 5,2 s, Turbo 8: 342 s,
+  mit Veda 130 s). Kürzer und kleiner rechnen (864 × 480), 64 GB RAM.
+- **AMD Radeon:** Laut comfy-kitchen läuft sol-attn auf RDNA3/4; in NVAI-open ist das ungeprüft, deshalb bietet es dort
+  weder sol-attn noch INT8-Attention an. Die Turbo-LoRA bleibt vorgewählt.
+- **Mac:** In NVAI-open für Mac ist MiniMax nicht eingebaut.
+<!-- /zusammenfassung -->
+
 ### Neu in 0.5.13
 
 **Studio:** ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Szenen mit Prompt auf Bahnen für Bild,

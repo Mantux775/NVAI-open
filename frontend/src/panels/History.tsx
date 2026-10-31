@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Asset, type AssetFolder, type Job, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import { FolderIcon } from '../components/FolderIcon'
+import { OutputBadge, useOutputBadges } from '../components/LicenseBadge'
 import { locale, t } from '../i18n'
 
 interface Props {
@@ -35,6 +36,8 @@ export function HistoryPanel({ event }: Props) {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Modelle, deren Ergebnisse nicht veröffentlicht werden dürfen (output_badge): Marke an jeder Datei
+  const badges = useOutputBadges()
   // Aufgeklappte Prompts (Job-IDs): lange Video-Prompts passen nicht in eine Zeile.
   const [openPrompts, setOpenPrompts] = useState<Set<string>>(() => new Set())
   const togglePrompt = (id: string) => {
@@ -306,12 +309,14 @@ export function HistoryPanel({ event }: Props) {
                       title={a.prompt}
                     >
                       <img src={a.url} alt="" loading="lazy" />
+                      <OutputBadge model={badges[a.model_id]} />
                     </button>
                   ) : (
                     <div key={a.id} className="card result wide">
                       <AssetView asset={a} compact />
                       <div className="muted small pad row-between">
                         <span>
+                          <OutputBadge model={badges[a.model_id]} />{' '}
                           {a.model_id}
                           {a.meta.seed != null && ` · seed ${a.meta.seed}`} ·{' '}
                           <a href={a.url} download>
@@ -353,6 +358,7 @@ export function HistoryPanel({ event }: Props) {
           <div className="lightbox-meta" onClick={(e) => e.stopPropagation()}>
             <p>{selected.prompt}</p>
             <p className="muted small">
+              <OutputBadge model={badges[selected.model_id]} />{' '}
               {selected.model_id} · seed {String(selected.meta.seed ?? '?')} · {selected.filename}
             </p>
             <div className="lightbox-actions">

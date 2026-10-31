@@ -2673,6 +2673,41 @@ ALL_MODELS: list[dict[str, Any]] = (
     IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
     + UPSCALE_MODELS + INTERPOLATE_MODELS
 )
+# MiniMax H3 (minimax.py, seit 0.5.18): Startbild-, Referenz- und FastH3-Fassung samt Turbo-LoRAs, mit roten
+# Lizenzmarken (in EU, UK, Südkorea und USA ohne eigene Lizenz verboten).
+from .minimax import MODELS as _MINIMAX_MODELS  # noqa: E402
+ALL_MODELS = ALL_MODELS + _MINIMAX_MODELS
+
+# Vorwahl für das bestmögliche Ergebnis (features.recommended, seit 0.5.18; Nutzer 31.10.2026: „es soll sofort
+# bestmögliches Ergebniss rauskommen“): nur Gemessenes oder die Angabe des Herstellers. Schritte und CFG sind ohnehin
+# die des Modells. Die Generieren-Seite setzt das beim Wechsel aufs Modell, das MCP für alles, was ein Aufruf offen
+# lässt; das Studio rechnet ohnehin im Projektformat (LTX-2.5 1080p mit DFR). MiniMax H3 hat seine eigene (minimax.py).
+_LTX25_BEST = {"size": [1920, 1088], "seconds": 5, "quality": "dfr"}
+RECOMMENDED: dict[str, dict[str, Any]] = {
+    # Qwen ist auf ~1,76 MP trainiert: gemessen feinere Seildrehung und Maserung bei doppelter Zeit (197 statt 98 s)
+    "qwen-image-2512-nvfp4": {"size": [1328, 1328]},
+    "qwen-image-2512-int8": {"size": [1328, 1328]},
+    "qwen-image-2512-lightning": {"size": [1328, 1328]},
+    # FLUX 3 rechnet nativ bis 4K: 1440² in 26 statt 12 s; beim Restaurieren bekam ein Gesicht mit 1 MP fremde Züge
+    "flux3-klein-nvfp4": {"size": [1440, 1440]},
+    "flux3-klein-int8": {"size": [1440, 1440]},
+    # Krea 2 und MOSS-Image laut Hersteller 1 bis 2 MP; Krea 2 gemessen 1408² in 37 statt 20 s
+    "krea2-turbo-nvfp4": {"size": [1408, 1408]},
+    "krea2-turbo-int8": {"size": [1408, 1408]},
+    "moss-image-sft-int8": {"size": [1408, 1408]},
+    # HiDream-O1 ist auf rund 4 MP trainiert, darunter laut Hersteller deutlich schlechter
+    "hidream-o1-dev-fp8": {"size": [2048, 2048]},
+    "hidream-o1-fp8": {"size": [2048, 2048]},
+    # LTX-2.5: 1080p mit DFR, gemessen Gesicht und Stoff über den ganzen Clip scharf (5 s: 786 statt 241 s)
+    "ltx25-distilled-nvfp4": _LTX25_BEST,
+    "ltx25-distilled-int8": _LTX25_BEST,
+    # Stable Audio 3: Musik 30–120 s, gemessen 60 s in rund 10 s; Stable Audio Open: kurze Effekte 3–8 s
+    "stable-audio-3-medium": {"seconds": 60},
+    "stable-audio-open-1.0": {"seconds": 6},
+}
+for _m in ALL_MODELS:
+    if _m["id"] in RECOMMENDED:
+        _m["features"] = {**(_m.get("features") or {}), "recommended": RECOMMENDED[_m["id"]]}
 
 KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
                "controlnet": "ControlNet", "upscale": "Hochskalieren", "interpolate": "Zwischenbilder"}

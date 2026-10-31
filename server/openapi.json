@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "x-api-version": 1
  },
  "paths": {
@@ -922,6 +922,68 @@
          "type": "object",
          "additionalProperties": true,
          "title": "Response Toggle Favorite Api Models  Model Id  Favorite Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/models/{model_id}/license": {
+   "post": {
+    "summary": "Confirm License",
+    "description": "Der Nutzer bestätigt (confirmed: true) oder widerruft eine eigene Genehmigung für die Lizenz des Modells. Nur für\nModelle mit harter Lizenzgrenze (license_badge); gilt für alle Modelle mit derselben Lizenz.",
+    "operationId": "confirm_license_api_models__model_id__license_post",
+    "parameters": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Model Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "type": "object",
+          "additionalProperties": {
+           "type": "boolean"
+          }
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Payload"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Confirm License Api Models  Model Id  License Post"
         }
        }
       }
@@ -3923,6 +3985,63 @@
       "title": "Image Asset Id",
       "description": "Fuer Bild-zu-Video: Asset-ID des Startbilds"
      },
+     "reference_asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 9,
+      "title": "Reference Asset Ids",
+      "description": "Nur Videomodelle mit features.references: Bild-Assets als Referenz (Figur, Gesicht, Stil), nicht als erstes Bild; wie sie im Prompt heissen, sagt features.prompt_hint"
+     },
+     "sparse_attention": {
+      "anyOf": [
+       {
+        "type": "string",
+        "enum": [
+         "sol-attn",
+         "veda"
+        ]
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sparse Attention",
+      "description": "Nur Videomodelle mit features.sparse_attention: sol-attn = Sparse Attention ohne Training (ComfyUIs „Model Sparse Attention“), veda = gelernter Praediktor (Knotenpaket Veda-on-ComfyUI); beide sparen Rechenzeit bei langen Clips"
+     },
+     "sparse_tau": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 4.0,
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sparse Tau",
+      "description": "Schwelle fuer sol-attn: hoeher = mehr ausgelassen (ComfyUIs Vorgabe 1,3)"
+     },
+     "int8_attention": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Int8 Attention",
+      "description": "Nur Videomodelle mit features.int8_attention: dichte Attention in INT8 (comfy-kitchen, ComfyUIs „Model Attention Backend“), mit Sparse Attention fuer deren dichte Teile; None = laut Empfehlung"
+     },
+     "recommended": {
+      "type": "boolean",
+      "title": "Recommended",
+      "description": "Empfohlene Einstellungen des Modells (features.recommended, auf die Grafikkarte zugeschnitten) fuer alles, was der Auftrag offen laesst: LoRAs (nur ohne eigene LoRAs und ohne steps), sparse_attention, int8_attention. False = genau das, was der Auftrag sagt",
+      "default": true
+     },
      "loras": {
       "items": {
        "$ref": "#/components/schemas/LoraRef"
@@ -4326,6 +4445,21 @@
       "type": "string",
       "title": "Warning",
       "default": ""
+     },
+     "license_badge": {
+      "type": "string",
+      "title": "License Badge",
+      "default": ""
+     },
+     "output_badge": {
+      "type": "string",
+      "title": "Output Badge",
+      "default": ""
+     },
+     "license_confirmed": {
+      "type": "boolean",
+      "title": "License Confirmed",
+      "default": false
      },
      "best_for": {
       "type": "string",

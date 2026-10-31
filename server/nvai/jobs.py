@@ -16,7 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import comfy, config, db, flux3_prompt, gpu, i18n, imagesize, loras, mesh_workers, prompt_targets, registry, workflows
+from . import (comfy, config, db, flux3_prompt, gpu, i18n, imagesize, loras, mesh_workers, minimax, prompt_targets,
+               registry, workflows)
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -1468,6 +1469,27 @@ async def _txt2audio(job: Job, ctx: JobContext) -> list[str]:
     })
 
 
+def _apply_recommended(p: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
+    """Empfohlene Einstellungen des Modells (features.recommended, auf die Grafikkarte zugeschnitten) fuer alles, was
+    der Auftrag offen laesst; so bekommen Studio und MCP dieselbe Vorwahl wie die Generieren-Seite, die alles
+    ausdruecklich schickt (recommended=False). LoRAs nur ohne eigene LoRAs und ohne eigene Schrittzahl, und nur
+    geladene. Gibt zurueck, was gesetzt wurde."""
+    rec = registry.features_for(entry).get("recommended") or {}
+    if not rec or p.get("recommended") is False:
+        return {}
+    applied: dict[str, Any] = {}
+    if rec.get("loras") and not p.get("loras") and p.get("steps") is None:
+        picks = [lo for lo in rec["loras"]
+                 if (e := registry.get_entry(lo["model_id"])) is not None and registry.is_installed(e)]
+        if picks:
+            p["loras"] = applied["loras"] = picks
+    if rec.get("sparse_attention") and p.get("sparse_attention") is None:
+        p["sparse_attention"] = applied["sparse_attention"] = rec["sparse_attention"]
+    if rec.get("int8_attention") and p.get("int8_attention") is None:
+        p["int8_attention"] = applied["int8_attention"] = True
+    return applied
+
+
 def _check_video_options(p: dict[str, Any], entry: dict[str, Any]) -> None:
     """Die Zusatzwege von LTX-2.5 (features des Modells) nur dort, wo es sie gibt -- und mit einer
     Meldung, die sagt, was fehlt, statt eines ComfyUI-Fehlers mitten im Lauf."""
@@ -1671,6 +1693,23 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
             f"{_name(entry)} ist ein Bild-zu-Video-Modell — bitte ein Startbild angeben.",
             f"{_name(entry)} is an image-to-video model — please provide a start image.",
         ))
+    # Referenzbilder (Figur, Gesicht, Stil) nur fuer Videomodelle, deren Katalogeintrag sie nennt (features.references).
+    refs = [a for a in (p.get("reference_asset_ids") or []) if a]
+    if refs:
+        limit = int(registry.features_for(entry).get("references") or 0)
+        if len(refs) > limit:
+            raise RuntimeError(t(
+                f"{_name(entry)} nimmt {limit or 'keine'} Referenzbilder.",
+                f"{_name(entry)} takes {limit or 'no'} reference images."))
+        p["reference_images"] = [_stage_image(a, t("Referenzbild", "Reference image")) for a in refs]
+    recommended = _apply_recommended(p, entry)
+    sparse = p.get("sparse_attention")
+    if sparse and sparse not in (registry.features_for(entry).get("sparse_attention") or []):
+        raise RuntimeError(t(f"{_name(entry)} kennt keine Sparse Attention „{sparse}“.",
+                             f"{_name(entry)} has no sparse attention \"{sparse}\"."))
+    if p.get("int8_attention") and not registry.features_for(entry).get("int8_attention"):
+        raise RuntimeError(t(f"{_name(entry)} kennt keine INT8-Attention.",
+                             f"{_name(entry)} has no INT8 attention."))
     # LTX-2.5: Endbild bzw. Schleife (das Startbild auch als Endbild) und vorgegebener Ton.
     if p.get("loop"):
         if not p.get("start_image"):
@@ -1695,7 +1734,7 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         # Mit "Laenge automatisch" waehlt das Modell die Laenge erst im Lauf.
         "frames": None if p.get("auto_duration") else frames_out, "fps": fps_out,
         "duration_s": None if p.get("auto_duration") else round(frames / max(fps, 1), 2),
-        "image_asset_id": p.get("image_asset_id"),
+        "image_asset_id": p.get("image_asset_id"), "reference_asset_ids": refs or None,
         "end_image_asset_id": p.get("end_image_asset_id"), "loop": bool(p.get("loop")),
         "quality": p.get("quality") or "standard", "auto_duration": bool(p.get("auto_duration")),
         "audio_asset_id": p.get("audio_asset_id"),
@@ -1704,6 +1743,9 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         # Latent-Kette: so viele Bilder am Anfang stammen vom Video chain_asset_id (das Studio blendet darueber)
         "chain_asset_id": p.get("chain_asset_id") if extension is None else None,
         "carry_frames": carry or None,
+        # MiniMax H3: Schritte, CFG und Beschleuniger, wie sie wirklich liefen; dazu, was die Empfehlung gesetzt hat
+        **(minimax.run_meta(entry, p) if wf in minimax.BUILDERS else {}),
+        **({"recommended": recommended} if recommended else {}),
     })
     if extension is None:
         return ids

@@ -34,7 +34,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
-from . import comfy, config, db, jobs, registry
+from . import comfy, config, db, jobs, registry, workflows
 from .i18n import t
 from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateVideoRequest, Job
 
@@ -1392,10 +1392,19 @@ def scene_status(s: dict[str, Any]) -> str:
 # ------------------------------------------------------------------------------------------- Erzeugen
 
 def _video_size(model_id: str | None, p: dict[str, Any], params: dict[str, Any]) -> dict[str, int]:
-    """LTX-2.5 rechnet in Vielfachen von 64: 1080p als 1920 × 1088, sonst 1280 × 704 (Hochformat gedreht)."""
+    """LTX-2.5 rechnet in Vielfachen von 64: 1080p als 1920 × 1088, sonst 1280 × 704 (Hochformat gedreht). Modelle
+    mit eigenem Bilderraster (features.frame_rule, MiniMax H3): die lange Seite ihres größten Formats (1344), die kurze
+    nach dem Seitenverhältnis des Projekts auf 32 gerundet, höchstens ihr 768p (1920 × 832 -> 1344 × 576, gemessen)."""
     if params.get("width") and params.get("height"):
         return {"width": int(params["width"]), "height": int(params["height"])}
     w, h = p["settings"]["width"], p["settings"]["height"]
+    entry = registry.get_entry(model_id) if model_id else None
+    feats = registry.features_for(entry) if entry else {}
+    if feats.get("frame_rule") and feats.get("sizes"):
+        long_side = max(max(s["w"], s["h"]) for s in feats["sizes"])
+        cap = max(min(s["w"], s["h"]) for s in feats["sizes"])
+        short_side = max(256, min(cap, round(long_side * min(w, h) / max(w, h) / 32) * 32))
+        return {"width": long_side, "height": short_side} if w >= h else {"width": short_side, "height": long_side}
     big = max(w, h) >= 1900
     long_side, short_side = (1920, 1088) if big else (1280, 704)
     if not (model_id or "").startswith("ltx"):
@@ -1403,13 +1412,18 @@ def _video_size(model_id: str | None, p: dict[str, Any], params: dict[str, Any])
     return {"width": long_side, "height": short_side} if w >= h else {"width": short_side, "height": long_side}
 
 
-def _image_size(p: dict[str, Any], params: dict[str, Any]) -> dict[str, int]:
-    """Rund 1 MP im Seitenverhältnis des Projekts, Vielfache von 16."""
+def _image_size(p: dict[str, Any], params: dict[str, Any], model_id: str | None = None) -> dict[str, int]:
+    """Im Seitenverhältnis des Projekts so viele Bildpunkte wie die Vorwahl des Modells (features.recommended.size,
+    etwa Qwen-Image 1,76 MP, FLUX 3 2 MP), sonst rund 1 MP; Vielfache von 16, höchstens 2048 je Seite."""
     if params.get("width") and params.get("height"):
         return {"width": int(params["width"]), "height": int(params["height"])}
     w, h = p["settings"]["width"], p["settings"]["height"]
-    scale = (1_048_576 / (w * h)) ** 0.5
-    return {"width": max(256, int(w * scale) // 16 * 16), "height": max(256, int(h * scale) // 16 * 16)}
+    entry = registry.get_entry(model_id) if model_id else None
+    rec = (registry.features_for(entry).get("recommended") or {}) if entry else {}
+    target = rec["size"][0] * rec["size"][1] if rec.get("size") else 1_048_576
+    scale = (target / (w * h)) ** 0.5
+    return {"width": min(2048, max(256, int(w * scale) // 16 * 16)),
+            "height": min(2048, max(256, int(h * scale) // 16 * 16))}
 
 
 def _last_frame_asset(asset_id: str, title: str = "", folder: str = "") -> str:
@@ -1453,21 +1467,30 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         return "txt2audio", {**req.model_dump(), "studio_project": p["id"]}
     if s["kind"] == "image":
         model_id = _known_model(s.get("model_id"), "image")
-        req = GenerateImageRequest(prompt=s["prompt"], model_id=model_id, **_image_size(p, params),
+        req = GenerateImageRequest(prompt=s["prompt"], model_id=model_id, **_image_size(p, params, model_id),
                                    **{k: v for k, v in params.items() if k in ("seed", "steps", "cfg",
                                                                                "negative_prompt",
                                                                                "reference_asset_ids", "loras")})
         return "txt2img", {**req.model_dump(), "studio_project": p["id"]}
     model_id = _known_model(s.get("model_id"), "video")
+    entry = registry.get_entry(model_id) if model_id else None
+    feats = registry.features_for(entry) if entry else {}
     fps = 24 if (model_id or "").startswith("ltx") else 16
     step = 8 if (model_id or "").startswith("ltx") else 4
     frames = max(9, int(round(secs * fps / step)) * step + 1)
+    if feats.get("frame_rule"):
+        # Eigenes Raster und feste Bildrate (MiniMax H3: 17k+5 bei 24 fps), Länge in den Grenzen des Modells
+        fps = int(feats.get("fps") or fps)
+        frames = workflows.normalize_frames(int(round(secs * fps)), entry["workflow"])
+        frames = max(int(feats.get("min_frames") or 9), min(int(feats.get("max_frames") or frames), frames))
     # audio_asset_id: ein vorgegebener Ton, etwa ein schon abgenommener Satz, damit die Stimme gleich bleibt (Nutzer
-    # 27.10.); die Länge kommt dann vom Ton
+    # 27.10.); die Länge kommt dann vom Ton. Referenzbilder und Beschleuniger für Modelle, die sie nennen (MiniMax
+    # H3); was die Szene offen lässt, ergänzt der Server mit der Empfehlung des Modells (recommended).
     extra = {k: v for k, v in params.items() if k in ("seed", "steps", "cfg", "negative_prompt", "loras",
                                                       "end_image_asset_id", "quality", "motion_speed",
-                                                      "audio_asset_id", "loop", "temporal_upscale", "crf")}
-    entry = registry.get_entry(model_id) if model_id else None
+                                                      "audio_asset_id", "loop", "temporal_upscale", "crf",
+                                                      "reference_asset_ids", "sparse_attention", "int8_attention",
+                                                      "recommended")}
     if entry and entry.get("family") == "ltx25" and "quality" not in extra:
         # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und kein Endbild
         # verlangt ist (gemessen 5 s 1080p: Details bleiben über die ganze Länge, 786 statt 241 s)

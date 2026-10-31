@@ -310,6 +310,19 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'background (water, smoke), leave it out.',
       ),
     },
+    {
+      head: t('MiniMax H3: Lizenz, Tempo, Zeitlupe', 'MiniMax H3: license, speed, slow motion'),
+      text: t(
+        'In EU, UK, Südkorea und USA ohne eigene Lizenz verboten, Ergebnisse nicht veröffentlichen. Vorgewählt ist der '
+          + 'schnellste gemessene Weg: Turbo-LoRA 8 Schritte v1.1 + sol-attn + INT8-Attention, 9,4 s in 1344 × 576 in '
+          + '6,6–6,9 statt 37 min. Es neigt zu Zeitlupe (24 fps, aber halb so viel Bewegung wie LTX-2.5): Tempo in den '
+          + 'Prompt hob die Explosion um 30–55 %; FastH3 bewegt sich fast wie LTX.',
+        'Prohibited in the EU, UK, South Korea and USA without a separate license; do not publish results. The fastest '
+          + 'measured way is preselected: turbo LoRA 8 steps v1.1 + sol-attn + INT8 attention, 9.4 s at 1344 × 576 in '
+          + '6.6–6.9 instead of 37 min. It tends to slow motion (24 fps, but half the motion of LTX-2.5): pace in the '
+          + 'prompt raised the explosion by 30–55 %; FastH3 moves almost like LTX.',
+      ),
+    },
   ],
   '3d': [
     {
@@ -508,5 +521,106 @@ export function Recommendations({ mode }: { mode: RecommendationMode }) {
         ))}
       </ul>
     </details>
+  )
+}
+
+// Kurzer Tipp unter der Modellwahl, immer sichtbar (Nutzer 31.10.2026: „im generieren berreich soll es immer "Hints"
+// geben, was am besten funktioniert. kurz und klar.“ / „bei fotos auch.“). Ein bis zwei Sätze, nur Gemessenes (RTX 5060 Ti);
+// je Modell, sonst je Modellfamilie, sonst je Reiter. Ausführlich steht es im Kasten „Empfohlene Einstellungen“.
+const TIP_BY_ID: Record<string, string> = {
+  'qwen-image-2512-lightning': t(
+    'Nur für Entwürfe (8 Schritte, rund 17 s). Endassets mit der vollen Fassung und 50 Schritten.',
+    'For drafts only (8 steps, about 17 s). Final assets with the full version and 50 steps.'),
+}
+const TIP_BY_FAMILY: Record<string, string> = {
+  qwenimage: t(
+    'Vorgewählt: natives 1328² mit 50 Schritten (rund 200 statt 100 s, feinere Details). Stehende Figuren 1056 × 1584, '
+      + 'Schrift in Anführungszeichen.',
+    'Preselected: native 1328² with 50 steps (about 200 instead of 100 s, finer detail). Standing figures 1056 × 1584, '
+      + 'text in quotation marks.'),
+  qwenimage21: t(
+    'Nur nicht kommerziell. Bis zehn Referenzen, im Prompt als <image1>, <image2> … ansprechen.',
+    'Non-commercial only. Up to ten references, addressed in the prompt as <image1>, <image2> …'),
+  flux3: t(
+    'Vorgewählt: 2 MP (1440², Bild rund 26 statt 12 s). Bearbeiten und Figuren halten mit Referenzbild; Stil zuerst '
+      + 'nennen, müssen Anzahl oder Bauweise stimmen, „Prompt ausbauen“ abschalten.',
+    'Preselected: 2 MP (1440², image about 26 instead of 12 s). Editing and keeping characters with a reference image; '
+      + 'name the style first, if counts or construction must be exact, switch off “Expand the prompt”.'),
+  krea2: t(
+    'Vorgewählt: 2 MP (1408², rund 37 statt 20 s). Fotografisch mit wenig KI-Look; Bildausschnitt nennen („medium shot '
+      + 'from the waist up“), sonst fehlt oft der Kopf.',
+    'Preselected: 2 MP (1408², about 37 instead of 20 s). Photographic with little AI look; state the framing (“medium '
+      + 'shot from the waist up”), otherwise the head is often cut off.'),
+  moss_image: t(
+    'Vorgewählt: 2 MP (1408², laut OpenMOSS das obere Ende). Plakate und Schilder: das fertige Bild beschreiben, Schrift '
+      + 'wörtlich in Anführungszeichen mit Ort und Schriftart.',
+    'Preselected: 2 MP (1408², the top end according to OpenMOSS). Posters and signs: describe the finished picture, text '
+      + 'word for word in quotation marks with position and typeface.'),
+  ltx25: t(
+    'Vorgewählt: 1080p mit DFR, 5 s (rund 13 min). Ein Absatz mit 4–8 Sätzen, laute Geräusche ausdrücklich nennen; ein '
+      + 'Endbild hält Gesicht und Kamera. Auf 16 GB in 1920 × 832 höchstens 6 s.',
+    'Preselected: 1080p with DFR, 5 s (about 13 min). One paragraph of 4–8 sentences, name loud sounds explicitly; an end '
+      + 'image holds face and camera. On 16 GB at 1920 × 832 at most 6 s.'),
+  minimax_h3: t(
+    'Vorgewählt: Turbo 8 + sol-attn + INT8 (9,4 s in 6,9 statt 37 min gemessen). Neigt zu Zeitlupe: jede Bewegung mit '
+      + 'Tempo beschreiben.',
+    'Preselected: turbo 8 + sol-attn + INT8 (9.4 s measured in 6.9 instead of 37 min). Tends to slow motion: describe '
+      + 'the pace of every movement.'),
+  minimax_h3_ref2va: t(
+    'Vorgewählt: Turbo 8 + sol-attn + INT8 (9,4 s in 6,6 statt 37 min gemessen). Referenzen als <Picture 1> … ansprechen, '
+      + 'Bewegung mit Tempo beschreiben.',
+    'Preselected: turbo 8 + sol-attn + INT8 (9.4 s measured in 6.6 instead of 37 min). Address references as '
+      + '<Picture 1> …, describe the pace of every movement.'),
+  minimax_h3_fast: t(
+    'Fest 8 Schritte (7,9 min) und kaum Zeitlupe: bewegt sich fast wie LTX-2.5. Nur Text und Startbild.',
+    'Fixed 8 steps (7.9 min) and hardly any slow motion: moves almost like LTX-2.5. Text and start image only.'),
+  wan: t(
+    'Bewegung ausdrücklich beschreiben. Auf 16 GB langsam; LTX-2.5 ist der schnellere Weg mit Ton.',
+    'Describe the motion explicitly. Slow on 16 GB; LTX-2.5 is the faster way, with sound.'),
+  wan22: t(
+    'Bewegung ausdrücklich beschreiben. Auf 16 GB sehr langsam (I2V: 5 s rund 55 min ohne LoRA); LTX-2.5 ist schneller.',
+    'Describe the motion explicitly. Very slow on 16 GB (I2V: 5 s about 55 min without a LoRA); LTX-2.5 is faster.'),
+  stable_audio: t(
+    'Vorgewählt: 6 s (kurze Effekte 3–8 s). Den Klang beschreiben („heavy metal sword clash, single impact, dry“).',
+    'Preselected: 6 s (short effects 3–8 s). Describe the sound (“heavy metal sword clash, single impact, dry”).'),
+  stable_audio3: t(
+    'Vorgewählt: 60 s (rund 10 s Rechenzeit). Musik ohne Gesang: ein Satz mit Gattung, Instrumenten und Stimmung, dann '
+      + '„BPM: 100.“',
+    'Preselected: 60 s (about 10 s to render). Music without vocals: one sentence with genre, instruments and mood, then '
+      + '“BPM: 100.”'),
+  triposg: t(
+    'Freigestelltes Objekt ohne Boden und Schatten. Nur Geometrie (rund 60 s); vor dem Einsatz im Spiel retopologisieren.',
+    'Cut-out object without floor and shadow. Geometry only (about 60 s); retopologize before using it in a game.'),
+  trellis2: t(
+    'Freigestelltes Objekt ohne Boden und Schatten. Mit PBR-Texturen (rund 75 s); gemalte Schrift wird nicht lesbar.',
+    'Cut-out object without floor and shadow. With PBR textures (about 75 s); painted text does not become readable.'),
+}
+const TIP_BY_MODE: Partial<Record<RecommendationMode, string>> = {
+  image: t(
+    'Endassets mit Qwen-Image-2512, Bearbeiten mit FLUX 3, Fotos mit Krea 2, Schrift und Plakate mit MOSS-Image.',
+    'Final assets with Qwen-Image-2512, editing with FLUX 3, photos with Krea 2, text and posters with MOSS-Image.'),
+  video: t(
+    'Erste Wahl LTX-2.5: Bild und Ton in einem Durchgang, 5 s in rund 1,5 min.',
+    'First choice LTX-2.5: picture and sound in one pass, 5 s in about 1.5 min.'),
+  audio: t('Effekte mit Stable Audio Open, Musik mit Stable Audio 3.', 'Effects with Stable Audio Open, music with Stable Audio 3.'),
+  '3d': t(
+    'Erst ein freigestelltes Bild ohne Boden und Schatten, dann das Mesh.',
+    'First a cut-out image without floor and shadow, then the mesh.'),
+  restore: t(
+    '„Automatisch“ erkennt Wasserflecken und Risse (20 von 21 Fotos richtig) und wählt gründlich oder schonend. Zwei '
+      + 'Varianten in voller Größe vergleichen; Farbhinweise senken Farbfehler um rund 40 %.',
+    '“Automatic” detects water stains and cracks (20 of 21 photos right) and picks thorough or gentle. Compare two '
+      + 'variants at full size; color hints cut color errors by about 40 %.'),
+}
+
+/** Kurzer Tipp, was am besten funktioniert, immer sichtbar unter der Modellwahl (beim Restaurieren immer der Fotos-Tipp). */
+export function ModelTip({ mode, model }: { mode: RecommendationMode; model?: { id: string; family: string } | null }) {
+  const text = mode === 'restore' ? TIP_BY_MODE.restore
+    : (model && (TIP_BY_ID[model.id] ?? TIP_BY_FAMILY[model.family])) || TIP_BY_MODE[mode]
+  if (!text) return null
+  return (
+    <p className="model-tip">
+      <strong>{t('Tipp', 'Tip')}:</strong> {text}
+    </p>
   )
 }

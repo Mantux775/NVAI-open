@@ -111,9 +111,11 @@ list per tab under **Recommended settings** (since 0.5.11); keep both in step wh
 | Exact construction, counts or gaze with FLUX 3 | `upsample_prompt=False` with a full prompt in whole sentences | With the upsampler a second fishing line appeared in 4 of 6 images, without it in 0 of 2 (same seed) |
 | Photographic look | `krea2-turbo-nvfp4`, state the framing ("medium shot from the waist up, his whole head inside the frame") | Without the framing the head was cut off in 3 of 3 images, with it in 0 of 2; ~20 s |
 | Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | Text letter-perfect in every test; rope handles through drilled holes in 3 of 3 with 50 steps, 2 of 3 with 25; ~51 s |
-| Size | Standing figure 832 × 1216, vehicle 1216 × 832, object 1024² | In a square, figures lose their feet more often |
+| Best result without settings (since 0.5.18) | Leave size, length and quality empty: the model's preselection (`features.recommended`) fills them in the web UI (on model change), over MCP and in the Studio: Qwen-Image-2512 native 1328², FLUX 3 1440², Krea 2 and MOSS-Image 1408², HiDream-O1 2048², LTX-2.5 1920 × 1088 for 5 s with `quality='dfr'`, Stable Audio 3 60 s, Stable Audio Open 6 s | Qwen native: finer rope twist and wood grain at double the time (197 instead of 98 s); FLUX 3 1440² in 26 instead of 12 s, and at 1 MP a restored face drifted; Krea 2 1408² in 37 instead of 20 s; LTX-2.5 DFR kept faces and fabric sharp over the clip (5 s: 786 instead of 241 s) |
+| Size | Object: the preselection above; standing figure portrait (Qwen 1056 × 1584, otherwise 832 × 1216), vehicle landscape (`features.sizes`) | In a square, figures lose their feet more often |
 | Choosing | `batch_size=4`, compare at full resolution | One model load instead of four; anatomy errors are a failure rate |
 | Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS; "a heavy explosion" without "loud" stayed silent for 2–2.5 s and then reached −20 to −36 dBFS, "the loud, rising whistle …, then a massive, booming explosion" −10 to −17 dBFS from 0.5–1 s |
+| MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | Preselected: turbo LoRA 8 steps v1.1 + `sparse_attention='sol-attn'` + `int8_attention=True` (`recommended=True`, the default); describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; attention is the bottleneck (sol-attn and INT8 each halve the sampling time); it moves about half as much as LTX-2.5, pace in the prompt raised an explosion by 30–55 %, FastH3 moves almost like LTX |
 | Long video render (from ~10 min) | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min, 6 s with a start image ~25 min; a blocking call that runs out of time returns `pending` with the `job_id`, never resubmit |
 | Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
 | Video loop | `loop=True` only with a still camera, and only if the background may stand still | With a push-in the loop fell apart in the last frames; water and smoke stood still (see the next row) |
@@ -1085,6 +1087,35 @@ prompt: "a burning torch mounted on a dark stone wall, flame flickering,
 Without LTX-2.5: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for quality (13 GB
 VRAM — don't keep anything else loaded). Kandinsky 6 was tested and not built in, see
 [Kandinsky 6](#kandinsky-6-tested-27-october-2026-not-built-in).
+
+### MiniMax H3 (since 0.5.18)
+
+> **License:** The MiniMax H3 Community License excludes the EU, the UK, South Korea and the USA, private use and
+> the generated videos included (sections I.3, I.5, V.4). Without a separate license from MiniMax
+> (<https://platform.minimax.io/h3-license>) it must not be used there, and nothing made with it may be published,
+> stills and screenshots included. The web UI marks the model and every result in red until the user ticks
+> "I have obtained a permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the
+> user before using it unless `license_confirmed` is true. Anyone offering third parties a tool for generating with
+> it must prevent prohibited content (section V.5); NVAI-open filters nothing.
+
+- **Versions:** `minimax-h3-fl2va-int8` (text and an optional start image), `minimax-h3-ref2va-int8` (up to 9
+  `reference_asset_ids`, addressed in the prompt as `<Picture 1>`, `<Picture 2>` … in their order; no start image),
+  `minimax-h3-fasth3-8step-int8` (fixed 8 steps, start image or text). Picture and stereo sound in one pass, 24 fps,
+  frames on the 17k+5 grid (124 = 5.2 s, up to 362 = 15 s), up to 768p.
+- **Preselection (measured on an RTX 5060 Ti 16 GB, 9.4 s at 1344 × 576):** turbo LoRA 8 steps v1.1 by lightx2v
+  (if downloaded), `sparse_attention='sol-attn'` and `int8_attention=True`: 6.9 min (start image) and 6.6 min
+  (reference) instead of 37 min with 20 steps. `recommended=True` (default) adds whatever a call leaves open;
+  `recommended=False` takes the call literally. On cards older than RTX 30 sol-attn drops out (comfy-kitchen needs
+  sm80), older than RTX 20 also INT8 attention (sm75); on AMD both drop out (untested).
+- **Fastest:** turbo 4 + sol-attn, 4.5–4.8 min. **Veda** (only offered when the node pack Veda-on-ComfyUI is
+  installed) was fastest, but jumped near the end at 1344 × 576. Only one turbo LoRA at a time: it sets the steps
+  and the shift (start image LoRAs at 768p 6/3, reference LoRAs 12/3; NVAI-open sets both).
+- **Slow motion:** the files are 24 fps, but MiniMax moved about half as much as LTX-2.5 in the same scene. Describe
+  the pace of every movement ("bursts in a split second", "at full real-time speed"): that raised the explosion by
+  30–55 %. FastH3 moved almost like LTX.
+- **Prompt:** one block of full English sentences, style and look first, then the scene, several shots as a timeline
+  (`[0s-2s] Shot 1: …`) with the camera, the sound last (dialogue in quotation marks with the speaker).
+- Full test series and hardware advice: [MODELS.md](MODELS.md#minimax-h3-since-0518).
 
 ### Image to video
 

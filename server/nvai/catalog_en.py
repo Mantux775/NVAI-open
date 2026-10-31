@@ -1533,3 +1533,8 @@ SIZE_LABELS: dict[str, str] = {
     "2496 × 1664 — 4 MP 3:2, Fahrzeuge": "2496 × 1664 — 4 MP 3:2, vehicles",
     "2560 × 1440 — 4 MP 16:9, Panorama": "2560 × 1440 — 4 MP 16:9, panorama",
 }
+
+# MiniMax H3 (minimax.py, since 0.5.18): English texts and size labels.
+from .minimax import EN as _MINIMAX_EN, SIZE_LABELS as _MINIMAX_SIZE_LABELS  # noqa: E402
+EN.update(_MINIMAX_EN)
+SIZE_LABELS.update(_MINIMAX_SIZE_LABELS)

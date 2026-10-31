@@ -171,6 +171,25 @@ class GenerateVideoRequest(BaseModel):
     image_asset_id: str | None = Field(
         None, description="Fuer Bild-zu-Video: Asset-ID des Startbilds"
     )
+    reference_asset_ids: list[str] = Field(
+        default_factory=list, max_length=9,
+        description="Nur Videomodelle mit features.references: Bild-Assets als Referenz (Figur, Gesicht, Stil), "
+                    "nicht als erstes Bild; wie sie im Prompt heissen, sagt features.prompt_hint",
+    )
+    sparse_attention: Literal["sol-attn", "veda"] | None = Field(
+        None, description="Nur Videomodelle mit features.sparse_attention: sol-attn = Sparse Attention ohne Training "
+                          "(ComfyUIs „Model Sparse Attention“), veda = gelernter Praediktor (Knotenpaket "
+                          "Veda-on-ComfyUI); beide sparen Rechenzeit bei langen Clips")
+    sparse_tau: float | None = Field(
+        None, ge=0.0, le=4.0, description="Schwelle fuer sol-attn: hoeher = mehr ausgelassen (ComfyUIs Vorgabe 1,3)")
+    int8_attention: bool | None = Field(
+        None, description="Nur Videomodelle mit features.int8_attention: dichte Attention in INT8 (comfy-kitchen, "
+                          "ComfyUIs „Model Attention Backend“), mit Sparse Attention fuer deren dichte Teile; "
+                          "None = laut Empfehlung")
+    recommended: bool = Field(
+        True, description="Empfohlene Einstellungen des Modells (features.recommended, auf die Grafikkarte "
+                          "zugeschnitten) fuer alles, was der Auftrag offen laesst: LoRAs (nur ohne eigene LoRAs und "
+                          "ohne steps), sparse_attention, int8_attention. False = genau das, was der Auftrag sagt")
 
     loras: list[LoraRef] = Field(
         default_factory=list, max_length=8,
@@ -469,6 +488,13 @@ class ModelInfo(BaseModel):
     # Gesetzt, wenn vor dem Einsatz etwas zu beachten ist (z. B. Lizenzausschluss).
     # Das Frontend zeigt den Text als rotes Ausrufezeichen am Modell.
     warning: str = ""
+    # Harte Lizenzgrenze (ganze Länder ausgeschlossen): kurzer Text als rote Marke am Modell, die Warnung steht dann
+    # immer sichtbar daneben; output_badge markiert jedes Ergebnis des Modells im Verlauf und im Studio. Leer = keine.
+    license_badge: str = ""
+    output_badge: str = ""
+    # Der Nutzer hat eine eigene Genehmigung für diese Lizenz bestätigt (Haken unter „Modelle“): Warnung und rote
+    # Marken entfallen. Nur bei Modellen mit license_badge.
+    license_confirmed: bool = False
     best_for: str = ""
     description: str = ""
     pros: list[str] = []

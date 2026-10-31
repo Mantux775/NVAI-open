@@ -17,6 +17,7 @@ import {
   type StudioScene,
   type StudioTransitionKind,
 } from '../api'
+import { OutputBadge, licenseBlocked } from '../components/LicenseBadge'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
 import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, tracksOf, trackOrHighest } from './time'
@@ -138,7 +139,7 @@ export function Inspector({ project, selection, models, onCommand, onGenerate, o
   const p = project
   if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
   if (selection.type === 'asset') {
-    return asset ? <AssetProps p={p} a={asset} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
+    return asset ? <AssetProps p={p} a={asset} model={models.find((m) => m.id === asset.model_id)} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
   }
   if ((selection.ids?.length ?? 1) > 1) return <ManyProps p={p} selection={selection} onCommand={onCommand} onGenerate={onGenerate} onSelect={onSelect} />
   if (selection.type === 'scene') {
@@ -291,10 +292,15 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         <select value={s.model_id ?? ''} onChange={(e) => update({ model_id: e.target.value || null })}>
           <option value="">{t('aktives Modell', 'active model')}</option>
           {usable.map((m) => (
-            <option key={m.id} value={m.id}>{m.name}</option>
+            <option key={m.id} value={m.id}>{licenseBlocked(m) ? '⚠ ' : ''}{m.name}</option>
           ))}
         </select>
       </label>
+      {(() => {
+        // Harte Lizenzgrenze des gewählten Modells: Warnung sichtbar unter der Wahl, bis eine Genehmigung bestätigt ist
+        const chosen = usable.find((m) => m.id === s.model_id)
+        return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
+      })()}
       {s.lane === 'video' && s.kind === 'video' && (
         <label className="st-field">
           <span>{t('Anschluss an', 'Chain to')}</span>
@@ -390,9 +396,11 @@ function ProjectProps({ p, onCommand }: { p: StudioProject; onCommand: Props['on
   )
 }
 
-function AssetProps({ p, a, playhead, onCommand, onDelete }: {
+function AssetProps({ p, a, model, playhead, onCommand, onDelete }: {
   p: StudioProject
   a: Asset
+  /** Das Modell, das die Datei erzeugt hat (für die Marke „nicht veröffentlichen“), sonst undefined */
+  model?: ModelInfo
   playhead: number
   onCommand: Props['onCommand']
   onDelete: Props['onDeleteAsset']
@@ -420,7 +428,11 @@ function AssetProps({ p, a, playhead, onCommand, onDelete }: {
       <h3>
         {t('Material', 'Media')} · {kind === 'video' ? t('Video', 'Video') : kind === 'audio' ? t('Ton', 'Audio') : t('Bild', 'Image')}
         {used && <span className="badge">{t('im Schnitt', 'in edit')}</span>}
+        <OutputBadge model={model} />
       </h3>
+      {model?.output_badge && !model.license_confirmed && model.warning && (
+        <p className="warn-banner small">{model.warning}</p>
+      )}
       <p className="st-asset-prompt small">{assetLabel(a)}</p>
       <table className="st-facts small">
         <tbody>

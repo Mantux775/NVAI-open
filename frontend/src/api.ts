@@ -87,6 +87,12 @@ export interface ModelInfo {
   commercial_ok: boolean
   /** Gesetzt, wenn vor dem Einsatz etwas zu beachten ist (z. B. Lizenzausschluss). */
   warning: string
+  /** Harte Lizenzgrenze (ganze Länder ausgeschlossen): rote Marke am Modell, die Warnung steht immer sichtbar. */
+  license_badge?: string
+  /** Rote Marke an jedem Ergebnis dieses Modells (Verlauf, Studio), z. B. „Nicht veröffentlichen“. */
+  output_badge?: string
+  /** Eigene Genehmigung für die Lizenz bestätigt (Haken unter „Modelle“): Warnung und rote Marken entfallen. */
+  license_confirmed?: boolean
   best_for: string
   description: string
   pros: string[]
@@ -230,17 +236,39 @@ export interface ModelFeatures {
   multishot: boolean
   fps: number
   max_seconds: number
+  // Videomodelle mit eigenem Bilderraster (seit 31.10.2026): Vorgabe, Grenzen und Schritt der Bildzahl, dazu die
+  // Rundungsregel für den Hinweis (sonst 4n+1).
+  default_frames: number
+  min_frames: number
+  max_frames: number
+  frame_step: number
+  frame_rule: string
   missing: Record<string, string>
   // Krea 2 (seit 0.5.10): Referenzbilder geben nur den Stil vor, freigeschaltet durch die optionale
   // Stil-LoRA (style_reference); ohne sie steht die Quelle unter missing.style_reference.
   reference_kind: 'style'
   style_reference: boolean
-  // LoRAs: empfohlene Stärke, wozu sie gehört, für welche Modellfamilien empfohlen, Testergebnis
+  // LoRAs: empfohlene Stärke, wozu sie gehört, für welche Modellfamilien empfohlen, Testergebnis. tested gibt es auch bei
+  // Modellen: gemessene Zeiten, kurz unter dem Modell angezeigt.
   strength: number
   use: 'start_image' | 'end_image' | 'audio_input' | 'motion_speed' | 'loop'
   recommended_for: string[]
   tested: string
+  // MiniMax H3 (seit 0.5.18): Beschleuniger, die das Modell auf dieser Karte kennt, und die gemessene Empfehlung, die
+  // die Generieren-Seite beim Wechsel aufs Modell vorwählt (Studio und MCP bekommen sie vom Server).
+  sparse_attention: SparseAttention[]
+  int8_attention: boolean
+  /** Vorwahl für das bestmögliche Ergebnis (seit 0.5.18): Format [w, h], Länge in s, Qualität; bei MiniMax H3 auch
+   *  Turbo-LoRA, Sparse Attention und INT8-Attention */
+  recommended: {
+    size?: [number, number]; seconds?: number; quality?: 'standard' | 'dfr'
+    loras?: LoraRef[]; sparse_attention?: SparseAttention; int8_attention?: boolean
+  }
+  /** Turbo-LoRAs (MiniMax H3): Schritte, Shift, Sampler; immer nur eine aktiv */
+  turbo: { steps: number; shift?: number[]; sampler?: string; scheduler?: string; ref_image_size?: string }
 }
+
+export type SparseAttention = 'sol-attn' | 'veda'
 
 export interface Health {
   ok: boolean
@@ -372,6 +400,13 @@ export interface VideoParams {
   seed?: number | null
   /** Startbild fuer Bild-zu-Video. Bei I2V-Modellen Pflicht. */
   image_asset_id?: string | null
+  /** Nur Videomodelle mit features.references (MiniMax H3 Referenz): Figur, Gesicht, Stil statt erstem Bild */
+  reference_asset_ids?: string[]
+  // Beschleuniger (features.sparse_attention, int8_attention). recommended=false: genau das, was hier steht; ohne
+  // ergänzt der Server die Empfehlung des Modells.
+  sparse_attention?: SparseAttention | null
+  int8_attention?: boolean | null
+  recommended?: boolean
   // Nur LTX-2.5 (features des Modells)
   end_image_asset_id?: string | null
   loop?: boolean
@@ -646,6 +681,12 @@ export const api = {
     req<{ model_id: string; favorite: boolean }>(`/api/models/${model_id}/favorite`, {
       method: 'POST',
       body: JSON.stringify(favorite === undefined ? {} : { favorite }),
+    }),
+  /** Eigene Genehmigung für die Lizenz des Modells bestätigen oder widerrufen (gilt für alle Modelle der Lizenz). */
+  confirmLicense: (model_id: string, confirmed: boolean) =>
+    req<{ model_id: string; license: string; confirmed: boolean }>(`/api/models/${model_id}/license`, {
+      method: 'POST',
+      body: JSON.stringify({ confirmed }),
     }),
 
   generateImage: (p: ImageParams) =>

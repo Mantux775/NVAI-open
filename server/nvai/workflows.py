@@ -1056,8 +1056,15 @@ def _audio_graph(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 
 # --------------------------------------------------------------- VIDEO
 
+# Bilderraster (Schritt, Rest) fuer Workflows, deren Builder nicht in dieser Datei steht (MODULE_BUILDERS).
+FRAME_GRID: dict[str, tuple[int, int]] = {}
+
+
 def normalize_frames(frames: int, workflow: str) -> int:
-    """Wan und Kandinsky brauchen 4n+1 Frames, LTX 8n+1, Mochi 6n+1."""
+    """Wan und Kandinsky brauchen 4n+1 Frames, LTX 8n+1, Mochi 6n+1; FRAME_GRID nennt weitere."""
+    if workflow in FRAME_GRID:
+        grid, rest = FRAME_GRID[workflow]
+        return max(0, round((frames - rest) / grid)) * grid + rest
     step = 8 if workflow in ("ltxv_t2v", "ltx25", "ltx23") else 6 if workflow == "mochi" else 4
     n = max(1, round((frames - 1) / step))
     return n * step + 1
@@ -1856,6 +1863,8 @@ VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
 EXTERNAL_WORKFLOWS = {"triposg", "trellis2"}
 # Schaerfen beim Restaurieren: Graph aus seedvr2_graph, aufgerufen von jobs._restore.
 UPSCALE_WORKFLOWS = {"seedvr2"}
+# Builder ausserhalb dieser Datei: MiniMax H3 (minimax.py, siehe Dateiende).
+MODULE_BUILDERS: dict[str, Any] = {}
 
 
 # Verlustfreier Master neben jedem gespeicherten Video (NVAISaveMaster, nvai/comfy_nodes/nvai_video.py; Nutzer
@@ -1890,6 +1899,9 @@ def add_master(graph: Graph) -> Graph:
 
 def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     wf = entry.get("workflow")
+    if wf in MODULE_BUILDERS:
+        graph, seed = MODULE_BUILDERS[wf](entry, p)
+        return (add_master(graph) if p.get("master", True) else graph), seed
     if wf in IMAGE_WORKFLOWS:
         return build_image(entry, p)
     if wf in AUDIO_WORKFLOWS:
@@ -1913,3 +1925,9 @@ def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         f"Fuer '{entry['id']}' gibt es noch keinen Workflow-Builder (workflow={wf})",
         f"There is no workflow builder for '{entry['id']}' yet (workflow={wf})",
     ))
+
+
+# MiniMax H3 (minimax.py): Bilderraster 17k+5 und die Builder der drei Fassungen
+from . import minimax as _minimax  # noqa: E402
+FRAME_GRID.update(_minimax.FRAME_GRID)
+MODULE_BUILDERS.update(_minimax.BUILDERS)

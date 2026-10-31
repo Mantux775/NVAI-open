@@ -64,6 +64,133 @@ Without a `model_id`, NVAI-open uses the active image model.
   end image or "Loop" ([PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md#tips-from-our-tests)); the background then stands
   still.
 
+### MiniMax H3 (since 0.5.18)
+
+> **⚠️ Not allowed in the EU, the UK, South Korea or the USA without a separate license from MiniMax.** The MiniMax H3
+> Community License excludes these territories (sections I.3 and I.5) and prohibits any use of the weights and their
+> outputs there, private use included (section V.4). **Videos and images from it must not be published**, stills and
+> screenshots included; that is why there is no picture here. License request:
+> <https://platform.minimax.io/h3-license>. The interface marks the model and every result in red ("Do not publish")
+> until the box "I have obtained a permission" is ticked under "Models". Anyone who offers third parties a tool for
+> generating with MiniMax must prevent prohibited content under the license (section V.5); NVAI-open filters nothing.
+
+Three versions, all with picture and stereo sound in one pass, 24 fps, 5 to 15 s, up to 768p: **start image** (FL2VA,
+text and optionally a start image), **reference** (Ref2VA, up to 9 reference images, in the prompt `<Picture 1>`,
+`<Picture 2>` …) and **FastH3** (fixed 8 steps, hardly any slow motion). Plus the turbo LoRAs by lightx2v (4 or 8
+instead of 20 steps).
+
+**Preselected** is the fastest measured way without an image jump: turbo LoRA 8 steps v1.1, sol-attn and INT8
+attention (start image 6.9 min, reference 6.6 min instead of 37). The Generate page sets it when you switch to the
+model, Studio and MCP get it from the server as long as the job says nothing else (`recommended`). On cards without
+sol-attn (older than RTX 30) or without INT8 attention (older than RTX 20) and on AMD the switch drops out; without the
+LoRA it renders with 20 steps. NVAI-open does not set up Veda: if the node pack Veda-on-ComfyUI is in ComfyUI's
+`custom_nodes`, it can be chosen.
+
+First test on an RTX 5060 Ti 16 GB: the same scene as with LTX-2.5 (9.4 s: an impact, an explosion, a fish falls into
+a bucket), once from the start image (FL2VA), once from two reference images and the description (Ref2VA). MiniMax
+followed the description more closely than LTX-2.5, and the face from the reference images stayed the same through
+the whole clip; the fish's flight path was not right yet.
+
+| | MiniMax H3 (INT8, 20 steps) | LTX-2.5 (NVFP4, DFR) |
+|---|---|---|
+| Result | 9.4 s at 1344 × 576 (the open weights stop at 768p) | 9 s at 1920 × 832, two clips joined by the latent chain |
+| Render time, RTX 5060 Ti 16 GB | 37.3 min from the start image, 37.1 min from reference images (about 107 s per step) | about 7 min (clip 1 260 s, clip 2 162–177 s) |
+| Download | 39.1 GB (start image version with turbo LoRA), reference version another 19.5 GB, about 59 GB together | 37.5 GB |
+| Memory while rendering | 14.9 GB of graphics memory, free system memory never below 31.8 GB (of 64 GB) | not compared |
+
+Without speed-ups MiniMax took a good five times as long for just under half the pixels.
+
+- **Size:** The full model has 33B parameters. Built in is the pruned version (about 20B going by the file size) in
+  INT8 at 19.5 GB, plus the text encoder Qwen3-VL-32B in NVFP4 (14.6 GB), the video and audio VAEs (3.2 GB) and the
+  8-step turbo LoRA (1.8 GB).
+- **NVFP4:** Neither MiniMax nor Comfy-Org offers the transformer in NVFP4. Comfy-Org recommends `int8_convrot` with
+  PyTorch cu130, which is how it runs here; only the text encoder is NVFP4. Third-party conversions exist on Hugging
+  Face, for example `Abiray/Minimax-H3-nvfp4-INT4-INT8-Convrot` and `MATLOWAI/minimax-h3-nvfp4`: the pruned version at
+  11.7 instead of 19.5 GB, for FL2VA and Ref2VA. Whether it is faster and looks as good is not measured. The same
+  license applies to them.
+- **What the test showed:** From the start image the pose and the face stayed stable, but the fish appeared in the
+  bucket instead of flying. From the reference images the fish flew, the sound followed the brief almost exactly
+  (silence, whistle, explosion, tail slap), and the face stayed the same through the whole clip; the arrangement
+  differed, and the background of one reference moved into the picture.
+
+**Faster with turbo LoRAs and sparse attention** (test series on the same card, the same scene, seed 42, 1344 × 576,
+9.4 s; time = whole job including loading; motion = mean frame change per quarter second):
+
+<!-- messreihe -->
+| Run | Version | Speed-up | Steps | Render time | Sound (dBFS RMS) |
+|---|---|---|---|---|---|
+| Run 1 | start image | no LoRA | 20 | 37.3 min | wind from the start (−14 dBFS), explosion −4.8 at 2.5 s, no tail slap of its own |
+| Run 2 | reference | no LoRA | 20 | 37.1 min | quiet start (−38), whistle, explosion −5.8, tail slap at 6.5 s (−18.8), then silence |
+| Test 1 | start image | turbo 8 v1.0 (544p, shift 12/3, res_multistep like ComfyUI's template) | 8 | 15.8 min (2.4× faster) | loud from the start (−6 to −9), explosion −5.2, small peak at 6.75 s (+4 dB) |
+| Test 2 | reference | turbo 8 v1.1 768p (shift 12/3, euler, "match") | 8 | 16.8 min (2.2× faster) | sampling 15:01 (113 s/step); quiet start (−37), whistle and explosion 1.25–2.5 s (−6.0), impact 3.75 s (−23), silence from 5.5 s, tail slap 6.5 s (−20.2), then silence |
+| Test 3 | reference | like test 2 + sol-attn (tau 1.3 from 20 %) | 8 | 8.3 min (4.5× faster) | sampling 7:15 (dense 113, sparse ~34 s/step); start −30, explosion 1.25–2.5 s (−6.2), impact 3.5 s, silence from 5.5 s, tail slap 6.75 s (−19.9) |
+| Test 4 | start image | turbo 8 v1.1 768p (shift 6/3, euler) | 8 | 15.8 min (2.4× faster) | sampling 14:25; loud from the start (−7 to −9), explosion 2.25–3 s (−7.2), decay to −40, small peak 7.0 s (+3.5 dB) |
+| Test 5 | start image | like test 4 + sol-attn | 8 | 8.2 min (4.5× faster) | sampling 7:22; loud from the start (−7), explosion 2.25–2.5 s (−7.7), tail slap peak 6.75–7.0 s (+5 dB) |
+| Test 6 | reference | turbo 4 v1.0 768p (shift 12/3, euler, "match") | 4 | 8.5 min (4.4× faster) | sampling 7:25 (112 s/step); quiet start (−42), explosion 1.25–2.0 s (−6.7), silence from 5 s, tail slap 6.5 s (−21.6), then silence |
+| Test 7 | start image | turbo 4 v1.2 768p (shift 6/3, euler) | 4 | 8.7 min (4.3× faster) | sampling 6:53 (103 s/step; first run after a restart, cold start in the total); loud from the start (−7), explosion 1.25–2.5 s (−5.6), tail slap peak 6.75 s (+6 dB) |
+| Test 8 | reference | like test 6 + sol-attn | 4 | 4.8 min (7.7× faster) | sampling 2:39 (dense 112, sparse ~16 s/step); quiet start (−40), explosion 1.25–2.0 s (−6.4), noise 5.75–6.5 s (−29), tail slap 6.75 s (−22.3), then silence |
+| Test 9 | start image | like test 7 + sol-attn | 4 | 4.5 min (8.3× faster) | sampling 2:29; loud from the start (−8), explosion from 1.25 s (−5.3), peaks 6.5 and 7.0 s (−27), noise 7.75–8.25 s |
+| Test 10 | reference | turbo 8 v1.0 768p (shift 12/3, euler, "match") | 8 | 15.7 min (2.4× faster) | sampling 14:21 (109 s/step; model switch in the total); start −33, explosion 1.25–2.5 s (−6.0), silence from 5 s, tail slap 6.5 s (−20.5), then silence |
+| Test 11 | reference | like test 3 + INT8 attention | 8 | 6.6 min (5.6× faster) | sampling 5:38; start −27, explosion 1.25–2.5 s (−6.4), impact 3.5 s, silence from 5.5 s, tail slap 6.75 s (−20.7), then silence |
+| Test 12 | reference | like test 2 + INT8 attention | 8 | 8.3 min (4.5× faster) | sampling 7:09 (without INT8 15:01); quiet start (−39), explosion 1.25–2.5 s (−5.8), impact 3.75 s, silence from 5.5 s, tail slap 6.5 s (−19.9), then silence |
+| Test 13 | reference | like test 3, sol-attn tau 1.5 | 8 | 8.2 min (4.5× faster) | sampling 7:08 (tau 1.3: 7:15); start −28, explosion 1.25–2.5 s (−6.0), impact 3.5 s, silence from 5.5 s, tail slap 6.75 s (−19.4), then silence |
+| Test 14 | reference | like test 2 + Veda (32 tiles) | 8 | 6.7 min (5.5× faster) | sampling 5:15 (R2VA predictor; cold start and compile in the total); motion 1–4 s 2.34 instead of 1.78 (test 2), but image jump at 7.75 s (5.1); sound: silence (−49), explosion 1.25–2.0 s (−5.4), tail slap 6.5 s (−19.8), then silence |
+| Test 15 | start image | FastH3 8 steps (VSA, shift 10/3, fixed) | 8 | 7.9 min (4.7× faster) | sampling 6:50 (loading the new checkpoint in the total); motion 1–4 s 4.21 (other MiniMax 1.8–2.8, LTX 5.1), explosion 8.7 at 2.5 s (LTX 7.5); sound loud from the start (−6), explosion 2.25–3.0 s (−3.6), tail slap 7.0 s (+20 dB), then silence |
+| Test 16 | start image | like test 4 + Veda (32 tiles) | 8 | 6.1 min (6.1× faster) | sampling 5:05 (38 s/step, including the one-off Triton kernel compile); loud from the start (−11), explosion 1.25–2.25 s (−5.7), tail slap peak 6.75 s (+6 dB), then silence (−40); Veda: 28 % padding tiles at 1344 × 576; image jump at 7.75 s (13.2) |
+| Test 17 | reference | like test 14 + INT8 attention | 8 | 6.3 min (5.9× faster) | sampling 5:13; motion and sound identical to test 14: next to Veda, INT8 has no effect |
+| Test 18 | start image | like test 4 + INT8 attention | 8 | 8.0 min (4.7× faster) | sampling 6:46 (without INT8 14:25); loud from the start (−8), explosion 1.25–2.5 s (−6.3), tail slap peak 6.75 s (+5 dB) |
+| Test 19 | start image | like test 9, prompt with tempo (real time, fast, energetic) | 4 | 4.6 min (8.1× faster) | sampling 2:29; motion 1–4 s 2.48 instead of 2.19 (test 9), explosion 6.6 instead of 4.3 (LTX 5.1/7.5); sound loud from the start, explosion 1.25 s (−4.3), tail slap 7.0 s (+11 dB) |
+| Test 20 | start image | like test 16, prompt with tempo | 8 | 6.1 min (6.1× faster) | sampling 5:05; motion 1–4 s 2.80 instead of 2.75 (test 16); again an image jump at the end (9.0 s, 10.1); sound loud from the start, explosion 1.25 s (−4.8), tail slap 6.75–7.0 s (+9 dB) |
+| Test 21 | reference | like test 8, prompt with tempo | 4 | 4.8 min (7.7× faster) | sampling 2:33; motion 1–4 s 1.78 instead of 1.76 (test 8), explosion 3.7 instead of 2.8; sound: louder start (−24 instead of −40), explosion 1.5 s (−6.7), tail slap 6.75 s (−26.6), then silence |
+| Test 22 | reference | like test 14, prompt with tempo | 8 | 6.3 min (5.9× faster) | sampling 5:14; motion 1–4 s 2.41 (test 14: 2.34), image jump at 9.0 s (6.1); sound: start −34, explosion 1.25–2.0 s (−5.0), tail slap 6.5 s (−21.5), then silence |
+| Test 23 | start image | like test 5 + INT8 attention (default candidate) | 8 | 6.9 min (5.4× faster) | sampling 5:21 (test 5 without INT8: 7:22); motion: explosion 2.25 s (4.43), tail slap 7.0–7.25 s (2.0–2.3); sound: explosion from 1.25 s (−5.6), tail slap 7.0 s (−29.0), then silence (−40) |
+<!-- /messreihe -->
+
+<!-- zusammenfassung -->
+**Summary** (measured on an RTX 5060 Ti 16 GB with 64 GB of RAM; the same scene, 9.4 s at 1344 × 576, seed 42;
+time = whole job including loading):
+
+| Goal | Start image version | Reference version |
+|---|---|---|
+| Starting point | 20 steps: 37.3 min | 20 steps: 37.1 min |
+| **Preselected:** fast, no image jump | turbo 8 v1.1 + sol-attn + INT8: **6.9 min** | turbo 8 v1.1 + sol-attn + INT8: **6.6 min** |
+| Fastest | turbo 4 v1.2 + sol-attn: **4.5 min** | turbo 4 v1.0 + sol-attn: **4.8 min** |
+| Little slow motion | FastH3 (fixed 8 steps): **7.9 min**, motion almost like LTX | – (FastH3 takes no references) |
+| Not recommended | Veda at 1344 × 576 (image jump near the end) | Veda at 1344 × 576 (image jump near the end) |
+
+- **Attention is the bottleneck, not memory.** sol-attn halves the render time (sampling 15:01 → 7:15), so does the INT8
+  attention (→ 7:09), both together 5:38 (start image 5:21). tau 1.5 instead of 1.3 changes nothing (7:08). Next to Veda,
+  INT8 has no effect at all (identical results). Veda is the fastest (5:05–5:15) but jumps near the end at this size (28 %
+  of its tiles are padding; it is planned for 1344 × 768 or 1536 × 768).
+- **Turbo LoRAs:** shift as lightx2v says (start image LoRAs at 768p 6/3, reference LoRAs 12/3), euler, simple; v1.0 and v1.1
+  equally fast. With turbo the reference version still hits the silence and the tail slap; the start image version starts
+  loud. Only one turbo LoRA is active at a time: it sets the steps and the shift.
+- **Slow motion:** all files are 24 fps. MiniMax moves only about half as much as LTX-2.5 during the explosion (frame change
+  1.8–2.8 against 5.1). Pace in the prompt makes the explosion stronger (+30–55 %), the rest barely. FastH3 reaches 4.2. 24 fps
+  counts as the lower limit for smooth motion (cinema); 16 fps stutters; 30–60 fps only through in-between frames, MiniMax
+  runs at a fixed 24.
+
+**Advice for this hardware** (RTX 5060 Ti 16 GB, 64 GB RAM; measured):
+- Everyday: the preselection, turbo 8 + sol-attn + INT8 (6.6–6.9 min). Drafts: turbo 4 + sol-attn (4.5–4.8 min). Lots of
+  motion: FastH3 (7.9 min, start image only). Final version: 20 steps (37 min). Always describe the pace of every movement.
+- 14.9 GB of graphics memory in use, the INT8 transformer (19.5 GB) is offloaded; free RAM stayed above 31.8 GB. Less than
+  64 GB of RAM is tight with MiniMax.
+
+**Advice for other hardware** (from sources, not measured):
+- **RTX 50 with more graphics memory** (24–32 GB): the same ways. NVFP4 weights help little there too (RTX 5090: 175 instead of
+  185 s, ai-muninn.com) because attention is the bottleneck. Veda at its planned sizes (1344 × 768, 5/10/14 s): 2.9 times as
+  fast as without on an RTX 5070.
+- **RTX 30/40** (sm80–sm89): sol-attn and INT8 attention run (comfy-kitchen: sol-attn from sm80, INT8 from sm75), NVAI-open
+  preselects them. The INT8 weights (convrot) need PyTorch with cu130, otherwise fp8_scaled (Comfy-Org). Veda only
+  experimental (triton-windows), no NVFP4.
+- **RTX 20** (sm75): INT8 attention yes (preselected), sol-attn and Veda no.
+- **8–12 GB of graphics memory:** by Veda's measurement H3 runs on an RTX 5070 with 12 GB (1344 × 768, 5.2 s, turbo 8: 342 s,
+  with Veda 130 s). Render shorter and smaller (864 × 480), 64 GB of RAM.
+- **AMD Radeon:** comfy-kitchen says sol-attn runs on RDNA3/4; in NVAI-open that is untested, so it offers neither sol-attn
+  nor INT8 attention there. The turbo LoRA stays preselected.
+- **Mac:** MiniMax is not built into NVAI-open for Mac.
+<!-- /zusammenfassung -->
+
 ### New in 0.5.13
 
 **Studio:** a full-screen editor for whole videos. Scenes with a prompt on lanes for picture, voice, music and sound,

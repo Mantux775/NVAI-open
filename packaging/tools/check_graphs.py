@@ -38,6 +38,18 @@ def options(spec):
 CARRY = {"carry_video": "dummy.mp4", "carry_frames": 25}
 VARIANTS = {"krea2_turbo": [("Stilvorlage", {"reference_images": ["dummy.png", "dummy2.png"]})],
             "ltx25": [("Latent-Kette", CARRY), ("Latent-Kette DFR", {**CARRY, "quality": "dfr"})]}
+# MiniMax H3 (seit 0.5.18, minimax.py): 24 fps, Raster 17k+5; die Referenz-Fassung nimmt Referenzen statt Startbild.
+# Geprueft werden auch die Vorwahl (Turbo-LoRA + sol-attn + INT8) und, wenn das Knotenpaket da ist, Veda.
+MM = {"fps": 24, "frames": 124, "width": 864, "height": 480}
+BASE = {"minimax_h3": MM, "minimax_h3_fast": MM,
+        "minimax_h3_ref2va": {**MM, "start_image": None, "reference_images": ["dummy.png", "dummy2.png"]}}
+MM_REC = {"sparse_attention": "sol-attn", "int8_attention": True}
+VARIANTS |= {
+    "minimax_h3": [("Vorwahl", {**MM_REC, "loras": [{"model_id": "minimax-h3-turbo-fl2v-8step-v1.1-768p"}]})]
+    + ([("Veda", {"sparse_attention": "veda"})] if "VedaSparseAttention" in INFO else []),
+    "minimax_h3_ref2va": [("Vorwahl", {**MM_REC, "loras": [{"model_id": "minimax-h3-turbo-ref2v-8step-v1.1-768p"}]})]
+    + ([("Veda", {"sparse_attention": "veda"})] if "VedaSparseAttention" in INFO else []),
+}
 
 
 def check(graph):
@@ -70,10 +82,12 @@ for entry in registry.all_entries():
     if kind not in BUILDERS:
         continue
     for label, extra in [("", {})] + VARIANTS.get(entry.get("workflow"), []):
-        p = REQUESTS[kind]() | extra
+        p = REQUESTS[kind]() | BASE.get(entry.get("workflow"), {}) | extra
         name = f"{entry['id']} ({label})" if label else entry["id"]
+        # Builder ausserhalb von workflows.py (MiniMax) laufen ueber workflows.build
+        build = workflows.build if entry.get("workflow") in workflows.MODULE_BUILDERS else BUILDERS[kind]
         try:
-            graph, _ = BUILDERS[kind](entry, p)
+            graph, _ = build(entry, p)
         except Exception as e:  # noqa: BLE001 - z. B. Startbild nötig
             print(f"{name}: nicht gebaut ({type(e).__name__}: {str(e)[:90]})")
             continue

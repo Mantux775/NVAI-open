@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 _USER_CATALOG = config.DATA_DIR / "custom_models.json"
 _ACTIVE_FILE = config.DATA_DIR / "active_models.json"
 _FAVORITES_FILE = config.DATA_DIR / "favorites.json"
+_LICENSES_FILE = config.DATA_DIR / "licenses.json"
 _state_lock = threading.RLock()
 
 
@@ -57,6 +58,32 @@ def set_favorite(model_id: str, value: bool) -> bool:
             favs.discard(model_id)
         config.ensure_dirs()
         _FAVORITES_FILE.write_text(json.dumps(sorted(favs), indent=2), encoding="utf-8")
+        return value
+
+
+# ----------------------------------------------------------- Genehmigungen
+
+def get_licenses() -> set[str]:
+    """Lizenzen (Name wie im Katalog), für die der Nutzer eine eigene Genehmigung bestätigt hat. Betrifft nur Modelle
+    mit harter Lizenzgrenze (license_badge): Mit Bestätigung entfallen Warnung und rote Marken."""
+    if _LICENSES_FILE.exists():
+        try:
+            return set(json.loads(_LICENSES_FILE.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, TypeError):
+            return set()
+    return set()
+
+
+def set_license(license_name: str, value: bool) -> bool:
+    """Bestätigt oder widerruft die Genehmigung für eine Lizenz; gilt für alle Modelle mit diesem Lizenznamen."""
+    with _state_lock:
+        confirmed = get_licenses()
+        if value:
+            confirmed.add(license_name)
+        else:
+            confirmed.discard(license_name)
+        config.ensure_dirs()
+        _LICENSES_FILE.write_text(json.dumps(sorted(confirmed), indent=2), encoding="utf-8")
         return value
 
 
@@ -156,6 +183,27 @@ def optional_status(entry: dict[str, Any]) -> dict[str, bool]:
     return out
 
 
+def _hardware_limits(feats: dict[str, Any]) -> None:
+    """Beschleuniger mit Mindest-Architektur (features.min_compute: Name -> CUDA compute capability, etwa sol-attn 8.0)
+    gelten nur auf passenden NVIDIA-Karten; auf aelteren Karten und auf AMD fallen sie aus der Auswahl
+    (sparse_attention, int8_attention) und aus der Empfehlung (recommended)."""
+    need = feats["min_compute"]
+    cap = gpu.compute_cap()
+
+    def ok(name: str) -> bool:
+        return name not in need or (cap is not None and cap >= float(need[name]))
+
+    feats["sparse_attention"] = [m for m in feats.get("sparse_attention") or [] if ok(m)]
+    if feats.get("int8_attention") and not ok("int8_attention"):
+        feats["int8_attention"] = False
+    rec = dict(feats.get("recommended") or {})
+    if rec.get("sparse_attention") and rec["sparse_attention"] not in feats["sparse_attention"]:
+        rec.pop("sparse_attention")
+    if rec.get("int8_attention") and not feats.get("int8_attention"):
+        rec.pop("int8_attention")
+    feats["recommended"] = rec
+
+
 def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     """Was ein Modell beim Generieren kann -- abgeleitet aus seinem Workflow, ergaenzt um
     die Angaben im Katalogeintrag ("features").
@@ -190,6 +238,8 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
         if i18n.lang() != "de" and feats.get("sizes"):
             feats["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
                               for s in feats["sizes"]]
+        if feats.get("min_compute"):
+            _hardware_limits(feats)
         return feats
     d = workflows.defaults_for(wf)
     base: dict[str, Any] = {
@@ -278,7 +328,8 @@ def localized(entry: dict[str, Any]) -> dict[str, Any]:
     if not over:
         return entry
     out = dict(entry)
-    for key in ("name", "best_for", "description", "pros", "cons", "warning", "license"):
+    for key in ("name", "best_for", "description", "pros", "cons", "warning", "license", "license_badge",
+                "output_badge"):
         if key in over:
             out[key] = over[key]
     if "features" in over:
@@ -350,6 +401,10 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
         commercial_ok=entry["commercial_ok"] or (
             bool(entry.get("custom")) and commercial_from_license(entry.get("license"))),
         warning=text.get("warning", ""),
+        license_badge=text.get("license_badge", ""),
+        output_badge=text.get("output_badge", ""),
+        # Lizenzname aus dem Katalog (nicht übersetzt): eine Bestätigung gilt für alle Modelle dieser Lizenz
+        license_confirmed=bool(entry.get("license_badge")) and entry.get("license", "") in get_licenses(),
         best_for=text.get("best_for", ""),
         description=text.get("description", ""),
         pros=text.get("pros", []),

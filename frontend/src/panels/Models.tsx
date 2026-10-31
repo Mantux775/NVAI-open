@@ -4,6 +4,7 @@ import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 import { GpuSettings } from '../components/GpuSettings'
 import { ContentBadge } from '../components/ContentBadge'
+import { LicenseBadge, licenseBlocked } from '../components/LicenseBadge'
 import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
 import { CivitaiSearch } from './CivitaiSearch'
@@ -155,6 +156,20 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusyDelete(null)
+    }
+  }
+
+  // Haken „Ich habe eine Genehmigung erworben“ (Nutzer 31.10.2026): gilt für alle Modelle mit derselben Lizenz,
+  // deshalb sofort bei allen umschalten; bei Fehler zurückdrehen.
+  const confirmLicense = async (m: ModelInfo, confirmed: boolean) => {
+    const mark = (value: boolean) =>
+      setModels((list) => list.map((x) => (x.license_badge && x.license === m.license ? { ...x, license_confirmed: value } : x)))
+    mark(confirmed)
+    try {
+      await api.confirmLicense(m.id, confirmed)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      mark(!confirmed)
     }
   }
 
@@ -389,12 +404,13 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
             <div className="model-head">
               <div className="model-title">
                 <h3>
-                  {m.warning && (
+                  {m.warning && !(m.license_badge && m.license_confirmed) && (
                     <span className="warn-mark" title={m.warning}>
                       !
                     </span>
                   )}
                   {m.name}
+                  <LicenseBadge model={m} />
                   <span className="badge kind">{KIND_LABEL[m.kind]}</span>
                   <ContentBadge model={m} />
                   {isActive && <span className="badge done">{t('aktiv', 'active')}</span>}
@@ -445,6 +461,29 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                   {!m.workflow && <span className="badge">{t('kein Workflow', 'no workflow')}</span>}
                 </h3>
                 <p className="best-for">{m.best_for}</p>
+                {/* Gemessene Zeiten kurz unter dem Modell (features.tested; Nutzer 31.10.2026) */}
+                {m.features?.tested && <p className="hint small tested">{m.features.tested}</p>}
+                {/* Harte Lizenzgrenze: Warnung immer sichtbar, nicht erst unter „Details“, bis der Nutzer eine eigene
+                    Genehmigung bestätigt */}
+                {licenseBlocked(m) && m.warning && <p className="warn-banner">{m.warning}</p>}
+                {m.license_badge && (
+                  <label
+                    className="license-confirm small"
+                    title={t(
+                      `Gilt für alle Modelle mit der ${m.license}. Nur setzen, wenn die Genehmigung wirklich vorliegt; `
+                        + 'dann entfallen Warnung und rote Marken.',
+                      `Applies to all models under the ${m.license}. Only tick it if you really have the permission; `
+                        + 'the warning and the red marks then go away.',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!m.license_confirmed}
+                      onChange={(e) => confirmLicense(m, e.target.checked)}
+                    />
+                    {t('Ich habe eine Genehmigung erworben', 'I have obtained permission')}
+                  </label>
+                )}
                 {m.kind === 'lora' && m.trigger && (
                   <p className="muted small">{t('Trigger', 'Trigger')}: <code>{m.trigger}</code></p>
                 )}
@@ -552,7 +591,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
 
             {open && (
               <div className="model-detail">
-                {m.warning && <p className="warn-banner">{m.warning}</p>}
+                {m.warning && !m.license_badge && <p className="warn-banner">{m.warning}</p>}
                 <p className="description">{m.description}</p>
                 <div className="proscons">
                   <div>

@@ -107,6 +107,9 @@ API_FEATURES = [
     "studio_scale",    # Studio: scale, anchor, scale_keys an Clips und der Befehl clip.key (seit 0.5.16)
     "latent_chain",    # LTX-2.5: chain_asset_id, Verlaengern mit Uebertrag und Ueberblendung, Studio-Anschluss
                        # mit Ueberblendung beim Uebernehmen (seit 0.5.17)
+    "recommended",     # features.recommended je Modell (Vorwahl fuers beste Ergebnis); generate/video:
+                       # recommended, reference_asset_ids, sparse_attention, int8_attention (seit 0.5.18)
+    "model_license",   # license_badge/output_badge/license_confirmed an Modellen, POST /api/models/{id}/license
 ]
 
 
@@ -663,6 +666,20 @@ async def toggle_favorite(model_id: str, payload: dict[str, bool] | None = None)
     if value is None:
         value = model_id not in registry.get_favorites()
     return {"model_id": model_id, "favorite": registry.set_favorite(model_id, bool(value))}
+
+
+@app.post("/api/models/{model_id}/license")
+async def confirm_license(model_id: str, payload: dict[str, bool] | None = None) -> dict[str, Any]:
+    """Der Nutzer bestätigt (confirmed: true) oder widerruft eine eigene Genehmigung für die Lizenz des Modells. Nur für
+    Modelle mit harter Lizenzgrenze (license_badge); gilt für alle Modelle mit derselben Lizenz."""
+    entry = registry.get_entry(model_id)
+    if entry is None:
+        raise HTTPException(404, t(f"Unbekanntes Modell: {model_id}", f"Unknown model: {model_id}"))
+    if not entry.get("license_badge"):
+        raise HTTPException(400, t("Für dieses Modell gibt es keine Genehmigung zu bestätigen.",
+                                   "There is no permission to confirm for this model."))
+    confirmed = registry.set_license(entry["license"], bool((payload or {}).get("confirmed")))
+    return {"model_id": model_id, "license": entry["license"], "confirmed": confirmed}
 
 
 @app.post("/api/models/active")

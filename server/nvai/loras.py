@@ -49,6 +49,10 @@ WORKFLOW_BASES: dict[str, tuple[str, ...]] = {
     "ltx25": ("ltx2",),
     "ltxv_t2v": ("ltxv",),
 }
+# MiniMax H3 (minimax.py): LoRA-Basen der Startbild- und der Referenz-Fassung (Turbo-LoRAs von lightx2v)
+from .minimax import LORA_BASES as _MINIMAX_BASES, LORA_LABELS as _MINIMAX_LABELS  # noqa: E402
+WORKFLOW_BASES.update(_MINIMAX_BASES)
+BASES.update(_MINIMAX_LABELS)
 
 # HF-Basismodell (Tag base_model:adapter:...) -> LoRA-Basis. Nur als Hinweis; entschieden
 # wird am Dateikopf.

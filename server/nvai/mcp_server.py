@@ -132,7 +132,15 @@ server = MCPServer(
         "locked-off medium shot; the framing stays exactly as in the first frame.' (it still "
         "pushed in 3 of 3 times at 1920x832; an end image holds the framing); 'calm, "
         "proud expression' became a grin ('stern, determined, does not smile'). Thin props "
-        "(rifles, flag poles) that cross people in the start image morph into each other.\n\n"
+        "(rifles, flag poles) that cross people in the start image morph into each other.\n"
+        "MINIMAX H3 (minimax-h3-fl2va-int8, minimax-h3-ref2va-int8 with up to 9 reference_asset_ids, "
+        "minimax-h3-fasth3-8step-int8): picture and stereo sound, 24 fps, 5-15 s. LICENSE: prohibited in the EU, "
+        "the UK, South Korea and the USA without a separate license from MiniMax, private use included, and "
+        "nothing made with it may be published; tell the user before using it unless the model shows "
+        "license_confirmed=true. Leave width, height, frames and fps empty to get the model's own values; the "
+        "measured fastest settings are applied by default (turbo LoRA 8 steps v1.1 if downloaded, sol-attn, "
+        "INT8 attention: 9.4 s at 1344x576 in 6.6-6.9 instead of 37 min). It tends to slow motion: describe the "
+        "pace of every movement.\n\n"
         "OLD PHOTOS: restore_image(image_path or image_asset_id) removes damage (repair), colorizes "
         "(colorize) and sharpens with SeedVR2 (sharpen). repair_mode='auto' (default) lets FLUX 3's upsampler "
         "look at the photo first and asks whether it has water stains or crack networks: yes -> 'thorough' "
@@ -216,6 +224,35 @@ def _asset_paths(assets: list[dict[str, Any]]) -> list[str]:
     from . import config
 
     return [str(config.ASSET_DIR / a["filename"]) for a in assets]
+
+
+async def _model_features(kind: str, model_id: str | None) -> dict[str, Any]:
+    """features des gewaehlten, sonst des aktiven Modells einer Art (registry.features_for); leer ohne Modell."""
+    async with await _client() as c:
+        if not model_id:
+            model_id = ((await c.get("/api/health")).json().get("active_models") or {}).get(kind)
+        if not model_id:
+            return {}
+        models = (await c.get("/api/models", params={"kind": kind})).json()
+    return next((m.get("features") or {} for m in models if m["id"] == model_id), {})
+
+
+async def _video_defaults(model_id: str | None) -> dict[str, Any]:
+    """Format, Laenge, Bildrate und Qualitaet, wenn generate_video sie offen laesst: Modelle mit eigenem Bilderraster
+    (features.frame_rule, MiniMax H3) nach ihrem Katalog, Modelle mit Vorwahl (features.recommended, LTX-2.5: 1080p,
+    5 s, DFR) danach, sonst Wans Vorgaben wie bisher."""
+    f = await _model_features("video", model_id)
+    rec = f.get("recommended") or {}
+    if f.get("frame_rule"):
+        size = (f.get("sizes") or [{"w": 832, "h": 480}])[0]
+        return {"width": size["w"], "height": size["h"], "frames": f.get("default_frames") or 49,
+                "fps": f.get("fps") or 16, "quality": "standard"}
+    if rec.get("size"):
+        fps = int(f.get("fps") or 24)
+        return {"width": rec["size"][0], "height": rec["size"][1], "fps": fps,
+                "frames": int(round((rec.get("seconds") or 5) * fps)) + 1,
+                "quality": "dfr" if rec.get("quality") == "dfr" and f.get("dfr") else "standard"}
+    return {"width": 832, "height": 480, "frames": 49, "fps": 16, "quality": "standard"}
 
 
 async def _generate(path: str, payload: dict[str, Any], ctx: Context | None, wait: bool = True) -> dict[str, Any]:
@@ -401,8 +438,8 @@ async def generate_image(
     prompt: str,
     ctx: Context,
     negative_prompt: str = "",
-    width: int = 1024,
-    height: int = 1024,
+    width: int | None = None,
+    height: int | None = None,
     model_id: str | None = None,
     steps: int | None = None,
     cfg: float | None = None,
@@ -451,7 +488,10 @@ async def generate_image(
         negative_prompt: Only has an effect with CFG > 1 (Qwen 50 steps, FLUX 3 Base), NOT
             with flux3-klein-nvfp4 and Lightning. Empty = model default (for Qwen the one
             from its model card). Style bans flatten the look.
-        width, height: Resolution, a multiple of 16 (FLUX 3) or 8.
+        width, height: Resolution, a multiple of 16 (FLUX 3) or 8. Empty = the model's preselection for the best
+            result (features.recommended.size: Qwen-Image-2512 native 1328x1328, FLUX 3 1440x1440, Krea 2 and
+            MOSS-Image 1408x1408, HiDream-O1 2048x2048), otherwise 1024x1024. Give the size for the subject when it
+            matters (standing figures portrait, vehicles landscape: features.sizes).
         model_id: Force a model; otherwise the active one.
         steps, cfg, sampler, scheduler: None = model default. Only change them if you
             know why -- karras and exponential make deformations worse.
@@ -501,6 +541,9 @@ async def generate_image(
         files, asset_ids, seed, model_id, folder; for FLUX 3 also 'caption' -- the description
         the image was actually generated from.
     """
+    if not (width and height):
+        size = ((await _model_features("image", model_id)).get("recommended") or {}).get("size") or [1024, 1024]
+        width, height = width or size[0], height or size[1]
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
         "width": width, "height": height, "model_id": model_id,
@@ -661,7 +704,7 @@ async def expand_prompt(
 async def generate_audio(
     prompt: str,
     ctx: Context,
-    seconds: float = 10.0,
+    seconds: float | None = None,
     negative_prompt: str = "",
     model_id: str | None = None,
     seed: int | None = None,
@@ -678,13 +721,16 @@ async def generate_audio(
 
     Args:
         prompt: Sound description (SFX) or one descriptive sentence (Stable Audio 3).
-        seconds: Length in seconds. Stable Audio Open can do up to 47 s, Stable Audio 3 up to 300 s.
+        seconds: Length in seconds. Stable Audio Open can do up to 47 s, Stable Audio 3 up to 300 s. Empty = the
+            model's preselection (Stable Audio 3: 60 s of music, Stable Audio Open: 6 s effect), otherwise 10.
         negative_prompt: What to avoid.
         model_id: Force a model; otherwise the active audio model.
         seed: For reproducible results.
         project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
             History, e.g. start images or a voice line made for that project. Unknown project: error.
     """
+    if seconds is None:
+        seconds = ((await _model_features("audio", model_id)).get("recommended") or {}).get("seconds") or 10.0
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
         "seconds": seconds, "model_id": model_id, "seed": seed, "project_id": project_id,
@@ -696,18 +742,22 @@ async def generate_audio(
 async def generate_video(
     prompt: str,
     ctx: Context,
-    width: int = 832,
-    height: int = 480,
-    frames: int = 49,
-    fps: int = 16,
+    width: int | None = None,
+    height: int | None = None,
+    frames: int | None = None,
+    fps: int | None = None,
     negative_prompt: str = "",
     model_id: str | None = None,
     seed: int | None = None,
     image_asset_id: str | None = None,
+    reference_asset_ids: list[str] | None = None,
     loras: list[dict[str, Any]] | None = None,
+    sparse_attention: str | None = None,
+    int8_attention: bool | None = None,
+    recommended: bool = True,
     end_image_asset_id: str | None = None,
     loop: bool = False,
-    quality: str = "standard",
+    quality: str | None = None,
     temporal_upscale: bool = False,
     auto_duration: bool = False,
     audio_asset_id: str | None = None,
@@ -784,6 +834,10 @@ async def generate_video(
       - on a 16 GB card at most 6 s (145 frames) at 1920x832: 8 s with quality='dfr' took 20
         minutes once and hit the one-hour limit another time. Build longer scenes from parts.
 
+    MINIMAX H3: see the instructions (license!). Leave width, height, frames and fps empty: they then come from
+    the model (features.sizes[0], features.default_frames, 24 fps; frames on the 17k+5 grid, 124 = 5.2 s, up to
+    362). recommended=True (the default) adds the measured fastest settings the call leaves open.
+
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
     kandinsky5-lite-i2v require it. The asset ID comes from
@@ -797,14 +851,25 @@ async def generate_video(
             verbs, camera movement, last the sound; dialogue in quotation marks. Several
             shots: write each cut out in prose ("A hard cut transitions to a close-up of
             ..."), 2-4 shots; expand_prompt(target='video_multishot') writes that form.
-        width, height: Resolution. 832x480 is the cheapest Wan default. For
-            image-to-video, match the start image's aspect ratio where possible.
-        frames: Number of frames. 49 at 16 fps is just over 3 seconds.
-        fps: Frame rate of the output file.
+        width, height: Resolution. Empty = the model's preselection for the best result (LTX-2.5: 1920x1088;
+            MiniMax H3: its first size), otherwise 832x480, the cheapest Wan default. For image-to-video, match
+            the start image's aspect ratio where possible.
+        frames: Number of frames. Empty = the model's preselection (LTX-2.5: 121 = 5 s; MiniMax H3: 124),
+            otherwise 49 (at 16 fps just over 3 seconds).
+        fps: Frame rate of the output file. Empty = the model's own (LTX-2.5 and MiniMax H3: 24), otherwise 16.
         negative_prompt: Empty = sensible default. No effect with HunyuanVideo 1.5.
         model_id: Force a model; otherwise the active video model.
         seed: For reproducible results.
         image_asset_id: Asset ID of the start image for image-to-video.
+        reference_asset_ids: Only for models with features.references (minimax-h3-ref2va-int8: up to 9):
+            image assets that set a character, a face or a style, not the first frame; address them in the
+            prompt as <Picture 1>, <Picture 2> ... in this order.
+        sparse_attention: 'sol-attn' (or 'veda' where the model lists it) for models with
+            features.sparse_attention; empty = the model's recommendation.
+        int8_attention: INT8 attention for models with features.int8_attention; empty = the recommendation.
+        recommended: True (default) fills what the call leaves open with the model's measured recommendation
+            (features.recommended; its LoRAs only when no loras and no steps are given, and only downloaded
+            ones). False = exactly what the call says. The result's meta.recommended lists what was added.
         loras: LoRAs as [{"model_id": "...", "strength": 0.8}]. Only installed LoRAs whose
             family fits the model: list_models(kind="lora") lists them, and each image or
             video model names the LoRA families it takes in 'lora_bases'. Put the LoRA's
@@ -831,8 +896,9 @@ async def generate_video(
         quality: LTX-2.5: 'standard' or 'dfr' (Diffusion Fidelity Rendering: detail
             keyframes plus a detail IC-LoRA). Measured at 1080p: faces and fabric stay sharp over
             the whole clip (face 2.5 to 3 times the edge sharpness of 'standard' after 2 s), at
-            about three times the time (5 s: 786 instead of 241 s). Prefer it for final videos when
-            features.dfr is true, and say so. Not with an end image or a loop.
+            about three times the time (5 s: 786 instead of 241 s). Empty = 'dfr' when the model preselects
+            it and features.dfr is true, else 'standard'; tell the user the time. Not with an end image or a
+            loop (empty then means 'standard').
         temporal_upscale: LTX-2.5 with quality='dfr': double frame rate at the same
             duration (24 -> 48 fps).
         auto_duration: LTX-2.5: the model picks the length from the described action
@@ -874,10 +940,17 @@ async def generate_video(
         wait: False = return right away with pending=true and the job_id; job_status(job_id) gives progress
             and, once done, the same result as a blocking call.
     """
+    d = await _video_defaults(model_id)
+    if quality is None:
+        # DFR geht nicht mit Endbild oder Schleife; wer eines gibt, bekommt Standard
+        quality = "standard" if end_image_asset_id or loop else d["quality"]
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
-        "width": width, "height": height, "frames": frames, "fps": fps,
+        "width": width or d["width"], "height": height or d["height"], "frames": frames or d["frames"],
+        "fps": fps or d["fps"],
         "model_id": model_id, "seed": seed, "image_asset_id": image_asset_id,
+        "reference_asset_ids": reference_asset_ids or [], "sparse_attention": sparse_attention,
+        "int8_attention": int8_attention, "recommended": recommended,
         "loras": loras or [], "end_image_asset_id": end_image_asset_id, "loop": loop,
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,

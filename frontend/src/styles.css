@@ -200,8 +200,10 @@ kbd {
 }
 .card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
 .card figcaption { padding: 6px 8px; }
-.card.as-button { cursor: pointer; }
+.card.as-button { cursor: pointer; position: relative; }
 .card.as-button:hover { border-color: var(--accent-dim); }
+/* Ergebnis eines Modells mit harter Lizenzgrenze (output_badge): rote Marke oben links auf dem Bild */
+.card.as-button .output-badge { position: absolute; top: 6px; left: 6px; background: var(--panel-2); }
 
 .output { min-height: 300px; }
 
@@ -561,6 +563,9 @@ kbd {
   line-height: 1;
   cursor: help;
 }
+/* Haken „Ich habe eine Genehmigung erworben“ bei Modellen mit harter Lizenzgrenze */
+.license-confirm { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 10px; cursor: pointer; }
+.license-confirm input { margin: 0; }
 .warn-banner {
   margin: 0 0 12px;
   padding: 9px 12px;
@@ -819,7 +824,17 @@ kbd {
 .rec-lora .hint { margin: 2px 0 4px; }
 .rec-lora .row { align-items: center; gap: 10px; }
 .rec-lora a { color: var(--accent); }
-.rec-lora .tested { color: var(--text); }
+.rec-lora .tested, .hint.tested { color: var(--text); }
+/* Kurzer Tipp unter der Modellwahl, immer sichtbar: was am besten funktioniert */
+.model-tip {
+  margin: 6px 0 8px; padding: 6px 10px; font-size: 0.86em; line-height: 1.45;
+  border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0;
+}
+.model-tip strong { color: var(--accent); }
+/* Beschleuniger (MiniMax H3): Sparse Attention und INT8-Attention in einer Zeile */
+.accel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.accel-row select { width: auto; }
+.accel-row .check { margin: 0; }
 
 /* Kurze Erklaerung "Wozu sind LoRAs gut?" in der Modell-Liste */
 .lora-intro {
@@ -938,6 +953,8 @@ kbd {
 .st-bin-item { position: relative; }
 .st-bin-item .st-bin-del { position: absolute; top: 3px; right: 3px; background: rgba(0, 0, 0, .65); }
 .st-bin-flag { position: absolute; top: 3px; left: 4px; color: var(--accent); font-size: 10px; text-shadow: 0 0 3px #000; }
+/* Material, das nicht veröffentlicht werden darf (output_badge): vor dem Namen, damit es nie abgeschnitten wird */
+.st-bin-name .output-badge, .st-bin-label .output-badge { font-size: 10px; padding: 0 5px; margin-right: 5px; }
 .st-bin-filter { display: flex; gap: 2px; padding: 0 6px 6px; }
 .st-bin-filter .tab { padding: 3px 8px; font-size: 12px; }
 .st-bin-more { grid-column: 1 / -1; margin: 6px 4px 2px; justify-content: center; }

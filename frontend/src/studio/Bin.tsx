@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type DragEvent as RDragEvent, type MouseEvent as RMouseEvent } from 'react'
 import { api, fileUrl, type Asset, type AssetFolder } from '../api'
 import { FolderIcon } from '../components/FolderIcon'
+import { OutputBadge, useOutputBadges } from '../components/LicenseBadge'
 import { t } from '../i18n'
 import type { MenuItem } from './ContextMenu'
 import { ASSET_MIME } from './Timelines'
@@ -141,6 +142,8 @@ interface Props {
 export function Bin({ refreshKey, selectedId, usedIds, projectId, home, onOpen, onDeleted, menuItems, onMenu }: Props) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [folders, setFolders] = useState<AssetFolder[]>([])
+  // Material aus Modellen, deren Ergebnisse nicht veröffentlicht werden dürfen (output_badge): rote Marke
+  const badges = useOutputBadges()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('') // die Suche mit kurzer Pause nach dem Tippen
@@ -393,7 +396,7 @@ export function Bin({ refreshKey, selectedId, usedIds, projectId, home, onOpen, 
       return (
         <div key={a.id} {...common} className={`st-bin-item${sel}`}>
           <Thumb a={a} />
-          <span className="st-bin-label small">{assetLabel(a)}</span>
+          <span className="st-bin-label small"><OutputBadge model={badges[a.model_id]} />{assetLabel(a)}</span>
           {lossless && <span className="st-bin-flag" title={t('Verlustfreie Fassung vorhanden', 'Lossless copy available')}>◆</span>}
           {del}
         </div>
@@ -405,7 +408,7 @@ export function Bin({ refreshKey, selectedId, usedIds, projectId, home, onOpen, 
           <Thumb a={a} />
         </span>
         <span className="st-bin-text">
-          <span className="st-bin-name">{assetLabel(a)}</span>
+          <span className="st-bin-name"><OutputBadge model={badges[a.model_id]} />{assetLabel(a)}</span>
           <span className="st-bin-meta">
             {kind && KIND_ICON[kind]} {assetFacts(a).join(' · ')}
             {lossless && <span className="st-bin-mark" title={t('Verlustfreie Kopie (FFV1) für Schnitt und Export', 'Lossless copy (FFV1) for editing and export')}>◆</span>}

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type StudioProjectInfo } from '../api'
+import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
-import { Recommendations } from '../components/Recommendations'
+import { LicenseBadge, OutputBadge, licenseBlocked } from '../components/LicenseBadge'
+import { ModelTip, Recommendations } from '../components/Recommendations'
 import { Lightbox } from '../components/Lightbox'
 import { locale, t } from '../i18n'
 
@@ -230,6 +231,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [upsample, setUpsample] = useState(true)
   const [refIds, setRefIds] = useState<string[]>([])
   const [loraPicks, setLoraPicks] = useState<LoraRef[]>([])
+  // Beschleuniger für Videomodelle, die sie kennen (MiniMax H3); beim Wechsel aufs Modell mit dessen Empfehlung belegt
+  const [sparse, setSparse] = useState<SparseAttention | ''>('')
+  const [int8, setInt8] = useState(false)
   // "Prompt ausbauen": vorheriger Prompt zum Zurücknehmen, Laufzeit der letzten Runde
   const [expanding, setExpanding] = useState(false)
   const [promptBefore, setPromptBefore] = useState<string | null>(null)
@@ -378,7 +382,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // Bild-zu-Video: diese Modelle brauchen zwingend ein Startbild, Wan 2.2 TI2V
   // kann beides. Reine Text-zu-Video-Modelle bekommen die Auswahl gar nicht erst.
   const needsStart = mode === 'video' && I2V_WORKFLOWS.has(selected?.workflow ?? '')
-  const usesStart = needsStart || (mode === 'video' && OPTIONAL_START_WORKFLOWS.has(selected?.workflow ?? ''))
+  const usesStart = needsStart || (mode === 'video' && (OPTIONAL_START_WORKFLOWS.has(selected?.workflow ?? '')
+    || selected?.features?.start_image === 'optional'))
   const meshWorker = selected?.workflow ? health?.mesh_workers?.[selected.workflow] : undefined
 
   // LoRAs, die zum gewählten Modell passen (Basis in lora_bases). Die Auswahl gilt je Modell;
@@ -402,6 +407,10 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       setEndId('')
       setLoop(true)
     }
+    // Turbo-LoRAs (MiniMax H3) legen Schritte und Shift fest: immer nur eine
+    if (on && l.features?.turbo) {
+      setLoraPicks((list) => list.filter((p) => !models.find((m) => m.id === p.model_id)?.features?.turbo))
+    }
     toggleLora(l.id, strength)
   }
 
@@ -416,7 +425,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       setQuality('dfr')
     }
   }, [dfrReady, quality, loop, endId])
-  const videoSizes = isLtx25 && vfeat?.sizes?.length ? vfeat.sizes : VIDEO_SIZES
+  const videoSizes = vfeat?.sizes?.length ? vfeat.sizes : VIDEO_SIZES
+  // Andere Videomodelle mit festen Angaben im Katalog (features.fps, default_frames): Bildrate und Länge des Modells
+  // statt der Wan-Vorgaben, sobald es gewählt wird.
+  useEffect(() => {
+    if (isLtx25) return
+    if (vfeat?.fps) setFps(vfeat.fps)
+    if (vfeat?.default_frames) setFrames(vfeat.default_frames)
+  }, [isLtx25, vfeat?.fps, vfeat?.default_frames])
   // 8n+1 Frames, der nächste Wert zu ltxSeconds (wie workflows.ltx_frames_for_seconds: 5 s = 121).
   // Höchstens 481 Frames (API-Grenze): 20 s bei 24 fps, 19 s bei 25, 16 s bei 30.
   const ltxMaxSeconds = Math.min(vfeat?.max_seconds ?? 20, Math.floor(480 / ltxFps))
@@ -428,8 +444,44 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       && (m.features?.recommended_for ?? []).includes(selected?.family ?? '-')),
     [models, selected],
   )
+  // Vorwahl für das bestmögliche Ergebnis (features.recommended, gemessen oder laut Hersteller) beim Wechsel aufs
+  // Modell: Format (Bild, Video), Länge (Musik, Video), DFR bei LTX-2.5, bei MiniMax H3 Turbo-LoRA (wenn geladen),
+  // Sparse Attention und INT8-Attention. Danach gilt, was der Nutzer einstellt; Video-Aufträge schicken alles
+  // ausdrücklich mit (recommended: false). Der Server nimmt auf älteren Karten und AMD aus, was dort nicht läuft.
+  const recFor = selected && (mode === 'image' || mode === 'audio' || mode === 'video') ? `${mode}:${selected.id}` : ''
   useEffect(() => {
-    if (!videoSizes.some((s) => s.label === vidSize.label)) setVidSize(videoSizes[0])
+    if (!recFor || !selected) return
+    const rec = selected.features?.recommended
+    const [w, h] = rec?.size ?? [0, 0]
+    if (mode === 'image') {
+      const size = sizes.find((s) => s.w === w && s.h === h)
+      if (size) setImgSize(size)
+      return
+    }
+    if (mode === 'audio') {
+      if (rec?.seconds) setSeconds(rec.seconds)
+      return
+    }
+    const size = videoSizes.find((s) => s.w === w && s.h === h)
+    if (size) setVidSize(size)
+    if (rec?.seconds) setLtxSeconds(rec.seconds)
+    if (rec?.quality) setQuality(rec.quality === 'dfr' && dfrReady ? 'dfr' : 'standard')
+    setSparse(rec?.sparse_attention ?? '')
+    setInt8(!!rec?.int8_attention)
+    const picks = (rec?.loras ?? []).filter((r) => loraChoices.some((l) => l.id === r.model_id))
+    if (picks.length) {
+      setLoraPicks((list) => [
+        ...list.filter((p) => !models.find((m) => m.id === p.model_id)?.features?.turbo
+          && !picks.some((r) => r.model_id === p.model_id)),
+        ...picks,
+      ])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Wechsel des Modells
+  }, [recFor])
+  useEffect(() => {
+    if (videoSizes.some((s) => s.label === vidSize.label)) return
+    const [w, h] = vfeat?.recommended?.size ?? [0, 0]
+    setVidSize(videoSizes.find((s) => s.w === w && s.h === h) ?? videoSizes[0])
   }, [videoSizes, vidSize.label])
   useEffect(() => {
     if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
@@ -463,7 +515,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const canOutpaint = (canImg2img && feat?.mask !== false) || outpaintByRef
   const outpainting = mode === 'image' && useSource && canOutpaint && outpaintOn
     && pad.left + pad.top + pad.right + pad.bottom > 0
-  const maxRefs = feat?.references ?? 0
+  const maxRefs = (mode === 'image' ? feat?.references : vfeat?.references) ?? 0
+  // MiniMax H3 Referenz: Referenzbilder statt Startbild, mindestens eins (im Prompt <Picture 1> …)
+  const needsRefs = mode === 'video' && maxRefs > 0 && !usesStart
+  const videoRefs = mode === 'video'
+    ? refIds.filter((id) => sourceImages.some((a) => a.id === id)).slice(0, maxRefs) : []
   const sizes = useMemo(() => [...IMAGE_SIZES, ...(feat?.sizes ?? [])], [feat])
   const chips = useMemo(() => {
     if (!feat) return []
@@ -496,9 +552,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     return out
   }, [feat, negWorks])
 
-  // Ein modelleigenes Format gilt nach dem Wechsel nicht mehr -- zurück auf das erste.
+  // Ein modelleigenes Format gilt nach dem Wechsel nicht mehr -- zurück auf die Vorwahl des neuen Modells, sonst das
+  // erste. Läuft nach dem Vorwahl-Effekt oben und darf ihn nicht überschreiben (FLUX 3 1440² -> Qwen stand sonst auf 832 × 1216).
   useEffect(() => {
-    if (!sizes.some((s) => s.label === imgSize.label)) setImgSize(sizes[0])
+    if (sizes.some((s) => s.label === imgSize.label)) return
+    const [w, h] = feat?.recommended?.size ?? [0, 0]
+    setImgSize(sizes.find((s) => s.w === w && s.h === h) ?? sizes[0])
   }, [sizes, imgSize.label])
 
   const toggleRef = (id: string) =>
@@ -540,8 +599,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       const asset = await api.upload(file)
       setSourceImages((s) => [asset, ...s])
       setSourceId(asset.id)
-      // Bei FLUX 3 ist ein hochgeladenes Bild fast immer als Referenz gemeint.
-      if (mode === 'image' && maxRefs > 0) {
+      // Bei FLUX 3 und der Referenz-Fassung von MiniMax ist ein hochgeladenes Bild fast immer als Referenz gemeint.
+      if ((mode === 'image' || mode === 'video') && maxRefs > 0) {
         setRefIds((r) => (r.length < maxRefs ? [...r, asset.id] : r))
       }
     } catch (e) {
@@ -578,6 +637,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       ? !!sourceId
       : needsStart
         ? !!prompt.trim() && !!sourceId
+        : needsRefs
+        ? !!prompt.trim() && videoRefs.length > 0
         : mode === 'image' && useSource && (canImg2img || outpainting)
           ? !!prompt.trim() && !!sourceId
           : mode === 'image' && cnId
@@ -679,10 +740,11 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     }
   }
 
-  // Der Hinweis zum Prompt steht im leeren Feld selbst, nicht als Absatz darunter.
-  const promptHint = mode === 'image' ? feat?.prompt_hint || '' : (isLtx25 && vfeat?.prompt_hint) || HINT[mode]
+  // Der Hinweis zum Prompt steht im leeren Feld selbst, nicht als Absatz darunter. Videomodelle mit eigenem Hinweis
+  // (LTX-2.5, MiniMax H3) zeigen ihren statt des allgemeinen.
+  const promptHint = mode === 'image' ? feat?.prompt_hint || '' : vfeat?.prompt_hint || HINT[mode]
   const placeholder = [promptHint, `${t('z. B.', 'e.g.')} ${feat?.placeholder
-    || (isLtx25 && vfeat?.placeholder) || PLACEHOLDER[mode]}`]
+    || vfeat?.placeholder || PLACEHOLDER[mode]}`]
     .filter(Boolean).join('\n\n')
 
   const expandRow = () => (
@@ -859,7 +921,12 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           ...common, width: vidSize.w, height: vidSize.h,
           frames: isLtx25 ? ltxFrames : frames, fps: isLtx25 ? ltxFps : fps,
           image_asset_id: usesStart && !(isLtx25 && extendId) ? sourceId || null : null,
+          reference_asset_ids: videoRefs,
           loras: activeLoras,
+          sparse_attention: sparse && vfeat?.sparse_attention?.includes(sparse) ? sparse : null,
+          int8_attention: vfeat?.int8_attention ? int8 : null,
+          // Alles steht ausdrücklich da (die Empfehlung ist oben vorgewählt), der Server ergänzt nichts
+          recommended: false,
           master,
           ...(isLtx25 ? {
             loop: loop && !!sourceId && quality !== 'dfr' && !extendId,
@@ -967,6 +1034,80 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       <button className="btn small ghost full" onClick={() => fileInput.current?.click()}>
         {t('Bild hochladen', 'Upload image')}
       </button>
+    </>
+  )
+
+  // Referenzbilder: FLUX 3 und andere Bearbeitungsmodelle, Stilvorlage bei Krea 2, Figur und Gesicht bei der
+  // Referenz-Fassung von MiniMax H3 (Video)
+  const refPicker = () => (
+    <>
+      <h3>
+        {styleRefs ? t('Stil-Referenz', 'Style reference') : t('Referenzbilder', 'Reference images')}{' '}
+        <span className="muted small">
+          {t(`— ${refIds.length} von ${maxRefs}`, `— ${refIds.length} of ${maxRefs}`)}
+        </span>
+      </h3>
+      {sourceImages.length === 0 ? (
+        <p className="hint small">
+          {t(
+            'Noch keine Bilder da. Erst eines generieren oder hochladen.',
+            'No images yet. Generate or upload one first.',
+          )}
+        </p>
+      ) : (
+        <div className="source-grid">
+          {sourceImages.map((a) => {
+            const idx = refIds.indexOf(a.id)
+            return (
+              <div
+                key={a.id}
+                className={idx >= 0 ? 'source selected' : 'source'}
+                title={a.prompt || a.filename}
+              >
+                <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => toggleRef(a.id)} />
+                {idx >= 0 && <span className="ref-no">{idx + 1}</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      <p className="hint small">
+        {mode === 'video'
+          ? t(
+            'Mindestens eins, bis zu neun: Figur, Gesicht oder Stil. Im Prompt als <Picture 1>, <Picture 2> … in '
+              + 'der Reihenfolge der Nummern ansprechen und sagen, was jedes vorgibt („the man from <Picture 1>, with '
+              + 'exactly his face“). Die Szene entsteht aus dem Text, ohne Startbild.',
+            'At least one, up to nine: a character, a face or a style. Address them in the prompt as <Picture 1>, '
+              + '<Picture 2> … in the order of their numbers and say what each one sets (“the man from <Picture 1>, '
+              + 'with exactly his face”). The scene comes from the text, without a start image.',
+          )
+          : styleRefs
+          ? t(
+            'Optional, ein oder zwei Bilder: Krea übernimmt ihren Stil (Malweise, Farben, Licht), '
+              + 'nicht ihren Inhalt. Was zu sehen sein soll, beschreibt der Prompt.',
+            'Optional, one or two images: Krea takes over their style (technique, colors, light), '
+              + 'not their content. What should be in the picture is up to the prompt.',
+          )
+          : t(
+            'Optional. Im Prompt heißen sie „the first image“, „the second image“ … in der '
+              + 'Reihenfolge der Nummern. Mit einem Bild wird bearbeitet: sagen, was sich ändert '
+              + 'und was gleich bleibt. Mehrere kombinieren Figuren, Objekte und Stil.',
+            'Optional. In the prompt they are called “the first image”, “the second image” … '
+              + 'in the order of their numbers. With one image you edit it: say what changes '
+              + 'and what stays the same. Several images combine figures, objects and style.',
+          )}
+      </p>
+      <div className="row-between source-actions">
+        <button className="btn small ghost" onClick={() => fileInput.current?.click()}>
+          {t('Bild hochladen', 'Upload image')}
+        </button>
+        {moreSourcesButton}
+        {refIds.length > 0 && (
+          <button className="btn small ghost" onClick={() => setRefIds([])}>
+            {t('Auswahl leeren', 'Clear selection')}
+          </button>
+        )}
+      </div>
     </>
   )
 
@@ -1118,6 +1259,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           </>
         ) : (
           <>
+            {needsRefs && refPicker()}
             {usesStart && (
               <>
                 {sourcePicker(!needsStart)}
@@ -1285,13 +1427,16 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           {available.map((m) => (
             <option key={m.id} value={m.id}>
               {m.favorite ? '★ ' : ''}
+              {licenseBlocked(m) ? '⚠ ' : ''}
               {m.name}
             </option>
           ))}
         </select>
         {selected && <p className="hint small">{selected.best_for}</p>}
+        {selected?.features?.tested && <p className="hint small tested">{selected.features.tested}</p>}
+        <ModelTip mode={mode} model={selected} />
         {selected && (mode === 'image' || mode === 'video') && (
-          <div className="feature-chips"><ContentBadge model={selected} /></div>
+          <div className="feature-chips"><ContentBadge model={selected} /><LicenseBadge model={selected} /></div>
         )}
         {chips.length > 0 && (
           <div className="feature-chips">
@@ -1300,7 +1445,10 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             ))}
           </div>
         )}
-        {mode === 'image' && selected?.warning && (
+        {/* Harte Lizenzgrenze: roter Kasten, bis der Nutzer unter „Modelle“ eine Genehmigung bestätigt; danach keiner */}
+        {selected?.license_badge ? (
+          licenseBlocked(selected) && selected.warning && <p className="warn-banner">{selected.warning}</p>
+        ) : (mode === 'image' || (mode === 'video' && selected?.commercial_ok === false)) && selected?.warning && (
           <p className="hint small warn">{selected.warning}</p>
         )}
         {mode === 'image' && feat?.missing?.style_reference && (
@@ -1358,6 +1506,27 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             )}
           </details>
         )}
+        {mode === 'video' && ((vfeat?.sparse_attention?.length ?? 0) > 0 || vfeat?.int8_attention) && (
+          <div className="accel-row">
+            <span className="muted small">{t('Beschleuniger', 'Speed-up')}</span>
+            {(vfeat?.sparse_attention?.length ?? 0) > 0 && (
+              <select value={sparse} onChange={(e) => setSparse(e.target.value as SparseAttention | '')}
+                title={t('Sparse Attention lässt unwichtige Teile der Attention aus',
+                  'Sparse attention skips unimportant parts of the attention')}>
+                <option value="">{t('Sparse Attention aus', 'Sparse attention off')}</option>
+                {vfeat?.sparse_attention?.map((m) => (
+                  <option key={m} value={m}>{m === 'veda' ? t('Veda (springt evtl. am Ende)', 'Veda (may jump near the end)') : 'sol-attn'}</option>
+                ))}
+              </select>
+            )}
+            {vfeat?.int8_attention && (
+              <label className="check">
+                <input type="checkbox" checked={int8} onChange={(e) => setInt8(e.target.checked)} />
+                {t('INT8-Attention', 'INT8 attention')}
+              </label>
+            )}
+          </div>
+        )}
         {mode === 'video' && recLoras.length > 0 && (
           <details className="lora-picker rec-loras">
             <summary>
@@ -1397,7 +1566,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                     {` · ${t('Stärke', 'strength')} ${dec(l.features?.strength ?? 1, 1)}`}
                   </p>
                   {l.features?.tested && <p className="hint small tested">{l.features.tested}</p>}
-                  {l.warning && <p className="hint small warn">{l.warning}</p>}
+                  {l.warning && !(l.license_badge && l.license_confirmed) && <p className="hint small warn">{l.warning}</p>}
                   <div className="row">
                     {l.installed ? (
                       <button className={pick ? 'btn small primary' : 'btn small'}
@@ -1480,68 +1649,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
               </label>
             )}
 
-            {maxRefs > 0 && (
-              <>
-                <h3>
-                  {styleRefs ? t('Stil-Referenz', 'Style reference') : t('Referenzbilder', 'Reference images')}{' '}
-                  <span className="muted small">
-                    {t(`— ${refIds.length} von ${maxRefs}`, `— ${refIds.length} of ${maxRefs}`)}
-                  </span>
-                </h3>
-                {sourceImages.length === 0 ? (
-                  <p className="hint small">
-                    {t(
-                      'Noch keine Bilder da. Erst eines generieren oder hochladen.',
-                      'No images yet. Generate or upload one first.',
-                    )}
-                  </p>
-                ) : (
-                  <div className="source-grid">
-                    {sourceImages.map((a) => {
-                      const idx = refIds.indexOf(a.id)
-                      return (
-                        <div
-                          key={a.id}
-                          className={idx >= 0 ? 'source selected' : 'source'}
-                          title={a.prompt || a.filename}
-                        >
-                          <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => toggleRef(a.id)} />
-                          {idx >= 0 && <span className="ref-no">{idx + 1}</span>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <p className="hint small">
-                  {styleRefs
-                    ? t(
-                      'Optional, ein oder zwei Bilder: Krea übernimmt ihren Stil (Malweise, Farben, Licht), '
-                        + 'nicht ihren Inhalt. Was zu sehen sein soll, beschreibt der Prompt.',
-                      'Optional, one or two images: Krea takes over their style (technique, colors, light), '
-                        + 'not their content. What should be in the picture is up to the prompt.',
-                    )
-                    : t(
-                      'Optional. Im Prompt heißen sie „the first image“, „the second image“ … in der '
-                        + 'Reihenfolge der Nummern. Mit einem Bild wird bearbeitet: sagen, was sich ändert '
-                        + 'und was gleich bleibt. Mehrere kombinieren Figuren, Objekte und Stil.',
-                      'Optional. In the prompt they are called “the first image”, “the second image” … '
-                        + 'in the order of their numbers. With one image you edit it: say what changes '
-                        + 'and what stays the same. Several images combine figures, objects and style.',
-                    )}
-                </p>
-                <div className="row-between source-actions">
-                  <button className="btn small ghost" onClick={() => fileInput.current?.click()}>
-                    {t('Bild hochladen', 'Upload image')}
-                  </button>
-                  {moreSourcesButton}
-                  {refIds.length > 0 && (
-                    <button className="btn small ghost" onClick={() => setRefIds([])}>
-                      {t('Auswahl leeren', 'Clear selection')}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
+            {maxRefs > 0 && refPicker()}
 
             {canHires && (
               <label className="check">
@@ -1967,7 +2075,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 <div className="row">
                   <label>
                     Frames
-                    <input type="number" min={9} max={201} step={4} value={frames}
+                    <input type="number" min={vfeat?.min_frames ?? 9} max={vfeat?.max_frames ?? 201}
+                      step={vfeat?.frame_step ?? 4} value={frames}
                       onChange={(e) => setFrames(Number(e.target.value))} />
                   </label>
                   <label>
@@ -1978,8 +2087,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 </div>
                 <p className="hint small">
                   {t(
-                    `≈ ${est} s Clip · Frames werden auf 4n+1 gerundet`,
-                    `≈ ${est} s clip · frames are rounded to 4n+1`,
+                    `≈ ${est} s Clip · Frames werden auf ${vfeat?.frame_rule ?? '4n+1'} gerundet`,
+                    `≈ ${est} s clip · frames are rounded to ${vfeat?.frame_rule ?? '4n+1'}`,
                   )}
                 </p>
               </>
@@ -2216,6 +2325,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                   <AssetView asset={a} />
                 )}
                 <figcaption className="muted small">
+                  <OutputBadge model={available.find((m) => m.id === a.model_id)} />{' '}
                   {a.kind === 'mesh' ? a.model_id : `seed ${String(a.meta.seed ?? '?')} · ${a.model_id}`}
                   {' · '}
                   <a href={a.url} download>Download</a>
