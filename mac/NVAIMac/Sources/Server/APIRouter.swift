@@ -133,6 +133,8 @@ enum APIRouter {
                 return .json(["deleted": true, "id": c[0]])
             }
             if route("POST", "/api/upload") != nil { return try await upload(req) }
+            if parts.count >= 2, parts[0] == "api", parts[1] == "studio",
+               let response = try await StudioRoutes.handle(req, parts) { return response }
             if let c = route("GET", "/files/:name") { return try file(c[0]) }
             return .error(404, t("Nicht gefunden: \(req.method) \(req.path)", "Not found: \(req.method) \(req.path)"))
         } catch let error as APIError {
@@ -314,9 +316,21 @@ enum APIRouter {
               !part.data.isEmpty else {
             throw APIError(422, t("Das Feld file fehlt oder ist leer.", "The field file is missing or empty."))
         }
-        // Nur Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage.
-        _ = try ImageFiles.load(part.data)
-        let asset = try await AssetStore.shared.addUpload(data: part.data, originalName: part.filename ?? "upload.png")
+        let name = part.filename ?? "upload.png"
+        let ext = (name as NSString).pathExtension.lowercased()
+        guard AssetStore.mediaSuffixes.contains(ext) else {
+            // Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage.
+            _ = try ImageFiles.load(part.data)
+            return .json(try await AssetStore.shared.addUpload(data: part.data, originalName: name).json)
+        }
+        // Video und Ton fürs Studio: was AVFoundation nicht liest, fliegt wieder raus.
+        let asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
+        do {
+            StudioMediaCache.shared.set(asset.id, try await StudioMediaProbe.probe(url: AssetStore.shared.fileURL(asset.filename)))
+        } catch {
+            await AssetStore.shared.delete(asset.id)
+            throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+        }
         return .json(asset.json)
     }
 
@@ -326,7 +340,9 @@ enum APIRouter {
         let ext = url.pathExtension.lowercased()
         let type = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
                     "tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic", "wav": "audio/wav",
-                    "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "video/mp4"][ext] ?? "application/octet-stream"
+                    "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "video/mp4", "mov": "video/quicktime",
+                    "m4v": "video/x-m4v", "aac": "audio/aac", "aif": "audio/aiff", "aiff": "audio/aiff",
+                    "flac": "audio/flac", "caf": "audio/x-caf", "json": "application/json"][ext] ?? "application/octet-stream"
         return .file(data, contentType: type)
     }
 }

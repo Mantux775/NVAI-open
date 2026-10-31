@@ -74,6 +74,8 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $state.selectedTab) {
+                // Wie unter Windows: das Studio zuerst und beim Start offen
+                StudioView().tabItem { Text("Studio") }.tag("studio")
                 GenerateView().tabItem { Text(t("Generieren", "Generate")) }.tag("generate")
                 HistoryView().tabItem { Text(t("Verlauf", "History")) }.tag("history")
                 ModelsView().tabItem { Text(t("Modelle", "Models")) }.tag("models")

@@ -7,7 +7,7 @@ Prompt auf Bahnen für Bild, Sprecher, Musik und Klang, dazu Marker, die sagen, 
 schneidest du die echten Clips: schneiden, trimmen, überblenden, Lautstärke. Ist der Schnitt fertig,
 exportiert das Studio mit dem Video-Encoder deiner Grafikkarte. Es ist auf hochwertiges 1080p ausgelegt:
 Videoszenen entstehen in höchster Qualität, jedes KI-Video wird zusätzlich verlustfrei aufbewahrt, und
-komprimiert wird erst beim Export. Claude Code kann das alles genauso.
+komprimiert wird erst beim Export. Claude Code kann das alles genauso. Auch NVAI-open für Mac hat das Studio: [Auf dem Mac](#auf-dem-mac-nvai-open-für-mac-049).
 
 ![Das Studio: links das Material, in der Mitte der Monitor, rechts die Projekteinstellungen, unten Komposition und Schnitt](../images/studio-de.jpg)
 
@@ -315,12 +315,36 @@ Gemessen auf einer RTX 5060 Ti 16 GB:
 Ein langes Video nur aus erzeugten Clips dauert: 10 Minuten sind 120 Clips à 5 s, in 1080p rund 8 Stunden
 mit dem Standardweg und rund einen Tag mit DFR. Standbilder mit Musik und Sprecher sind viel günstiger.
 
+## Auf dem Mac (NVAI-open für Mac 0.4.9)
+
+NVAI-open für Mac hat das Studio ebenfalls, nativ auf Apple Silicon und wie unter Windows der erste Reiter:
+dieselbe Leiste, Material, Monitor und Eigenschaften, die zwei Zeitleisten mit den Werkzeugen links oben,
+dieselben Tasten und Rechtsklick-Menüs. Das Projektformat ist dasselbe: Ein als Paket exportiertes Projekt
+öffnet sich auf dem anderen Rechner mit seinem ganzen Material.
+
+![Das Studio in NVAI-open für Mac](../images/studio-mac-de.jpg)
+
+Was der Mac anders macht:
+
+- **Modelle:** Videoszenen rechnet LTX-Video 2B, ohne Ton. Größe und Länge passen sich dem Speicher des Macs
+  an: Mit 8 GB bleibt Breite × Höhe × Bilder bei höchstens 768 × 512 × 97, etwa 4 s in 768 × 512 oder 2 s in
+  1152 × 640. Standbilder kommen vom aktiven Bildmodell (FLUX.2 Klein, Z-Image Turbo oder Core ML), Musik und
+  Klänge von Stable Audio 3. Für die Sprecher-Bahn eine aufgenommene Tondatei auf die Szene ziehen.
+- **Eine Anschluss-Szene** beginnt mit dem letzten Bild der Szene davor. Die Latent-Kette braucht LTX-2.5 und
+  bleibt Windows vorbehalten.
+- **Export** mit dem Video-Encoder des Macs auf −14 LUFS: YouTube 1080p (H.264), YouTube 4K (H.265), Shorts,
+  Projektformat und ProRes 4444. Eine verlustfreie Kopie jedes Videos, AV1 und den MKV-Master gibt es nicht.
+- **REST:** dieselbe Schnittstelle wie unter Windows, `/api/studio/*` unter `http://127.0.0.1:8100`.
+
+Gemessen auf einem Mac mini M1 mit 8 GB: drei Testszenen (ein 2-Sekunden-Clip mit LTX-Video 2B in
+1152 × 640, ein Standbild mit Z-Image, 6 s Musik) brauchten zusammen 320 s, das Laden der Modelle
+eingerechnet; der Export des 9-Sekunden-Schnitts in 1080p 2 s.
+
 ## Was noch fehlt
 
 - Sprecherstimme (Sprachausgabe). Bis dahin eine aufgenommene Tondatei auf die Sprecher-Szene ziehen.
 - Titel, Untertitel, Schwenks (Bild verschieben; Zoomen gibt es seit 0.5.16), Wellenformen, Export als
   PNG-Einzelbilder, WAV oder SRT, Austausch mit anderen Schnittprogrammen (OpenTimelineIO).
-- Das Studio in NVAI-open für Mac.
 
 ## Making of
 

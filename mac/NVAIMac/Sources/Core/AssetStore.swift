@@ -53,12 +53,14 @@ actor AssetStore {
             // Einträge ohne Datei fallen weg (von Hand gelöscht).
             assets = list.filter { FileManager.default.fileExists(atPath: fileURL($0.filename).path) }
         }
+        AssetSnapshot.shared.set(assets)
     }
 
     private func save() {
         if let data = try? JSONEncoder().encode(assets) {
             try? data.write(to: indexURL, options: .atomic)
         }
+        AssetSnapshot.shared.set(assets)
         onChange?()
     }
 
@@ -134,11 +136,28 @@ actor AssetStore {
         return record
     }
 
+    /// Export des Studios (MP4 oder MOV) in die Ablage verschieben.
+    func addStudioExport(file: URL, ext: String, jobID: String, prompt: String,
+                         meta: [String: JSONValue]) throws -> AssetRecord {
+        load()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = Self.newID("ast")
+        let filename = "\(id.dropFirst(4))_nvai_studio.\(ext)"
+        try? FileManager.default.removeItem(at: fileURL(filename))
+        try FileManager.default.moveItem(at: file, to: fileURL(filename))
+        let record = AssetRecord(id: id, jobID: jobID, kind: "video", filename: filename, prompt: prompt,
+                                 modelID: "studio", meta: meta, createdAt: Date().timeIntervalSince1970)
+        assets.append(record)
+        save()
+        return record
+    }
+
     func addUpload(data: Data, originalName: String) throws -> AssetRecord {
         load()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let ext = (originalName as NSString).pathExtension.lowercased()
-        let suffix = ["png", "jpg", "jpeg", "webp", "tif", "tiff", "heic"].contains(ext) ? ext : "png"
+        // Bilder und, fürs Studio, Video und Ton (was AVFoundation liest); alles andere wurde als Bild geprüft
+        let suffix = (Self.imageSuffixes + Self.mediaSuffixes).contains(ext) ? ext : "png"
         let id = Self.newID("ast")
         let filename = "upl_\(id.dropFirst(4)).\(suffix)"
         try data.write(to: fileURL(filename), options: .atomic)
@@ -149,6 +168,55 @@ actor AssetStore {
         save()
         return record
     }
+
+    /// Ein Bild, das das Studio selbst ablegt (etwa das letzte Bild einer Szene als Startbild für den Anschluss):
+    /// als Upload mit Beschriftung, wie _last_frame_asset unter Windows.
+    func addStudioImage(png: Data, label: String, meta: [String: JSONValue]) throws -> AssetRecord {
+        load()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let id = Self.newID("ast")
+        let filename = "upl_\(id.dropFirst(4)).png"
+        try png.write(to: fileURL(filename), options: .atomic)
+        let record = AssetRecord(id: id, jobID: nil, kind: "upload", filename: filename, prompt: label, modelID: "",
+                                 meta: meta, createdAt: Date().timeIntervalSince1970)
+        assets.append(record)
+        save()
+        return record
+    }
+
+    /// Ordnet ein Asset einem Studio-Projekt zu (sein Ordner im Material, wie assets/Studio/<Projekt> unter Windows).
+    /// Was schon einem Projekt gehört, bleibt dort.
+    func tag(_ ids: [String], project: String) {
+        load()
+        var changed = false
+        for i in assets.indices where ids.contains(assets[i].id) && assets[i].meta["studio_project"] == nil {
+            assets[i].meta["studio_project"] = .string(project)
+            changed = true
+        }
+        if changed { save() }
+    }
+
+    /// Asset aus einem Studio-Paket unter seiner ID eintragen (Datei kopiert, freier Dateiname).
+    func importAsset(id: String, kind: String, file: URL, prompt: String, modelID: String, meta: [String: JSONValue],
+                     createdAt: Double) throws -> AssetRecord {
+        load()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var name = file.lastPathComponent
+        let stem = (name as NSString).deletingPathExtension, ext = (name as NSString).pathExtension
+        while FileManager.default.fileExists(atPath: fileURL(name).path) {
+            name = "\(stem)-\(Self.newID("imp").dropFirst(4).prefix(8)).\(ext)"
+        }
+        try FileManager.default.copyItem(at: file, to: fileURL(name))
+        let record = AssetRecord(id: id, jobID: nil, kind: kind, filename: name, prompt: prompt, modelID: modelID,
+                                 meta: meta, createdAt: createdAt)
+        assets.removeAll { $0.id == id }
+        assets.append(record)
+        save()
+        return record
+    }
+
+    static let imageSuffixes = ["png", "jpg", "jpeg", "webp", "tif", "tiff", "heic"]
+    static let mediaSuffixes = ["mp4", "mov", "m4v", "wav", "mp3", "m4a", "aac", "aif", "aiff", "flac", "caf"]
 
     @discardableResult
     func delete(_ id: String) -> Bool {
@@ -238,5 +306,27 @@ actor AssetStore {
 
     private static func writeIndex(_ list: [AssetRecord], to url: URL) {
         if let data = try? JSONEncoder().encode(list) { try? data.write(to: url, options: .atomic) }
+    }
+}
+
+
+/// Stand der Assets für Leser, die nicht auf den Actor warten können (Studio-Befehle laufen synchron, wie unter
+/// Windows). Nach jedem Laden und Speichern des AssetStore nachgeführt, also nie älter als die letzte Änderung.
+final class AssetSnapshot: @unchecked Sendable {
+    static let shared = AssetSnapshot()
+    private let lock = NSLock()
+    private var byID: [String: AssetRecord] = [:]
+
+    func set(_ list: [AssetRecord]) {
+        let map = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        lock.lock()
+        byID = map
+        lock.unlock()
+    }
+
+    func get(_ id: String) -> AssetRecord? {
+        lock.lock()
+        defer { lock.unlock() }
+        return byID[id]
     }
 }

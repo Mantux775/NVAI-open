@@ -22,6 +22,8 @@ struct JobRecord: Sendable, Identifiable {
     var audio: AudioJobRequest?
     /// Video (seit 0.4.8, `POST /api/generate/video`).
     var video: VideoJobRequest?
+    /// Export eines Studio-Projekts (Mac-Studio, seit dem Studio-Umbau 30.10.2026).
+    var studioExport: StudioExportRequest?
     var downloadModelID: String?
     /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
     var expandPrompt: String?
@@ -70,6 +72,8 @@ actor JobQueue {
     /// Laufender Download als eigene Task, damit „Abbrechen“ ihn mitten in der Datei stoppen kann.
     private var downloadTask: Task<Void, Error>?
     private var videoTask: Task<VideoEngine.Result, Error>?
+    /// Der laufende Studio-Export, damit „Abbrechen“ ihn stoppt.
+    private var exportTask: Task<StudioRender.Result, Error>?
     /// Die laufende FLUX.2-Rechnung. Das Paket prüft nach jedem Schritt auf Abbruch
     /// (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md), ein Abbrechen wirkt also innerhalb eines Schritts.
     private var imageTask: Task<CGImage, Error>?
@@ -131,6 +135,18 @@ actor JobQueue {
                             stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
                             lang: request.lang)
         job.video = request
+        add(job)
+        return job
+    }
+
+    /// Studio-Projekt exportieren; läuft in derselben Schlange wie das Erzeugen, damit auf 8 GB nie ein Export neben
+    /// einer Videoberechnung liegt.
+    func submitStudioExport(_ request: StudioExportRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "studio_export", status: "queued",
+                            stage: t("wartet", "queued"),
+                            params: .object(["project_id": .string(request.projectID), "preset": .string(request.preset)]),
+                            createdAt: Date().timeIntervalSince1970, lang: request.lang)
+        job.studioExport = request
         add(job)
         return job
     }
@@ -278,6 +294,7 @@ actor JobQueue {
             if job.request?.engine == "coreml" { CoreMLEngine.shared.requestCancel() }
             imageTask?.cancel()
             videoTask?.cancel()
+            exportTask?.cancel()
         default:
             break
         }
@@ -354,6 +371,9 @@ actor JobQueue {
             } else if let video = job.video {
                 AppLog.info("Job \(id) started: video, \(video.width)×\(video.height), \(video.frames) frames, \(video.fps) fps")
                 try await runVideo(id, video)
+            } else if let export = job.studioExport {
+                AppLog.info("Job \(id) started: studio export, \(export.projectID), \(export.preset)")
+                try await runStudioExport(id, export)
             } else if let restore = job.restore {
                 AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
                 try await runRestore(id, restore)
@@ -387,6 +407,33 @@ actor JobQueue {
             let peak = done.timings.map(\.peakMB).max().map { ", peak \(Int($0)) MB" } ?? ""
             AppLog.info("Job \(id) \(done.status) after \(String(format: "%.1f", Date().timeIntervalSince(started))) s\(peak)")
         }
+    }
+
+    private func runStudioExport(_ id: String, _ req: StudioExportRequest) async throws {
+        let store = StudioStore.shared
+        let p = try await store.load(req.projectID)
+        await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets([:], p))
+        let plan = try StudioRender.plan(p, preset: req.preset)
+        let temp = FileManager.default.temporaryDirectory.appendingPathComponent("\(id).\(plan.preset.ext)")
+        let task = Task { try await StudioRender.render(plan, to: temp) { [weak self] fraction, stage in
+            Task { await self?.update(id) { $0.progress = fraction; $0.stage = stage } }
+        } }
+        exportTask = task
+        defer {
+            exportTask = nil
+            try? FileManager.default.removeItem(at: temp)  // nach Erfolg schon in die Ablage verschoben, sonst Reste
+        }
+        let result = try await task.value
+        let meta: [String: JSONValue] = [
+            "studio_project": .string(p.id), "preset": .string(req.preset), "encoder": .string(result.encoder),
+            "render_seconds": .double((result.renderSeconds * 10).rounded() / 10), "frames": .int(result.frames),
+            "width": .int(plan.width), "height": .int(plan.height),
+            "loudness_before": .double((result.loudnessBefore * 10).rounded() / 10),
+            "gain_db": .double((result.gainDB * 10).rounded() / 10),
+            "peak_dbfs": .double((result.peakDBFS * 100).rounded() / 100)]
+        let asset = try await AssetStore.shared.addStudioExport(file: result.url, ext: plan.preset.ext, jobID: id,
+                                                                prompt: p.name, meta: meta)
+        update(id) { $0.assetIDs.append(asset.id) }
     }
 
     private func loadProgress(_ id: String, fraction: Double, message: String, isDownload: Bool) {

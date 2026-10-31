@@ -12,6 +12,8 @@ final class AppState: ObservableObject {
     @Published var images: [AssetRecord] = []
     /// Hochgeladene Bilder (Startbild, Maske, Referenz, altes Foto), neueste zuerst.
     @Published var uploads: [AssetRecord] = []
+    /// Video- und Ton-Uploads (Studio).
+    @Published var mediaUploads: [AssetRecord] = []
     /// Erzeugte Musik und Klänge (seit 0.4.7), neueste zuerst.
     @Published var audios: [AssetRecord] = []
     /// Stable Audio 3 geladen?
@@ -27,7 +29,7 @@ final class AppState: ObservableObject {
     @Published var assetsDirectory: URL = Settings.assetsDirectory
     @Published var port: UInt16 = Settings.serverPort
     /// Gewählter Reiter (generate, history, models, settings) – auch für `--snapshot --tab`.
-    @Published var selectedTab = "generate"
+    @Published var selectedTab = "studio"
     @Published var showSearch = false
     /// `--snapshot --tab search --search-kind video --search-query ltx`: so öffnet sich die Modellsuche.
     var searchPreset: (art: HuggingFace.Art, query: String)?
@@ -183,7 +185,10 @@ final class AppState: ObservableObject {
     func refresh() async {
         jobs = await JobQueue.shared.list(limit: 200)
         images = await AssetStore.shared.list(kind: "image", limit: 1000)
-        uploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
+        // Bild-Uploads für die Bildauswahl; Video und Ton aus dem Studio getrennt (sie sind keine Ausgangsbilder)
+        let allUploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
+        uploads = allUploads.filter { !AssetStore.mediaSuffixes.contains(($0.filename as NSString).pathExtension.lowercased()) }
+        mediaUploads = allUploads.filter { AssetStore.mediaSuffixes.contains(($0.filename as NSString).pathExtension.lowercased()) }
         audios = await AssetStore.shared.list(kind: "audio", limit: 500)
         videos = await AssetStore.shared.list(kind: "video", limit: 500)
         // Ein beendeter Download ändert den Modellstatus.

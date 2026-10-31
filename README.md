@@ -10,18 +10,19 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.17.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.17/NVAI-open-Setup-0.5.17.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.8.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.17/NVAI-open-0.4.8.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.4.9.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.17/NVAI-open-0.4.9.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-October 2026: NVAI-open 0.5.17 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.17)), the Mac stays at 0.4.8
+October 2026: NVAI-open 0.5.17 for Windows and 0.4.9 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.17))
 
 - **Two clips without a seam:** a chained scene in the Studio and "Extend" now carry the last second of the first clip into the next one (latent chain) instead of only its last frame, and dissolve over it: the motion goes on and the seam no longer stands out. For Claude: `generate_video(chain_asset_id=…)`
+- **The Studio on the Mac:** NVAI-open for Mac 0.4.9 has the Studio too, with LTX-Video 2B, the Mac's image models and Stable Audio 3. Projects move between Windows and Mac as packages. [On the Mac](docs/STUDIO.md#on-the-mac-nvai-open-for-mac-049)
 - 0.5.16 brought zoom in the Studio ([notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.16))
 
-Neu: **Zwei Clips ohne Naht**: Eine Anschluss-Szene im Studio und „Verlängern“ übernehmen jetzt die letzte Sekunde des ersten Clips statt nur seines letzten Bildes (Latent-Kette) und blenden darüber: Die Bewegung läuft weiter, die Naht fällt nicht mehr auf.
+Neu: **Zwei Clips ohne Naht**: Eine Anschluss-Szene im Studio und „Verlängern“ übernehmen jetzt die letzte Sekunde des ersten Clips statt nur seines letzten Bildes (Latent-Kette) und blenden darüber: Die Bewegung läuft weiter, die Naht fällt nicht mehr auf. **Das Studio auf dem Mac**: NVAI-open für Mac 0.4.9 hat das Studio auch, mit LTX-Video 2B, den Bildmodellen des Macs und Stable Audio 3; Projekte wandern als Paket zwischen Windows und Mac. [Auf dem Mac](docs/de/STUDIO.md#auf-dem-mac-nvai-open-für-mac-049)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
 
@@ -72,6 +73,7 @@ A full-screen editor for whole videos, the first tab when NVAI-open starts. At t
 - **High-quality 1080p:** video scenes run in the best LTX-2.5 quality, every AI video is also kept losslessly, and only the export compresses: measured 42.3 instead of 37.7 dB PSNR for a YouTube export.
 - **Export:** YouTube 1080p and 4K, Shorts, AV1, a lossless master (MKV) or ProRes 4444 for other editing software.
 - **Claude Code** builds the whole video for you over MCP while you watch it in the Studio.
+- **Mac:** NVAI-open for Mac 0.4.9 has the Studio too, with the same tools and project format ([On the Mac](docs/STUDIO.md#on-the-mac-nvai-open-for-mac-049)).
 
 Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
@@ -180,7 +182,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 
 ### Mac app, PhotoCraft add-on, iOS
 
-- **Mac:** a native app for Apple Silicon with FLUX.2 Klein and Z-Image Turbo: generate, refine, fill, reference images, expand prompts, LoRAs, restore old photos, music and sounds with Stable Audio 3 (30 seconds in about 13 seconds on an M1), and short videos with LTX-Video 2B from text or a start image (2 seconds at 768 × 512 in about 95 seconds on an M1 with 8 GB).
+- **Mac:** a native app for Apple Silicon with FLUX.2 Klein and Z-Image Turbo: generate, refine, fill, reference images, expand prompts, LoRAs, restore old photos, music and sounds with Stable Audio 3 (30 seconds in about 13 seconds on an M1), short videos with LTX-Video 2B from text or a start image (2 seconds at 768 × 512 in about 95 seconds on an M1 with 8 GB), and since 0.4.9 the Studio for whole videos from scenes.
 - **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
@@ -267,6 +269,7 @@ Ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Oben komponierst
 - **Hochwertiges 1080p:** Videoszenen laufen in der höchsten Qualität von LTX-2.5, jedes KI-Video wird zusätzlich verlustfrei aufbewahrt, und komprimiert wird erst beim Export: gemessen 42,3 statt 37,7 dB PSNR bei einem YouTube-Export.
 - **Export:** YouTube 1080p und 4K, Shorts, AV1, ein verlustfreier Master (MKV) oder ProRes 4444 für andere Schnittprogramme.
 - **Claude Code** baut dir das ganze Video per MCP, während du im Studio zusiehst.
+- **Mac:** NVAI-open für Mac 0.4.9 hat das Studio auch, mit denselben Werkzeugen und demselben Projektformat ([Auf dem Mac](docs/de/STUDIO.md#auf-dem-mac-nvai-open-für-mac-049)).
 
 Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
@@ -375,7 +378,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 
 ### Mac-App, PhotoCraft-Add-on, iOS
 
-- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein und Z-Image Turbo: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen, LoRAs, alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3 (30 Sekunden in rund 13 Sekunden auf einem M1) sowie kurze Videos mit LTX-Video 2B aus Text oder einem Startbild (2 Sekunden in 768 × 512 in rund 95 Sekunden auf einem M1 mit 8 GB).
+- **Mac:** eine native App für Apple Silicon mit FLUX.2 Klein und Z-Image Turbo: generieren, überarbeiten, füllen, Referenzbilder, Prompt ausbauen, LoRAs, alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3 (30 Sekunden in rund 13 Sekunden auf einem M1), kurze Videos mit LTX-Video 2B aus Text oder einem Startbild (2 Sekunden in 768 × 512 in rund 95 Sekunden auf einem M1 mit 8 GB) und seit 0.4.9 das Studio für ganze Videos aus Szenen.
 - **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 

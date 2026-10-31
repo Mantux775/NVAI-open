@@ -7,7 +7,7 @@ prompt on lanes for picture, voice, music and sound, and markers that say what g
 bottom you edit the real clips: cut, trim, dissolve, set the volume. When the edit is done, the Studio
 exports with the video encoder of your graphics card. It aims at high-quality 1080p: video scenes are
 generated in the best quality, every AI video is also kept losslessly, and only the export compresses.
-Claude Code can do all of it as well.
+Claude Code can do all of it as well. NVAI-open for Mac has the Studio too: [On the Mac](#on-the-mac-nvai-open-for-mac-049).
 
 ![The Studio: media on the left, the monitor in the middle, the project settings on the right, the composition and the edit below](images/studio.jpg)
 
@@ -310,12 +310,36 @@ A long video made only of generated clips takes long: 10 minutes are 120 clips o
 8 hours with the standard path and about a day with DFR. Still images with music and voice are much
 cheaper.
 
+## On the Mac (NVAI-open for Mac 0.4.9)
+
+NVAI-open for Mac has the Studio too, natively on Apple Silicon and the first tab like on Windows: the same
+toolbar, media, monitor and properties, the two timelines with the tools at the top left, the same keys and
+right-click menus. The project format is the same, so a project exported as a package opens on the other
+computer with all its media.
+
+![The Studio in NVAI-open for Mac](images/studio-mac.jpg)
+
+What the Mac does differently:
+
+- **Models:** video scenes run with LTX-Video 2B, without sound. Size and length are fitted to the Mac's
+  memory: on 8 GB, width × height × frames stays within 768 × 512 × 97, for example 4 s at 768 × 512 or 2 s at
+  1152 × 640. Still images come from the active image model (FLUX.2 Klein, Z-Image Turbo or Core ML), music
+  and sounds from Stable Audio 3. For the voice lane, drag a recorded audio file onto the scene.
+- **A chained scene** starts from the last frame of the scene before it. The latent chain needs LTX-2.5 and
+  stays on Windows.
+- **Export** with the Mac's own video encoder at −14 LUFS: YouTube 1080p (H.264), YouTube 4K (H.265), Shorts,
+  project format and ProRes 4444. There is no lossless copy of every video, no AV1 and no MKV master.
+- **REST:** the same interface as on Windows, `/api/studio/*` at `http://127.0.0.1:8100`.
+
+Measured on a Mac mini M1 with 8 GB: three test scenes (a 2-second LTX-Video 2B clip at 1152 × 640, a
+Z-Image still image, 6 s of music) took 320 s together, loading the models included; exporting the 9-second
+edit at 1080p took 2 s.
+
 ## Not there yet
 
 - Voice (text-to-speech). Until then, drag a recorded audio file onto the voice scene.
 - Titles, subtitles, panning (moving the picture, zoom exists since 0.5.16), waveforms, export as PNG frames,
   WAV or SRT, exchange with other editors (OpenTimelineIO).
-- The Studio in NVAI-open for Mac.
 
 ## Making of
 

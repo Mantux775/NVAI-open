@@ -1132,6 +1132,12 @@ points, speed, gain and transitions; tracks can be added, hidden and muted. The 
 same commands as the MCP tools, so the user sees every change live and can undo it. User guide with
 screenshots: [STUDIO.md](STUDIO.md).
 
+NVAI-open for Mac (0.4.9 and later) has the same Studio with the same REST interface (`/api/studio/*` on
+`http://127.0.0.1:8100`) and the same project and package format; the MCP tools ship with the Windows version.
+On the Mac, video scenes use LTX-Video 2B without sound, a chained scene starts from the last frame (no latent
+chain), and the export offers YouTube 1080p/4K, Shorts, project format and ProRes 4444
+([On the Mac](STUDIO.md#on-the-mac-nvai-open-for-mac-049)).
+
 | Tool | Purpose |
 |---|---|
 | `studio_projects` | Projects, newest first |

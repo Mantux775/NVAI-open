@@ -150,6 +150,11 @@ NVAI-open for Mac: Getting Started
    "Generate" > LoRAs and put its trigger word into the prompt.
 7. Music and sounds: under "Models", download Stable Audio 3 Medium (3.8 GB), then "Generate" >
    "Music and sounds". 30 seconds take about 13 seconds on an M1.
+8. Video: under "Models", download LTX-Video 2B (about 9 GB), then "Generate" > "Video", from text or a
+   start image, without sound. 2 seconds at 768 x 512 take about 95 seconds on an M1 with 8 GB.
+9. Studio (the first tab): whole videos from scenes. Compose scenes with a prompt at the top (double-click
+   a lane), "Generate scenes" makes the clips, images and music, "Conform" puts them into the edit below,
+   where you cut, add transitions and export (YouTube, Shorts, ProRes). Projects open on Windows too.
 
 Language: follows the system; switch under Settings > Language (the menu bar follows after a restart).
 
@@ -163,9 +168,10 @@ Feedback
   "Report on GitHub". NVAI-open saves an anonymized report (no names, no prompts, no images)
   and opens a prefilled issue; drag the saved file into it.
 
-Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Qwen3.5 4B (Alibaba, Apache-2.0),
-SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community License: commercial use
-below US$1M annual revenue). NVAI-open itself: MIT License.
+Models: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Z-Image Turbo (Alibaba, Apache-2.0), Qwen3.5 4B
+(Alibaba, Apache-2.0), SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community
+License: commercial use below US$1M annual revenue), LTX-Video 2B (Lightricks, LTX-Video Open Weights
+License: free below US$10M annual revenue, mark distributed videos as AI-generated). NVAI-open itself: MIT License.
 Third-party components: see "Third-Party Notices.txt" or NVAI-open > Licenses.
 TXT
 cat > "$OUT/dmg/Erste Schritte.txt" <<'TXT'
@@ -188,6 +194,11 @@ NVAI-open für Mac: Erste Schritte
    LoRAs anhaken und das Auslösewort in den Prompt schreiben.
 7. Musik und Klänge: unter „Modelle“ Stable Audio 3 Medium laden (3,8 GB), dann „Generieren“ >
    „Musik und Klänge“. 30 Sekunden dauern auf einem M1 rund 13 Sekunden.
+8. Video: unter „Modelle“ LTX-Video 2B laden (rund 9 GB), dann „Generieren“ > „Video“, aus Text oder einem
+   Startbild, ohne Ton. 2 Sekunden in 768 x 512 dauern auf einem M1 mit 8 GB rund 95 Sekunden.
+9. Studio (der erste Reiter): ganze Videos aus Szenen. Oben Szenen mit Prompt anlegen (Doppelklick auf eine
+   Bahn), „Szenen erzeugen“ macht Clips, Bilder und Musik, „Übernehmen“ legt sie in den Schnitt darunter,
+   dort schneiden, Übergänge setzen und exportieren (YouTube, Shorts, ProRes). Projekte öffnen sich auch unter Windows.
 
 Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menüleiste folgt nach einem Neustart).
 
@@ -201,9 +212,10 @@ Rückmeldung
   „Auf GitHub melden“ klicken. NVAI-open speichert einen anonymisierten Bericht (keine Namen,
   keine Prompts, keine Bilder) und öffnet ein vorausgefülltes Issue; die Datei dort hineinziehen.
 
-Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Qwen3.5 4B (Alibaba, Apache-2.0),
-SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community License: kommerziell bis
-1 Mio. US-$ Jahresumsatz). NVAI-open selbst: MIT-Lizenz.
+Modelle: FLUX.2 Klein 4B (Black Forest Labs, Apache-2.0), Z-Image Turbo (Alibaba, Apache-2.0), Qwen3.5 4B
+(Alibaba, Apache-2.0), SeedVR2 3B (ByteDance, Apache-2.0), Stable Audio 3 Medium (Stability AI Community
+License: kommerziell bis 1 Mio. US-$ Jahresumsatz), LTX-Video 2B (Lightricks, LTX-Video Open Weights License:
+kostenlos unter 10 Mio. US-$ Jahresumsatz, Weitergegebenes als KI-erzeugt kennzeichnen). NVAI-open selbst: MIT-Lizenz.
 Komponenten von Dritten: siehe „Third-Party Notices.txt“ oder NVAI-open > Lizenzen.
 TXT
 cp "$ROOT/Resources/Third-Party-Notices.txt" "$OUT/dmg/Third-Party Notices.txt"

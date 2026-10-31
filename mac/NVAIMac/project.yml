@@ -70,8 +70,8 @@ targets:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: io.github.mantux775.nvai.mac
-        MARKETING_VERSION: "0.4.8"
-        CURRENT_PROJECT_VERSION: "17"
+        MARKETING_VERSION: "0.4.9"
+        CURRENT_PROJECT_VERSION: "18"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

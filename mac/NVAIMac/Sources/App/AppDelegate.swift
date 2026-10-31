@@ -29,7 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Startoptionen für Tests ohne Bildschirm (wie bei der PhotoCraft-App):
 ///
-///     NVAI-open --snapshot <png> [--tab generate|restore|audio|video|history|models|search|settings] [--report <md>] [--quit]
+///     NVAI-open --snapshot <png> [--tab studio|generate|restore|audio|video|history|models|search|settings] [--report <md>] [--quit]
+///               [--studio-select <id>]   (im Studio: cl_ Clip, sc_ Szene, mk_ Marker, ast_ Material als Quelle)
+///     Optionen der Form „-schlüssel wert“ (etwa -serverPort) verhindern unter macOS 27 das Fenster: vorher per
+///     `defaults write` setzen.
 ///     NVAI-open --restore-kind <ordner> --kind-out <json> [--quit]
 ///     NVAI-open --sharpen <bild> --sharpen-out <png> [--sharpen-scale 2] [--quit]
 ///     NVAI-open --audio-test <prompt> --audio-out <wav> [--audio-seconds 10] [--quit]
@@ -120,8 +123,18 @@ enum LaunchOptions {
             if tab == "audio" { AppState.shared.showAudio = true }
             if tab == "video" { AppState.shared.showVideo = true }
             if tab == "player" { AppState.shared.snapshotPlayVideo = AppState.shared.videos.first }
+            if tab == "studio", let pick = value("--studio-select") {
+                // Studio erst laden lassen, dann auswählen (Prüfstand für Eigenschaften und Quellansicht)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                StudioModel.shared.snapshotSelect(pick)
+            }
+            if tab == "studio", args.contains("--studio-scrub-test") { await scrubTest() }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
-            try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : tab == "player" ? 4_000_000_000 : 2_500_000_000)
+            try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : tab == "player" || tab == "studio" ? 4_000_000_000 : 2_500_000_000)
+            // Das Fenster kann länger brauchen (Studio lädt Projekt und Monitorbild): bis zu 10 s auf ein sichtbares warten
+            for _ in 0..<20 where !NSApp.windows.contains(where: { $0.isVisible && $0.frame.width > 400 }) {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
             write(snapshot, sheet: tab == "search" || tab == "player")
         }
         if quit {
@@ -132,6 +145,31 @@ enum LaunchOptions {
             NSApp.terminate(nil)
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { exit(0) }
         }
+    }
+
+    /// Prüfstand für den Monitor des Studios (Absturz beim Ziehen des Abspielkopfs, 31.10.): 300 Sprünge im Abstand
+    /// von 5 ms wie beim Ziehen, dazwischen Zurücksetzen des Renderers und kurzes Abspielen.
+    private static func scrubTest() async {
+        try? await Task.sleep(nanoseconds: 2_500_000_000)
+        let model = StudioModel.shared
+        guard let p = model.project, p.editDuration > 0 else {
+            AppLog.error("Scrub test: no project with clips")
+            return
+        }
+        let t0 = Date()
+        for i in 0..<300 {
+            model.seek(Int(Double(p.editDuration) * Double((i * 37) % 300) / 300))
+            if i % 50 == 25 { model.preview.invalidate() }
+            if i % 100 == 60 {
+                model.togglePlay()
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                model.togglePlay()
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        AppLog.info(String(format: "Scrub test: 300 seeks in %.1f s, no crash, frame %@", Date().timeIntervalSince(t0),
+                           model.preview.image.map { "\($0.width)×\($0.height)" } ?? "none"))
     }
 
     /// Prüfstand für „Automatisch“: alle Fotos eines Ordners, das Modell bleibt dafür geladen.
@@ -250,7 +288,8 @@ enum LaunchOptions {
     private static func write(_ path: String, sheet: Bool) {
         guard let window = NSApp.windows.first(where: { $0.isVisible && $0.frame.width > 400 && $0.sheetParent == nil })
         else {
-            AppLog.error("Snapshot: no window found")
+            let list = NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) \(Int($0.frame.width))×\(Int($0.frame.height))" }
+            AppLog.error("Snapshot: no window found (\(list.joined(separator: "; ")))")
             return
         }
         let target = sheet ? (window.attachedSheet ?? window) : window
