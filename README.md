@@ -10,21 +10,21 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.20.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.20/NVAI-open-Setup-0.5.20.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.1.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.19/NVAI-open-0.5.1.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.20/NVAI-open-0.5.2.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.20 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.20))
+November 2026: NVAI-open 0.5.20 for Windows and 0.5.2 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.20))
 
-- **A big bug hunt:** the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, and phone photos are no longer restored sideways. The documentation is shorter and sorted by topic.
+- **A big bug hunt:** the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, phone photos are no longer restored sideways, and the Studio on the Mac no longer loses takes. The documentation is shorter and sorted by topic.
 - **Studio on a notebook** (since 0.5.19): progress and "✕ Cancel" next to "Conform", properties you can drag wider, fits a 14-inch screen.
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.20:
+Neu in 0.5.20 (Mac 0.5.2):
 
-- **Große Fehlersuche:** Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, und Handyfotos werden nicht mehr quer restauriert. Die Dokumentation ist kürzer und nach Themen geordnet.
+- **Große Fehlersuche:** Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, Handyfotos werden nicht mehr quer restauriert, und das Studio auf dem Mac verliert keine Takes mehr. Die Dokumentation ist kürzer und nach Themen geordnet.
 - **Studio auf dem Notebook** (seit 0.5.19): Fortschritt und „✕ Abbrechen“ neben „Übernehmen“, Eigenschaften breiter ziehbar, passt auf einen 14-Zoll-Bildschirm.
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
