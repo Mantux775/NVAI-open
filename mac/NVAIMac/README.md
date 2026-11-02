@@ -23,6 +23,7 @@ request's `Accept-Language` (`de` → German, otherwise English).
 | Video | MLX (own port `ltxv-swift`) | LTX-Video 2B 0.9.8 distilled from text or a start image; LTX-Video 13B | 2B from 8 GB, 13B from 16 GB |
 | | MLX (`ltx-video-swift-mlx`, local copy) | LTX-2.3 and LTX-2.5 with sound | from 32 / 64 GB, macOS 26.3 |
 | Sound | MLX (`stable-audio-3-swift`, local copy) | Stable Audio 3 Medium: music and sounds | from 8 GB |
+| Speech | MLX (`qwen3-tts-swift`, local copy of the Qwen3-TTS part of mlx-audio-swift) | Qwen3-TTS: VoiceDesign 1.7B 4-bit (a voice from a description), Base 0.6B 8-bit (a voice from a recording), 10 languages | from 8 GB |
 | Photos | MLX (`seedvr2-mlx-swift`, local copy) and FLUX.2 Klein | restore, colorize, sharpen with SeedVR2 3B; "Automatic" asks Qwen3.5 4B | from 8 GB |
 
 The local copies under `Packages/` say in their `NVAI-OPEN-CHANGES.md` what was changed (for example a cancellation
@@ -30,14 +31,16 @@ check after every FLUX.2 step).
 
 Measured on a Mac mini M1 with 8 GB: FLUX.2 Klein 4-bit 512 × 512 in 40.5 s (peak 4.4 GB, bit-identical to the
 package CLI), 1184 × 880 in 109 s; LTX-Video 2B 768 × 512 × 97 frames in 174 s (peak 6.2 GB); 30 s of music in about
-13 s. The 13B and LTX-2 models are recommended by memory from their authors' figures, not measured.
+13 s; a described voice in 0.8 times real time (peak 3.3 GB). The 13B and LTX-2 models are recommended by memory
+from their authors' figures, not measured.
 
 ## Studio
 
 Same project format, commands and REST routes as on Windows (`Sources/Studio/`, `Sources/UI/Studio/`,
 `Sources/Server/StudioRoutes.swift`): two timelines, generate with progress and cancel (`POST …/cancel`, feature
 `studio_cancel`), conform, cut, export with AVFoundation at −14 LUFS. A chained scene starts from the last frame; the
-latent chain (last second carried over) stays on Windows.
+latent chain (last second carried over) stays on Windows. Voice scenes speak with Qwen3-TTS like on Windows
+(`params.voice`, `voice_from`, `voice_asset_id`, `voice_text`, `language`); a voice scene takes the length of its take.
 
 ## Other features
 

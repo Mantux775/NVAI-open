@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 
-export type RecommendationMode = 'image' | 'audio' | 'video' | '3d' | 'restore' | 'vhs'
+export type RecommendationMode = 'image' | 'audio' | 'speech' | 'video' | '3d' | 'restore' | 'vhs'
 
 // Empfohlene Einstellungen je Reiter (seit 0.5.11, Nutzerwunsch): nur Gemessenes, Zahlen von einer RTX 5060 Ti.
 // Quelle und Belege: CLAUDE.md bzw. docs/CLAUDE_CODE.md ("Recommended settings at a glance") -- beide
@@ -80,6 +80,35 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'Jahresumsatz, Krea 2 unter 1 Mio. US-$, jedes Bild vor dem Veröffentlichen prüfen.',
         'Qwen-Image-2512 and MOSS-Image are free (Apache-2.0). FLUX 3 commercially only below US$5M annual revenue, '
           + 'Krea 2 below US$1M; review every image before publishing.',
+      ),
+    },
+  ],
+  speech: [
+    {
+      head: t('Stimme beschreiben: Qwen3-TTS', 'Describe the voice: Qwen3-TTS'),
+      text: t(
+        'Ein Satz mit Geschlecht, Alter, Tonlage, Tempo und Stimmung („eine ruhige, tiefe Männerstimme, etwa fünfzig, '
+          + 'warm und leicht rau“). Gemessen: 5,8 s deutsche Sprache in 2,3 s, Whisper erkannte jedes Wort.',
+        'One sentence with gender, age, pitch, pace and mood (“a calm, deep male voice, about fifty, warm and slightly '
+          + 'rough”). Measured: 5.8 s of German speech in 2.3 s, Whisper recognized every word.',
+      ),
+    },
+    {
+      head: t('Eine Stimme für viele Sätze', 'One voice for many sentences'),
+      text: t(
+        'Jeder Seed klingt anders. Die beste Probe als Aufnahme wählen, mit ihrem Text; dann klingen alle weiteren Sätze '
+          + 'gleich. Im Studio heißt das „Gleiche Stimme wie“.',
+        'Every seed sounds different. Choose the best take as the recording, with its text; then all further '
+          + 'sentences sound the same. In the Studio this is “Same voice as”.',
+      ),
+    },
+    {
+      head: t('Lizenz', 'License'),
+      text: t(
+        'Apache-2.0, kommerziell ohne Umsatzgrenze. Stimmen nur aus Aufnahmen übernehmen, deren Sprecher zugestimmt '
+          + 'haben.',
+        'Apache-2.0, commercial use without a revenue cap. Only take voices over from recordings whose speakers '
+          + 'agreed.',
       ),
     },
   ],
@@ -588,6 +617,9 @@ const TIP_BY_FAMILY: Record<string, string> = {
       + '„BPM: 100.“',
     'Preselected: 60 s (about 10 s to render). Music without vocals: one sentence with genre, instruments and mood, then '
       + '“BPM: 100.”'),
+  qwen3_tts: t(
+    'Stimme in einem Satz beschreiben. Für dieselbe Stimme über viele Sätze eine gelungene Probe als Aufnahme wählen.',
+    'Describe the voice in one sentence. For the same voice over many sentences, choose a good take as the recording.'),
   triposg: t(
     'Freigestelltes Objekt ohne Boden und Schatten. Nur Geometrie (rund 60 s); vor dem Einsatz im Spiel retopologisieren.',
     'Cut-out object without floor and shadow. Geometry only (about 60 s); retopologize before using it in a game.'),
@@ -603,6 +635,8 @@ const TIP_BY_MODE: Partial<Record<RecommendationMode, string>> = {
     'Erste Wahl LTX-2.5: Bild und Ton in einem Durchgang, 5 s in rund 1,5 min.',
     'First choice LTX-2.5: picture and sound in one pass, 5 s in about 1.5 min.'),
   audio: t('Effekte mit Stable Audio Open, Musik mit Stable Audio 3.', 'Effects with Stable Audio Open, music with Stable Audio 3.'),
+  speech: t('Sprecherstimme mit Qwen3-TTS: Stimme beschreiben oder aus einer Aufnahme übernehmen.',
+    'Narrator voice with Qwen3-TTS: describe the voice or take it over from a recording.'),
   '3d': t(
     'Erst ein freigestelltes Bild ohne Boden und Schatten, dann das Mesh.',
     'First a cut-out image without floor and shadow, then the mesh.'),

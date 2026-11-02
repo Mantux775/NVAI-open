@@ -25,6 +25,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'fav', label: t('★ Favoriten', '★ Favorites') },
   { id: 'image', label: t('Bild', 'Image') },
   { id: 'audio', label: 'Audio' },
+  { id: 'speech', label: t('Sprache', 'Speech') },
   { id: 'video', label: 'Video' },
   { id: '3d', label: '3D' },
   { id: 'controlnet', label: 'ControlNet' },

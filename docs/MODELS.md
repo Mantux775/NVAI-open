@@ -41,6 +41,7 @@ with the same prompts and seeds: [MODEL_COMPARISON.md](MODEL_COMPARISON.md).
 | Only a few words of prompt | first **✨ Expand prompt**, then any model |
 | Video with sound | **LTX-2.5** |
 | Instrumental music / sound effects | **Stable Audio 3** / **Stable Audio Open** |
+| Narrator voice, dialogue lines | **Qwen3-TTS** |
 | 3D model from an image | **TripoSG** (shape) or **TRELLIS.2** (with textures) |
 | Restore or colorize an old photo | the **Restore** tab: FLUX 3 and SeedVR2 |
 | Historically accurate vehicles (Panzer IV, Kübelwagen …) | **none**, see [Known pitfalls](#known-pitfalls) |
@@ -389,6 +390,42 @@ kept a real person recognizable).
 
 ---
 
+## Speech
+
+| Model | Use for | Measured | License |
+|---|---|---|---|
+| Qwen3-TTS 1.7B (`qwen3-tts-1.7b`) | narrator voice and dialogue lines in 10 languages, including English and German | 5.8 s of speech in 2.3 s; a voice taken over in 2 s | Apache-2.0 |
+
+The voice comes from a description or from a recording:
+
+- **Describe it** in one sentence: gender, age, pitch, pace and mood, for example "a calm, deep male voice, about fifty,
+  warm and slightly rough". The same description sounds different with every seed: in our test the deep male voice
+  came out between 102 and 175 Hz. Listen to a few takes and keep the best one.
+- **Take it over** from a recording (audio, video or upload, the first 20 s; three seconds are enough). With the exact
+  words of the recording the model also copies the way of speaking, without them only the sound of the voice. Lines
+  taken over from one reference stayed at a similarity of 0.99 to it; a different seed of the same description reached
+  0.97–0.98 and a young female voice 0.96. Only take voices over from recordings whose speakers agreed.
+- **One speaker for many lines:** make the first line from a description, then use it as the recording for all others.
+  In the Studio this is "Same voice as" on the voice lane.
+- Whisper understood every word of our German and English test lines (0 errors in 166 words). Punctuation sets the
+  pauses; a voice taken over from a German line can also speak English. No singing.
+- The first job of a session takes 20 to 65 s longer (loading), later ones only the time above. Qwen3-TTS runs in its own
+  process with faster-qwen3-tts (MIT) and needs about 5 GB of graphics memory.
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/generate/speech -H "Content-Type: application/json" -d '{
+  "text": "Welcome to the old mill. Grain used to be ground here, today it tells stories.",
+  "voice": "a calm, deep male voice, about fifty, warm and slightly rough", "language": "en", "seed": 7}'
+# same voice for the next line: the asset id and the exact text of the first line
+curl -X POST http://127.0.0.1:8100/api/generate/speech -H "Content-Type: application/json" -d '{
+  "text": "Tomorrow morning we go on to the cellar.", "voice_asset_id": "<asset id of the first line>",
+  "voice_text": "Welcome to the old mill. Grain used to be ground here, today it tells stories.", "language": "en"}'
+```
+
+From Claude Code the same works with the MCP tool `generate_speech`.
+
+---
+
 ## 3D
 
 Two steps: first an image of the object, then `image_to_3d` (or `text_to_3d`, which does both). What is in the image
@@ -457,6 +494,7 @@ NVAI-open for Mac runs its own native models on Apple Silicon (MLX). Measured on
 | Z-Image Turbo | photographic images and lettering, 8 steps | 512² in 101 s, 1 MP in 399 s |
 | LTX-Video 2B | video from text or a start image, 24 fps, no sound | 4 s at 768 × 512 in 174 s |
 | Stable Audio 3 Medium | music and sounds up to 60 s on 8 GB | 30 s in 13 s |
+| Qwen3-TTS (VoiceDesign 1.7B 4-bit, Base 0.6B 8-bit), since Mac 0.5.3 | narrator voice from a description or a recording | 0.8 times real time, at most 3.3 GB |
 | Qwen3.5 4B, SeedVR2 3B | "Automatic" when restoring; sharpening | Automatic about 20 s; 1024 × 738 → 2× in 9 min |
 
 FLUX.2 Klein removes less damage from old photos than FLUX 3 on Windows, and SeedVR2 3B smooths faces slightly more
@@ -492,7 +530,7 @@ Claude Code, use the MCP server ([CLAUDE_CODE.md](CLAUDE_CODE.md)). Over REST:
 | `GET /api/health` | status, active models, queue |
 | `GET /api/version` | versions, contract (`api`) and supported extensions (`features`) |
 | `GET /api/models?kind=image` | models with `features`, `recommended` and `gpu_note` |
-| `POST /api/generate/image` (`/video`, `/audio`) | create a job; the answer has its `id` |
+| `POST /api/generate/image` (`/video`, `/audio`, `/speech`) | create a job; the answer has its `id` |
 | `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
 | `GET /api/jobs/{id}/assets` | the results with `id`, `filename`, `url`, `meta` (seed, settings, `caption`) |
 | `POST /api/upload` | upload your own image (multipart, field `file`), e.g. as a reference |

@@ -123,6 +123,16 @@ class Backend:
         self.loaded: str | None = None
 
     async def is_running(self, timeout: float = 2.0) -> bool:
+        # Erst ein schneller Portcheck: Unter Windows wartet ein Verbindungsversuch auf einen geschlossenen Port rund
+        # 2 s (gemessen 2.11.2026), etwa vor jeder Sprecherzeile, solange ComfyUI noch nicht gestartet ist.
+        from urllib.parse import urlparse
+
+        u = urlparse(self.url)
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(u.hostname or "127.0.0.1", u.port or 80), 0.25)
+            writer.close()
+        except (OSError, asyncio.TimeoutError):
+            return False
         try:
             async with httpx.AsyncClient(timeout=timeout) as c:
                 return (await c.get(f"{self.url}/system_stats")).status_code == 200

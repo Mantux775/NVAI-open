@@ -36,7 +36,7 @@ from typing import Any, Callable
 
 from . import comfy, config, db, jobs, registry, workflows
 from .i18n import t
-from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateVideoRequest, Job
+from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateSpeechRequest, GenerateVideoRequest, Job
 
 TICKS_PER_SECOND = 254_016_000_000
 UNDO_LIMIT = 100
@@ -652,7 +652,10 @@ def _batch(p: dict[str, Any], a: dict[str, Any]) -> dict[str, list[Any]]:
 
 @command("scene.add", "Szene anlegen: lane (video|voice|music|sfx), prompt, title, kind (video|image|audio), "
          "model_id, start/start_s (sonst hinten an der Bahn), duration/duration_s (Vorgabe 5 s), params; takes und "
-         "take übernehmen vorhandenes Material (Einfügen einer kopierten Szene)")
+         "take übernehmen vorhandenes Material (Einfügen einer kopierten Szene). Bahn voice: prompt ist der "
+         "gesprochene Text, params voice (Beschreibung der Stimme), voice_from (Szenen-ID: gleiche Stimme wie "
+         "deren Take), voice_asset_id und voice_text (Stimme aus einer Aufnahme), language (auto|de|en|...), "
+         "seed; die Länge folgt dem Take")
 def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     lane = a.get("lane", "video")
     if lane not in LANES:
@@ -678,7 +681,8 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
 
 
 @command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, params "
-         "(wird zusammengeführt, z. B. image_asset_id, quality, seed), start/start_s, duration/duration_s")
+         "(wird zusammengeführt, z. B. image_asset_id, quality, seed; Bahn voice: voice, voice_from, "
+         "voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
     for key in SCENE_FIELDS:
@@ -722,6 +726,20 @@ def _scene_take(p: dict[str, Any], a: dict[str, Any]) -> None:
         s["takes"].append(asset_id)
     s["take"] = asset_id
     s["error"] = None
+    _fit_voice(p, s)
+
+
+def _fit_voice(p: dict[str, Any], s: dict[str, Any]) -> None:
+    """Eine Sprecher-Szene ist so lang wie ihr Take (seit 0.5.21): Wie lang ein Satz wird, bestimmt die Stimme, und
+    Übernehmen legt Clips in der Länge ihrer Szene; zu kurz geplant, fehlte sonst das Satzende."""
+    if s["lane"] != "voice" or not s.get("take"):
+        return
+    try:
+        duration = _media(p, s["take"])["duration"]
+    except StudioError:
+        return
+    if duration:
+        s["duration"] = max(frame_ticks(p), int(duration))
 
 
 # ------------------------------------------------------------------------------------------ Marker
@@ -1376,6 +1394,7 @@ def refresh(pid: str) -> dict[str, Any]:
                     if job.asset_ids:
                         s["take"] = job.asset_ids[-1]
                         s["error"] = None
+                        _fit_voice(p, s)
                 elif job.status == "error":
                     s["error"] = job.error
             if pending != s.get("jobs", []):
@@ -1493,6 +1512,43 @@ def _known_model(model_id: str | None, kind: str) -> str | None:
     return registry.get_active_model(kind)
 
 
+def _depends_on(s: dict[str, Any]) -> str | None:
+    """Szene, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video) oder die Szene, deren Stimme eine
+    Sprecher-Szene übernimmt (params.voice_from, seit 0.5.21)."""
+    if s["lane"] == "voice":
+        return (s.get("params") or {}).get("voice_from") or None
+    return s.get("chain_from")
+
+
+def _voice_request(p: dict[str, Any], s: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    """Sprecher-Szene: Der Prompt ist der Text. Die Stimme kommt aus params.voice (Beschreibung), params.voice_from
+    (gleiche Stimme wie eine andere Sprecher-Szene: deren gewählter Take mit seinem Text als Vorlage) oder
+    params.voice_asset_id (eine Aufnahme, mit params.voice_text wortgenau). Ohne Angabe wählt das Modell selbst."""
+    model_id = _known_model(s.get("model_id"), "speech")
+    if not model_id:
+        raise StudioError(t("Kein Sprachmodell installiert: unter „Modelle“ Qwen3-TTS laden.",
+                            "No speech model installed: download Qwen3-TTS under “Models”."))
+    voice_asset, voice_text = params.get("voice_asset_id") or None, str(params.get("voice_text") or "")
+    if params.get("voice_from"):
+        source = _find(p["scenes"], params["voice_from"], t("Szene", "scene"))
+        if source["lane"] != "voice" or source["id"] == s["id"]:
+            raise StudioError(t("„Gleiche Stimme wie“ braucht eine andere Sprecher-Szene.",
+                                "“Same voice as” needs another narrator scene."))
+        if not source.get("take"):
+            raise StudioError(t("Die Szene, deren Stimme diese übernimmt, hat noch keinen Take.",
+                                "The scene whose voice this one takes over has no take yet."))
+        take = db.get_asset(source["take"])
+        meta = (take.meta or {}) if take is not None else {}
+        voice_asset = source["take"]
+        # Wortgenau nur, wenn die Vorlage selbst gesprochen wurde (meta.text); bei einer fremden Aufnahme der Text,
+        # den ihre Szene dafür nennt, sonst nur der Stimmklang
+        voice_text = meta.get("text") if meta.get("speech") else str((source.get("params") or {}).get("voice_text") or "")
+    req = GenerateSpeechRequest(text=s["prompt"], voice=str(params.get("voice") or ""), voice_asset_id=voice_asset,
+                                voice_text=voice_text or "", language=params.get("language") or "auto",
+                                seed=params.get("seed"), model_id=model_id)
+    return {**req.model_dump(), "studio_project": p["id"]}
+
+
 def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Die Anfrage, wie sie auch /api/generate/* bekäme (dieselbe Prüfung durch das Schema)."""
     params = dict(s.get("params") or {})
@@ -1500,9 +1556,7 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         raise StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet."))
     secs = seconds(s["duration"])
     if s["lane"] == "voice":
-        raise StudioError(t("Eine Sprecherstimme (TTS) hat NVAI-open noch nicht; sie kommt mit Stufe 3. Bis dahin "
-                            "eine Tondatei als Take hinzufügen.", "NVAI-open has no voice (TTS) yet; it comes with "
-                            "stage 3. Until then, add an audio file as a take."))
+        return "tts", _voice_request(p, s, params)
     if s["lane"] in ("music", "sfx"):
         model_id = _known_model(s.get("model_id"), "audio")
         req = GenerateAudioRequest(prompt=s["prompt"], model_id=model_id,
@@ -1637,10 +1691,12 @@ def _busy(s: dict[str, Any]) -> bool:
     return bool(s.get("jobs") or s.get("waiting_for"))
 
 
-KIND_ORDER = {"audio": 0, "image": 1, "video": 2}
+KIND_ORDER = {"audio": 0, "speech": 0, "image": 1, "video": 2}
 
 
 def _job_kind(s: dict[str, Any]) -> str:
+    if s["lane"] == "voice":
+        return "speech"
     if s["lane"] != "video":
         return "audio"
     return "image" if s["kind"] == "image" else "video"
@@ -1660,13 +1716,13 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
     # Reihenfolge in der GPU-Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann Videos nach Modell,
     # Anschluss-Szenen zuletzt. So folgt ein Anschluss direkt auf seine Vorlage, ohne dass das Videomodell
     # dazwischen für ein Bild- oder Tonmodell entladen wird.
-    wanted.sort(key=lambda s: (bool(s.get("chain_from")), KIND_ORDER.get(_job_kind(s), 9), _model_of(s), s["start"]))
+    wanted.sort(key=lambda s: (bool(_depends_on(s)), KIND_ORDER.get(_job_kind(s), 9), _model_of(s), s["start"]))
     by_id = {s["id"]: s for s in p["scenes"]}
     submitted: dict[str, str] = {}
     waiting: dict[str, str] = {}
     errors: dict[str, str] = {}
     for s in wanted:
-        source = by_id.get(s.get("chain_from") or "")
+        source = by_id.get(_depends_on(s) or "")
         if source is not None and (source["id"] in submitted or source["id"] in waiting or _busy(source)):
             waiting[s["id"]] = source["id"]
             continue
@@ -1738,10 +1794,13 @@ async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
                 continue
             job_id, error = None, None
             if source is None or source.get("error") or not source.get("take"):
-                error = t("Die Szene, an die diese anschließt, ist fehlgeschlagen.",
-                          "The scene this one continues from failed.")
+                error = (t("Die Szene, deren Stimme diese übernimmt, ist fehlgeschlagen.",
+                           "The scene whose voice this one takes over failed.") if s["lane"] == "voice" else
+                         t("Die Szene, an die diese anschließt, ist fehlgeschlagen.",
+                           "The scene this one continues from failed."))
             else:
-                s["chain_from"] = source_id  # auch wenn der Anschluss nur aus einem Marker kam
+                if s["lane"] == "video":
+                    s["chain_from"] = source_id  # auch wenn der Anschluss nur aus einem Marker kam
                 try:
                     kind, params = await asyncio.to_thread(_job_request, p, s)
                     job_id = (await jobs.submit(kind, params)).id

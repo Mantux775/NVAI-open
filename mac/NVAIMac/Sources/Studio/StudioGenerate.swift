@@ -38,6 +38,14 @@ actor StudioGenerator {
         }
         let made = jobs.values.filter { $0.status == "done" }.flatMap(\.assetIDs) + orphans.values.flatMap { $0 } + older
         if !made.isEmpty { await AssetStore.shared.tag(made, project: pid) }
+        // Sprecherzeilen kennen ihre Länge (meta.seconds): Die Szene wird so lang wie ihr Take (seit 0.5.3), sonst
+        // schnitte Übernehmen das Satzende ab
+        var speechSeconds: [String: Double] = [:]
+        for id in made {
+            if let r = AssetSnapshot.shared.get(id), r.meta["speech"]?.boolValue == true, let s = r.meta["seconds"]?.doubleValue {
+                speechSeconds[id] = s
+            }
+        }
         let live = Set(chainTasks.keys)  // nach dem letzten Warten gelesen, so aktuell wie möglich
         return try await store.update(pid) { p in
             var changed = false
@@ -51,6 +59,9 @@ actor StudioGenerator {
                         if let last = files.last {
                             p.scenes[i].take = last
                             p.scenes[i].error = nil
+                            if p.scenes[i].lane == "voice", let secs = speechSeconds[last] {
+                                p.scenes[i].duration = Swift.max(p.frameTicks, Studio.ticks(secs))
+                            }
                         }
                         continue
                     }
@@ -68,6 +79,9 @@ actor StudioGenerator {
                         if let last = job.assetIDs.last {
                             p.scenes[i].take = last
                             p.scenes[i].error = nil
+                            if p.scenes[i].lane == "voice", let secs = speechSeconds[last] {
+                                p.scenes[i].duration = Swift.max(p.frameTicks, Studio.ticks(secs))
+                            }
                         }
                     } else if job.status == "error" {
                         p.scenes[i].error = job.error
@@ -98,10 +112,17 @@ actor StudioGenerator {
 
     // MARK: Erzeugen
 
-    private static let kindOrder = ["audio": 0, "image": 1, "video": 2]
+    private static let kindOrder = ["audio": 0, "speech": 0, "image": 1, "video": 2]
 
     private static func jobKind(_ s: StudioScene) -> String {
-        s.lane != "video" ? "audio" : (s.kind == "image" ? "image" : "video")
+        s.lane == "voice" ? "speech" : s.lane != "video" ? "audio" : (s.kind == "image" ? "image" : "video")
+    }
+
+    /// Szene, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video) oder die Szene, deren Stimme eine
+    /// Sprecher-Szene übernimmt (params.voice_from, seit 0.5.3).
+    private static func dependsOn(_ s: StudioScene) -> String? {
+        if s.lane == "voice" { return s.params["voice_from"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+        return s.chainFrom
     }
 
     private static func busy(_ s: StudioScene) -> Bool { !s.jobs.isEmpty || s.waitingFor != nil }
@@ -119,13 +140,13 @@ actor StudioGenerator {
         // Reihenfolge in der Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann die Videos, Anschluss-
         // Szenen zuletzt: so folgt ein Anschluss direkt auf seine Vorlage, ohne dass LTX-Video entladen wird.
         wanted.sort { a, b in
-            (a.chainFrom != nil ? 1 : 0, Self.kindOrder[Self.jobKind(a)] ?? 9, a.start)
-                < (b.chainFrom != nil ? 1 : 0, Self.kindOrder[Self.jobKind(b)] ?? 9, b.start)
+            (Self.dependsOn(a) != nil ? 1 : 0, Self.kindOrder[Self.jobKind(a)] ?? 9, a.start)
+                < (Self.dependsOn(b) != nil ? 1 : 0, Self.kindOrder[Self.jobKind(b)] ?? 9, b.start)
         }
         let byID = Dictionary(p.scenes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var submitted: [String: String] = [:], waiting: [String: String] = [:], errors: [String: String] = [:]
         for s in wanted {
-            if let from = s.chainFrom, let source = byID[from],
+            if let from = Self.dependsOn(s), let source = byID[from],
                submitted[source.id] != nil || waiting[source.id] != nil || Self.busy(source) {
                 waiting[s.id] = source.id
                 continue
@@ -214,10 +235,12 @@ actor StudioGenerator {
             var jobID: String?
             var failure: String?
             if let source, source.error == nil, source.take != nil {
-                p.scenes[i].chainFrom = sourceID  // auch wenn der Anschluss nur aus einem Marker kam
+                if p.scenes[i].lane == "video" { p.scenes[i].chainFrom = sourceID }  // auch wenn er nur aus einem Marker kam
                 do { jobID = try await Self.submit(p, p.scenes[i]).id } catch { failure = error.localizedDescription }
             } else {
-                failure = t("Die Szene, an die diese anschließt, ist fehlgeschlagen.", "The scene this one continues from failed.")
+                failure = p.scenes[i].lane == "voice"
+                    ? t("Die Szene, deren Stimme diese übernimmt, ist fehlgeschlagen.", "The scene whose voice this one takes over failed.")
+                    : t("Die Szene, an die diese anschließt, ist fehlgeschlagen.", "The scene this one continues from failed.")
             }
             _ = try? await store.update(pid) { q in
                 guard let k = q.scenes.firstIndex(where: { $0.id == sceneID }) else { return false }
@@ -242,8 +265,27 @@ actor StudioGenerator {
         guard !prompt.isEmpty else { throw StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet.")) }
         let secs = Studio.seconds(s.duration)
         if s.lane == "voice" {
-            throw StudioError(t("Eine Sprecherstimme (TTS) hat NVAI-open noch nicht. Bis dahin eine Tondatei als Take hinzufügen.",
-                                "NVAI-open has no voice (TTS) yet. Until then, add an audio file as a take."))
+            // Sprecher-Szene (seit 0.5.3): Der Prompt ist der Text; die Stimme aus params.voice, params.voice_from (der
+            // gewählte Take einer anderen Sprecher-Szene mit seinem Text) oder params.voice_asset_id (+ voice_text)
+            var body: [String: JSONValue] = ["text": .string(prompt), "model_id": .string(SpeechCatalog.id)]
+            for key in ["voice", "voice_asset_id", "voice_text", "language", "seed"] { if let v = s.params[key] { body[key] = v } }
+            if let from = s.params["voice_from"]?.stringValue, !from.isEmpty {
+                guard let source = p.scenes.first(where: { $0.id == from }), source.lane == "voice", source.id != s.id else {
+                    throw StudioError(t("„Gleiche Stimme wie“ braucht eine andere Sprecher-Szene.",
+                                        "“Same voice as” needs another narrator scene."))
+                }
+                guard let take = source.take else {
+                    throw StudioError(t("Die Szene, deren Stimme diese übernimmt, hat noch keinen Take.",
+                                        "The scene whose voice this one takes over has no take yet."))
+                }
+                body["voice_asset_id"] = .string(take)
+                // Wortgenau nur, wenn die Vorlage selbst gesprochen wurde (meta.text); sonst der Text, den ihre Szene
+                // dafür nennt, oder nur der Stimmklang
+                let meta = AssetSnapshot.shared.get(take)?.meta ?? [:]
+                let spoken = meta["speech"]?.boolValue == true ? meta["text"]?.stringValue : nil
+                body["voice_text"] = .string(spoken ?? source.params["voice_text"]?.stringValue ?? "")
+            }
+            return await JobQueue.shared.submitSpeech(try SpeechJobRequest.parse(.object(body)))
         }
         if s.lane == "music" || s.lane == "sfx" {
             var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(AudioCatalog.id),

@@ -86,6 +86,8 @@ LOCAL = [
      "Packages/z-image-swift"),
     ("ltx-video-swift-mlx", "0.4.2 (local copy)", "https://github.com/VincentGourbin/ltx-video-swift-mlx",
      "Packages/ltx-video-swift-mlx"),
+    ("mlx-audio-swift (Qwen3-TTS)", "0dda61b (local copy)", "https://github.com/Blaizzy/mlx-audio-swift",
+     "Packages/qwen3-tts-swift"),
 ]
 for name, version, location, folder in LOCAL:
     licenses = files_in(Path(folder), LICENSE_NAMES)

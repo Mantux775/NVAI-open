@@ -1,7 +1,8 @@
-"""Clients fuer die Mesh-Worker (TripoSG, TRELLIS.2).
+"""Clients fuer die Worker-Prozesse: Mesh-Worker (TripoSG, TRELLIS.2) und seit 0.5.21 die Sprecherstimme
+(Qwen3-TTS).
 
-Beide laufen als eigener Prozess mit eigenem venv und sprechen dieselbe kleine
-HTTP-Schnittstelle (/health, /generate, /unload). Deshalb eine Klasse statt zwei
+Alle laufen als eigener Prozess mit eigenem venv und sprechen dieselbe kleine
+HTTP-Schnittstelle (/health, /generate, /unload; Qwen3-TTS dazu /cancel). Deshalb eine Klasse statt
 fast identischer Module.
 
 Warum ueberhaupt eigene Prozesse: Die Modelle brauchen unvereinbare torch- und
@@ -15,7 +16,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -37,6 +38,8 @@ class MeshWorker:
         port: int,
         env_prefix: str,
         package_dir: str,
+        role: str = "mesh",
+        extra_env: Callable[[], dict[str, str]] | None = None,
     ) -> None:
         self.key = key
         self.name = name
@@ -45,6 +48,8 @@ class MeshWorker:
         self.port = port
         self.env_prefix = env_prefix
         self.package_dir = package_dir
+        self.role = role  # welche Karte (gpu.ROLES): 3D auf der 3D-Karte, die Stimme auf der fuer Bild/Video/Ton
+        self.extra_env = extra_env
         self.log_path = config.DATA_DIR / f"{key}.log"
         self._proc: subprocess.Popen | None = None
         self._started_at: float | None = None
@@ -62,7 +67,24 @@ class MeshWorker:
     def is_set_up(self) -> bool:
         return self.python().exists() and (self.repo_root / self.package_dir).is_dir()
 
+    async def _port_open(self, timeout: float = 0.25) -> bool:
+        """Schneller Portcheck. Unter Windows wartet ein Verbindungsversuch auf einen geschlossenen Port rund 2 s
+        (gemessen 2.11.2026: 2,0-2,1 s je Worker); _ensure_backend fragt vor jedem Bild-, Video- und Tonauftrag alle
+        Worker, das kostete 4-6 s je Auftrag. Ein laufender Worker nimmt die Verbindung sofort an."""
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", self.port), timeout)
+        except (OSError, asyncio.TimeoutError):
+            return False
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except OSError:
+            pass
+        return True
+
     async def is_running(self, timeout: float = 2.0) -> bool:
+        if not await self._port_open():
+            return False
         try:
             async with httpx.AsyncClient(timeout=timeout) as c:
                 return (await c.get(f"{self.url}/health")).status_code == 200
@@ -126,7 +148,9 @@ class MeshWorker:
         env[f"{self.env_prefix}_PORT"] = str(self.port)
         if gpu.multi_gpu():
             # Mehrere Karten (experimentell seit 0.5): der Worker sieht nur seine.
-            env["CUDA_VISIBLE_DEVICES"] = str(gpu.device_for("mesh"))
+            env["CUDA_VISIBLE_DEVICES"] = str(gpu.device_for(self.role))
+        if self.extra_env is not None:
+            env.update(self.extra_env())
 
         self._proc = subprocess.Popen(
             [str(py), str(self.script)],
@@ -180,6 +204,14 @@ class MeshWorker:
         except (httpx.HTTPError, OSError):
             pass
 
+    async def cancel(self) -> bool:
+        """Laufenden Auftrag anhalten, ohne den Prozess zu beenden (nur Worker mit /cancel, z. B. Qwen3-TTS)."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as c:
+                return (await c.post(f"{self.url}/cancel")).status_code == 200
+        except (httpx.HTTPError, OSError):
+            return False
+
     # ---------------------------------------------------------- Generierung
 
     async def generate(self, payload: dict[str, Any], timeout: float = 2400.0) -> dict[str, Any]:
@@ -213,10 +245,34 @@ TRELLIS2 = MeshWorker(
     package_dir="trellis2",
 )
 
+def _site_packages(venv: Path) -> Path:
+    return venv / "Lib" / "site-packages" if sys.platform == "win32" else next(
+        iter(sorted((venv / "lib").glob("python3*/site-packages"))), venv / "lib" / "site-packages")
+
+
+def _qwen3tts_env() -> dict[str, str]:
+    """PyTorch fuer den Stimm-Worker kommt aus dem venv von ComfyUI (gleiche CUDA- bzw. ROCm-Fassung, kein zweites
+    PyTorch auf der Platte); der Worker haengt den Pfad hinten an sys.path."""
+    return {"QWEN3TTS_TORCH_SITE": str(_site_packages(config.COMFY_ROOT / ".venv"))}
+
+
+QWEN3TTS = MeshWorker(
+    key="qwen3tts",
+    name="Qwen3-TTS",
+    repo_root=config.QWEN3TTS_ROOT,
+    script="qwen3tts_worker.py",
+    port=config.QWEN3TTS_PORT,
+    env_prefix="QWEN3TTS",
+    package_dir=str(_site_packages(Path(".venv")) / "faster_qwen3_tts"),
+    role="image",
+    extra_env=_qwen3tts_env,
+)
+
 # Zuordnung workflow-Schluessel aus catalog.py -> Worker
 BY_WORKFLOW: dict[str, MeshWorker] = {
     "triposg": TRIPOSG,
     "trellis2": TRELLIS2,
+    "qwen3tts": QWEN3TTS,
 }
 
 

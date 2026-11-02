@@ -12,7 +12,8 @@ enum APIRouter {
     /// Startbild (`image_asset_id`), wenn dessen Encoder geladen ist (`features.image_to_video` des Modells).
     static var features: [String] {
         ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
-         "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel"]
+         "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel",
+         "speech"]
             + (HelperModel.vision.installed ? ["restore_auto"] : [])
     }
 
@@ -69,6 +70,13 @@ enum APIRouter {
                 let result = try await JobQueue.expandAndWait(prompt, target: target)
                 return .json(["prompt": prompt, "expanded": result.expanded, "target": target.rawValue,
                               "seconds": (result.seconds * 10).rounded() / 10])
+            }
+            if route("POST", "/api/generate/speech") != nil {
+                let request = try SpeechJobRequest.parse(req.json)
+                if let asset = request.voiceAssetID, await AssetStore.shared.get(asset) == nil {
+                    throw APIError(404, t("Aufnahme nicht gefunden: \(asset)", "Recording not found: \(asset)"))
+                }
+                return .json(await JobQueue.shared.submitSpeech(request).json)
             }
             if route("POST", "/api/generate/audio") != nil {
                 let request = try AudioJobRequest.parse(req.json)
@@ -186,6 +194,7 @@ enum APIRouter {
                     "unified_memory": true],
             "active_models": ["image": active.installed ? active.id as Any : NSNull(),
                               "audio": AudioCatalog.installed ? AudioCatalog.id as Any : NSNull(),
+                              "speech": SpeechCatalog.installed ? SpeechCatalog.id as Any : NSNull(),
                               "video": VideoCatalog.anyInstalled ? VideoCatalog.active.id as Any : NSNull(), "3d": NSNull()],
             "queue_depth": await queue.queueDepth,
             "current_job": await queue.currentJobID ?? NSNull(),
@@ -205,8 +214,9 @@ enum APIRouter {
         let images = kind == nil || kind == "image" ? Models.all.map(\.info) : []
         let loras = kind == nil || kind == "lora" ? LoRACatalog.all.map(\.info) : []
         let audio = kind == nil || kind == "audio" ? [AudioCatalog.info] : []
+        let speech = kind == nil || kind == "speech" ? [SpeechCatalog.info] : []
         let video = kind == nil || kind == "video" ? VideoCatalog.models.map(\.info) : []
-        return images + loras + audio + video + HelperModel.allCases.filter { kind == nil || $0.kind == kind }.map(\.info)
+        return images + loras + audio + speech + video + HelperModel.allCases.filter { kind == nil || $0.kind == kind }.map(\.info)
     }
 
     static func download(_ req: HTTPRequest) async throws -> HTTPResponse {
@@ -214,6 +224,7 @@ enum APIRouter {
             if let helper = HelperModel.find(id) { return .json(await JobQueue.shared.submitDownload(helper).json) }
             if let lora = LoRACatalog.find(id) { return .json(await JobQueue.shared.submitDownload(lora).json) }
             if id == AudioCatalog.id { return .json(await JobQueue.shared.submitAudioDownload().json) }
+            if SpeechCatalog.matches(id) { return .json(await JobQueue.shared.submitSpeechDownload().json) }
             if let video = VideoCatalog.model(id) {
                 if video.isLTX2 { try LTX2Engine.checkOS() }
                 guard SystemInfo.memoryGB >= video.minRAMGB else {

@@ -154,10 +154,18 @@ server = MCPServer(
         "meta.repair.auto says what auto chose. "
         "Colorizing takes only the color from FLUX 3 and keeps the photo's brightness and detail; known "
         "colors in `notes` cut the measured color error by 40 %.\n\n"
+        "NARRATOR VOICE: generate_speech(text, voice=...) speaks a text with Qwen3-TTS (Apache-2.0, 10 languages "
+        "incl. German and English). Describe the voice in one sentence (gender, age, pitch, pace, mood) or take it "
+        "over from a recording (voice_asset_id, with voice_text = what is said in it, word for word). A described "
+        "voice differs per seed: for one speaker over several lines, make the first line, then use its asset id "
+        "and text as voice_asset_id/voice_text for the others. You cannot listen: say so and let the user judge "
+        "the voice. Only take voices over from recordings whose speakers agreed.\n\n"
         "STUDIO: studio_* tools build a whole video in a project with two timelines: a composition of scenes "
         "(prompt, model, duration on the lanes video/voice/music/sfx) with markers, and an edit with real clips "
         "on V1/V2/A1/A2. Add one scene per shot, studio_generate(wait=True), check the takes, edit.conform, then "
-        "studio_export. Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
+        "studio_export. Voice scenes: the prompt is the spoken text, params voice (description), voice_from (a "
+        "scene id: same voice as its take; that scene is generated first), voice_asset_id/voice_text, language; "
+        "a voice scene takes the length of its take. Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
         "done. Ten minutes made only of LTX-2.5 clips take about 3 hours at 720p on an RTX 5060 Ti; still images "
         "(about 20 s each) are much cheaper for narrated explainer videos.\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
@@ -758,6 +766,45 @@ async def generate_audio(
         "seconds": seconds, "model_id": model_id, "seed": seed, "project_id": project_id,
     }
     return await _generate("/api/generate/audio", payload, ctx)
+
+
+@server.tool()
+async def generate_speech(
+    text: str,
+    ctx: Context,
+    voice: str = "",
+    voice_asset_id: str | None = None,
+    voice_text: str = "",
+    language: str = "auto",
+    model_id: str | None = None,
+    seed: int | None = None,
+    project_id: str | None = None,
+) -> dict[str, Any]:
+    """Speaks a text with a narrator voice (Qwen3-TTS, Apache-2.0) and returns the path of the WAV file.
+
+    The voice comes from a description (`voice`) or from a recording (`voice_asset_id`). A described voice comes out
+    differently with every seed: to keep one speaker over several lines, generate the first line, then pass its
+    asset id as voice_asset_id and its text as voice_text for every further line. Measured on an RTX 5060 Ti: 5.8 s
+    of German speech in 2.3 s, plus 5-15 s to load the model once. No singing.
+
+    Args:
+        text: What is said, up to 1500 characters, written as it should be spoken; punctuation sets the pauses.
+        voice: The voice in one sentence: gender, age, pitch, pace and mood, e.g. "a calm, deep male voice, about
+            fifty, warm and slightly rough". Ignored with voice_asset_id. Empty and no recording: the model chooses.
+        voice_asset_id: Take the voice over from a recording: an audio, video or uploaded asset (the first 20 s are
+            used, 3 s and more work). Only recordings whose speakers agreed.
+        voice_text: What is said in that recording, word for word; then the way of speaking is taken over too.
+            Empty: only the sound of the voice.
+        language: auto, de, en, fr, es, it, pt, ru, zh, ja or ko.
+        model_id: Force a model; otherwise the active speech model (qwen3-tts-1.7b).
+        seed: For reproducible results (same seed and input give the same recording).
+        project_id: A Studio project: the recording goes straight into its folder instead of the History.
+    """
+    payload = {
+        "text": text, "voice": voice, "voice_asset_id": voice_asset_id, "voice_text": voice_text,
+        "language": language, "model_id": model_id, "seed": seed, "project_id": project_id,
+    }
+    return await _generate("/api/generate/speech", payload, ctx)
 
 
 @server.tool()

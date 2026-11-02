@@ -16,6 +16,8 @@ enum MacFit {
     /// SeedVR2 3B 6,5 GB, Qwen3.5 4B rund 3 GB; Stable Audio 3 laut Katalog 5 GB.
     static let videoNeedGB = 6.2
     static let audioNeedGB = 5.0
+    /// Qwen3-TTS: gemessen 3,26 GB Spitze auf dem Mac mini M1 mit 8 GB (VoiceDesign 1.7B 4 Bit).
+    static let speechNeedGB = 3.5
 
     static func helperNeedGB(_ helper: HelperModel) -> Double {
         switch helper {
@@ -33,6 +35,7 @@ enum MacRecommendations {
         if let z = ZImageCatalog.model(id) { return ZImageCatalog.fits(z) == "ja" }
         if VideoCatalog.model(id) != nil { return VideoCatalog.recommended.id == id }  // eines je Speichergröße
         if id == AudioCatalog.id { return MacFit.of(needGB: MacFit.audioNeedGB) != "nein" }
+        if id == SpeechCatalog.id { return MacFit.of(needGB: MacFit.speechNeedGB) != "nein" }
         if let helper = HelperModel(rawValue: id) { return MacFit.of(needGB: MacFit.helperNeedGB(helper)) != "nein" }
         return false
     }

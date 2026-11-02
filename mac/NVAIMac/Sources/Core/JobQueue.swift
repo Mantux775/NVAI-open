@@ -1,4 +1,5 @@
 import Foundation
+import Qwen3TTSKit
 import CoreGraphics
 import LTXV
 
@@ -20,6 +21,8 @@ struct JobRecord: Sendable, Identifiable {
     var restore: RestoreJobRequest?
     /// Musik oder Klang (seit 0.4.7, `POST /api/generate/audio`).
     var audio: AudioJobRequest?
+    /// Sprecherstimme (seit 0.5.3, `POST /api/generate/speech`).
+    var speech: SpeechJobRequest?
     /// Video (seit 0.4.8, `POST /api/generate/video`).
     var video: VideoJobRequest?
     /// Export eines Studio-Projekts (Mac-Studio, seit dem Studio-Umbau 30.10.2026).
@@ -72,6 +75,7 @@ actor JobQueue {
     /// Laufender Download als eigene Task, damit „Abbrechen“ ihn mitten in der Datei stoppen kann.
     private var downloadTask: Task<Void, Error>?
     private var videoTask: Task<VideoEngine.Result, Error>?
+    private var speechTask: Task<[Float], Error>?
     /// Der laufende Studio-Export, damit „Abbrechen“ ihn stoppt.
     private var exportTask: Task<StudioRender.Result, Error>?
     /// Die laufende FLUX.2-Rechnung. Das Paket prüft nach jedem Schritt auf Abbruch
@@ -171,6 +175,28 @@ actor JobQueue {
         let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
                             params: .object(["model_id": .string(AudioCatalog.id)]),
                             createdAt: Date().timeIntervalSince1970, downloadModelID: AudioCatalog.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    /// Sprecherstimme erzeugen (seit 0.5.3), Auftragsart „tts“ wie unter Windows.
+    func submitSpeech(_ request: SpeechJobRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "tts", status: "queued",
+                            stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
+                            lang: request.lang)
+        job.speech = request
+        add(job)
+        return job
+    }
+
+    /// Qwen3-TTS laden (beide Fassungen).
+    func submitSpeechDownload() -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == SpeechCatalog.id && !$0.isFinished }) {
+            return existing
+        }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(SpeechCatalog.id)]),
+                            createdAt: Date().timeIntervalSince1970, downloadModelID: SpeechCatalog.id, lang: Lang.current)
         add(job)
         return job
     }
@@ -294,6 +320,7 @@ actor JobQueue {
             if job.request?.engine == "coreml" { CoreMLEngine.shared.requestCancel() }
             imageTask?.cancel()
             videoTask?.cancel()
+            speechTask?.cancel()
             exportTask?.cancel()
         default:
             break
@@ -368,6 +395,9 @@ actor JobQueue {
             } else if let audio = job.audio {
                 AppLog.info("Job \(id) started: audio, \(Int(audio.seconds)) s, \(audio.steps) steps")
                 try await runAudio(id, audio)
+            } else if let speech = job.speech {
+                AppLog.info("Job \(id) started: speech, \(speech.text.count) characters, \(speech.voiceAssetID == nil ? "described voice" : "voice from a recording")")
+                try await runSpeech(id, speech)
             } else if let video = job.video {
                 AppLog.info("Job \(id) started: video, \(video.width)×\(video.height), \(video.frames) frames, \(video.fps) fps")
                 try await runVideo(id, video)
@@ -468,6 +498,17 @@ actor JobQueue {
             try await work.value
             return
         }
+        if modelID == SpeechCatalog.id {
+            update(id) { $0.stage = t("lädt \(SpeechCatalog.name)", "downloading \(SpeechCatalog.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await SpeechCatalog.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            return
+        }
         if modelID == AudioCatalog.id {
             update(id) { $0.stage = t("lädt \(AudioCatalog.name)", "downloading \(AudioCatalog.name)") }
             let report: @Sendable (Double, String) -> Void = { fraction, message in
@@ -535,6 +576,7 @@ actor JobQueue {
         if SystemInfo.memoryGB <= 16 {
             await VideoEngine.shared.unload()
             await AudioEngine.shared.unload()
+            await SpeechEngine.shared.unload()
             await SeedVR2Engine.shared.unload()
             await VisionEngine.shared.unload()
             await ZImageEngine.shared.unload()
@@ -774,6 +816,7 @@ actor JobQueue {
     private func freeHelpers() async {
         guard SystemInfo.memoryGB <= 16 else { return }
         await AudioEngine.shared.unload()
+        await SpeechEngine.shared.unload()
         await SeedVR2Engine.shared.unload()
         await VisionEngine.shared.unload()
         await ZImageEngine.shared.unload()
@@ -786,6 +829,7 @@ actor JobQueue {
         if SystemInfo.memoryGB <= 16 {
             await Flux2Engine.shared.unload()
             await AudioEngine.shared.unload()
+            await SpeechEngine.shared.unload()
             await SeedVR2Engine.shared.unload()
             await VisionEngine.shared.unload()
             await VideoEngine.shared.unload()
@@ -857,6 +901,7 @@ actor JobQueue {
             await VisionEngine.shared.unload()
             await ZImageEngine.shared.unload()
             await VideoEngine.shared.unload()
+            await SpeechEngine.shared.unload()
             MemoryLog.release()
         }
         update(id) { $0.stage = t("lädt Stable Audio 3", "loading Stable Audio 3") }
@@ -904,6 +949,108 @@ actor JobQueue {
         update(id) { $0.assetIDs.append(asset.id) }
     }
 
+    // MARK: Sprecherstimme
+
+    /// Qwen3-TTS (`SpeechEngine`): VoiceDesign für eine beschriebene Stimme, Base zum Übernehmen aus einer Aufnahme;
+    /// Ränder gekürzt, Spitze auf −1 dBFS, WAV in die Ablage. Meta wie unter Windows (`speech`, `text`, `mode` …).
+    private func runSpeech(_ id: String, _ req: SpeechJobRequest) async throws {
+        // Aufnahme zuerst lesen: Ein Fehler darin soll nicht erst nach dem Laden auffallen
+        var reference: [Float]?
+        var referenceText: String? = req.voiceText.isEmpty ? nil : req.voiceText
+        var referenceMode: String?
+        if let assetID = req.voiceAssetID {
+            guard let record = await AssetStore.shared.get(assetID) else {
+                throw APIError(404, t("Aufnahme nicht gefunden: \(assetID)", "Recording not found: \(assetID)"))
+            }
+            update(id) { $0.stage = t("liest die Aufnahme", "reading the recording") }
+            let read = try await SpeechEngine.readReference(AssetStore.shared.fileURL(record.filename), sampleRate: 24_000)
+            reference = read.samples
+            if read.trimmed { referenceText = nil }
+            referenceMode = referenceText != nil ? "text" : (read.trimmed ? "klang (gekuerzt)" : "klang")
+        }
+        await CoreMLEngine.shared.unload()
+        if SystemInfo.memoryGB <= 16 {
+            await Flux2Engine.shared.unload()
+            await AudioEngine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+            await VisionEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            await VideoEngine.shared.unload()
+            MemoryLog.release()
+        }
+        let kind: Qwen3TTSKindChoice = reference == nil ? .design : .clone
+        update(id) { $0.stage = t("lädt Qwen3-TTS", "loading Qwen3-TTS") }
+        let sampler = PeakMemorySampler()
+        sampler.start()
+        let loadStart = Date()
+        let wasLoaded = await SpeechEngine.shared.loadedKind == kind.engineKind
+        do {
+            try await SpeechEngine.shared.load(kind.engineKind)
+        } catch {
+            _ = sampler.stop()
+            throw error
+        }
+        let loadSeconds = wasLoaded ? 0 : Date().timeIntervalSince(loadStart)
+        let seed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        update(id) {
+            $0.stage = t("spricht", "speaking")
+            $0.progress = 0.15
+        }
+        let started = Date()
+        let text = req.text, voice = req.voice, language = req.language
+        let refSamples = reference, refText = referenceText
+        let work = Task {
+            if let refSamples {
+                return try await SpeechEngine.shared.clone(text: text, reference: refSamples, referenceText: refText,
+                                                           language: language, seed: seed)
+            }
+            return try await SpeechEngine.shared.design(text: text, instruct: voice, language: language, seed: seed)
+        }
+        speechTask = work
+        defer { speechTask = nil }
+        let raw: [Float]
+        do {
+            raw = try await work.value
+        } catch {
+            _ = sampler.stop()
+            throw error
+        }
+        let seconds = Date().timeIntervalSince(started)
+        let peak = sampler.stop()
+        MemoryLog.line("after Qwen3-TTS")
+        if jobs[id]?.cancelRequested == true { throw CancellationError() }
+        let sampleRate = await SpeechEngine.shared.sampleRate
+        let samples = SpeechEngine.tidy(raw, sampleRate: sampleRate)
+        guard !samples.isEmpty, samples.allSatisfy(\.isFinite) else {
+            throw APIError(500, t("Das Modell lieferte keinen gültigen Ton.", "The model returned no valid audio."))
+        }
+        let audioSeconds = Double(samples.count) / Double(sampleRate)
+        var meta: [String: JSONValue] = [
+            "speech": .bool(true), "text": .string(req.text), "voice": .string(req.voice),
+            "mode": .string(kind == .design ? "design" : "clone"), "language": .string(req.language),
+            "seed": .int(Int(seed)), "seconds": .double((audioSeconds * 1000).rounded() / 1000),
+            "sample_rate": .int(sampleRate), "format": .string("wav"), "model_name": .string(SpeechCatalog.name),
+            "workflow": .string("qwen3tts"), "engine": .string("mlx"),
+            "duration_s": .double((seconds * 10).rounded() / 10), "gen_s": .double((seconds * 100).rounded() / 100),
+            "peak_memory_mb": .int(Int(peak)), "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+        ]
+        if loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+        if let assetID = req.voiceAssetID {
+            meta["voice_asset_id"] = .string(assetID)
+            meta["voice_text"] = .string(req.voiceText)
+            meta["voice_reference"] = .string(referenceMode ?? "klang")
+        }
+        let asset = try await AssetStore.shared.addAudio(wav: SpeechEngine.wav(samples, sampleRate: sampleRate), jobID: id,
+                                                         prompt: req.text, modelID: SpeechCatalog.id, meta: meta)
+        update(id) { $0.assetIDs.append(asset.id) }
+    }
+
+    /// Welche Fassung ein Auftrag braucht.
+    private enum Qwen3TTSKindChoice: Equatable {
+        case design, clone
+        var engineKind: Qwen3TTS.Kind { self == .design ? .voiceDesign : .base }
+    }
+
     // MARK: Video
 
     /// LTX-Video 2B (`VideoEngine`): Startbild-Encoder, T5, Transformer und Decoder nacheinander, MP4 in die Ablage.
@@ -914,6 +1061,7 @@ actor JobQueue {
         if SystemInfo.memoryGB <= 16 {
             await Flux2Engine.shared.unload()
             await AudioEngine.shared.unload()
+            await SpeechEngine.shared.unload()
             await SeedVR2Engine.shared.unload()
             await VisionEngine.shared.unload()
             await ZImageEngine.shared.unload()
@@ -1054,6 +1202,7 @@ actor JobQueue {
         await CoreMLEngine.shared.unload()
         if SystemInfo.memoryGB <= 16 {
             await AudioEngine.shared.unload()
+            await SpeechEngine.shared.unload()
             await ZImageEngine.shared.unload()
             await VideoEngine.shared.unload()
             // SeedVR2 bleibt nach einem abgebrochenen Schärfen geladen: vor FLUX.2 weg damit (8 GB reichen nicht für beide)

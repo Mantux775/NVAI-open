@@ -272,6 +272,14 @@ kbd {
    (gemessen 930 px Fenster: 74/74/74/74/87 px statt fünfmal 77 px mit abgeschnittenem Text). */
 .mode-switch.five { grid-template-columns: repeat(5, minmax(max-content, 1fr)); }
 .mode-switch.five .mode { padding: 8px 2px; font-size: 12.5px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Seit 0.5.21 sechs Reiter (Sprache dazu): zwei Reihen zu drei, so bleibt jede Beschriftung lesbar */
+.mode-switch.six { grid-template-columns: repeat(3, 1fr); }
+.mode-switch.six .mode { padding: 7px 2px; font-size: 13px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Sprecherstimme: Stimme beschreiben oder aus einer Aufnahme */
+.voice-mode { display: flex; gap: 16px; margin: 2px 0 6px; }
+.voice-mode label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex: none; width: auto; }
+.voice-ref { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.voice-ref select { flex: 1; min-width: 0; }
 /* Foto restaurieren: Schritte mit Unteroptionen */
 .restore-steps { display: flex; flex-direction: column; gap: 6px; }
 .restore-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-left: 24px; }

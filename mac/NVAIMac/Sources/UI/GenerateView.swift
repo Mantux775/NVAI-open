@@ -38,7 +38,7 @@ struct GenerateView: View {
     /// Große Vorschau eines Ergebnisses (Klick auf ein Bild).
     @State private var preview: AssetRecord?
 
-    enum FormMode: Hashable { case generate, restore, audio, video }
+    enum FormMode: Hashable { case generate, restore, audio, speech, video }
 
     /// Musik und Klänge (seit 0.4.7, Stable Audio 3 Medium).
     @State private var audioPrompt = ""
@@ -139,6 +139,7 @@ struct GenerateView: View {
                     Text(t("Bild erzeugen", "Create image")).tag(FormMode.generate)
                     Text(t("Foto restaurieren", "Restore photo")).tag(FormMode.restore)
                     Text(t("Musik und Klänge", "Music and sounds")).tag(FormMode.audio)
+                    Text(t("Sprache", "Speech")).tag(FormMode.speech)
                     Text(t("Video", "Video")).tag(FormMode.video)
                 }
                 .pickerStyle(.segmented)
@@ -146,6 +147,7 @@ struct GenerateView: View {
                 switch formMode {
                 case .restore: restoreForm
                 case .audio: audioForm
+                case .speech: SpeechForm()
                 case .video: videoForm
                 case .generate: generateForm
                 }

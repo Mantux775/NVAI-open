@@ -18,6 +18,8 @@ final class AppState: ObservableObject {
     @Published var audios: [AssetRecord] = []
     /// Stable Audio 3 geladen?
     @Published var audioInstalled = AudioCatalog.installed
+    /// Sprecherstimme (seit 0.5.3, Qwen3-TTS).
+    @Published var speechInstalled = SpeechCatalog.installed
     /// Videos (seit 0.4.8, LTX-Video 2B) und ob das Modell geladen ist; dazu der Bild-Encoder fürs Startbild.
     @Published var videos: [AssetRecord] = []
     @Published var videoInstalled = VideoCatalog.anyInstalled
@@ -206,6 +208,8 @@ final class AppState: ObservableObject {
         if loraRows != loras { loras = loraRows }
         let audioOK = AudioCatalog.installed
         if audioOK != audioInstalled { audioInstalled = audioOK }
+        let speechOK = SpeechCatalog.installed
+        if speechOK != speechInstalled { speechInstalled = speechOK }
         let videoOK = VideoCatalog.anyInstalled
         if videoOK != videoInstalled { videoInstalled = videoOK }
         let encoderOK = VideoCatalog.active.encoderInstalled

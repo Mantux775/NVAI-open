@@ -32,6 +32,10 @@ packages:
     # LTX-2.5 mit Ton auf MLX (MIT), lokale Kopie von ltx-video-swift-mlx 0.4.2 für Macs ab 32 GB; mlx-swift und
     # mlx-swift-lm auf den Fassungen der App (Packages/ltx-video-swift-mlx/NVAI-OPEN-CHANGES.md).
     path: Packages/ltx-video-swift-mlx
+  Qwen3TTS:
+    # Sprecherstimme Qwen3-TTS auf MLX (Port MIT aus mlx-audio-swift, Modell Apache-2.0), seit 0.5.3; mlx-swift und
+    # mlx-swift-lm auf den Fassungen der App (Packages/qwen3-tts-swift/NVAI-OPEN-CHANGES.md).
+    path: Packages/qwen3-tts-swift
   StableDiffusion:
     # Core ML Stable Diffusion für kleine Macs und die Modellsuche, wie in NVAILocal.
     url: https://github.com/apple/ml-stable-diffusion
@@ -64,6 +68,8 @@ targets:
         product: LTXV
       - package: LTX25
         product: LTXVideo
+      - package: Qwen3TTS
+        product: Qwen3TTSKit
       - package: StableDiffusion
         product: StableDiffusion
       - package: ZIPFoundation
@@ -76,8 +82,8 @@ targets:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: io.github.mantux775.nvai.mac
-        MARKETING_VERSION: "0.5.2"
-        CURRENT_PROJECT_VERSION: "22"
+        MARKETING_VERSION: "0.5.3"
+        CURRENT_PROJECT_VERSION: "23"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

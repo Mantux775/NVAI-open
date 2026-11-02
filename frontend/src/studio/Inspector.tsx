@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   fileUrl,
+  SPEECH_LANGUAGES,
   TPS,
   type Asset,
   type ModelInfo,
@@ -258,7 +259,7 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
   onGenerate: Props['onGenerate']
 }) {
   const update = (fields: Record<string, unknown>) => onCommand('scene.update', { id: s.id, ...fields })
-  const modelKind = s.lane === 'video' ? (s.kind === 'image' ? 'image' : 'video') : 'audio'
+  const modelKind = s.lane === 'video' ? (s.kind === 'image' ? 'image' : 'video') : s.lane === 'voice' ? 'speech' : 'audio'
   const usable = models.filter((m) => m.kind === modelKind && m.installed)
   const earlier = p.scenes.filter((x) => x.lane === 'video' && x.id !== s.id && x.start < s.start)
   return (
@@ -272,12 +273,14 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
       {s.error && <p className="warn-text small">{s.error}</p>}
       {s.status === 'waiting' && (
         <p className="muted small">
-          {t(`Wartet auf „${sceneName(p, s.waiting_for)}“: Deren letztes Bild wird das Startbild.`, `Waiting for "${sceneName(p, s.waiting_for)}": its last frame becomes the start image.`)}
+          {s.lane === 'voice'
+            ? t(`Wartet auf „${sceneName(p, s.waiting_for)}“: Deren Take gibt die Stimme vor.`, `Waiting for "${sceneName(p, s.waiting_for)}": its take sets the voice.`)
+            : t(`Wartet auf „${sceneName(p, s.waiting_for)}“: Deren letztes Bild wird das Startbild.`, `Waiting for "${sceneName(p, s.waiting_for)}": its last frame becomes the start image.`)}
         </p>
       )}
       <Field label={t('Titel', 'Title')} value={s.title} onCommit={(v) => update({ title: v })} />
       <Field
-        label={s.lane === 'video' ? t('Prompt (was zu sehen ist und wie es sich bewegt)', 'Prompt (what is seen and how it moves)') : t('Prompt (Klang, Stil, Tempo)', 'Prompt (sound, style, tempo)')}
+        label={s.lane === 'video' ? t('Prompt (was zu sehen ist und wie es sich bewegt)', 'Prompt (what is seen and how it moves)') : s.lane === 'voice' ? t('Text (was gesprochen wird)', 'Text (what is said)') : t('Prompt (Klang, Stil, Tempo)', 'Prompt (sound, style, tempo)')}
         value={s.prompt}
         area
         prompt
@@ -285,6 +288,9 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         placeholder={s.lane === 'video' ? t(
           'Ein Absatz: Einstellung, Handlung, Kamera, Ton. Personen: Gesicht im Bild lassen, sonst erfindet LTX ein neues; sprechen nur mit Gesicht im Bild, die Stimme immer gleich beschreiben („in a warm, cheerful, clear female voice“).',
           'One paragraph: shot, action, camera, sound. People: keep the face in the picture, or LTX invents a new one; let them speak only with their face in the shot and describe the voice the same way every time ("in a warm, cheerful, clear female voice").',
+        ) : s.lane === 'voice' ? t(
+          'So, wie es gesprochen werden soll; Satzzeichen setzen Pausen. Die Szene wird so lang wie ihr Take.',
+          'As it should be spoken; punctuation sets the pauses. The scene takes the length of its take.',
         ) : undefined}
         onCommit={(v) => update({ prompt: v })}
       />
@@ -323,6 +329,7 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         const chosen = usable.find((m) => m.id === s.model_id)
         return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
       })()}
+      {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
       {s.lane === 'video' && s.kind === 'video' && (
         <label className="st-field">
           <span>{t('Anschluss an', 'Chain to')}</span>
@@ -359,6 +366,84 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
         })}
       </div>
     </div>
+  )
+}
+
+/** Stimme einer Sprecher-Szene (seit 0.5.21): beschreiben, gleich wie eine andere Sprecher-Szene (deren Take mit
+ * seinem Text als Vorlage) oder aus einer Aufnahme im Projekt. params.voice / voice_from / voice_asset_id. */
+function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update: (fields: Record<string, unknown>) => void }) {
+  const params = s.params || {}
+  const source = params.voice_from ? 'scene' : params.voice_asset_id ? 'asset' : 'describe'
+  const others = p.scenes.filter((x) => x.lane === 'voice' && x.id !== s.id)
+  const recordings = Object.entries(p.assets).filter(([, a]) => a.kind === 'audio' || a.kind === 'video'
+    || (a.kind === 'upload' && /\.(wav|mp3|flac|ogg|m4a|aac|opus|mp4|mov|mkv|webm)$/i.test(a.url)))
+  const setSource = (v: string) => update({ params: {
+    voice_from: v === 'scene' ? (others[0]?.id ?? null) : null,
+    voice_asset_id: v === 'asset' ? (recordings[0]?.[0] ?? null) : null,
+  } })
+  return (
+    <>
+      <label className="st-field">
+        <span>{t('Stimme', 'Voice')}</span>
+        <select value={source} onChange={(e) => setSource(e.target.value)}>
+          <option value="describe">{t('beschreiben', 'describe')}</option>
+          <option value="scene" disabled={others.length === 0}>{t('gleich wie Szene …', 'same as scene …')}</option>
+          <option value="asset" disabled={recordings.length === 0}>{t('aus einer Aufnahme', 'from a recording')}</option>
+        </select>
+      </label>
+      {source === 'describe' && (
+        <Field
+          label={t('Beschreibung der Stimme', 'Description of the voice')}
+          value={String(params.voice ?? '')}
+          area
+          rows={3}
+          placeholder={t('z. B. eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau. Leer: das Modell wählt.',
+            'e.g. a calm, deep male voice, about fifty, warm and slightly rough. Empty: the model chooses.')}
+          onCommit={(v) => update({ params: { voice: v } })}
+        />
+      )}
+      {source === 'scene' && (
+        <label className="st-field">
+          <span>{t('Gleiche Stimme wie', 'Same voice as')}</span>
+          <select value={params.voice_from ?? ''} onChange={(e) => update({ params: { voice_from: e.target.value || null } })}>
+            {others.map((x) => (
+              <option key={x.id} value={x.id}>{x.title || x.prompt.slice(0, 40) || x.id}</option>
+            ))}
+          </select>
+          <span className="small">{t('Deren gewählter Take ist die Vorlage; ohne Take wird sie zuerst erzeugt.',
+            'Its chosen take is the reference; without a take it is generated first.')}</span>
+        </label>
+      )}
+      {source === 'asset' && (
+        <>
+          <label className="st-field">
+            <span>{t('Aufnahme', 'Recording')}</span>
+            <select value={params.voice_asset_id ?? ''} onChange={(e) => update({ params: { voice_asset_id: e.target.value || null } })}>
+              {recordings.map(([id, a]) => (
+                <option key={id} value={id}>{a.kind === 'video' ? '▶ ' : '♪ '}{(a.prompt || id).slice(0, 50)}</option>
+              ))}
+            </select>
+          </label>
+          <Field
+            label={t('Was darin gesagt wird (optional)', 'What is said in it (optional)')}
+            value={String(params.voice_text ?? '')}
+            area
+            rows={2}
+            placeholder={t('wortgenau; dann auch Sprechweise und Betonung, sonst nur der Stimmklang',
+              'word for word; then also the way of speaking, otherwise only the sound of the voice')}
+            onCommit={(v) => update({ params: { voice_text: v } })}
+          />
+          <p className="muted small">{t('Die ersten 20 s zählen. Nur Aufnahmen, deren Sprecher zugestimmt haben.',
+            'The first 20 s count. Only recordings whose speakers agreed.')}</p>
+        </>
+      )}
+      <label className="st-field">
+        <span>{t('Sprache', 'Language')}</span>
+        <select value={params.language ?? 'auto'} onChange={(e) => update({ params: { language: e.target.value } })}>
+          {SPEECH_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+      </label>
+    </>
   )
 }
 

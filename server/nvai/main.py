@@ -37,6 +37,7 @@ from .schemas import (
     Generate3DRequest,
     GenerateAudioRequest,
     GenerateImageRequest,
+    GenerateSpeechRequest,
     GenerateVideoRequest,
     Job,
     ModelInfo,
@@ -116,6 +117,8 @@ API_FEATURES = [
                        # recommended, reference_asset_ids, sparse_attention, int8_attention (seit 0.5.18)
     "model_license",   # license_badge/output_badge/license_confirmed an Modellen, POST /api/models/{id}/license
     "studio_cancel",   # POST /api/studio/projects/{pid}/cancel: Erzeugen abbrechen (seit 0.5.19)
+    "speech",          # POST /api/generate/speech: Sprecherstimme mit Qwen3-TTS (Modellart "speech"); Studio-Spur
+                       # voice mit params voice, voice_from, voice_asset_id, voice_text, language (seit 0.5.21)
 ]
 
 
@@ -776,6 +779,24 @@ async def vhs_process(req: VhsRequest) -> Job:
 @app.post("/api/generate/audio", response_model=Job)
 async def generate_audio(req: GenerateAudioRequest) -> Job:
     return await jobs.submit("txt2audio", _job_params(req))
+
+
+@app.post("/api/generate/speech", response_model=Job)
+async def generate_speech(req: GenerateSpeechRequest) -> Job:
+    """Sprecherstimme (seit 0.5.21): Text zu Sprache mit Qwen3-TTS, Stimme aus einer Beschreibung oder Aufnahme."""
+    if req.voice_asset_id and db.get_asset(req.voice_asset_id) is None:
+        raise HTTPException(404, t(f"Aufnahme nicht gefunden: {req.voice_asset_id}",
+                                   f"Recording not found: {req.voice_asset_id}"))
+    model_id = req.model_id or registry.get_active_model("speech")
+    entry = registry.get_entry(model_id) if model_id else None
+    if entry is None or entry.get("kind") != "speech":
+        raise HTTPException(409, t("Kein Sprachmodell installiert. Unter „Modelle“ Qwen3-TTS laden.",
+                                   "No speech model installed. Download Qwen3-TTS under “Models”."))
+    if not mesh_workers.get(entry["workflow"]).is_set_up():
+        raise HTTPException(409, t("Die Sprecherstimme ist nicht eingerichtet: „NVAI-open reparieren“ im Startmenü "
+                                   "ausführen.", "The narrator voice is not set up: run “Repair NVAI-open” from the "
+                                   "Start menu."))
+    return await jobs.submit("tts", _job_params(req))
 
 
 @app.post("/api/generate/video", response_model=Job)

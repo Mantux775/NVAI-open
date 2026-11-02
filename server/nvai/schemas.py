@@ -7,12 +7,12 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean"]
+                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
 # (SeedVR2): es schaerft beim Restaurieren, erzeugt aber selbst nichts.
-ModelKind = Literal["image", "audio", "video", "3d", "controlnet", "lora", "upscale", "interpolate"]
+ModelKind = Literal["image", "audio", "speech", "video", "3d", "controlnet", "lora", "upscale", "interpolate"]
 
 
 class LoraRef(BaseModel):
@@ -150,6 +150,29 @@ class GenerateAudioRequest(BaseModel):
     project_id: str | None = Field(
         None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
                           "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
+
+
+SpeechLanguage = Literal["auto", "de", "en", "fr", "es", "it", "pt", "ru", "zh", "ja", "ko"]
+
+
+class GenerateSpeechRequest(BaseModel):
+    """Sprecherstimme (seit 0.5.21, Qwen3-TTS): Text zu Sprache, die Stimme aus einer Beschreibung (voice) oder aus
+    einer Aufnahme (voice_asset_id). Beides leer: das Modell waehlt selbst eine Stimme."""
+    text: str = Field(..., min_length=1, max_length=1500, description="Was gesprochen wird")
+    voice: str = Field("", max_length=600, description=(
+        "Beschreibung der Stimme, etwa 'eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau' "
+        "(Geschlecht, Alter, Tonlage, Tempo, Stimmung); gilt nur ohne voice_asset_id"))
+    voice_asset_id: str | None = Field(None, description=(
+        "Stimme aus einer Aufnahme übernehmen: ein Ton-, Video- oder hochgeladenes Asset; genutzt werden die "
+        "ersten 20 s. Nur Aufnahmen, deren Sprecher zugestimmt haben"))
+    voice_text: str = Field("", max_length=2000, description=(
+        "Was in der Aufnahme gesagt wird, wortgenau: dann übernimmt das Modell auch Sprechweise und Betonung. "
+        "Leer: nur der Stimmklang"))
+    language: SpeechLanguage = Field("auto", description="Sprache des Textes; auto erkennt sie selbst")
+    model_id: str | None = None
+    seed: int | None = None
+    project_id: str | None = Field(
+        None, description="Studio-Projekt: Die Aufnahme kommt gleich in seinen Ordner statt in den Verlauf")
 
 
 class GenerateVideoRequest(BaseModel):

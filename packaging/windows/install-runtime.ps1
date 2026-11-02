@@ -212,6 +212,11 @@ try {
             @("--index-strategy", "unsafe-best-match")
     }
 
+    # Narrator voice (Qwen3-TTS, since 0.5.21): its own venv without PyTorch (qwen-tts pins its own transformers);
+    # the worker takes PyTorch from ComfyUI's venv at runtime, so the same CUDA or ROCm build. Small, so always.
+    Step (L "Sprecherstimme (Qwen3-TTS)" "Narrator voice (Qwen3-TTS)")
+    New-Venv (Join-Path $App "external\qwen3tts\.venv") (Join-Path $App "locks\qwen3tts.lock") | Out-Null
+
     if ($With3D -and $vendor -eq "amd") {
         Step (L "3D (TripoSG)" "3D (TripoSG)")
         Write-Host (L "Uebersprungen: 3D braucht derzeit eine NVIDIA-Karte (CUDA-Erweiterungen)." `

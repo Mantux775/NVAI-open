@@ -848,6 +848,34 @@ EN: dict[str, dict[str, Any]] = {
             "New in NVAI-open, not much experience yet",
         ],
     },
+    "qwen3-tts-1.7b": {
+        "best_for": "Narrator voice: describe a voice or take it over from a short recording",
+        "description": (
+            "The speech model from Alibaba's Qwen team (January 2026) in two versions: VoiceDesign turns a "
+            "description into a voice (\"a calm, deep male voice, about fifty, warm and slightly rough\"), "
+            "Base takes a voice over from a recording of a few seconds. In the Studio the first line of a voice "
+            "becomes the reference for the others, so they sound the same. Ten languages, including English and "
+            "German. Runs with faster-qwen3-tts (CUDA graphs) in its own process next to ComfyUI."
+        ),
+        "pros": [
+            "Apache-2.0: commercial use without a revenue cap",
+            "Measured on an RTX 5060 Ti: 5.8 s of German speech in 2.3 s, a voice taken over in 2 s",
+            "Whisper recognized every word of the German test sentences",
+            "Same seed, same recording",
+        ],
+        "cons": [
+            "No singing",
+            "A voice from a description comes out differently with every seed: listen to a few, then use the best "
+            "one as the reference",
+            "Downloads 9 GB (both versions) and needs about 5 GB of graphics memory",
+            "Only take voices over from recordings whose speakers agreed",
+        ],
+        "features": {"prompt_hint": (
+            "Describe the voice in one sentence: gender, age, pitch, pace and mood, for example \"a calm, deep male "
+            "voice, about fifty, warm and slightly rough\". The text is spoken as written; punctuation sets the "
+            "pauses."
+        )},
+    },
     # ------------------------------------------------------------ VIDEO
     "wan21-t2v-1.3b": {
         "best_for": "The entry point to video — runs comfortably on 16 GB",

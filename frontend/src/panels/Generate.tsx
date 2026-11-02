@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
+import { api, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
@@ -18,6 +18,7 @@ type Mode = GenKind | 'restore'
 const MODES: { id: Mode; label: string; icon: string }[] = [
   { id: 'image', label: t('Bild', 'Image'), icon: '▣' },
   { id: 'audio', label: 'Audio', icon: '♪' },
+  { id: 'speech', label: t('Sprache', 'Speech'), icon: '❝' },
   { id: 'video', label: 'Video', icon: '▶' },
   { id: '3d', label: '3D', icon: '◈' },
   { id: 'restore', label: t('Restaurieren', 'Restore'), icon: '✦' },
@@ -61,6 +62,8 @@ const PLACEHOLDER: Record<Mode, string> = {
   audio: 'footsteps on gravel, close mic, dry, no music',
   video: 'a torch flickering in a dark stone corridor, slow camera push in',
   '3d': 'a weathered stone gargoyle',
+  speech: t('Willkommen in der alten Mühle. Hier wurde früher Korn gemahlen, heute erzählt sie Geschichten.',
+    'Welcome to the old mill. Grain used to be ground here, today it tells stories.'),
   restore: '',
 }
 
@@ -74,6 +77,7 @@ const EXPAND_TIP: Record<Mode, string> = {
     'Stable Audio: sound tags (source, material, room, microphone). Stable Audio 3: one sentence with genre, instruments, mood and BPM.'),
   '3d': t('Beschreibt ein einzelnes, geschlossenes Objekt ohne Boden und Schatten, so wie die 3D-Modelle es brauchen.',
     'Describes a single closed object without floor or shadow, the way the 3D models need it.'),
+  speech: '',
   restore: '',
 }
 
@@ -102,6 +106,8 @@ const HINT: Record<Mode, string> = {
       + 'may stay. TRELLIS.2 and TripoSG work purely from the image — whatever is in the '
       + 'image ends up in the mesh.',
   ),
+  speech: t('Der Text wird so gesprochen, wie er dasteht; Satzzeichen setzen Pausen.',
+    'The text is spoken as written; punctuation sets the pauses.'),
   restore: '',
 }
 
@@ -119,7 +125,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<Record<Mode, string>>({
-    image: '', audio: '', video: '', '3d': '', restore: '',
+    image: '', audio: '', speech: '', video: '', '3d': '', restore: '',
   })
 
   const [prompt, setPrompt] = useState('')
@@ -150,6 +156,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const [temporal, setTemporal] = useState(false)
   const [audioId, setAudioId] = useState('')
   const [audioAssets, setAudioAssets] = useState<Asset[]>([])
+  // Sprecherstimme (seit 0.5.21): Stimme beschreiben oder aus einer Aufnahme übernehmen
+  const [voiceMode, setVoiceMode] = useState<'design' | 'clone'>('design')
+  const [voiceDesc, setVoiceDesc] = useState('')
+  const [voiceAsset, setVoiceAsset] = useState('')
+  const [voiceText, setVoiceText] = useState('')
+  const [speechLang, setSpeechLang] = useState<SpeechLanguage>('auto')
+  const [voiceRefs, setVoiceRefs] = useState<Asset[]>([])
+  const voiceFileRef = useRef<HTMLInputElement>(null)
   // Video verlängern (seit 0.5.10): ein vorhandenes Video fortsetzen, sein letzter Frame wird Startbild
   const [extendId, setExtendId] = useState('')
   const [videoAssets, setVideoAssets] = useState<Asset[]>([])
@@ -540,6 +554,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
     if (isLtx25) api.assets('video', 30).then(setVideoAssets).catch(() => setVideoAssets([]))
   }, [isLtx25, results])
+  // Aufnahmen, aus denen sich eine Stimme übernehmen lässt: Ton (auch eigene Sprecherzeilen), Videos mit Ton, Uploads
+  useEffect(() => {
+    if (mode !== 'speech') return
+    Promise.all([api.assets('audio', 60), api.assets('video', 30), api.assets('upload', 60)])
+      .then(([aud, vid, up]) => setVoiceRefs([...aud, ...vid,
+        ...up.filter((a) => /\.(wav|mp3|flac|ogg|m4a|aac|opus|mp4|mov|mkv|webm)$/i.test(a.filename))]))
+      .catch(() => setVoiceRefs([]))
+  }, [mode, results])
   // Fehlt eine optionale Datei (eigene Freigabe auf Hugging Face), steht der Weg dorthin daneben.
   const missingNote = (name: string) => {
     const url = vfeat?.missing?.[name]
@@ -693,7 +715,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const restoreEdits = restoreRepair || restoreColorize
   const restoreReady = !!sourceId && (restoreEdits ? available.length > 0 : restoreSharpen && !!upscaler)
   const canGenerate =
-    mode === 'restore'
+    mode === 'speech'
+      ? !!prompt.trim() && (voiceMode === 'design' || !!voiceAsset)
+      : mode === 'restore'
       ? restoreReady
       : mode === '3d'
       ? !!sourceId
@@ -808,6 +832,112 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const placeholder = [promptHint, `${t('z. B.', 'e.g.')} ${feat?.placeholder
     || vfeat?.placeholder || PLACEHOLDER[mode]}`]
     .filter(Boolean).join('\n\n')
+
+  // Sprecherstimme: Text, Stimme (beschreiben oder aus einer Aufnahme), Sprache. Eine eigene Aufnahme kommt über
+  // „Hochladen“ dazu und steht dann gleich in der Liste.
+  const pickVoice = (id: string) => {
+    setVoiceAsset(id)
+    const ref = voiceRefs.find((a) => a.id === id)
+    // Eine eigene Sprecherzeile kennt ihren Text: dann wortgenau übernehmen
+    if (ref?.meta?.speech && typeof ref.meta.text === 'string') setVoiceText(ref.meta.text)
+  }
+  const speechControls = () => (
+    <>
+      <h3>Text</h3>
+      <textarea
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        placeholder={`${t('z. B.', 'e.g.')} ${PLACEHOLDER.speech}`}
+        rows={5}
+        maxLength={1500}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) generate()
+        }}
+      />
+      <p className="hint small">{HINT.speech} {prompt.length > 1200 ? `(${prompt.length}/1500)` : ''}</p>
+
+      <h3>{t('Stimme', 'Voice')}</h3>
+      <div className="voice-mode">
+        <label>
+          <input type="radio" checked={voiceMode === 'design'} onChange={() => setVoiceMode('design')} />
+          {t('beschreiben', 'describe')}
+        </label>
+        <label>
+          <input type="radio" checked={voiceMode === 'clone'} onChange={() => setVoiceMode('clone')} />
+          {t('aus einer Aufnahme', 'from a recording')}
+        </label>
+      </div>
+      {voiceMode === 'design' ? (
+        <>
+          <textarea
+            value={voiceDesc}
+            onChange={(e) => setVoiceDesc(e.target.value)}
+            rows={3}
+            maxLength={600}
+            placeholder={t('z. B. eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau',
+              'e.g. a calm, deep male voice, about fifty, warm and slightly rough')}
+          />
+          <p className="hint small">
+            {t('Geschlecht, Alter, Tonlage, Tempo und Stimmung in einem Satz; leer wählt das Modell selbst. Jeder Seed '
+              + 'klingt etwas anders: Für dieselbe Stimme in weiteren Sätzen eine gelungene Aufnahme unter „aus einer '
+              + 'Aufnahme“ als Vorlage wählen.',
+              'Gender, age, pitch, pace and mood in one sentence; empty lets the model choose. Every seed sounds a '
+              + 'little different: for the same voice in further sentences, choose a good recording under “from a '
+              + 'recording” as the reference.')}
+          </p>
+        </>
+      ) : (
+        <>
+          <div className="voice-ref">
+            <select value={voiceAsset} onChange={(e) => pickVoice(e.target.value)}>
+              <option value="">{t('Aufnahme wählen …', 'Choose a recording …')}</option>
+              {voiceRefs.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.kind === 'video' ? '▶ ' : '♪ '}
+                  {(a.prompt || String(a.meta?.original_name || '') || a.filename).slice(0, 60)}
+                  {a.meta?.seconds ? ` (${a.meta.seconds} s)` : ''}
+                </option>
+              ))}
+            </select>
+            <button className="btn small" onClick={() => voiceFileRef.current?.click()} disabled={busy}>
+              {t('Hochladen …', 'Upload …')}
+            </button>
+            <input ref={voiceFileRef} type="file" accept="audio/*,video/*" hidden onChange={async (e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              try {
+                const a = await api.upload(f)
+                setVoiceRefs((list) => [a, ...list])
+                setVoiceAsset(a.id)
+              } catch (err) {
+                setError(String(err))
+              }
+            }} />
+          </div>
+          <textarea
+            value={voiceText}
+            onChange={(e) => setVoiceText(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            placeholder={t('Was in der Aufnahme gesagt wird, wortgenau (optional)',
+              'What is said in the recording, word for word (optional)')}
+          />
+          <p className="hint small">
+            {t('Genutzt werden die ersten 20 s, drei Sekunden reichen. Mit dem Text übernimmt das Modell auch '
+              + 'Sprechweise und Betonung, ohne ihn nur den Stimmklang. Nur Aufnahmen, deren Sprecher zugestimmt haben.',
+              'The first 20 s are used, three seconds are enough. With the text the model also takes over the way of '
+              + 'speaking, without it only the sound of the voice. Only recordings whose speakers agreed.')}
+          </p>
+        </>
+      )}
+
+      <h3>{t('Sprache', 'Language')}</h3>
+      <select value={speechLang} onChange={(e) => setSpeechLang(e.target.value as SpeechLanguage)}>
+        {SPEECH_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+      </select>
+    </>
+  )
 
   const expandRow = () => (
     <div className="expand-row">
@@ -975,6 +1105,15 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
           upscale_model_id: restoreSharpen && upscaler ? upscaler.id : null,
           seed: seed ? Number(seed) : null,
           project_id: projectId || null,
+        })
+      } else if (mode === 'speech') {
+        job = await api.generateSpeech({
+          text: prompt,
+          voice: voiceMode === 'design' ? voiceDesc : '',
+          voice_asset_id: voiceMode === 'clone' ? voiceAsset || null : null,
+          voice_text: voiceMode === 'clone' ? voiceText : '',
+          language: speechLang,
+          model_id: common.model_id, seed: common.seed, project_id: common.project_id,
         })
       } else if (mode === 'audio') {
         job = await api.generateAudio({ ...common, seconds })
@@ -1281,7 +1420,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             e.target.value = ''
           }}
         />
-        <div className={MODES.length === 5 ? 'mode-switch five' : 'mode-switch four'}>
+        <div className={MODES.length === 6 ? 'mode-switch six' : MODES.length === 5 ? 'mode-switch five' : 'mode-switch four'}>
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -1297,7 +1436,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
 
         <Recommendations mode={mode} />
 
-        {mode === 'restore' ? restoreControls() : mode === '3d' ? (
+        {mode === 'restore' ? restoreControls() : mode === 'speech' ? speechControls() : mode === '3d' ? (
           <>
             {textureNotice()}
             <details className="mesh-from-text" open={!!prompt.trim() || sourceImages.length === 0}>
@@ -2271,7 +2410,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         )}
 
         <div className="row">
-          {mode !== 'restore' && (
+          {mode !== 'restore' && mode !== 'speech' && (
             <label>
               Steps
               <input value={steps} onChange={(e) => setSteps(e.target.value)}

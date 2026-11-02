@@ -1,6 +1,6 @@
 # NVAI-open
 
-Images, videos with sound, music and 3D models, made on your own computer. Free, private, no account, no subscription, no cloud.
+Images, videos with sound, music, speech and 3D models, made on your own computer. Free, private, no account, no subscription, no cloud.
 
 <p align="center"><img src="docs/images/photo-to-video-captain.gif" width="420" alt="A generated photo becomes a ship captain in a storm who says his line"></p>
 <p align="center"><sub>Made with NVAI-open: a generated photo becomes a ship captain who speaks in a storm. <a href="docs/videos/photo-to-video-captain.mp4">With sound</a></sub></p>
@@ -9,23 +9,23 @@ Images, videos with sound, music and 3D models, made on your own computer. Free,
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.20.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.20/NVAI-open-Setup-0.5.20.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.21.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-Setup-0.5.21.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.20/NVAI-open-0.5.2.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.20 for Windows and 0.5.2 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.20))
+November 2026: NVAI-open 0.5.21 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.21))
 
-- **A big bug hunt:** the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, phone photos are no longer restored sideways, and the Studio on the Mac no longer loses takes. The documentation is shorter and sorted by topic.
-- **Studio on a notebook** (since 0.5.19): progress and "✕ Cancel" next to "Conform", properties you can drag wider, fits a 14-inch screen.
+- **Narrator voice in the Studio:** voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code. [Details](docs/STUDIO.md#narrator-voice)
+- **A big bug hunt** (0.5.20): the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, phone photos are no longer restored sideways, and the Studio on the Mac no longer loses takes. The documentation is shorter and sorted by topic.
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.20 (Mac 0.5.2):
+Neu in 0.5.21:
 
-- **Große Fehlersuche:** Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, Handyfotos werden nicht mehr quer restauriert, und das Studio auf dem Mac verliert keine Takes mehr. Die Dokumentation ist kürzer und nach Themen geordnet.
-- **Studio auf dem Notebook** (seit 0.5.19): Fortschritt und „✕ Abbrechen“ neben „Übernehmen“, Eigenschaften breiter ziehbar, passt auf einen 14-Zoll-Bildschirm.
+- **Sprecherstimme im Studio:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
+- **Große Fehlersuche** (0.5.20): Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, Handyfotos werden nicht mehr quer restauriert, und das Studio auf dem Mac verliert keine Takes mehr. Die Dokumentation ist kürzer und nach Themen geordnet.
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
@@ -46,6 +46,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 - **Video with sound:** LTX-2.5 makes picture and sound in one pass, speech included: clips of up to 20 seconds, in up to 1080p.
 - **Studio:** build a whole video from scenes, cut it and export it with your graphics card's encoder.
 - **Music and sounds:** instrumental music up to 5 minutes, sound effects.
+- **Speech:** a narrator voice you describe in one sentence or take over from a recording, in 10 languages. In the Studio one speaker keeps the same voice over many lines.
 - **3D models:** from an image to a textured model for Unity, Blender or any engine.
 - **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
 - **A few words are enough:** "Expand prompt" writes the full description for you.
@@ -74,6 +75,7 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 - **Editing:** selection, razor and magnet with their keys, right-click menus, speed in percent, cross dissolve, dips and wipes, zoom with keyframes, video and audio tracks with eye and mute.
 - **Generating:** next to "Conform" you see which scene is being made and how far it is; "✕ Cancel" stops the run, finished takes stay.
 - **Seamless shots:** a chain marker makes a clip continue the one before it, so two shots join without a jump.
+- **Narrator voice:** voice scenes speak their text with Qwen3-TTS; "Same voice as" keeps one speaker over all lines, and each scene takes the length of its line.
 - **Media:** every project has its own folder for what it generates, exports and uploads. Whole projects can be packed into a ZIP file and opened on another computer.
 - **Quality:** video scenes run in the best LTX-2.5 quality and are also kept losslessly; only the export compresses (42.3 instead of 37.7 dB PSNR for a YouTube export).
 - **Export:** YouTube 1080p and 4K, Shorts, AV1, a lossless master (MKV) or ProRes 4444 for other editing software.
@@ -167,6 +169,7 @@ Every tab has a **Recommended settings** box with what we measured. The most imp
 - **Faces in video:** keep the face large, make the start image with FLUX 3 from a frontal photo and tick "Loop" or give an end image. Let people speak only with their face in the shot, about 2 words per second, and make a few variants to pick by ear.
 - **Two clips without a seam:** use the chain marker in the Studio or "Extend"; the second clip takes over the last second of the first.
 - **MiniMax H3:** only with a separate license from MiniMax in the EU, the UK, South Korea and the USA, and never publish what it makes. It tends to slow motion, so describe the pace of every movement.
+- **Narrator voice:** describe gender, age, pitch, pace and mood in one sentence. The same description sounds different with every seed, so pick the best take and use it as the recording for all further lines.
 - **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
 - **FLUX 3 and LTX-2.5:** accept the license on Hugging Face and store a read token under "Models". Step by step: [docs/HUGGINGFACE.md](docs/HUGGINGFACE.md)
 - **Old photos:** leave it on "Automatic", put known colors into the hints ("his suit is dark brown") and compare both variants at full size.
@@ -248,6 +251,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache: Clips bis 20 Sekunden, bis 1080p.
 - **Studio:** ein ganzes Video aus Szenen bauen, schneiden und mit dem Encoder der Grafikkarte exportieren.
 - **Musik und Sounds:** instrumentale Musik bis 5 Minuten, Soundeffekte.
+- **Sprache:** eine Sprecherstimme, die du in einem Satz beschreibst oder aus einer Aufnahme übernimmst, in 10 Sprachen. Im Studio behält ein Sprecher über viele Zeilen dieselbe Stimme.
 - **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
 - **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
@@ -276,6 +280,7 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 - **Schneiden:** Auswahl, Schneiden und Magnet mit ihren Tasten, Rechtsklick-Menüs, Geschwindigkeit in Prozent, Überblendung, Abblende und Wischblende, Zoomen mit Keyframes, Video- und Tonspuren mit Auge und Stummschalter.
 - **Erzeugen:** Neben „Übernehmen“ siehst du, welche Szene gerade entsteht und wie weit sie ist; „✕ Abbrechen“ beendet den Lauf, fertige Takes bleiben.
 - **Nahtlose Einstellungen:** Ein Anschluss-Marker lässt einen Clip den vorigen fortsetzen, so gehen zwei Einstellungen ohne Sprung ineinander über.
+- **Sprecherstimme:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen, und jede Szene wird so lang wie ihre Zeile.
 - **Material:** Jedes Projekt hat einen eigenen Ordner für das, was es erzeugt, exportiert und hochlädt. Ganze Projekte lassen sich als ZIP-Datei packen und auf einem anderen Rechner öffnen.
 - **Qualität:** Videoszenen laufen in der höchsten Qualität von LTX-2.5 und werden zusätzlich verlustfrei aufbewahrt; komprimiert wird erst beim Export (42,3 statt 37,7 dB PSNR bei einem YouTube-Export).
 - **Export:** YouTube 1080p und 4K, Shorts, AV1, ein verlustfreier Master (MKV) oder ProRes 4444 für andere Schnittprogramme.
@@ -369,6 +374,7 @@ In jedem Reiter steht unter **Empfohlene Einstellungen**, was wir gemessen haben
 - **Gesichter im Video:** das Gesicht groß halten, das Startbild mit FLUX 3 aus einem frontalen Foto machen und „Schleife“ anhaken oder ein Endbild mitgeben. Personen nur mit Gesicht im Bild sprechen lassen, rund 2 Wörter je Sekunde, und ein paar Varianten nach Gehör wählen.
 - **Zwei Clips ohne Naht:** den Anschluss-Marker im Studio oder „Verlängern“ nehmen; der zweite Clip übernimmt die letzte Sekunde des ersten.
 - **MiniMax H3:** in der EU, in Großbritannien, Südkorea und den USA nur mit eigener Lizenz von MiniMax, und nichts damit Erzeugtes veröffentlichen. Es neigt zu Zeitlupe, also jede Bewegung mit Tempo beschreiben.
+- **Sprecherstimme:** Geschlecht, Alter, Tonlage, Tempo und Stimmung in einem Satz beschreiben. Dieselbe Beschreibung klingt mit jedem Seed anders, also die beste Probe wählen und sie als Aufnahme für alle weiteren Zeilen nehmen.
 - **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.
 - **FLUX 3 und LTX-2.5:** die Lizenz auf Hugging Face annehmen und unter „Modelle“ einen Token mit Leserecht eintragen. Schritt für Schritt: [docs/de/HUGGINGFACE.md](docs/de/HUGGINGFACE.md)
 - **Alte Fotos:** auf „Automatisch“ lassen, bekannte Farben in die Hinweise schreiben („his suit is dark brown“) und die zwei Varianten in voller Größe vergleichen.

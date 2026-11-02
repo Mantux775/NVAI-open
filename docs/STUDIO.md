@@ -17,7 +17,7 @@ compresses. Claude Code can do all of it too, and NVAI-open for Mac has the Stud
 | Lane | What it makes |
 |---|---|
 | Picture | Video clips with sound (LTX-2.5) or still images (any image model) |
-| Voice | No text-to-speech yet: drag a recorded audio file onto the scene |
+| Voice | Spoken lines with a voice you describe or take over (Qwen3-TTS), see [Narrator voice](#narrator-voice) |
 | Music | Instrumental music up to 5 minutes (Stable Audio 3) |
 | Sound | Sound effects and ambience (Stable Audio Open) |
 
@@ -36,7 +36,8 @@ and the clip gets the new material while your cut stays.
    edge to change its length.
 3. **Set markers:** double-click the marker row, or press M for a note at the playhead.
 4. **Generate scenes:** makes every scene that has no take yet. Sound and still images come first, then the videos; a
-   chained scene waits for the one before it. While it runs, the bar next to "Conform" shows the scene being made,
+   chained scene waits for the one before it, a voice scene for the voice it
+   takes over. While it runs, the bar next to "Conform" shows the scene being made,
    its percentage and how many are done (for example "Far view 63 % · 2/5"). "✕ Cancel" (click twice) stops every
    running and queued job of the project; finished takes stay.
 5. **Conform**, then **edit:** with Selection (V) drag clips and their edges, with the Razor (C) click to cut; Ctrl+K
@@ -70,6 +71,23 @@ add it as a take. A file that lies in the edit can only be deleted after its cli
 
 Lossless files and uploaded MKV, MOV or AVI files do not play in a browser, so NVAI-open makes an H.264 preview for
 watching. The export and the download use the original.
+
+## Narrator voice
+
+Voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages including English and German). Write the text
+into the field where other scenes have their prompt; punctuation sets the pauses. Under "Voice" choose where the voice
+comes from:
+
+- **describe:** one sentence with gender, age, pitch, pace and mood, for example "a calm, deep male voice, about
+  fifty, warm and slightly rough". Every seed sounds a little different, so listen to a few takes of the first line.
+- **same as scene …:** the chosen take of another voice scene is the reference, together with its text. The scene
+  waits until that one has a take. This keeps one speaker over many lines: in our test the lines stayed at a
+  similarity of 0.99 to their reference.
+- **from a recording:** an audio or video file of the project; the first 20 s count, three seconds are enough. With the
+  exact words of the recording the way of speaking is copied too. Only use recordings whose speakers agreed.
+
+A voice scene takes the length of its take, so conforming never cuts off the end of a sentence. Conform puts the lines
+on A1, and the export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
 
 ## Tools, right-click and tracks
 
@@ -226,7 +244,7 @@ What the Mac does differently:
 - **Models:** video scenes use the video model chosen under "Generate → Video". The Mac recommends one by memory:
   LTX-Video 2B, from 16 GB LTX-Video 13B, from 32 GB LTX-2.3 and from 64 GB LTX-2.5 with sound. On 8 GB a clip stays
   within 768 × 512 × 97 frames, for example 4 s at 768 × 512. Still images come from the active image model, music and
-  sound from Stable Audio 3.
+  sound from Stable Audio 3, voice scenes from Qwen3-TTS (since Mac 0.5.3; VoiceDesign 1.7B in 4-bit, Base 0.6B in 8-bit).
 - **Chain:** starts from the last frame; carrying the last second over needs LTX-2.5 and stays on Windows.
 - **Export** with the Mac's own encoder: YouTube 1080p and 4K, Shorts, project format and ProRes 4444. There is no
   lossless copy, no AV1 and no MKV master.
@@ -237,7 +255,7 @@ exporting 9 seconds at 1080p took 2 s.
 
 ## Not there yet
 
-Text-to-speech, titles and subtitles, panning, waveforms, export as image sequence, WAV or SRT, and exchange with
+Titles and subtitles, panning, waveforms, export as image sequence, WAV or SRT, and exchange with
 other editing software.
 
 ## Making of

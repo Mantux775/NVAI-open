@@ -18,7 +18,7 @@ das Studio ([Auf dem Mac](#auf-dem-mac)).
 | Bahn | Was sie erzeugt |
 |---|---|
 | Bild/Video | Videoclips mit Ton (LTX-2.5) oder Standbilder (jedes Bildmodell) |
-| Sprecher | Noch keine Sprachausgabe: eine aufgenommene Tondatei auf die Szene ziehen |
+| Sprecher | Gesprochene Zeilen mit einer beschriebenen oder übernommenen Stimme (Qwen3-TTS), siehe [Sprecherstimme](#sprecherstimme) |
 | Musik | Instrumentalmusik bis 5 Minuten (Stable Audio 3) |
 | Klang | Geräusche und Atmosphäre (Stable Audio Open) |
 
@@ -37,7 +37,7 @@ erzeugen, übernehmen, und der Clip bekommt das neue Material, dein Schnitt blei
    du durch Ziehen, ihre Länge am rechten Rand.
 3. **Marker setzen:** Doppelklick auf die Markerzeile oder M für eine Notiz am Abspielkopf.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine
-   Anschluss-Szene wartet auf die Szene davor. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
+   Anschluss-Szene wartet auf die Szene davor, eine Sprecher-Szene auf die Stimme, die sie übernimmt. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
    gerade entsteht, mit Prozent und wie viele fertig sind (etwa „Far view 63 % · 2/5“). „✕ Abbrechen“ (zweimal
    klicken) beendet alle laufenden und wartenden Aufträge des Projekts; fertige Takes bleiben.
 5. **Übernehmen**, dann **schneiden:** Mit der Auswahl (V) Clips und ihre Ränder ziehen, mit dem Schneidewerkzeug (C)
@@ -72,6 +72,25 @@ zum Clip, auf eine Szene gezogen zum Take. Was im Schnitt liegt, lässt sich ers
 
 Verlustfreie Dateien und hochgeladene MKV-, MOV- oder AVI-Dateien spielt kein Browser ab, deshalb macht NVAI-open
 dafür eine H.264-Vorschau zum Ansehen. Export und Download nehmen das Original.
+
+## Sprecherstimme
+
+Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen, darunter Deutsch und Englisch). Den Text
+schreibst du in das Feld, in dem andere Szenen ihren Prompt haben; Satzzeichen setzen die Pausen. Unter „Stimme“
+wählst du, woher die Stimme kommt:
+
+- **beschreiben:** ein Satz mit Geschlecht, Alter, Tonlage, Tempo und Stimmung, etwa „eine ruhige, tiefe
+  Männerstimme, etwa fünfzig, warm und leicht rau“. Jeder Seed klingt etwas anders, deshalb von der ersten Zeile ein
+  paar Takes anhören.
+- **gleich wie Szene …:** Der gewählte Take einer anderen Sprecher-Szene ist die Vorlage, samt seinem Text. Die Szene
+  wartet, bis jene einen Take hat. So bleibt ein Sprecher über viele Zeilen gleich: Im Test lagen die Zeilen bei einer
+  Ähnlichkeit von 0,99 zu ihrer Vorlage.
+- **aus einer Aufnahme:** eine Ton- oder Videodatei des Projekts; die ersten 20 s zählen, drei Sekunden reichen. Mit
+  dem genauen Wortlaut der Aufnahme wird auch die Sprechweise übernommen. Nur Aufnahmen nehmen, deren Sprecher
+  zugestimmt haben.
+
+Eine Sprecher-Szene wird so lang wie ihr Take, so schneidet Übernehmen nie das Satzende ab. Übernehmen legt die Zeilen
+auf A1, der Export bringt die Mischung auf −14 LUFS. Im Test brauchten drei Zeilen samt Laden des Modells 30 s.
 
 ## Werkzeuge, Rechtsklick und Spuren
 
@@ -235,7 +254,8 @@ Was der Mac anders macht:
 - **Modelle:** Videoszenen rechnet das Videomodell, das unter „Generieren → Video“ gewählt ist. Der Mac empfiehlt eines
   nach Arbeitsspeicher: LTX-Video 2B, ab 16 GB LTX-Video 13B, ab 32 GB LTX-2.3 und ab 64 GB LTX-2.5 mit Ton. Mit 8 GB
   bleibt ein Clip bei höchstens 768 × 512 × 97 Bildern, etwa 4 s in 768 × 512. Standbilder kommen vom aktiven
-  Bildmodell, Musik und Klang von Stable Audio 3.
+  Bildmodell, Musik und Klang von Stable Audio 3, Sprecher-Szenen von Qwen3-TTS (ab Mac 0.5.3; VoiceDesign 1.7B in 4 Bit, Base
+  0.6B in 8 Bit).
 - **Anschluss:** beginnt mit dem letzten Bild; die letzte Sekunde zu übernehmen braucht LTX-2.5 und bleibt Windows
   vorbehalten.
 - **Export** mit dem Encoder des Macs: YouTube 1080p und 4K, Shorts, Projektformat und ProRes 4444. Eine verlustfreie
@@ -247,7 +267,7 @@ Gemessen auf einem Mac mini M1 mit 8 GB: Drei Testszenen (ein 2-Sekunden-Video, 
 
 ## Was noch fehlt
 
-Sprachausgabe, Titel und Untertitel, Schwenks, Wellenformen, Export als Einzelbilder, WAV oder SRT und der Austausch
+Titel und Untertitel, Schwenks, Wellenformen, Export als Einzelbilder, WAV oder SRT und der Austausch
 mit anderen Schnittprogrammen.
 
 ## Making of

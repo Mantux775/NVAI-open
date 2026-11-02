@@ -1088,7 +1088,7 @@ def get_active_model(kind: str = "image") -> str | None:
 
 
 def get_active_models() -> dict[str, str | None]:
-    return {k: get_active_model(k) for k in ("image", "audio", "video", "3d")}
+    return {k: get_active_model(k) for k in ("image", "audio", "speech", "video", "3d")}
 
 
 def set_active_model(model_id: str) -> str:

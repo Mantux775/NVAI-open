@@ -57,6 +57,11 @@ struct ModelsView: View {
         shows("audio") && visible(AudioCatalog.id, installed: state.audioInstalled)
             && matches([AudioCatalog.name, AudioCatalog.id, AudioCatalog.description])
     }
+    /// Sprecherstimme unter dem Filter „Ton“ (seit 0.5.3).
+    private var showSpeech: Bool {
+        shows("audio") && visible(SpeechCatalog.id, installed: state.speechInstalled)
+            && matches([SpeechCatalog.name, SpeechCatalog.id, SpeechCatalog.description, "TTS", "speech", "Sprache"])
+    }
     private var helperRows: [AppState.HelperRow] {
         guard shows("extras") else { return [] }
         return state.helpers.filter { visible($0.id, installed: $0.installed) && matches([$0.model.name, $0.model.id, $0.model.description]) }
@@ -143,6 +148,10 @@ struct ModelsView: View {
                     Text(t("Musik und Klänge", "Music and sounds")).font(.title2.bold()).padding(.top, 10)
                     AudioModelCard()
                 }
+                if showSpeech {
+                    Text(t("Sprecherstimme", "Narrator voice")).font(.title2.bold()).padding(.top, 10)
+                    SpeechModelCard()
+                }
 
                 let helpers = helperRows
                 if !helpers.isEmpty {
@@ -153,7 +162,7 @@ struct ModelsView: View {
                     ForEach(helpers) { row in HelperCard(row: row) }
                 }
 
-                if videos.isEmpty && flux.isEmpty && zimage.isEmpty && coreml.isEmpty && loras.isEmpty && !showAudio && helpers.isEmpty {
+                if videos.isEmpty && flux.isEmpty && zimage.isEmpty && coreml.isEmpty && loras.isEmpty && !showAudio && !showSpeech && helpers.isEmpty {
                     Text(t("Kein Modell passt zu Filter und Suche.", "No model matches the filter and search."))
                         .foregroundStyle(.secondary).padding(.top, 10)
                 }

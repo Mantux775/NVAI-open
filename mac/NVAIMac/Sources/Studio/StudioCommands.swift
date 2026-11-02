@@ -181,10 +181,12 @@ enum StudioCommands {
     static func sceneTake(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
         let i = try p.sceneIndex(a.string("id") ?? "")
         let assetID = a.string("asset_id") ?? ""
-        _ = try media(&p, assetID, env)  // prüft, dass es das Asset gibt und es lesbar ist
+        let m = try media(&p, assetID, env)  // prüft, dass es das Asset gibt und es lesbar ist
         if !p.scenes[i].takes.contains(assetID) { p.scenes[i].takes.append(assetID) }
         p.scenes[i].take = assetID
         p.scenes[i].error = nil
+        // Eine Sprecher-Szene ist so lang wie ihr Take (seit 0.5.3)
+        if p.scenes[i].lane == "voice", let d = m.duration, d > 0 { p.scenes[i].duration = d }
         return .null
     }
 

@@ -100,6 +100,11 @@ TRIPOSG_URL = os.getenv("NVAI_TRIPOSG_URL", "http://127.0.0.1:8200")
 TRELLIS2_ROOT = Path(os.getenv("NVAI_TRELLIS2_ROOT", ROOT / "external" / "trellis2"))
 TRELLIS2_URL = os.getenv("NVAI_TRELLIS2_URL", "http://127.0.0.1:8201")
 
+# Sprecherstimme (Qwen3-TTS, seit 0.5.21): eigenes venv ohne PyTorch, das kommt aus dem venv von ComfyUI
+# (mesh_workers.QWEN3TTS). Eigener Port, damit ein Testserver nicht den Worker der Installation anspricht.
+QWEN3TTS_ROOT = Path(os.getenv("NVAI_QWEN3TTS_ROOT", ROOT / "external" / "qwen3tts"))
+QWEN3TTS_PORT = int(os.getenv("NVAI_QWEN3TTS_PORT", "8202"))
+
 
 MODELS_UNREACHABLE: str | None = None  # Grund, wenn der Modellordner fehlt (externe Platte nicht angeschlossen)
 

@@ -254,15 +254,20 @@ private struct SceneInspector: View {
             }
             if let error = scene.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
             if let w = scene.waitingFor, let source = project.scenes.first(where: { $0.id == w }) {
-                Text(t("Wartet auf „\(source.title.isEmpty ? t("Szene", "Scene") : source.title)“: dessen letztes Bild wird das Startbild.",
-                       "Waiting for \"\(source.title.isEmpty ? t("Szene", "Scene") : source.title)\": its last frame becomes the start image."))
+                let name = source.title.isEmpty ? t("Szene", "Scene") : source.title
+                Text(scene.lane == "voice"
+                     ? t("Wartet auf „\(name)“: deren Take gibt die Stimme vor.", "Waiting for \"\(name)\": its take sets the voice.")
+                     : t("Wartet auf „\(name)“: dessen letztes Bild wird das Startbild.", "Waiting for \"\(name)\": its last frame becomes the start image."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             CommitField(label: t("Titel", "Title"), value: scene.title) { update(["title": .string($0)]) }
             CommitEditor(label: scene.lane == "video" ? t("Prompt: was zu sehen ist und wie es sich bewegt", "Prompt: what is seen and how it moves")
+                         : scene.lane == "voice" ? t("Text: was gesprochen wird", "Text: what is said")
                          : t("Prompt: Klang, Stil, Tempo", "Prompt: sound, style, tempo"),
                          value: scene.prompt,
                          placeholder: scene.lane == "video" ? t("Einstellung, Ort und Licht, Handlung, Kamera …", "Shot, place and light, action, camera …")
+                         : scene.lane == "voice" ? t("So, wie es gesprochen werden soll; die Szene wird so lang wie ihr Take.",
+                                                     "As it should be spoken; the scene takes the length of its take.")
                          : t("z. B. „Ruhiges Klavier mit weichen Flächen. BPM: 80.“", "e.g. \"Calm piano with soft pads. BPM: 80.\"")) {
                 update(["prompt": .string($0)])
             }
@@ -289,6 +294,7 @@ private struct SceneInspector: View {
                 }
             }
             modelPicker
+            if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
             if scene.lane == "video" && scene.kind == "video" {
                 let earlier = project.scenes.filter { $0.lane == "video" && $0.id != scene.id && $0.start < scene.start }
                 Picker(t("Anschluss an", "Chain to"), selection: Binding(
@@ -328,7 +334,8 @@ private struct SceneInspector: View {
                 ForEach(VideoCatalog.installedModels) { m in Text(m.name).tag(m.id) }
             }
         } else {
-            LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? VideoCatalog.active.name : "Stable Audio 3")
+            LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? VideoCatalog.active.name
+                           : scene.lane == "voice" ? "Qwen3-TTS" : "Stable Audio 3")
                 .font(.callout)
         }
     }
@@ -363,6 +370,78 @@ private struct SceneInspector: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Stimme einer Sprecher-Szene (seit 0.5.3, wie unter Windows): beschreiben, gleich wie eine andere Sprecher-Szene
+/// (deren gewählter Take mit seinem Text) oder aus einer Aufnahme des Projekts; dazu die Sprache.
+private struct VoiceInspector: View {
+    let project: StudioProject
+    let scene: StudioScene
+    let update: (StudioParams) -> Void
+
+    private var source: String {
+        if !(scene.params["voice_from"]?.stringValue ?? "").isEmpty { return "scene" }
+        if !(scene.params["voice_asset_id"]?.stringValue ?? "").isEmpty { return "asset" }
+        return "describe"
+    }
+    private var others: [StudioScene] { project.scenes.filter { $0.lane == "voice" && $0.id != scene.id } }
+    /// Ton- und Videomaterial des Projekts (Takes und Clips)
+    private var recordings: [String] {
+        let ids = project.scenes.flatMap(\.takes) + project.clips.map(\.assetID)
+        var seen = Set<String>()
+        return ids.filter { id in
+            guard seen.insert(id).inserted, let kind = project.media[id]?.kind else { return false }
+            return kind == "audio" || kind == "video"
+        }
+    }
+
+    var body: some View {
+        Picker(t("Stimme", "Voice"), selection: Binding(get: { source }, set: { v in
+            update(["params": .object([
+                "voice_from": v == "scene" ? (others.first.map { JSONValue.string($0.id) } ?? .null) : .null,
+                "voice_asset_id": v == "asset" ? (recordings.first.map { JSONValue.string($0) } ?? .null) : .null])])
+        })) {
+            Text(t("beschreiben", "describe")).tag("describe")
+            Text(t("gleich wie Szene …", "same as scene …")).tag("scene")
+            Text(t("aus einer Aufnahme", "from a recording")).tag("asset")
+        }
+        switch source {
+        case "scene":
+            Picker(t("Gleiche Stimme wie", "Same voice as"), selection: Binding(
+                get: { scene.params["voice_from"]?.stringValue ?? "" },
+                set: { update(["params": .object(["voice_from": $0.isEmpty ? .null : .string($0)])]) })) {
+                ForEach(others) { s in Text(s.title.isEmpty ? String(s.prompt.prefix(30)) : s.title).tag(s.id) }
+            }
+            Text(t("Deren gewählter Take ist die Vorlage; ohne Take wird sie zuerst erzeugt.",
+                   "Its chosen take is the reference; without a take it is generated first."))
+                .font(.caption).foregroundStyle(.secondary)
+        case "asset":
+            Picker(t("Aufnahme", "Recording"), selection: Binding(
+                get: { scene.params["voice_asset_id"]?.stringValue ?? "" },
+                set: { update(["params": .object(["voice_asset_id": $0.isEmpty ? .null : .string($0)])]) })) {
+                ForEach(recordings, id: \.self) { id in
+                    Text(AssetSnapshot.shared.get(id).map { StudioMaterial.label($0) } ?? id).tag(id)
+                }
+            }
+            CommitField(label: t("Was darin gesagt wird (optional)", "What is said in it (optional)"),
+                        value: scene.params["voice_text"]?.stringValue ?? "") { update(["params": .object(["voice_text": .string($0)])]) }
+            Text(t("Die ersten 20 s zählen. Nur Aufnahmen, deren Sprecher zugestimmt haben.",
+                   "The first 20 s count. Only recordings whose speakers agreed."))
+                .font(.caption).foregroundStyle(.secondary)
+        default:
+            CommitEditor(label: t("Beschreibung der Stimme", "Description of the voice"),
+                         value: scene.params["voice"]?.stringValue ?? "",
+                         placeholder: t("z. B. eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau",
+                                        "e.g. a calm, deep male voice, about fifty, warm and slightly rough")) {
+                update(["params": .object(["voice": .string($0)])])
+            }
+        }
+        Picker(t("Sprache", "Language"), selection: Binding(
+            get: { scene.params["language"]?.stringValue ?? "auto" },
+            set: { update(["params": .object(["language": .string($0)])]) })) {
+            ForEach(SpeechForm.languageNames, id: \.id) { Text($0.label).tag($0.id) }
         }
     }
 }

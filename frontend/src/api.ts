@@ -6,7 +6,7 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
 /** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. Ebenso 'upscale'
  * (SeedVR2): es schärft beim Restaurieren. */
-export type ModelKind = 'image' | 'audio' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale' | 'interpolate'
+export type ModelKind = 'image' | 'audio' | 'speech' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale' | 'interpolate'
 
 /** Eine LoRA beim Generieren: Katalog-ID (kind 'lora') und Stärke. */
 export interface LoraRef {
@@ -14,7 +14,7 @@ export interface LoraRef {
   strength: number
 }
 /** Die vier Modi, die wirklich etwas erzeugen. */
-export type GenKind = 'image' | 'audio' | 'video' | '3d'
+export type GenKind = 'image' | 'audio' | 'speech' | 'video' | '3d'
 // Wofür "Prompt ausbauen" schreibt (server/nvai/prompt_targets.py)
 export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_multishot' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d'
 
@@ -386,6 +386,28 @@ export interface AudioParams {
   project_id?: string | null
 }
 
+/** Sprecherstimme (seit 0.5.21, Qwen3-TTS): Stimme aus einer Beschreibung oder einer Aufnahme. */
+export interface SpeechParams {
+  text: string
+  voice?: string
+  voice_asset_id?: string | null
+  voice_text?: string
+  language?: SpeechLanguage
+  model_id?: string | null
+  seed?: number | null
+  project_id?: string | null
+}
+
+export type SpeechLanguage = 'auto' | 'de' | 'en' | 'fr' | 'es' | 'it' | 'pt' | 'ru' | 'zh' | 'ja' | 'ko'
+
+/** Sprachen von Qwen3-TTS, jeweils in ihrer eigenen Schreibweise (nur „Automatisch“ übersetzt). */
+export const SPEECH_LANGUAGES: { id: SpeechLanguage; label: string }[] = [
+  { id: 'auto', label: t('Automatisch', 'Automatic') },
+  { id: 'de', label: 'Deutsch' }, { id: 'en', label: 'English' }, { id: 'fr', label: 'Français' },
+  { id: 'es', label: 'Español' }, { id: 'it', label: 'Italiano' }, { id: 'pt', label: 'Português' },
+  { id: 'ru', label: 'Русский' }, { id: 'zh', label: '中文' }, { id: 'ja', label: '日本語' }, { id: 'ko', label: '한국어' },
+]
+
 export interface VideoParams {
   loras?: LoraRef[]
   prompt: string
@@ -723,6 +745,8 @@ export const api = {
     ),
   generateAudio: (p: AudioParams) =>
     req<Job>('/api/generate/audio', { method: 'POST', body: JSON.stringify(p) }),
+  generateSpeech: (p: SpeechParams) =>
+    req<Job>('/api/generate/speech', { method: 'POST', body: JSON.stringify(p) }),
   generateVideo: (p: VideoParams) =>
     req<Job>('/api/generate/video', { method: 'POST', body: JSON.stringify(p) }),
   generate3D: (p: Mesh3DParams) =>
@@ -864,6 +888,7 @@ export function connectEvents(onEvent: (e: ServerEvent) => void): () => void {
 export const KIND_LABEL: Record<ModelKind, string> = {
   image: t('Bild', 'Image'),
   audio: 'Audio',
+  speech: t('Sprache', 'Speech'),
   video: 'Video',
   '3d': '3D',
   controlnet: 'ControlNet',

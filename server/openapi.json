@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.20",
+  "version": "0.5.21",
   "x-api-version": 1
  },
  "paths": {
@@ -1232,6 +1232,45 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/GenerateAudioRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/speech": {
+   "post": {
+    "summary": "Generate Speech",
+    "description": "Sprecherstimme (seit 0.5.21): Text zu Sprache mit Qwen3-TTS, Stimme aus einer Beschreibung oder Aufnahme.",
+    "operationId": "generate_speech_api_generate_speech_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GenerateSpeechRequest"
        }
       }
      },
@@ -3181,6 +3220,7 @@
       "enum": [
        "image",
        "audio",
+       "speech",
        "video",
        "3d",
        "controlnet",
@@ -3950,6 +3990,102 @@
     ],
     "title": "GenerateImageRequest"
    },
+   "GenerateSpeechRequest": {
+    "properties": {
+     "text": {
+      "type": "string",
+      "maxLength": 1500,
+      "minLength": 1,
+      "title": "Text",
+      "description": "Was gesprochen wird"
+     },
+     "voice": {
+      "type": "string",
+      "maxLength": 600,
+      "title": "Voice",
+      "description": "Beschreibung der Stimme, etwa 'eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau' (Geschlecht, Alter, Tonlage, Tempo, Stimmung); gilt nur ohne voice_asset_id",
+      "default": ""
+     },
+     "voice_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Voice Asset Id",
+      "description": "Stimme aus einer Aufnahme übernehmen: ein Ton-, Video- oder hochgeladenes Asset; genutzt werden die ersten 20 s. Nur Aufnahmen, deren Sprecher zugestimmt haben"
+     },
+     "voice_text": {
+      "type": "string",
+      "maxLength": 2000,
+      "title": "Voice Text",
+      "description": "Was in der Aufnahme gesagt wird, wortgenau: dann übernimmt das Modell auch Sprechweise und Betonung. Leer: nur der Stimmklang",
+      "default": ""
+     },
+     "language": {
+      "type": "string",
+      "enum": [
+       "auto",
+       "de",
+       "en",
+       "fr",
+       "es",
+       "it",
+       "pt",
+       "ru",
+       "zh",
+       "ja",
+       "ko"
+      ],
+      "title": "Language",
+      "description": "Sprache des Textes; auto erkennt sie selbst",
+      "default": "auto"
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id",
+      "description": "Studio-Projekt: Die Aufnahme kommt gleich in seinen Ordner statt in den Verlauf"
+     }
+    },
+    "type": "object",
+    "required": [
+     "text"
+    ],
+    "title": "GenerateSpeechRequest",
+    "description": "Sprecherstimme (seit 0.5.21, Qwen3-TTS): Text zu Sprache, die Stimme aus einer Beschreibung (voice) oder aus\neiner Aufnahme (voice_asset_id). Beides leer: das Modell waehlt selbst eine Stimme."
+   },
    "GenerateVideoRequest": {
     "properties": {
      "prompt": {
@@ -4276,7 +4412,8 @@
        "restore",
        "studio_export",
        "vhs",
-       "vhs_clean"
+       "vhs_clean",
+       "tts"
       ],
       "title": "Kind"
      },
@@ -4460,6 +4597,7 @@
       "enum": [
        "image",
        "audio",
+       "speech",
        "video",
        "3d",
        "controlnet",

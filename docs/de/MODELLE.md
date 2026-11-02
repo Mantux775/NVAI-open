@@ -41,6 +41,7 @@ nebeneinander, mit denselben Prompts und Seeds: [MODEL_COMPARISON.md](../MODEL_C
 | Nur ein paar Worte Prompt | erst **✨ Prompt ausbauen**, dann jedes Modell |
 | Video mit Ton | **LTX-2.5** |
 | Instrumentalmusik / Soundeffekte | **Stable Audio 3** / **Stable Audio Open** |
+| Sprecherstimme, Dialogzeilen | **Qwen3-TTS** |
 | 3D-Modell aus einem Bild | **TripoSG** (Form) oder **TRELLIS.2** (mit Texturen) |
 | Altes Foto restaurieren oder einfärben | Reiter **„Restaurieren“**: FLUX 3 und SeedVR2 |
 | Historisch genaue Fahrzeuge (Panzer IV, Kübelwagen …) | **keins**, siehe [Bekannte Fallen](#bekannte-fallen) |
@@ -395,6 +396,42 @@ für LTX-2.5** (keines hielt eine echte Person erkennbar).
 
 ---
 
+## Sprache
+
+| Modell | Wofür | Gemessen | Lizenz |
+|---|---|---|---|
+| Qwen3-TTS 1.7B (`qwen3-tts-1.7b`) | Sprecherstimme und Dialogzeilen in 10 Sprachen, darunter Deutsch und Englisch | 5,8 s Sprache in 2,3 s; eine übernommene Stimme in 2 s | Apache-2.0 |
+
+Die Stimme kommt aus einer Beschreibung oder aus einer Aufnahme:
+
+- **Beschreiben** in einem Satz: Geschlecht, Alter, Tonlage, Tempo und Stimmung, etwa „eine ruhige, tiefe
+  Männerstimme, etwa fünfzig, warm und leicht rau“. Dieselbe Beschreibung klingt mit jedem Seed anders: Im Test lag die
+  tiefe Männerstimme zwischen 102 und 175 Hz. Ein paar Proben anhören und die beste behalten.
+- **Übernehmen** aus einer Aufnahme (Ton, Video oder Upload, die ersten 20 s; drei Sekunden reichen). Mit dem genauen
+  Wortlaut der Aufnahme übernimmt das Modell auch die Sprechweise, ohne ihn nur den Stimmklang. Zeilen aus einer
+  Vorlage lagen bei einer Ähnlichkeit von 0,99 zu ihr; ein anderer Seed derselben Beschreibung kam auf 0,97–0,98, eine
+  junge Frauenstimme auf 0,96. Stimmen nur aus Aufnahmen übernehmen, deren Sprecher zugestimmt haben.
+- **Ein Sprecher für viele Zeilen:** die erste Zeile aus einer Beschreibung erzeugen, dann sie als Aufnahme für alle
+  weiteren nehmen. Im Studio heißt das „Gleiche Stimme wie“ auf der Sprecher-Bahn.
+- Whisper verstand jedes Wort unserer deutschen und englischen Testzeilen (0 Fehler in 166 Wörtern). Satzzeichen setzen
+  die Pausen; eine aus einer deutschen Zeile übernommene Stimme spricht auch Englisch. Kein Gesang.
+- Der erste Auftrag einer Sitzung braucht 20 bis 65 s länger (Laden), die weiteren nur die Zeit oben. Qwen3-TTS rechnet in einem
+  eigenen Prozess mit faster-qwen3-tts (MIT) und braucht rund 5 GB Grafikspeicher.
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/generate/speech -H "Content-Type: application/json" -d '{
+  "text": "Willkommen in der alten Mühle. Hier wurde früher Korn gemahlen, heute erzählt sie Geschichten.",
+  "voice": "eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau", "language": "de", "seed": 7}'
+# gleiche Stimme für die nächste Zeile: Asset-ID und genauer Text der ersten
+curl -X POST http://127.0.0.1:8100/api/generate/speech -H "Content-Type: application/json" -d '{
+  "text": "Morgen früh geht es weiter, dann zeige ich euch den Keller.", "voice_asset_id": "<Asset-ID der ersten Zeile>",
+  "voice_text": "Willkommen in der alten Mühle. Hier wurde früher Korn gemahlen, heute erzählt sie Geschichten.", "language": "de"}'
+```
+
+Aus Claude Code geht dasselbe mit dem MCP-Werkzeug `generate_speech`.
+
+---
+
 ## 3D
 
 Zwei Schritte: erst ein Bild des Objekts, dann `image_to_3d` (oder `text_to_3d`, das beides macht). Was im Bild steht,
@@ -466,6 +503,7 @@ NVAI-open für Mac rechnet mit eigenen, nativen Modellen auf Apple Silicon (MLX)
 | Z-Image Turbo | fotografische Bilder und Schrift, 8 Schritte | 512² in 101 s, 1 MP in 399 s |
 | LTX-Video 2B | Video aus Text oder einem Startbild, 24 fps, ohne Ton | 4 s in 768 × 512 in 174 s |
 | Stable Audio 3 Medium | Musik und Klänge bis 60 s bei 8 GB | 30 s in 13 s |
+| Qwen3-TTS (VoiceDesign 1.7B 4 Bit, Base 0.6B 8 Bit), ab Mac 0.5.3 | Sprecherstimme aus einer Beschreibung oder Aufnahme | 0,8-fache Echtzeit, höchstens 3,3 GB |
 | Qwen3.5 4B, SeedVR2 3B | „Automatisch“ beim Restaurieren; Schärfen | Automatisch rund 20 s; 1024 × 738 → 2× in 9 min |
 
 FLUX.2 Klein entfernt bei alten Fotos weniger Schäden als FLUX 3 unter Windows, und SeedVR2 3B glättet Gesichter etwas
@@ -501,7 +539,7 @@ Aus Claude Code geht es über den MCP-Server ([CLAUDE_CODE.md](../CLAUDE_CODE.md
 | `GET /api/health` | Zustand, aktive Modelle, Warteschlange |
 | `GET /api/version` | Versionen, Vertrag (`api`) und unterstützte Erweiterungen (`features`) |
 | `GET /api/models?kind=image` | Modelle mit `features`, `recommended` und `gpu_note` |
-| `POST /api/generate/image` (`/video`, `/audio`) | Auftrag anlegen; die Antwort hat seine `id` |
+| `POST /api/generate/image` (`/video`, `/audio`, `/speech`) | Auftrag anlegen; die Antwort hat seine `id` |
 | `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
 | `GET /api/jobs/{id}/assets` | die Ergebnisse mit `id`, `filename`, `url`, `meta` (Seed, Einstellungen, `caption`) |
 | `POST /api/upload` | eigenes Bild hochladen (multipart, Feld `file`), etwa als Referenz |

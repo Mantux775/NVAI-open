@@ -323,6 +323,10 @@ async def cancel_current() -> dict[str, Any]:
             if await w.is_running():
                 await asyncio.to_thread(w.stop)  # wartet bis zu 15 s auf das Prozessende, nicht im Event-Loop
                 stopped.append(w.name)
+    elif job and job.kind == "tts":
+        # Der Stimm-Worker kennt /cancel: Er haelt nach dem naechsten Ton-Frame an und bleibt geladen.
+        if await mesh_workers.QWEN3TTS.cancel():
+            stopped.append(mesh_workers.QWEN3TTS.name)
     elif await comfy.interrupt():
         stopped.append("ComfyUI")
 
@@ -394,7 +398,7 @@ async def _ensure_backend(ctx: JobContext) -> None:
     # stehen, faende ein grosses Video-Modell keinen Platz mehr -- die Gegenrichtung
     # macht _img23d bereits. Rechnet 3D auf einer anderen Karte, darf er bleiben.
     for w in mesh_workers.all_workers():
-        if _same_gpu("mesh", "image") and await w.is_running():
+        if _same_gpu(w.role, "image") and await w.is_running():
             ctx.progress(0.0, t(f"entlade {w.name}", f"unloading {w.name}"))
             await w.unload()
 
@@ -1798,6 +1802,75 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         meta=meta,
     )
     return [combined.id, *ids]
+
+
+@register("tts")
+async def _tts(job: Job, ctx: JobContext) -> list[str]:
+    """Sprecherstimme (seit 0.5.21): Text zu Sprache im Qwen3-TTS-Worker, einem eigenen Prozess wie die Mesh-Worker.
+
+    Mit voice_asset_id uebernimmt die Base-Fassung die Stimme einer Aufnahme (Ton, Video oder Upload; die ersten
+    20 s, mit voice_text auch Sprechweise und Betonung), sonst macht VoiceDesign sie aus der Beschreibung `voice`.
+    Gemessen auf der RTX 5060 Ti: 5,8 s deutsche Sprache in 2,3 s, Laden mit CUDA-Graphen rund 5-15 s."""
+    p = job.params
+    entry = _resolve_model(p, "speech")
+    worker = mesh_workers.get(entry["workflow"])
+    if not worker.is_set_up():
+        raise RuntimeError(t("Die Sprecherstimme ist nicht eingerichtet: „NVAI-open reparieren“ im Startmenü "
+                             "ausführen.", "The narrator voice is not set up: run “Repair NVAI-open” from the "
+                             "Start menu."))
+    dirs = {("design" if "VoiceDesign" in f["repo"] else "clone"): registry.file_path(f) for f in entry["files"]}
+    ref_path: Path | None = None
+    if p.get("voice_asset_id"):
+        ref = db.get_asset(p["voice_asset_id"])
+        ref_path = db.asset_file(ref.filename) if ref is not None else None
+        if ref_path is None or not ref_path.exists():
+            raise RuntimeError(t(f"Aufnahme nicht gefunden: {p['voice_asset_id']}",
+                                 f"Recording not found: {p['voice_asset_id']}"))
+    mode = "clone" if ref_path is not None else "design"
+
+    # Eine Karte traegt nur ein grosses Modell: ComfyUI und die anderen Worker raeumen, wenn sie auf derselben liegen.
+    if _same_gpu(worker.role, "image") and await comfy.is_running():
+        ctx.progress(0.02, t("gebe VRAM von ComfyUI frei", "freeing ComfyUI's VRAM"))
+        await comfy.MAIN.free_memory()
+    if (gpu.separate_text_backend() and _same_gpu(worker.role, "text")
+            and await comfy.TEXT.is_running(timeout=1.0)):
+        await comfy.TEXT.free_memory()
+    for other in mesh_workers.all_workers():
+        if other is not worker and _same_gpu(other.role, worker.role) and await other.is_running():
+            ctx.progress(0.03, t(f"entlade {other.name}", f"unloading {other.name}"))
+            await other.unload()
+
+    ctx.progress(0.05, t(f"starte {worker.name}", f"starting {worker.name}"))
+    worker.start(dirs[mode])
+    if not await worker.wait_until_ready():
+        raise RuntimeError(t(f"{worker.name} nicht gestartet (Timeout). Details: /api/backend/log?worker={worker.key}",
+                             f"{worker.name} did not start (timeout). Details: /api/backend/log?worker={worker.key}"))
+    ctx.progress(0.15, t("spricht", "speaking"))
+    out_name = f"{db.new_id('tts')}.wav"
+    payload: dict[str, Any] = {
+        "mode": mode, "model_path": str(dirs[mode]), "text": p["text"], "language": p.get("language") or "auto",
+        "instruct": p.get("voice") or "", "seed": p.get("seed"), "output_path": str(config.ASSET_DIR / out_name),
+    }
+    if ref_path is not None:
+        payload |= {"ref_audio_path": str(ref_path), "ref_text": p.get("voice_text") or None,
+                    "work_dir": str(config.DATA_DIR / "tmp" / "tts")}
+    try:
+        result = await worker.generate(payload, timeout=900.0)
+    except RuntimeError as exc:
+        if "abgebrochen" in str(exc):
+            raise asyncio.CancelledError() from exc
+        raise
+    meta = {
+        "speech": True, "text": p["text"], "voice": p.get("voice") or "", "mode": mode,
+        "language": result.get("language"), "seed": result.get("seed"), "seconds": result.get("seconds"),
+        "sample_rate": result.get("sample_rate"), "gen_s": result.get("gen_s"),
+    }
+    if ref_path is not None:
+        meta |= {"voice_asset_id": p["voice_asset_id"], "voice_text": p.get("voice_text") or "",
+                 "voice_reference": result.get("ref_mode")}
+    asset = db.create_asset(kind="audio", filename=out_name, job_id=job.id, prompt=p["text"], model_id=entry["id"],
+                            meta=meta)
+    return [asset.id]
 
 
 @register("img23d")

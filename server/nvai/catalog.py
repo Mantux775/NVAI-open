@@ -1423,6 +1423,67 @@ AUDIO_MODELS: list[dict[str, Any]] = [
     },
 ]
 
+# --------------------------------------------------------------- SPRACHE (seit 0.5.21)
+
+QWEN3TTS_ALLOW = ["*.json", "*.safetensors", "*.txt"]
+QWEN3TTS_LANGUAGES = ["auto", "de", "en", "fr", "es", "it", "pt", "ru", "zh", "ja", "ko"]
+SPEECH_MODELS: list[dict[str, Any]] = [
+    {
+        "id": "qwen3-tts-1.7b",
+        "name": "Qwen3-TTS 1.7B",
+        "kind": "speech",
+        "family": "qwen3_tts",
+        "workflow": "qwen3tts",
+        # Zwei Snapshots: VoiceDesign (Stimme aus einer Beschreibung) und Base (Stimme aus einer Aufnahme). Der Worker
+        # (server/workers/qwen3tts_worker.py, faster-qwen3-tts) haelt immer nur eins davon im Speicher.
+        "files": [
+            {"repo": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign", "snapshot": True,
+             "target": "qwen3-tts/12Hz-1.7B-VoiceDesign", "check": "model.safetensors",
+             "allow_patterns": QWEN3TTS_ALLOW},
+            {"repo": "Qwen/Qwen3-TTS-12Hz-1.7B-Base", "snapshot": True,
+             "target": "qwen3-tts/12Hz-1.7B-Base", "check": "model.safetensors",
+             "allow_patterns": QWEN3TTS_ALLOW},
+        ],
+        "size_gb": 9.06,
+        "vram_gb": 5,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Sprecherstimme: eine Stimme beschreiben oder aus einer kurzen Aufnahme übernehmen",
+        "description": (
+            "Das Sprachmodell von Alibabas Qwen-Team (Januar 2026) in zwei Fassungen: VoiceDesign macht aus "
+            "einer Beschreibung eine Stimme („eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht "
+            "rau“), Base übernimmt eine Stimme aus einer Aufnahme von wenigen Sekunden. Im Studio wird die "
+            "erste Zeile einer Stimme zur Vorlage der übrigen, damit sie gleich klingen. Zehn Sprachen, "
+            "darunter Deutsch und Englisch. Rechnet mit faster-qwen3-tts (CUDA-Graphen) in einem eigenen "
+            "Prozess neben ComfyUI."
+        ),
+        "pros": [
+            "Apache-2.0: kommerziell ohne Umsatzgrenze",
+            "Gemessen auf der RTX 5060 Ti: 5,8 s deutsche Sprache in 2,3 s, eine übernommene Stimme in 2 s",
+            "Whisper erkannte jedes Wort der deutschen Testsätze wieder",
+            "Gleicher Seed, gleiche Aufnahme",
+        ],
+        "cons": [
+            "Kein Gesang",
+            "Eine Stimme aus einer Beschreibung fällt je Seed anders aus: Proben anhören, dann die beste als "
+            "Vorlage nehmen",
+            "Lädt 9 GB (beide Fassungen) und braucht rund 5 GB Grafikspeicher",
+            "Stimmen nur aus Aufnahmen übernehmen, deren Sprecher zugestimmt haben",
+        ],
+        "features": {
+            "languages": QWEN3TTS_LANGUAGES,
+            "voice_design": True,
+            "voice_clone": True,
+            "max_chars": 1500,
+            "prompt_hint": (
+                "Die Stimme in einem Satz beschreiben: Geschlecht, Alter, Tonlage, Tempo und Stimmung, etwa "
+                "„eine ruhige, tiefe Männerstimme, etwa fünfzig, warm und leicht rau“. Der Text wird so "
+                "gesprochen, wie er dasteht; Satzzeichen setzen Pausen."
+            ),
+        },
+    },
+]
+
 # --------------------------------------------------------------- VIDEO
 
 # LTX-2.5: was beide Fassungen (NVFP4 fuer RTX 50, INT8 fuer RTX 20/30/40) teilen. Die optionalen
@@ -2670,7 +2731,7 @@ INTERPOLATE_MODELS: list[dict[str, Any]] = [
 
 
 ALL_MODELS: list[dict[str, Any]] = (
-    IMAGE_MODELS + AUDIO_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
+    IMAGE_MODELS + AUDIO_MODELS + SPEECH_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
     + UPSCALE_MODELS + INTERPOLATE_MODELS
 )
 # MiniMax H3 (minimax.py, seit 0.5.18): Startbild-, Referenz- und FastH3-Fassung samt Turbo-LoRAs, mit roten
@@ -2709,7 +2770,7 @@ for _m in ALL_MODELS:
     if _m["id"] in RECOMMENDED:
         _m["features"] = {**(_m.get("features") or {}), "recommended": RECOMMENDED[_m["id"]]}
 
-KIND_LABELS = {"image": "Bild", "audio": "Audio", "video": "Video", "3d": "3D",
+KIND_LABELS = {"image": "Bild", "audio": "Audio", "speech": "Sprache", "video": "Video", "3d": "3D",
                "controlnet": "ControlNet", "upscale": "Hochskalieren", "interpolate": "Zwischenbilder"}
 
 

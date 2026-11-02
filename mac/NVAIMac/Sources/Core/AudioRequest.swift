@@ -1,7 +1,7 @@
 import Foundation
 
 /// Musik oder Klang erzeugen (`POST /api/generate/audio`, seit 0.4.7): Felder wie `GenerateAudioRequest` unter
-/// Windows, so weit Stable Audio 3 sie nutzt. Gesang (`lyrics`) gibt es nur mit ACE-Step unter Windows.
+/// Windows, so weit Stable Audio 3 sie nutzt. Gesang (`lyrics`) gibt es in NVAI-open nicht.
 struct AudioJobRequest: Sendable {
     var prompt: String
     var seconds: Double
@@ -21,8 +21,8 @@ struct AudioJobRequest: Sendable {
             throw APIError(404, t("Unbekanntes Audiomodell: \(id)", "Unknown audio model: \(id)"))
         }
         if let lyrics = o["lyrics"]?.stringValue, !lyrics.trimmingCharacters(in: .whitespaces).isEmpty {
-            throw APIError(422, t("Gesang (lyrics) gibt es nur mit ACE-Step in NVAI-open für Windows; Stable Audio 3 macht Musik ohne Gesang.",
-                                  "Vocals (lyrics) are only available with ACE-Step in NVAI-open for Windows; Stable Audio 3 makes music without vocals."))
+            throw APIError(422, t("Gesang (lyrics) gibt es in NVAI-open nicht; Stable Audio 3 macht Musik ohne Gesang.",
+                                  "NVAI-open has no vocals (lyrics); Stable Audio 3 makes music without vocals."))
         }
         guard AudioCatalog.installed else {
             throw APIError(409, t("Stable Audio 3 ist nicht geladen. In NVAI-open unter „Modelle“ herunterladen.",

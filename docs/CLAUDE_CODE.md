@@ -35,6 +35,7 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | `generate_image` | Image → file paths |
 | `expand_prompt` | A few words → a full prompt; `target` = `image`, `video`, `video_sound`, `video_start`, `video_multishot`, `sfx`, `music_sa3` or `3d` (needs FLUX 3 downloaded) |
 | `generate_audio` | Sound effect or music → file paths |
+| `generate_speech` | Spoken text with a described voice or a voice taken over from a recording → WAV path |
 | `generate_video` | Clip → file paths; `wait=False` returns the `job_id` at once |
 | `job_status` | State of a job; `wait_s` up to 600 waits for it; once done, the same result as the `generate_*` call |
 | `image_to_3d` / `text_to_3d` | Image (or text → image) → GLB mesh |
@@ -91,6 +92,7 @@ both in step when a new finding comes in.
 | Quality through editing | leave `master` on (default); YouTube 1080p at 24 Mbit/s | export from the lossless copy 42.3 dB instead of 37.7 from the MP4 |
 | MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | the preselection: turbo LoRA 8 steps v1.1 + `sparse_attention="sol-attn"` + `int8_attention=True`; describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; it moves about half as much as LTX-2.5 |
 | Sound effects / music | Stable Audio Open / Stable Audio 3 Medium | describe the sound for effects; music as one sentence with BPM, up to 5 minutes, no vocals |
+| Narrator voice, one speaker over many lines | `generate_speech` with `voice` (one sentence: gender, age, pitch, pace, mood) for the first line, then that line as `voice_asset_id` with its exact text as `voice_text`; Studio: `voice_from` | lines taken over stayed at 0.99 similarity to the reference, another seed of the same description 0.97–0.98; the same "deep male voice" description gave 102–175 Hz depending on the seed |
 | 3D source image | one object, plain background, no floor, no cast shadow; `project_front=True` for lettering | floor and shadow become a plate; lettering became a distorted relief |
 | Old photo | `restore_image` with `repair_mode="auto"` (default), `batch_size=2`, known colors in `notes` | auto chose right on 20 of 21 test photos; color hints cut the color error by 40 % |
 
@@ -106,6 +108,7 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 | Image 1024² / 1408²; with a style template | Krea 2 Turbo NVFP4 | ~20 s / ~37 s; 41–48 s |
 | Image 1 MP, 50 steps | MOSS-Image INT8 | ~51 s (first expansion ~11 s extra) |
 | Sound effect 6 s / music 60 s / 300 s | Stable Audio Open / Stable Audio 3 | ~12 s / 9–12 s / ~64 s |
+| Speech 5.8 s / voice taken over 3 s (first job of a session +20–65 s loading) | Qwen3-TTS 1.7B | ~2.3 s / ~2 s |
 | Video with sound 1280 × 704, 5 s; with a start image | LTX-2.5 NVFP4 | ~93 s; ~109 s |
 | Start and end image 5 s / loop 4 s, 1280 × 704 | LTX-2.5 NVFP4 | ~154 s / ~125 s |
 | Video 1920 × 1088, 5 s, standard / DFR | LTX-2.5 NVFP4 | ~251 s / ~786 s |
@@ -268,6 +271,25 @@ What FLUX 3 computes falls under the FLUX Kommunity License; SeedVR2 output is f
 
 Every audio output goes through NVAI-open's limiter (−1 dBFS; video sound −2.5 dBFS). There is no model for songs with
 vocals. Normalize before putting a track into a video (−14 LUFS); the Studio export does that itself.
+
+### Narrator voice (since 0.5.21)
+
+`generate_speech(text, voice=…)` speaks a text with **Qwen3-TTS 1.7B** (Apache-2.0, 10 languages including English
+and German; `language` auto detects). Two ways to get a voice:
+
+- **Describe it** in `voice`, one sentence: gender, age, pitch, pace, mood ("a calm, deep male voice, about fifty, warm
+  and slightly rough"). The same description sounds different per seed: measured median pitch 102–132 Hz with seeds
+  1–3 and 175 Hz with seed 7. Make a few takes and let the user pick.
+- **Take it over** with `voice_asset_id` (audio, video or upload; the first 20 s, 3 s are enough) and `voice_text` = the
+  exact words of that recording; without `voice_text` only the sound of the voice is used. Only recordings whose
+  speakers agreed.
+
+For one speaker over several lines, generate the first line from a description, then pass its asset id and text for
+every further line (in the Studio: `params.voice_from` = that scene's id; the scene waits for its take). Whisper
+large-v3-turbo understood every word of 166 test words (German and English), and a German reference can speak
+English. You cannot listen: say so and let the user judge the voice. Speed on an RTX 5060 Ti: 5.8 s of speech in
+2.3 s; the first job of a session takes 20 to 65 s longer (process start and loading with CUDA graphs: 22 s right
+after starting NVAI-open, 65 s after a long run of image and video jobs).
 
 ## Video
 
@@ -444,6 +466,11 @@ Workflow:
    before exporting a final version.
 4. Markers of kind `ai` that are not done are tasks the user left for you: carry them out, then `marker.update` with
    `done=true`.
+
+Voice scenes (since 0.5.21): the prompt is the spoken text; `params.voice` describes the voice, `params.voice_from`
+takes over the voice of another voice scene (its chosen take and text; the scene waits for it), `params.voice_asset_id`
+with `params.voice_text` takes it from a recording, `params.language` sets the language. A voice scene takes the length
+of its take, so plan gaps between lines and move scenes after generating.
 
 To stop a run, `POST /api/studio/projects/{id}/cancel` (feature `studio_cancel`) cancels every queued and running job of
 the project's scenes and releases waiting chained scenes; finished takes stay. Never cancel a run the user started
