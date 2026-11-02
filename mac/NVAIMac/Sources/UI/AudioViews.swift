@@ -109,8 +109,7 @@ struct AudioModelCard: View {
                             AudioCatalog.downloadGB, Int(AudioCatalog.maxSeconds)))
                     .font(.caption).foregroundStyle(.secondary)
                 if let download {
-                    ProgressView(value: download.progress)
-                    Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                    DownloadProgressRow(download: download)
                 } else if let lastError {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }

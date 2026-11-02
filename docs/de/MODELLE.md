@@ -1,70 +1,293 @@
-# Bildmodelle in NVAI-open: Qwen-Image-2512, FLUX 3 Image Klein, Krea 2 und MOSS-Image
+# Die Modelle in NVAI-open
 
 *English: [../MODELS.md](../MODELS.md)*
 
-Referenz für Projekte, die Bilder über NVAI-open erzeugen lassen. Sie gilt für Claude Code
-mit dem MCP-Server `nvai` ebenso wie für eigene Programme über die REST-API. Beschrieben sind
-die vier Bildmodelle, die NVAI-open bevorzugt: was sie können, wie man sie anspricht, wie lange
-sie brauchen und wo sie scheitern. Alle vier nebeneinander, mit gleichen Prompts und Seeds (englisch):
-[../MODEL_COMPARISON.md](../MODEL_COMPARISON.md).
+Was jedes Modell kann, wie man es anspricht, wie lange es braucht und wo es scheitert. Das gilt für die App, für Claude
+Code mit dem MCP-Server `nvai` und für eigene Programme über die REST-API. Gemessen ist alles auf einer RTX 5060 Ti mit
+16 GB, wenn nichts anderes dasteht; was vom Hersteller stammt, ist so gekennzeichnet. Die vier Bildmodelle
+nebeneinander, mit denselben Prompts und Seeds: [MODEL_COMPARISON.md](../MODEL_COMPARISON.md) (englisch).
 
-Stand: 18. Oktober 2026 (Krea 2: 24. Oktober, MOSS-Image: 25. Oktober). Gemessen auf einer RTX 5060 Ti mit 16 GB (ComfyUI 0.41.3, PyTorch 2.11
-cu130). Alle Zeiten und Befunde sind dort gemessen. Was vom Hersteller stammt, ist als
-Herstellerangabe gekennzeichnet.
+- [Bilder](#bilder): Qwen-Image-2512, FLUX 3 Image Klein, Krea 2, MOSS-Image
+- [Video](#video): LTX-2.5, MiniMax H3, weitere
+- [Ton](#ton), [3D](#3d), [Alte Fotos](#alte-fotos)
+- [Zensiert oder unzensiert](#zensiert-oder-unzensiert), [Auf dem Mac](#auf-dem-mac), [Für Programme](#für-programme)
 
----
-
-## 1. Auf einen Blick
+## Auf einen Blick
 
 | | **Qwen-Image-2512** | **FLUX 3 Image Klein** | **Krea 2 Turbo** | **MOSS-Image** |
 |---|---|---|---|---|
 | Modell-ID | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` | `krea2-turbo-nvfp4` | `moss-image-sft-int8` |
-| Hersteller | Alibaba (Qwen) | Black Forest Labs, Oktober 2026 | Krea.ai, Juni 2026 | OpenMOSS, Oktober 2026 |
-| Größe | 20 Mrd. Parameter, NVFP4 | 5,6 Mrd. Parameter, NVFP4 | 12 Mrd. Parameter, NVFP4 | 5 Mrd. Parameter, INT8 |
-| Text-Encoder | Qwen2.5-VL-7B | Qwen3-VL-4B, dazu ein Prompt-Upsampler (Qwen3.5-9B) | Qwen3-VL-4B (dieselbe Datei wie bei FLUX 3) | Qwen3.5-9B (W4A8), baut knappe Prompts selbst aus |
-| Schritte / CFG | 50 / 4,0 | 16 / 1 (destilliert) | 8 / 1 (destilliert) | 50 / 3 |
-| Negativprompt | wirkt; leer = Standard aus Qwens Modellkarte | wirkt **nicht** | wirkt **nicht** | wirkt; leer = Empfehlung aus ComfyUIs Vorlage |
-| Referenzbilder | — | bis 10 | — | — |
-| Platzierung per Box | — | ja | — | per JSON-Layout („summary“, „items“; Herstellerangabe) |
-| Schrift im Bild | buchstabengenau | im Test 3 von 3 fehlerfrei | im Test buchstabengenau | in allen Tests buchstabengenau |
-| Zeit für ein Bild 1024² | ~100 s | ~30 s bei neuem Prompt, 13–16 s bei bekanntem | ~20 s | ~51 s (25 Schritte ~28 s), Ausbau beim ersten Mal ~11 s dazu |
-| Lizenz | **Apache-2.0** | **FLUX Kommunity License** — Umsatzgrenze, Prüfpflicht | **Krea 2 Community License** — unter 1 Mio. US-$ Umsatz, Prüfpflicht | **Apache-2.0** |
-| Stärke | Endassets, konstruktive Details, Schrift | Bearbeiten, gleichbleibende Figuren, Layout, Tempo | fotografischer Look, natürliche Hände und Gesichter, Tempo | Schrift und Layout, Plakate und Grafiken, frei verkaufbar |
+| Hersteller | Alibaba (Qwen) | Black Forest Labs | Krea.ai | OpenMOSS |
+| Schritte / CFG | 50 / 4 | 16 / 1 | 8 / 1 | 50 / 3 |
+| Negativprompt | wirkt | wirkungslos | wirkungslos | wirkt |
+| Referenzbilder | — | bis zu 10 | 1–2 als Stilvorlage | — |
+| Schrift im Bild | buchstabengenau | 3 von 3 fehlerfrei | buchstabengenau | buchstabengenau, am saubersten |
+| Zeit je Bild 1024² | ~100 s | ~30 s, 13–16 s bei bekanntem Prompt | ~20 s | ~51 s |
+| Lizenz | Apache-2.0 | FLUX Kommunity License: unter 5 Mio. US-$ Umsatz, jedes Bild prüfen | Krea 2 Community License: unter 1 Mio. US-$ Umsatz, jedes Bild prüfen | Apache-2.0 |
+| Stark bei | Endassets, Konstruktion, Schrift | Bearbeiten, dieselbe Figur in mehreren Bildern, Layout | Foto-Look, Hände und Gesichter | Plakate, Schilder, Layout |
 
-## 2. Welches Modell wofür
+## Welches Modell wofür
 
 | Aufgabe | Modell |
 |---|---|
-| Endasset ohne Vorlage: Objekt, Figur, Icon, Szene | **Qwen** |
-| Schrift, Beschriftung, Schilder | **Qwen** oder **MOSS-Image** (rund halb so lang, beide Apache-2.0) |
-| Plakat, Grafik, Layout mit viel Text | **MOSS-Image** (~51 s): das fertige Bild beschreiben, Schrift in Anführungszeichen mit Ort und Schriftart |
-| Konstruktion muss stimmen (Befestigungen, Scharniere, Griffe) | **Qwen** |
-| Fotografisches Bild mit wenig KI-Look, natürliche Hände und Gesichter | **Krea 2** (~20 s), Bildausschnitt nennen; Lizenz nur unter 1 Mio. US-$ Umsatz |
-| Vorhandenes Bild gezielt ändern: Teil ersetzen, Farbe, Material | **FLUX 3** mit dem Bild als Referenz |
+| Endasset: Objekt, Figur, Icon, Szene | **Qwen-Image-2512** |
+| Beschriftung, Schilder, Plakate, Layout mit viel Text | **MOSS-Image** oder Qwen-Image-2512 |
+| Konstruktion muss stimmen (Befestigungen, Scharniere, Griffe) | **Qwen-Image-2512** |
+| Ein Foto mit wenig KI-Look, natürliche Hände und Gesichter | **Krea 2**, Bildausschnitt nennen |
+| Einen Teil eines vorhandenen Bildes ändern, den Rest behalten | **FLUX 3** mit dem Bild als Referenz |
 | Dieselbe Figur oder dasselbe Objekt in mehreren Bildern | **FLUX 3** mit Referenzbild |
-| Motive aus mehreren Bildern kombinieren | **FLUX 3** mit mehreren Referenzen |
-| Mehrere Objekte an festen Plätzen | **FLUX 3** mit Bounding-Boxen |
-| Schnelle Entwürfe | FLUX 3 (13–16 s), Krea 2 (~20 s) oder Qwen Lightning (`qwen-image-2512-lightning`, ~17 s) |
-| Historisch exakte Fahrzeuge (Panzer IV, Sd.Kfz. 251 …) | **keines** — siehe Abschnitt 9 |
-| Nur ein paar Worte Prompt, Modell ohne eigenen Upsampler | erst **✨ Prompt ausbauen** (`expand_prompt`), siehe Abschnitt 5 |
-| Altes Foto restaurieren oder einfärben | Reiter **Restaurieren** (`restore_image`): FLUX 3 entfernt Schäden und färbt ein, SeedVR2 schärft, siehe „Neu in 0.5.11“ |
-| Qwen-Image 2.1 ausprobieren (`qwen-image-2.1-int8`) | **nur nicht kommerziell** (Qwen Research License); Bearbeiten wirkte im Test überzeichnet |
+| Mehrere Objekte an festen Positionen | **FLUX 3** mit Bounding-Boxen |
+| Schnelle Entwürfe | FLUX 3 (13–16 s), Krea 2 (~20 s) oder `qwen-image-2512-lightning` (~17 s) |
+| Nur ein paar Worte Prompt | erst **✨ Prompt ausbauen**, dann jedes Modell |
+| Video mit Ton | **LTX-2.5** |
+| Instrumentalmusik / Soundeffekte | **Stable Audio 3** / **Stable Audio Open** |
+| 3D-Modell aus einem Bild | **TripoSG** (Form) oder **TRELLIS.2** (mit Texturen) |
+| Altes Foto restaurieren oder einfärben | Reiter **„Restaurieren“**: FLUX 3 und SeedVR2 |
+| Historisch genaue Fahrzeuge (Panzer IV, Kübelwagen …) | **keins**, siehe [Bekannte Fallen](#bekannte-fallen) |
 
-Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
+Ohne `model_id` nimmt NVAI-open das aktive Modell der Art. Jedes Modell startet mit seinen gemessenen Bestwerten, und
+ein kurzer Tipp unter der Modellwahl sagt, worauf es ankommt.
 
-### Getestet, nicht aufgenommen (Oktober 2026)
+---
 
-- **Kandinsky 6** (Kandinsky Lab, MIT; Bild und Ton in einem Durchgang, 5 s in 864 × 480, Full HD nur mit einem
-  zusätzlichen Super-Resolution-Modell): Pro destilliert traf die Erwartungen, brauchte auf einer 16-GB-Karte
-  aber 928–966 s je 5-s-Clip (LTX-2.5 mit demselben Startbild: 114 s in 1280 × 704), Lite zerfiel, und die
-  Super-Resolution hätte für 5 s rund 1,5 h gebraucht. Die Tonteile sind nicht kommerziell nutzbar, der
-  Video-VAE (Tencent) gilt nicht in der EU. Einzelheiten:
-  [CLAUDE_CODE.md](../CLAUDE_CODE.md#kandinsky-6-tested-27-october-2026-not-built-in) (englisch)
-- **IC-LoRAs Restore und Ingredients für LTX-2.5** (Lightricks): Restore holte ein verändertes Gesicht nicht
-  zurück und brachte neue Artefakte; Ingredients (ein Referenzblatt statt eines Startbilds) hielt eine echte
-  Person in keinem Test erkennbar. Für eine erkennbare Person trägt das Startbild das Gesicht, gehalten mit einem
-  Endbild oder der „Schleife“ ([FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md#tipps-aus-unseren-tests)); der Hintergrund
-  steht dann still.
+## Bilder
+
+### Qwen-Image-2512 (`qwen-image-2512-nvfp4`)
+
+20 Mrd. Parameter, in NVFP4 14,9 GB (RTX 50 rechnet das Format in Hardware); Text-Encoder Qwen2.5-VL-7B, zusammen
+24,5 GB Download. 50 Schritte, CFG 4, Apache-2.0.
+
+- **Buchstabengenaue Schrift**, so wie sie im Prompt in Anführungszeichen steht.
+- **Konstruktion:** Die Seilgriffe einer Kiste liefen durch Bohrungen; die destillierte Lightning-Fassung legte sie ohne
+  Halt aufs Holz.
+- **Der Negativprompt wirkt.** Leer nimmt NVAI-open den aus Qwens Modellkarte (geringe Auflösung, verformte Hände,
+  Wachs- oder KI-Look, verzerrte Schrift).
+- **Verfeinern statt neu würfeln:** `image_asset_id` mit `denoise` (0,3 behutsam, 0,5 deutlich). `hires=True` rechnet
+  einen zweiten Durchgang für Hände, Gesichter und feine Technik.
+- **Native Formate geben mehr Detail** (trainiert auf rund 1,76 MP), bei doppelter Zeit:
+
+| Natives Format | Für |
+|---|---|
+| 1328 × 1328 | Objekte, Icons |
+| 1056 × 1584 | stehende Figuren |
+| 1584 × 1056 | Fahrzeuge, Szenen |
+| 928 × 1664 / 1664 × 928 | Panoramen |
+
+Zeiten: 1024² rund 100 s, 1328² rund 200 s, Lightning (8 Schritte) rund 17 s; der erste Auftrag nach dem Start dauert
+15–30 s länger.
+
+Prompt in ganzen englischen Sätzen: erst Medium und Stil, dann das Motiv mit Material, Farbe, Zustand und Konstruktion,
+dann Licht und Hintergrund; Schrift wörtlich in Anführungszeichen.
+
+```
+Studio product photograph of a weathered wooden ammunition crate. Black stenciled letters on
+the front read "MUNITION 7,92". Rope handles pass through drilled holes in the side boards.
+Plain light grey background, soft even light.
+```
+
+Konstruktion ausschreiben (was nicht dasteht, wird erfunden), genau eine Ansicht nennen, die Herkunft von Personen als
+Region plus Merkmale angeben („with pale northern European features“) und Gewichtungsklammern wie `(full body:1.2)`
+weglassen: Das ist CLIP-Syntax und wirkt hier nicht.
+
+**INT8 für RTX 20/30/40** (`qwen-image-2512-int8`, 20,6 GB): ab RTX 20 in Hardware gerechnet. Auf der RTX 5060 Ti 119
+statt 101 s bei gleicher Qualität; auf einer RTX 4060 mit 8 GB 653 statt 1095 s mit NVFP4.
+
+### FLUX 3 Image Klein (`flux3-klein-nvfp4`)
+
+Black Forest Labs, 5,6 Mrd. Parameter, offizielle NVFP4-Fassung (5,3 GB), Text-Encoder Qwen3-VL-4B und ein
+Prompt-Upsampler (Qwen3.5-9B), zusammen 20,2 GB Download. 16 Schritte ohne Guidance. Das Repository ist gesperrt: die
+Lizenz auf Hugging Face annehmen und einen Token eintragen ([HUGGINGFACE.md](HUGGINGFACE.md)).
+
+**Der Upsampler.** FLUX 3 ist auf lange Beschreibungen trainiert, die sein eigener Upsampler schreibt, und BFL rät von
+der Nutzung ohne ab. Der Upsampler macht deshalb aus deiner Anfrage erst eine Beschreibung mit 100 bis 350 Wörtern,
+daraus entsteht das Bild, und die Beschreibung kommt als **`caption`** zurück. Derselbe Prompt gibt immer dieselbe
+Beschreibung, ein neuer Seed kostet also nur die Bildzeit. Der Upsampler füllt jede Lücke selbst: Er hängte Soldaten
+den Mantel wie ein Cape um und gab ihnen Schnürschuhe. Alles, was stimmen muss, gehört deshalb in den Prompt, der
+**Stil zuerst** (ohne plant er ein Foto), und stimmt das Bild nicht, zuerst `caption` lesen statt neu zu würfeln.
+`upsample_prompt=False` schaltet ihn ab; das lohnt sich, wenn Bauweise, Anzahl oder Blickrichtung genau stimmen müssen
+(er setzte in 4 von 6 Bildern eine zweite Angelschnur dazu, ohne ihn 0 von 2), dann die volle Beschreibung selbst
+schreiben.
+
+**Referenzbilder:** `reference_asset_ids` nimmt bis zu zehn Bilder; im Prompt heißen sie „the first image“, „the second
+image“ und so weiter. Zum Bearbeiten sagen, was sich ändert und was bleibt:
+
+```
+generate_image(
+  prompt="Replace the rope handles with forged iron handles bolted to the side boards; "
+         "keep everything else unchanged.",
+  model_id="flux3-klein-nvfp4",
+  reference_asset_ids=["ast_b2e2b512098a"],
+)
+```
+
+Nur die Griffe änderten sich; Bretter, Schrift und Leisten blieben. Mehrere Referenzen kombinieren Motive („put the
+soldier from the first image into the trench from the second image“). Ein einzelnes `image_asset_id` wird zur ersten
+Referenz. Referenzen legen den Inhalt fest, nicht die Form: Eine Bauzeichnung macht ein erfundenes Fahrzeug nicht
+maßstabsgetreu.
+
+**Platzierung mit Boxen:** eine JSON-Liste anhängen; jede Box ist `[oben, links, unten, rechts]` auf einem Raster von 0
+bis 1000.
+
+```
+Studio product photograph of three separate weathered wooden ammunition crates standing side
+by side on a plain light grey background, soft even light.
+[{"id": "crate_1", "bbox": [430, 30, 820, 320], "desc": "a small crate with a hinged lid"},
+ {"id": "crate_2", "bbox": [250, 350, 820, 650], "desc": "a tall crate with rope handles"},
+ {"id": "crate_3", "bbox": [560, 680, 820, 970], "desc": "a flat, wide crate"}]
+```
+
+Alle drei Kisten standen in ihren Boxen. Die ids nicht als `<crate_1>` im Text zitieren: Der Text gilt dann als fertige
+Beschreibung und geht am Upsampler vorbei.
+
+**Formate und Zeiten:** Vielfache von 16, bis 2048 × 2048; ein größeres Format gibt mehr Detail (1440² 26 s), einen
+zweiten Durchgang gibt es nicht. Neuer Prompt in 1024² rund 30 s, derselbe Prompt mit neuem Seed 13–16 s, vier Bilder
+37 s, Bearbeiten mit Referenz rund 45 s.
+
+**INT8 für RTX 20/30/40** (`flux3-klein-int8`, die offizielle Fassung von BFL mit kleinerem Upsampler); laut BFL läuft
+sie auf Karten mit 8 GB. Die nicht destillierte **Base**-Fassung (50 Schritte, Negativprompt) brachte keinen sichtbaren
+Gewinn.
+
+**Lizenz (FLUX Kommunity License v1.0, keine Rechtsberatung):** Bilder kommerziell nur unter 5 Mio. US-$ Jahresumsatz
+samt verbundenen Unternehmen; ein Inhaltsfilter **oder** jedes Bild vor der Veröffentlichung prüfen; KI-Kennzeichnung,
+wo das Gesetz sie verlangt; BFL kann die Lizenz per Mitteilung kündigen; die Bilder dürfen kein anderes Bildmodell
+trainieren. Keine EU-Sperre. Ohne diese Bedingungen: Qwen-Image-2512.
+
+### Krea 2 Turbo (`krea2-turbo-nvfp4`)
+
+Krea.ai, 12 Mrd. Parameter, 8 Schritte ohne Guidance. Der Text-Encoder ist Byte für Byte der von FLUX 3, der VAE der
+von Qwen-Image; ist eines davon installiert, bleiben 7,7 GB zu laden. Die Dateien kommen von Comfy-Org und sind nicht
+gesperrt. 1 bis 2 MP; kein Negativprompt, keine Maske, kein zweiter Durchgang.
+
+| Gleicher Prompt und Seed | Qwen-Image-2512 | FLUX 3 | Krea 2 Turbo |
+|---|---|---|---|
+| Fischer flickt ein Netz, 1024² (mit Laden) | 160 s | 36 s | 41 s |
+| Kiste mit Schrift, 1024² | 109 s | 31 s | 21 s |
+| Entdeckerin in ganzer Figur, 832 × 1216 | 113 s | 32 s | 20 s |
+
+![Entdeckerin in ganzer Figur, gleicher Prompt und Seed: Qwen-Image-2512, FLUX 3 und Krea 2 Turbo](../images/compare-krea2.jpg)
+
+Das fotografischste der drei: natürliche Hände und Gesichter, Struktur statt glattem KI-Look, Schrift genau. **Den
+Bildausschnitt nennen:** Dem Fischer fehlte in 3 von 3 Bildern der Kopf; mit „Medium shot from the waist up, his whole
+head and face inside the frame“ war er in 2 von 2 im Bild. Krea 2 ist auf ausführliche Beschreibungen trainiert, ein
+paar Worte also erst mit ✨ Prompt ausbauen erweitern. 2 MP (1408²) dauern 37 s.
+
+**Stilvorlage:** Mit der Stil-LoRA von ostris (0,46 GB, unter „Modelle“ → „Zusätze laden“) nimmt Krea 2 ein oder zwei
+Bilder in `reference_asset_ids` als Vorlage: Malweise, Farben und Licht kommen aus dem Bild, der Inhalt aus dem Prompt.
+Im Prompt nur den Inhalt beschreiben; Licht und Farben kommen aus der Vorlage, auch wo der Prompt anderes sagt, und mit
+zwei Vorlagen gewinnt die erste.
+
+![Vorlagen von FLUX 3, Krea 2 ohne und mit Stilvorlage](../images/krea2-style-reference-de.jpg)
+
+| Lauf (1024², ein Leuchtturm im Sturm) | Zeit | Ergebnis |
+|---|---|---|
+| ohne Vorlage | 24 s | fotografisch, dunkle Sturmwolken |
+| Aquarell-Vorlage | 48 s | Aquarell im pastelligen Abendlicht der Vorlage |
+| Holzschnitt-Vorlage | 41 s | Holzschnitt in Schwarz, Rot und Creme |
+
+**Lizenz (Krea 2 Community License):** kommerziell nur unter 1 Mio. US-$ Jahresumsatz samt verbundenen Unternehmen; ein
+Inhaltsfilter oder jedes Bild von Hand prüfen; KI-Kennzeichnung, wo verlangt; Krea kann mit 30 Tagen Frist kündigen.
+
+**INT8 für RTX 20/30/40** (`krea2-turbo-int8`, 13,5 GB): an einem normalen Anschluss schneller als NVFP4 auf einer
+Karte ohne FP4-Einheiten (12–13 statt 25 s).
+
+### MOSS-Image (`moss-image-sft-int8`)
+
+OpenMOSS, 5 Mrd. Parameter in INT8, Apache-2.0: Schrift und Layout ohne Umsatzgrenze. Sein Text-Encoder (Qwen3.5-9B)
+baut kurze Prompts selbst zur vollen Beschreibung aus, die als `caption` zurückkommt (`upsample_prompt=False` schaltet
+das ab); laut OpenMOSS legt ein JSON mit „summary“ und „items“ das Layout fest. 50 Schritte, cfg 3: 51 s je Bild mit
+1 MP, das erste Ausbauen rund 11 s mehr. Die Schrift war in jedem Bild buchstabengenau; die Seilgriffe der Kiste liefen
+mit 50 Schritten in 3 von 3 Bildern durch Bohrungen, mit 25 in 2 von 3. Beschreiben, wie das fertige Bild aussieht,
+die Schrift in Anführungszeichen mit Ort und Schriftart. Nur Text zu Bild, keine Referenzen oder Maske; eine
+vorhandene Figur kam als andere Person heraus.
+
+![MOSS-Image: Plakat mit Schrift, Kiste mit 25 und mit 50 Schritten](../images/moss-image-de.jpg)
+
+### Füllen und erweitern
+
+- **Füllen** (`mask_asset_id`, weiß = neu, schwarz = behalten, mit `image_asset_id` und `denoise=1.0`): Qwen-Image-2512
+  machte aus „MUNITION 7,92“ auf einer Kiste „FLAK 88“ in derselben Schablonenschrift; außerhalb der Maske blieb das
+  Bild, wie es war. FLUX 3 füllt über eine Referenz: NVAI-open graut den Bereich, FLUX malt ihn, und nur der Bereich
+  kommt deckungsgleich zurück. Gut zum Entfernen und Hinzufügen (Kisten weg, eine Möwe dazu, 60–70 s). Um Vorhandenes
+  umzuschreiben, etwa ein Schild, stattdessen mit Referenz bearbeiten.
+- **Erweitern** (`outpaint=[links, oben, rechts, unten]` in Pixeln): FLUX 3 nehmen. Es setzt die Szene auf einem grauen
+  Rand fort; weil es das Bild nie genau an derselben Stelle zurückgibt (mit Rand rundum zoomte es um 25–42 %),
+  erweitert NVAI-open eine Achse nach der anderen, misst den Versatz, schiebt zurück und setzt das Original pixelgenau
+  ein. Qwen-Image-2512 erweitert über eine Maske, malte den Rand aber als eigene Szene mit harter Kante.
+
+### Prompt ausbauen
+
+**✨ Prompt ausbauen** (MCP `expand_prompt`, REST `POST /api/prompt/expand`) schreibt aus ein paar Worten die volle
+Beschreibung, mit dem Upsampler von FLUX 3 (13–16 s, FLUX 3 muss geladen sein). Es geht in jedem Reiter: Bilder, Video
+(Bewegung, Kamera, Ort, Licht; bei LTX-2.5 auch der Ton; mit Startbild nur die Bewegung), mehrere Einstellungen,
+Soundeffekte, Musik für Stable Audio 3 und 3D. Mit „a medieval blacksmith“ malte Qwen-Image-2512 einen Krieger in
+Lederrüstung, mit dem ausgebauten Text eine Schmiede mit Amboss, Zange und Funken. Dem Schmied gab es dabei einen Helm:
+den Text lesen und streichen, was nicht passt.
+
+![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](../images/expand-prompt.jpg)
+
+### NVFP4 oder INT8
+
+Nur RTX 50 rechnet NVFP4 in Hardware; RTX 20, 30 und 40 rechnen INT8. NVAI-open markiert die passende Fassung als
+`recommended` und erklärt andere in `gpu_note`. Ein Modell, das größer ist als der Grafikspeicher, läuft trotzdem, weil
+ComfyUI Teile aus dem Arbeitsspeicher nachlädt: an einem normalen Anschluss kostete das wenig (Krea 2 INT8 mit 8 GB
+13,0 statt 12,2 s). Nur an einem langsamen Anschluss wie einem Riser (PCIe 3.0 x4) lag NVFP4 vorn, wo nur es in den
+Speicher passte.
+
+| Erstes / nächstes Bild, 1024² | Krea 2 NVFP4 | Krea 2 INT8 | Qwen NVFP4 | Qwen INT8 |
+|---|---|---|---|---|
+| ohne FP4-Einheiten, 16 GB, PCIe 4.0 x8 | 29,8 / 25,0 s | 17,5 / 12,2 s | 226,9 / 214,0 s | 127,2 / 118,6 s |
+| RTX 4060, 8 GB, Riser | 46 s | 193 / 82 s | 1095 s | 653 s |
+
+---
+
+## Video
+
+### LTX-2.5
+
+`ltx25-distilled-nvfp4` (RTX 50) bzw. `-int8`: Bild und Ton in einem Durchgang, MP4 mit 24 fps. LTX-2 Community
+License, kostenlos unter 10 Mio. US-$ Umsatz; das Repository ist gesperrt. Formate in Vielfachen von 64 (1280 × 704,
+1920 × 1088), Längen 8n+1 Bilder (97 = 4 s, 121 = 5 s), bis 20 s. Mit 16 GB einen Clip in 1920 × 832 höchstens 6 s lang
+machen; längere Szenen entstehen aus mehreren Clips.
+
+| Weg | Parameter | Gemessen |
+|---|---|---|
+| Text zu Video | — | 5 s in 1280 × 704 in 93 s; 1920 × 1088 in 251 s |
+| Startbild | `image_asset_id` | 5 s in 1280 × 704 in 109 s |
+| Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erstes und letztes Bild treffen die zwei Bilder |
+| Schleife | `loop=True` | 4 s in 125 s; nur mit ruhiger Kamera, sonst zerfallen die letzten Bilder |
+| Vorgegebener Ton | `audio_asset_id` | 20 s Blasmusik → ein Clip von 19,7 s in 1024 × 576 in 302 s, der Ton unverändert |
+| Mehrere Einstellungen | `expand_prompt(target="video_multishot")` | 8 s in 170 s, zwei Einstellungen mit sauberem Schnitt, dieselbe Person |
+| Verlängern | `extend_asset_id` | 5 s + 4 s in 1920 × 1088 in 255 s, keine sichtbare Naht |
+| Anschluss | `chain_asset_id` | der neue Clip übernimmt die letzte Sekunde des angegebenen und setzt dessen Bewegung fort |
+| Länge automatisch | `auto_duration=True` | eine Tür, die langsam aufgeht: 3 s |
+
+- **Höchste Qualität (DFR)** (`quality="dfr"`): Vorgabe, sobald das Detail-LoRA von Lightricks installiert ist.
+  Gesichter und Stoffe bleiben über den ganzen Clip scharf (Kantenschärfe nach 2 s 625 statt 211), dafür rund dreimal so
+  lang (5 s in 1080p: 786 statt 241 s). Nicht mit Endbild oder Schleife.
+
+![Das Gesicht nach 2 s in voller Auflösung: DFR in 0.5.8, der Standardweg und DFR in 0.5.9](../images/dfr-before-after-de.jpg)
+
+- **Endbild und Schleife halten Gesicht und Ausschnitt** (Ähnlichkeit zum Startbild 0,80–1,0 über 5 s statt 0,3–0,4).
+  Der Preis: Was in beiden Bildern gleich ist, steht dazwischen still, auch Wasser und Rauch, selbst wenn der Prompt sie
+  bewegen will. Für bewegten Hintergrund nur ein Startbild geben.
+- **Ton:** so laut beschreiben, wie er sein soll. Sprache und eine Schmiede kamen mit −14 bis −18 LUFS, ein Lagerfeuer,
+  das „leise knistert“, mit −41 bis −52. Der Ton jedes Videos läuft durch einen Limiter bei −2,5 dBFS.
+- **LoRAs** („Empfohlene LoRAs“ unter dem Videomodell): Cinemagraph nur zusammen mit „Schleife“ (6 % des Bildes
+  bewegten sich, das Gesicht stand still); Slow Motion gibt echte Zeitlupe (Gischt fiel über 5 statt 1,5 s);
+  `motion_speed` allein tut das nicht. Fantasy Anime und Painterly ändern den Look deutlich, Paper Cut-Out mit Stärke 1,5.
+- **48 fps** mit `temporal_upscale`, **Bitrate** CRF 12 (rund 16 Mbit/s bei 1080p; das Weiche kommt aus dem Modell,
+  nicht vom Encoder).
+- **Person aus einem Foto:** FLUX 3 übernimmt das Gesicht aus einem Foto und macht vier Startbilder in einer Rolle, die
+  du beschreibst (95–98 s), und LTX-2.5 erweckt sie zum Leben: [FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md). Die Stimme ist nie die
+  echte.
+
+**Prompt schreiben** (nach Lightricks): ein Absatz im Präsens, 4–8 Sätze: Einstellung → Ort und Licht → Handlung mit
+Verben → Personen über Merkmale statt Gefühle → Kamera → Ton. Gesprochenes in Anführungszeichen mit der Stimme. Kurz
+halten: Mit 8 statt 14 Sätzen bewegte sich die Person 38–49 % weniger. Ruhe positiv sagen („sits perfectly still like a
+statue“) und nicht nennen, was nicht passieren soll, auch nicht verneint. Fallen aus den Tests: „shouts“ gibt Grimassen
+(„says firmly in a rough, deep voice“ ist ruhiger); „proud, calm expression“ wurde ein Grinsen („stern … does not smile“
+nicht); „static camera“ allein fuhr trotzdem heran („Static camera, a locked-off medium shot; the framing stays exactly
+as in the first frame.“ hielt); dünne Gegenstände wie Gewehre, die Personen kreuzen, verschmelzen.
 
 ### MiniMax H3 (seit 0.5.18)
 
@@ -72,51 +295,38 @@ Ohne Angabe von `model_id` nimmt NVAI-open das aktive Bildmodell.
 > MiniMax H3 Community License schließt diese Gebiete aus (Abschnitt I.3 und I.5) und verbietet dort jede Nutzung der
 > Gewichte und ihrer Ergebnisse, auch privat (Abschnitt V.4). **Videos und Bilder daraus dürfen nicht veröffentlicht
 > werden**, auch keine Standbilder oder Screenshots; deshalb steht hier kein Bild. Lizenzanfrage:
-> <https://platform.minimax.io/h3-license>. Die Oberfläche markiert das Modell und jedes Ergebnis rot („Nicht
+> <https://platform.minimax.io/h3-license>. Die App markiert das Modell und jedes Ergebnis rot („Nicht
 > veröffentlichen“), bis unter „Modelle“ der Haken „Ich habe eine Genehmigung erworben“ gesetzt ist. Wer Dritten ein
 > Werkzeug zum Erzeugen mit MiniMax anbietet, muss laut Lizenz (Abschnitt V.5) verbotene Inhalte verhindern; NVAI-open
 > filtert nichts.
 
-Drei Fassungen, alle mit Bild und Stereoton in einem Durchgang, 24 fps, 5 bis 15 s, bis 768p: **Startbild** (FL2VA, Text
-und auf Wunsch ein Startbild), **Referenz** (Ref2VA, bis zu 9 Referenzbilder, im Prompt `<Picture 1>`, `<Picture 2>` …)
-und **FastH3** (fest 8 Schritte, kaum Zeitlupe). Dazu die Turbo-LoRAs von lightx2v (4 oder 8 statt 20 Schritte).
+Drei Fassungen, alle mit Bild und Stereoton, 24 fps, 5 bis 15 s, bis 768p: **Startbild** (Text und auf Wunsch ein
+Startbild), **Referenz** (bis zu 9 Referenzbilder, im Prompt `<Picture 1>`, `<Picture 2>` …) und **FastH3** (fest 8
+Schritte, kaum Zeitlupe), dazu die Turbo-LoRAs von lightx2v.
 
 **Vorgewählt** ist der schnellste gemessene Weg ohne Bildsprung: Turbo-LoRA 8 Schritte v1.1, sol-attn und
-INT8-Attention (Startbild 6,9 min, Referenz 6,6 min statt 37). Die Generieren-Seite setzt das beim Wechsel aufs Modell,
-Studio und MCP bekommen es vom Server, solange der Auftrag nichts anderes sagt (`recommended`). Auf Karten ohne sol-attn
-(älter als RTX 30) oder ohne INT8-Attention (älter als RTX 20) und auf AMD fällt der Schalter weg; fehlt die LoRA, rechnet
-es mit 20 Schritten. Veda richtet NVAI-open nicht ein: liegt das Knotenpaket Veda-on-ComfyUI in ComfyUIs `custom_nodes`,
-steht es zur Wahl.
+INT8-Attention. App, Studio und MCP nehmen ihn, solange ein Auftrag nichts anderes sagt. Auf Karten älter als RTX 30
+fällt sol-attn weg, älter als RTX 20 auch die INT8-Attention, auf AMD beides.
 
-Erster Test auf einer RTX 5060 Ti 16 GB: dieselbe Szene wie mit LTX-2.5 (9,4 s: ein Einschlag, eine Explosion, ein Fisch
-fällt in einen Eimer), einmal ab dem Startbild (FL2VA), einmal aus zwei Referenzbildern und der Beschreibung (Ref2VA).
-MiniMax folgte der Beschreibung genauer als LTX-2.5, und das Gesicht aus den Referenzbildern blieb über den ganzen Clip
-gleich; die Flugbahn des Fischs stimmte noch nicht.
+Im ersten Test (dieselbe Szene wie mit LTX-2.5, 9,4 s) folgte MiniMax der Beschreibung genauer, und das Gesicht aus den
+Referenzbildern blieb über den ganzen Clip gleich. Es neigt zu Zeitlupe: Es bewegt sich etwa halb so stark wie LTX-2.5,
+also jede Bewegung mit Tempo beschreiben (das machte die Explosion um 30–55 % heftiger).
 
-| | MiniMax H3 (INT8, 20 Schritte) | LTX-2.5 (NVFP4, DFR) |
+| Dieselbe Szene, 9,4 s in 1344 × 576 | Startbild-Fassung | Referenz-Fassung |
 |---|---|---|
-| Ergebnis | 9,4 s in 1344 × 576 (die offenen Gewichte enden bei 768p) | 9 s in 1920 × 832, zwei Clips per Latent-Kette |
-| Rechenzeit, RTX 5060 Ti 16 GB | 37,3 min ab Startbild, 37,1 min aus Referenzbildern (rund 107 s je Schritt) | rund 7 min (Clip 1 260 s, Clip 2 162–177 s) |
-| Download | 39,1 GB (Startbild-Fassung mit Turbo-LoRA), Referenz-Fassung weitere 19,5 GB, zusammen rund 59 GB | 37,5 GB |
-| Speicher beim Rechnen | Grafikspeicher 14,9 GB, freier Arbeitsspeicher nie unter 31,8 GB (von 64 GB) | nicht verglichen |
+| 20 Schritte, ohne Beschleuniger | 37,3 min | 37,1 min |
+| **Vorgewählt:** Turbo 8 v1.1 + sol-attn + INT8 | **6,9 min** | **6,6 min** |
+| Am schnellsten: Turbo 4 + sol-attn | 4,5 min | 4,8 min |
+| Wenig Zeitlupe: FastH3 | 7,9 min | – |
+| Nicht empfohlen: Veda bei diesem Format | Bildsprung gegen Ende | Bildsprung gegen Ende |
 
-Ohne Beschleuniger brauchte MiniMax also gut fünfmal so lange, für knapp die Hälfte der Bildpunkte.
+Die Attention bremst, nicht der Speicher: sol-attn und INT8-Attention halbieren jeweils die Zeit. Der Download hat rund
+39 GB für die Startbild-Fassung und weitere 19,5 GB für die Referenz-Fassung; beim Rechnen waren 14,9 GB Grafikspeicher
+belegt, und der freie Arbeitsspeicher blieb über 31,8 von 64 GB, weniger als 64 GB RAM ist also knapp. In NVAI-open für
+Mac gibt es MiniMax nicht.
 
-- **Größe:** Das volle Modell hat 33 Mrd. Parameter. Eingebaut ist die beschnittene Fassung (pruned, laut Dateigröße
-  rund 20 Mrd.) in INT8 mit 19,5 GB, dazu der Text-Encoder Qwen3-VL-32B in NVFP4 (14,6 GB), Video- und Ton-VAE (3,2 GB)
-  und die Turbo-LoRA für 8 Schritte (1,8 GB).
-- **NVFP4:** Weder MiniMax noch Comfy-Org bieten den Transformer in NVFP4 an. Comfy-Org empfiehlt `int8_convrot` mit
-  PyTorch cu130, so läuft er hier; nur der Text-Encoder ist NVFP4. Umwandlungen von Dritten gibt es auf Hugging Face,
-  etwa `Abiray/Minimax-H3-nvfp4-INT4-INT8-Convrot` und `MATLOWAI/minimax-h3-nvfp4`: die beschnittene Fassung mit 11,7
-  statt 19,5 GB, für FL2VA und Ref2VA. Ob sie schneller ist und gleich gut aussieht, ist nicht gemessen. Für sie gilt
-  dieselbe Lizenz.
-- **Was im Test auffiel:** Ab dem Startbild blieben Haltung und Gesicht stabil, der Fisch entstand aber im Eimer, statt
-  zu fliegen. Aus den Referenzbildern flog der Fisch, der Ton folgte der Vorgabe fast genau (Stille, Pfiff, Explosion,
-  Flossenschlag), und das Gesicht blieb über den ganzen Clip gleich; die Anordnung wich ab, und der Hintergrund einer
-  Referenz wanderte ins Bild.
-
-**Schneller mit Turbo-LoRAs und Sparse Attention** (Messreihe auf derselben Karte, dieselbe Szene, Seed 42,
-1344 × 576, 9,4 s; Zeit = ganzer Auftrag samt Laden; Bewegung = mittlere Bildänderung je Viertelsekunde):
+<details>
+<summary>Die ganze Messreihe (23 Läufe)</summary>
 
 <!-- messreihe -->
 | Lauf | Fassung | Beschleunigung | Schritte | Rechenzeit | Ton (dBFS RMS) |
@@ -148,422 +358,154 @@ Ohne Beschleuniger brauchte MiniMax also gut fünfmal so lange, für knapp die H
 | Test 23 | Startbild | wie Test 5 + INT8-Attention (Vorgabe-Kandidat) | 8 | 6,9 min (5,4-mal so schnell) | Sampling 5:21 (Test 5 ohne INT8: 7:22); Bewegung: Explosion 2,25 s (4,43), Flossenschlag 7,0–7,25 s (2,0–2,3); Ton: Explosion ab 1,25 s (−5,6), Flossenschlag 7,0 s (−29,0), danach Stille (−40) |
 <!-- /messreihe -->
 
-<!-- zusammenfassung -->
-**Zusammenfassung** (gemessen auf einer RTX 5060 Ti 16 GB mit 64 GB Arbeitsspeicher; dieselbe Szene, 9,4 s in
-1344 × 576, Seed 42; Zeit = ganzer Auftrag samt Laden):
+Andere Hardware (laut Quellen, nicht gemessen): RTX 30/40 rechnen sol-attn und INT8-Attention, RTX 20 nur die
+INT8-Attention; laut Veda-Messung läuft H3 auch auf einer RTX 5070 mit 12 GB. Auf AMD ist sol-attn ungeprüft, deshalb
+bietet NVAI-open dort keinen der beiden Schalter an.
 
-| Ziel | Startbild-Fassung | Referenz-Fassung |
-|---|---|---|
-| Ausgangspunkt | 20 Schritte: 37,3 min | 20 Schritte: 37,1 min |
-| **Vorgewählt:** schnell, ohne Bildsprung | Turbo 8 v1.1 + sol-attn + INT8: **6,9 min** | Turbo 8 v1.1 + sol-attn + INT8: **6,6 min** |
-| Am schnellsten | Turbo 4 v1.2 + sol-attn: **4,5 min** | Turbo 4 v1.0 + sol-attn: **4,8 min** |
-| Wenig Zeitlupe | FastH3 (fest 8 Schritte): **7,9 min**, Bewegung fast wie LTX | – (FastH3 nimmt keine Referenzen) |
-| Nicht empfohlen | Veda bei 1344 × 576 (Bildsprung gegen Ende) | Veda bei 1344 × 576 (Bildsprung gegen Ende) |
+</details>
 
-- **Engpass ist die Attention, nicht der Speicher.** sol-attn halbiert die Rechenzeit (Sampling 15:01 → 7:15), die
-  INT8-Attention ebenso (→ 7:09), beide zusammen 5:38 (Startbild 5:21). tau 1,5 statt 1,3 bringt nichts (7:08). Neben Veda
-  wirkt INT8 gar nicht (identische Ergebnisse). Veda ist am schnellsten (5:05–5:15), springt bei diesem Format aber gegen
-  Ende (28 % seiner Kacheln sind Polsterung, geplant ist es für 1344 × 768 bzw. 1536 × 768).
-- **Turbo-LoRAs:** Shift laut lightx2v (Startbild-LoRAs in 768p 6/3, Referenz-LoRAs 12/3), euler, simple; v1.0 und v1.1
-  gleich schnell. Mit Turbo trifft die Referenz-Fassung Stille und Flossenschlag weiter, die Startbild-Fassung beginnt laut.
-  Es ist immer nur eine Turbo-LoRA aktiv: Sie legt Schritte und Shift fest.
-- **Zeitlupe:** Alle Dateien haben 24 fps. MiniMax bewegt sich bei der Explosion nur etwa halb so stark wie LTX-2.5
-  (Bildänderung 1,8–2,8 gegen 5,1). Tempo im Prompt macht die Explosion heftiger (+30–55 %), den Rest kaum. FastH3 kommt auf
-  4,2. 24 fps gelten als Untergrenze für flüssige Bewegung (Kino); 16 fps ruckeln, 30–60 fps sind nur über Zwischenbilder
-  möglich, MiniMax rechnet fest mit 24.
+### Weitere Videomodelle
 
-**Rat für diese Hardware** (RTX 5060 Ti 16 GB, 64 GB RAM; gemessen):
-- Alltag: die Vorwahl, Turbo 8 + sol-attn + INT8 (6,6–6,9 min). Entwürfe: Turbo 4 + sol-attn (4,5–4,8 min). Viel Bewegung:
-  FastH3 (7,9 min, nur Startbild). Endfassung: 20 Schritte (37 min). Bewegungen immer mit Tempo beschreiben.
-- Grafikspeicher 14,9 GB belegt, der INT8-Transformer (19,5 GB) wird ausgelagert; freier Arbeitsspeicher blieb über 31,8 GB.
-  Weniger als 64 GB RAM ist mit MiniMax knapp.
-
-**Rat für andere Hardware** (laut Quellen, nicht gemessen):
-- **RTX 50 mit mehr Grafikspeicher** (24–32 GB): dieselben Wege. NVFP4-Gewichte bringen auch dort wenig (RTX 5090: 175 statt
-  185 s, ai-muninn.com), weil die Attention bremst. Veda in seinen geplanten Formaten (1344 × 768, 5/10/14 s): auf einer
-  RTX 5070 2,9-mal so schnell wie ohne.
-- **RTX 30/40** (sm80–sm89): sol-attn und INT8-Attention laufen (comfy-kitchen: sol-attn ab sm80, INT8 ab sm75), NVAI-open
-  wählt sie vor. Die INT8-Gewichte (convrot) brauchen PyTorch mit cu130, sonst fp8_scaled (Comfy-Org). Veda nur
-  versuchsweise (triton-windows), kein NVFP4.
-- **RTX 20** (sm75): INT8-Attention ja (vorgewählt), sol-attn und Veda nein.
-- **8–12 GB Grafikspeicher:** Laut Veda-Messung läuft H3 auf einer RTX 5070 mit 12 GB (1344 × 768, 5,2 s, Turbo 8: 342 s,
-  mit Veda 130 s). Kürzer und kleiner rechnen (864 × 480), 64 GB RAM.
-- **AMD Radeon:** Laut comfy-kitchen läuft sol-attn auf RDNA3/4; in NVAI-open ist das ungeprüft, deshalb bietet es dort
-  weder sol-attn noch INT8-Attention an. Die Turbo-LoRA bleibt vorgewählt.
-- **Mac:** In NVAI-open für Mac ist MiniMax nicht eingebaut.
-<!-- /zusammenfassung -->
-
-### Neu in 0.5.13
-
-**Studio:** ein Schnittplatz über den ganzen Bildschirm für ganze Videos. Szenen mit Prompt auf Bahnen für Bild,
-Sprecher, Musik und Klang, Marker, die sagen, was wohin kommt (ein Anschluss-Marker lässt einen Clip mit dem letzten
-Bild des vorigen beginnen), ein Schnitt mit echten Schnitten und Überblendungen und ein Export mit dem Encoder der
-Grafikkarte auf −14 LUFS. Claude Code steuert es mit sechs `studio_*`-Werkzeugen. Schritt für Schritt:
-[STUDIO.md](STUDIO.md).
-
-**Verlustfreie Kopie jedes KI-Videos:** Neben dem MP4 schreibt jedes Videomodell die Bilder zusätzlich verlustfrei
-(FFV1 in MKV, Ton als Float-PCM). Das Studio exportiert daraus und nimmt Anschluss-Startbilder daraus. Gemessen mit
-LTX-2.5 in 1080p: rund 32 MB je Sekunde (das MP4 2 MB); ein YouTube-Export aus dem MP4 kam gegen das Original auf
-37,7 dB PSNR, aus der Kopie auf 42,3 dB bei gleicher Bitrate. „Verlustfreie Kopie für den Schnitt“ unter
-„Generieren → Video“ schaltet sie ab.
-
-![Derselbe Ausschnitt: das Original, ein YouTube-Export aus dem MP4 und einer aus der verlustfreien Kopie](../images/lossless-export-de.jpg)
-
-**YouTube 1080p mit 24 Mbit/s** statt 12: 42,8 statt 42,3 dB; 40 Mbit/s brachten 43,0 dB, und die Farbe in 4:2:0
-kommt selbst ohne Kompression nicht über 43,9 dB. Neue Exportformate: ein verlustfreier Master (MKV, FFV1) und
-ProRes 4444 (MOV); beide spielt kein Browser, deshalb bekommen sie eine H.264-Vorschau.
-
-**ACE-Step entfernt:** Seine Musik war in der Praxis durchweg schlecht. Musik kommt jetzt von Stable Audio 3 Medium
-(instrumental, bis 5 Minuten); singen kann vorerst kein Modell.
-
-### Neu in NVAI-open für Mac 0.5.0
-
-**Videomodelle nach Arbeitsspeicher.** Unter „Modelle“ empfiehlt der Mac ein Videomodell für seinen Speicher:
-
-| Arbeitsspeicher | Empfohlen | Ton | Stand |
+| Modell | Wofür | Gemessen | Lizenz |
 |---|---|---|---|
-| unter 16 GB | LTX-Video 2B | nein | gemessen: 4 s in 768 × 512 in 174 s auf einem M1 mit 8 GB |
-| 16–23 GB | LTX-Video 13B, 4 Bit | nein | blockweise geprüft, nicht ganz gerechnet |
-| 24–31 GB | LTX-Video 13B, 8 Bit | nein | blockweise geprüft, nicht ganz gerechnet |
-| 32–63 GB | LTX-2.3 distilled, 4 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3 |
-| ab 64 GB | LTX-2.5 distilled, 8 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3, gesperrt |
+| Wan 2.2 TI2V 5B, Wan 2.1 T2V 1.3B | Text zu Video; 832 × 480 ist der günstige Standard, Bewegung ausdrücklich beschreiben | | Apache-2.0 |
+| Wan 2.2 I2V A14B | Bild zu Video, zwei Experten | 5 s in 1280 × 560 in 55 min, mit der 4-Schritt-LoRA Lightning in 6,5 min; beides kam in Zeitlupe | Apache-2.0 |
+| LTX-2.3 (`ltx23-nvfp4`) | die Basis, für die die meisten Community-LoRAs für LTX gemacht sind | 4 s in 1280 × 704 in 101 s | LTX-2 Community |
+| Mochi 1 preview | Text zu Video mit weicher Bewegung | 49 Bilder in 848 × 480 in 351 s | Apache-2.0 |
+| Kandinsky 5.0 Video Lite | kleines Videomodell, 5 s | 768 × 512 in rund 300 s (destilliert) | MIT, VAE unter Tencents Lizenz |
 
-- **LTX-Video 13B** läuft im eigenen MLX-Port von NVAI-open: der Aufbau des 2B mit 48 statt 28 Blöcken der Breite 4096.
-  Lightricks' fp8-Datei (13,2 GB) wird beim Laden in 4 oder 8 Bit umgewandelt. Gegen ComfyUI an den ersten zwei Blöcken
-  geprüft: float32 auf 2,6e-6 genau, 8 Bit so nah wie bf16 (7,3e-3, bf16 6,8e-3), 4 Bit 2,3e-2. Der Test-Mac von
-  NVAI-open hat 8 GB, das ganze Modell lief dort nicht: Speicher (rund 10,5 GB in 4 Bit, 17 GB in 8 Bit) und Zeiten
-  sind geschätzt.
-- **LTX-2.3 und LTX-2.5 mit Ton** kommen aus [ltx-video-swift-mlx](https://github.com/VincentGourbin/ltx-video-swift-mlx)
-  von Vincent Gourbin (MIT), eingebaut als lokale Kopie: Bild und Ton in einem Durchgang, aus Text oder einem Startbild.
-  Die Downloads sind groß (rund 46 und 70 GB); LTX-2.5 ist gesperrt (Lizenz auf Hugging Face annehmen, Token in den
-  Einstellungen eintragen). Auf dem Test-Mac mit 8 GB nicht gerechnet.
-- Unter seinem Mindestspeicher lässt sich ein Modell nicht laden, weder in der App noch per REST.
-- **Im [Studio](STUDIO.md#auf-dem-mac-nvai-open-für-mac-049)** rechnen Videoszenen mit dem Modell, das unter
-  „Generieren“ > „Video“ gewählt ist (anfangs das empfohlene, sobald es geladen ist); sind mehrere geladen, wählt eine
-  Szene ihres in den Eigenschaften.
+Getestet und nicht aufgenommen: **Kandinsky 6** (Pro brauchte 928–966 s je 5-s-Clip gegen 114 s bei LTX-2.5, Lite
+zerfiel, Teile davon sind nicht kommerziell oder in der EU nicht lizenziert) und die **IC-LoRAs Restore und Ingredients
+für LTX-2.5** (keines hielt eine echte Person erkennbar).
 
-Berichte von Macs mit mehr Speicher sind als [Issue](https://github.com/Mantux775/NVAI-open/issues) willkommen: Zeit,
-Speicher, Bild.
+---
 
-### Neu in NVAI-open für Mac 0.4.8
+## Ton
 
-**Z-Image Turbo** (Tongyi-MAI, Apache-2.0) ist das dritte Bildmodell der Mac-Fassung neben FLUX.2 Klein und Core ML:
-fotografische Bilder und Schrift, Text zu Bild, 8 Schritte, kein Negativprompt. Der Download umfasst 6,2 GB: die
-4-Bit-Fassung von mflux-community und 0,28 GB Schichten in bf16. mflux rechnet auch Ein- und Ausgabeschicht,
-Zeit- und Text-Einbettung und die Modulation auf 4 Bit herunter; auf dem Mac gab das orangestichige, verwaschene
-Bilder mit einem 16-Pixel-Raster. NVAI-open holt genau diese Schichten in bf16 aus mlx-community/Z-Image-Turbo-bf16
-(byteweise, ohne das 12,3-GB-Repo). Mit gleichem Seed kam die Kiste danach als verwittertes Holz mit Seilgriff und
-buchstabengenauer Schrift; bei 1 MP liefen die Seile durch Bohrungen.
-
-| Gemessen auf einem Mac mini M1, 8 GB | |
-|---|---|
-| 512 × 512 | 101 s, Spitze 4,6 GB |
-| 832 × 1216 (1 MP) | 399 s (acht Schritte zu je rund 48 s, Dekodieren 10 s), Spitze 5,4 GB |
-| Größtes Bild | 1 MP bei 8 GB (der Decoder rechnet in überlappenden Kacheln, ohne sichtbare Nähte), sonst 1536² |
-
-**Video mit LTX-Video 2B** (Lightricks, 0.9.8 distilled): Text oder Startbild zu Video in acht Schritten, 24 Bilder je
-Sekunde, ohne Ton, als Aufgabe „Video“ neben „Bild erzeugen“. NVAI-open rechnet es mit einem eigenen MLX-Port, der
-gegen die Referenz geprüft ist. Der Download umfasst 9,0 GB (Transformer, Decoder und Encoder aus Lightricks' Datei,
-der T5-XXL-Text-Encoder in 4 Bit); auf der Platte sind es 8,1 GB, weil der Encoder einmal in eine kleinere Form
-umgewandelt wird. Lizenz: LTX-Video Open Weights License, kostenlos unter 10 Mio. US-$ Jahresumsatz; weitergegebene
-Videos als KI-erzeugt kennzeichnen.
-
-| Gemessen auf einem Mac mini M1, 8 GB | |
-|---|---|
-| 512 × 320, 2 s (49 Bilder) | 40 s, Spitze 5,4 GB |
-| 768 × 512, 4 s (97 Bilder) | 174 s, Spitze 6,2 GB |
-| 768 × 512, 2 s (49 Bilder) mit Startbild | 91 bis 97 s (davon 1 bis 2 s fürs Bild), Spitze 6,0 GB |
-
-Bild und Bewegung passen zusammen (eine Fackel mit Funken und Kamerafahrt, eine Kiste im Regen); Schrift im Bild
-gelingt nicht.
-
-**Startbild:** Das gewählte Bild wird zum ersten Bild des Videos. Es wird mittig auf das Videoformat zugeschnitten,
-ein Bild im Hochformat stellt das Format auf Hochformat um. Im Prompt das Bild kurz beschreiben, dann Bewegung und
-Kamera. Gemessen an einer Welle an Felsen und einem gemalten Lagerfeuer: Das erste Bild trifft die Vorlage (PSNR 26,4
-bis 26,8 dB), und die Bewegung setzt ohne Sprung daran an. Lightricks zeichnet das Startbild
-zusätzlich weich und komprimiert es wie ein Videobild (H.264, CRF 29). Auf dem Mac ließ dieselbe Kompression (HEIC mit
-gleicher Abweichung) die Bewegung im Zweierschritt stocken wie ein Video mit 12 Bildern je Sekunde. NVAI-open schneidet
-deshalb nur zu und skaliert; das leichte Rauschen, das Lightricks in jedem Schritt aufs Startbild gibt, bleibt (bei der
-Welle 12 % mehr Bewegung, genauso gleichmäßig). LTX-Video vor 0.4.8 geladen? „Startbild nachrüsten“ unter „Modelle“
-holt nur den Encoder (1,4 GB). Endbild, Schleife, Ton und LoRAs bleiben LTX-2.5 in der Windows-Fassung vorbehalten.
-
-**Weitere Modelle suchen:** Die Suche unter „Modelle“ hat jetzt „Bilder“ und „Videos“. Bei Bildern findet sie die
-Core-ML-Pipelines, die NVAI-open laden kann (Stable Diffusion 1.5, 2 und XL), auch wenn sie nicht unter den 50
-meistgeladenen Treffern eines Suchworts sind: „realistic“ fand vorher keine, jetzt 11. MLX-Bildmodelle erscheinen mit
-Hinweis: FLUX.2 Klein und Z-Image Turbo laufen als Katalogmodelle, andere Fassungen und Familien lädt sie nicht. Bei
-Videos zeigt sie Text- und Bild-zu-Video-Modelle mit denselben Hinweisen: LTX-Video 2B läuft (Katalog), LTX-2.3 und
-2.5 brauchen ab 32 GB Arbeitsspeicher, Wan und die übrigen sind noch nicht eingebaut. LoRAs blendet sie aus; der Mac
-lädt sie aus der Suche nicht.
-
-Die Fußzeile zeigt jetzt die Version (NVAI-open 0.4.8).
-
-
-### Neu in NVAI-open für Mac 0.4.7
-
-NVAI-open für Mac restauriert jetzt wie die Windows-Fassung und kann dazu LoRAs und Klänge, alles nativ auf Apple
-Silicon (MLX). Gemessen auf einem Mac mini M1 mit 8 GB:
-
-| Was | Wie | Gemessen (M1, 8 GB) |
-|---|---|---|
-| Schonend restaurieren | behält das Foto in voller Auflösung und ersetzt nur die Schäden, dieselben Regeln wie unter Windows | bei gleicher Größe gleich wie der Windows-Code; 1,1 s für 1216 × 1600 |
-| Automatisch | Qwen3.5 4B (Apache-2.0, 3 GB) sieht das Foto an und entscheidet mit einer gemessenen Schwelle, ob die Schäden über das ganze Bild gehen: dann gründlich, sonst schonend | bei 20 von 21 Testfotos wie erwartet, rund 20 s |
-| Schärfen und vergrößern | SeedVR2 3B (ByteDance, Apache-2.0, 4,7 GB) in Kacheln von 384 px mit überblendeten Nähten und Farbangleich je Kachel | 1024 × 738 → 2× in 9 min, 1600 × 1216 → 2× in 28 min |
-| LoRAs | fünf LoRAs unter Apache-2.0 für FLUX.2 Klein: Pixel-Art, Sprite-Sheet, Hintergrund entfernen, Anime, gleichbleibend bearbeiten | erstes Bild nach einem Wechsel rund 10 s länger |
-| Musik und Klänge | Stable Audio 3 Medium (8 Bit, 3,8 GB; Stability AI Community License), bis 60 s auf 8 GB | 30 s Klang in 13 s, 60 s in 23 s |
-
-Grenzen: FLUX.2 Klein 4B entfernt weniger Schäden als FLUX 3 unter Windows (bei einem stark gealterten Testfoto
-blieben eine Knicklinie und eine abgerissene Ecke). SeedVR2 3B glättet Gesichter etwas stärker als 7B unter Windows,
-lässt sie aber natürlich; Real-ESRGAN war schneller, machte alte Fotos aber wachsartig und flog raus. Auf 8 GB laden die
-Modelle nacheinander.
-
-![Dasselbe Gesicht auf das Doppelte geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
-
-![FLUX.2 Klein auf dem Mac ohne und mit Pixel-Art-LoRA](../images/mac-lora-pixelart-de.jpg)
-
-### Neu in 0.5.11
-
-**MOSS-Image** (`moss-image-sft-int8`, OpenMOSS) ist das vierte empfohlene Bildmodell: Schrift und Layout im Bild unter Apache-2.0, also ohne Umsatzgrenze und Prüfpflicht verkaufbar. Knappe Prompts baut es mit seinem eigenen Text-Encoder (Qwen3.5-9B) zur vollen Beschreibung aus, die danach unter `caption` steht (`upsample_prompt=False` schaltet das ab); ein JSON mit „summary“ und „items“ legt laut OpenMOSS das Layout fest. Vorgabe ist die Einstellung von OpenMOSS mit 50 Schritten und cfg 3. Gemessen mit gleichen Prompts und Seeds: 51 s je Bild mit 1 MP, beim ersten Mal rund 11 s für den Ausbau dazu; mit den 25 Schritten aus ComfyUIs Vorlage 28 s. Die Schrift kam in allen Bildern buchstabengenau, der Soldat stand mit beiden Stiefeln im Bild, der Fischer behielt den Kopf im Bild. Die Seilgriffe der Kiste liefen mit 50 Schritten in drei von drei Bildern durch Bohrungen, mit 25 Schritten in zwei von drei. Nur Text zu Bild (keine Referenzbilder, keine Maske), auf dem Mac nicht verfügbar.
-
-![MOSS-Image: Plakat mit Schrift, Kiste mit 25 und mit 50 Schritten](../images/moss-image-de.jpg)
-
-**Alte Fotos restaurieren und einfärben** (`POST /api/image/restore`, MCP `restore_image`, Reiter „Restaurieren“, PhotoCraft-Add-on 0.4.6). Drei Schritte, jeder abwählbar:
-
-| Schritt | Was passiert | Gemessen (RTX 5060 Ti) |
-|---|---|---|
-| Schäden entfernen | FLUX 3 entfernt Kratzer, Staub, Risse, Flecken und Emulsionsschäden; das Ergebnis wird am Foto ausgerichtet. **Automatisch** (Vorgabe) lässt den Upsampler von FLUX 3 das Foto vorher ansehen und fragt, ob es Wasserflecken oder Rissnetze zeigt: ja → Gründlich, nein → Schonend (bei 20 von 21 Testfotos wie erwartet, rund 2,5 s). **Gründlich** nimmt das ganze Bild von FLUX: Craquelé, feine Kratzer, Wasserflecken und Ausbleichen verschwinden, Gesichter können je Variante leicht abweichen. **Schonend** setzt nur die erkannten Schäden ins Foto und behält Schärfe, Feinzeichnung und Gesichter in voller Auflösung (ein Porträt von 1911 behielt sein Gesicht, obwohl FLUX es in einer von zwei Varianten verändert hatte). Gewählt wird nach der Art des Schadens: flächige Alterung (Wasserflecken, Craquelé, Korn, Ausbleichen) → Gründlich; einzelne Schäden auf einem sonst guten Foto (Staub, Kratzer, Risse, Lichteinfall) → Schonend, das bei echten Glasplatten und einem Foto von 1945 mit Lichteinfall die Schärfe hielt, wo Gründlich weicher wurde. Ähnlichkeit zur unbeschädigten Vorlage an Testfotos (Helligkeit, Viertelgröße, 1 = gleich): stark beschädigt unbearbeitet 0,601, schonend 0,648, gründlich 0,689; leicht beschädigt 0,921, 0,932 und 0,911, dort lag schonend am nächsten, gründlich zeichnete Gesichter in einem Gruppenfoto anders | 2 Varianten: 70 s bei einem Foto bis 1 MP, 150 s bei 2 MP Arbeitsgröße; ein 3,5-MP-Foto mit Einfärben 4,6 min |
-| Einfärben | FLUX 3 färbt ein, übernommen wird nur die Farbe; Helligkeit, Detail und Gesichter bleiben die des Fotos. FLUX allein lag in der Helligkeit 5,4 L daneben, die Übertragung rund 1 | rund 40 s je Variante |
-| Farbhinweise | Bekannte Farben unter „Hinweise“ („her dress is red with white dots …“) | Farbabweichung ΔE 17,5 → 10,4 (−40 %) bei einem Foto mit bekannten Farben |
-| Schärfen | SeedVR2 7B (ByteDance, Apache-2.0, neue Modellart „Hochskalieren“) schärft, nimmt grobes Korn heraus (feines Rauschen in ruhigen Flächen blieb im Test) und vergrößert bis 4× (höchstens 16 MP) | 1024 → 2048 in 6 s, 1200 × 864 → 3840 × 2770 in 18,5 s |
-
-Die Arbeitsgröße fürs Schäden-Entfernen ist 2 MP (höchstens die Fotogröße): Bei 1 MP bekam ein Soldat in einem Gruppenfoto ein anderes Gesicht. Grenzen: Kleine Zeichen, die FLUX weglässt (ein Bindestrich in einer Beschriftung), verschwinden in beiden Arten, Schrift also prüfen; Filmkorn bleibt bei gründlich zum Teil; an gleich hellen Kanten kann Farbe überlaufen; SeedVR2 erfindet bei starker Vergrößerung Feindetail. Was FLUX 3 berechnet, fällt unter die FLUX Kommunity License.
-
-![Ein gealtertes Testfoto, von NVAI-open restauriert und eingefärbt, neben der Farbvorlage, aus der es gealtert wurde](../images/restore-car-de.jpg)
-
-![Gesicht: Original, FLUX 3 allein, NVAI-open mit nur der Farbe übernommen](../images/restore-face-de.jpg)
-
-![Graubild, eingefärbt, eingefärbt mit Farbhinweisen, Vorlage](../images/colorize-hints-de.jpg)
-
-### Neu in 0.5.10
-
-| Was | Gemessen |
-|---|---|
-| Krea 2 mit Stilvorlage | Mit der Stil-LoRA von ostris (0,46 GB, Krea-2-Lizenz) nimmt Krea 2 ein oder zwei Bilder als Stilvorlage: Malweise, Farben und Licht kommen aus dem Bild, der Inhalt aus dem Prompt. Ein Leuchtturm mit einer Aquarell- bzw. Holzschnitt-Vorlage kam deutlich in deren Stil, in 41–48 statt 24 s. Mit beiden Vorlagen 71 s, dabei setzte sich die erste fast ganz durch. Siehe Abschnitt 6 |
-| Vorderseite aus dem Bild (3D) | „Vorderseite aus dem Bild übernehmen“ legt das freigestellte Quellbild auf die Flächen des Meshes, die zur Kamera zeigen, damit Schrift und Aufkleber lesbar bleiben. TripoSG baut gemalte Buchstaben nur als schwaches, verzerrtes Relief; mit der Projektion war „HAFEN“ auf einem Wegweiser lesbar. Die Projektion selbst dauert unter einer Sekunde (das ganze Mesh 66 s). Die Richtung ergibt sich aus der Silhouette (vorn +Z, Deckung 0,93 gegen 0,68 für hinten). Lose Reste der Freistellung wie Bodenflecken fallen vorher weg; passt keine Richtung klar, gilt +Z, die Ansicht, aus der TripoSG das Bild baut. Der Rest eines TripoSG-Meshes bekommt Farben aus dem Bild, ein TRELLIS.2-Mesh behält dort seine eigene Textur (noch nicht getestet, TRELLIS.2 ist hier nicht installiert). `project_front` in `image_to_3d` und `text_to_3d` |
-| Video verlängern | LTX-2.5 setzt ein vorhandenes Video fort: Sein letzter Frame wird Startbild, Format und Bildrate kommen vom Video, das neue Stück wird samt Ton angehängt. 5 s + 4 s bei 1920 × 1088 ergaben ein Video von 9,0 s (217 Frames) in 255 s, ohne sichtbare Naht. `extend_asset_id` in `generate_video` |
-| „lädt nach“ statt „zu groß“ | Modelle, die größer als der Grafikspeicher sind, laufen trotzdem: ComfyUI lädt bei jedem Schritt Teile aus dem Arbeitsspeicher nach. An einem normalen Anschluss kostete das wenig (Krea 2 INT8 ohne FP4: 13,0 s mit 8 GB, 12,2 s mit 16 GB), deshalb markiert die Modellliste sie nicht mehr rot als „zu groß für diese Karte“ |
-| „Zusätze laden“ | Optionale Dateien eines installierten Modells (Kreas Stil-LoRA, das Detail-LoRA von LTX-2.5 für DFR …) haben unter „Modelle“ einen eigenen Knopf; vorher musste man das Modell erneut laden |
-
-![Vorlagen von FLUX 3, Krea 2 ohne und mit Stilvorlage](../images/krea2-style-reference-de.jpg)
-
-![Ein Wegweiser aus TripoSG: Quellbild, das Mesh ohne, mit der Vorderseite aus dem Bild und von hinten](../images/front-projection-de.jpg)
-
-**Welches Format für welche Karte.** NVFP4 rechnet nur auf RTX 50 in Hardware, RTX 20/30/40 rechnen
-INT8. In 0.5.9 war Krea 2 NVFP4 auf einer RTX 4060 mit 8 GB schneller als INT8, weil nur die
-NVFP4-Fassung in 8 GB passt. Diese Karte hängt aber am Riser (PCIe 3.0 x4, 3,9 GB/s). Um zu sehen, ob das
-auch an einem normalen Anschluss gilt, lief die RTX 5060 Ti (PCIe 4.0 x8, 15,8 GB/s) ohne ihre
-FP4-Einheiten, ComfyUI nahm also denselben Weg wie auf einer RTX 40, einmal mit ihren 16 GB und einmal
-mit 8 GB (den Rest hielt ComfyUI per `--reserve-vram` zurück). Die absoluten Zeiten sind die der 5060 Ti,
-es zählt der Vergleich. Erstes Bild mit Laden / nächstes Bild, 1024 × 1024:
-
-| Karte | Krea 2 NVFP4 | Krea 2 INT8 | Qwen-Image-2512 NVFP4 | Qwen-Image-2512 INT8 |
-|---|---|---|---|---|
-| ohne FP4, 16 GB, PCIe 4.0 x8 | 29,8 / 25,0 s | 17,5 / 12,2 s | 226,9 / 214,0 s | 127,2 / 118,6 s |
-| ohne FP4, 8 GB, PCIe 4.0 x8 | 28,5 / 25,1 s | 17,1 / 13,0 s | 237,9 s | 158,9 s |
-| RTX 4060, 8 GB, PCIe 3.0 x4 (Riser) | 46 s | 193 / 82 s | 1095 s | 653 s |
-
-INT8 war auch dort schneller, wo es nicht in den Grafikspeicher passte (Krea 2 INT8 hat 13,5 GB). Nur am
-langsamen Riser lag NVFP4 vorn, und nur dort, wo es passte und INT8 nicht. NVAI-open empfiehlt deshalb auf
-RTX 20/30/40 INT8 und NVFP4 nur an einem Anschluss bis 4 GB/s, wenn nur die NVFP4-Fassung passt
-(`recommended` und `gpu_note` in `list_models`; mit mehreren Karten zeigt „Modelle → Grafikkarten“ den
-Anschluss jeder Karte).
-
-### Neu in 0.5.9
-
-Videoqualität, gemessen auf einer RTX 5060 Ti mit LTX-2.5 (1920 × 1088, wo nicht anders angegeben):
-
-| Was | Gemessen |
-|---|---|
-| Höchste Qualität (DFR) | Vorgabe, sobald das Detail-LoRA von Lightricks installiert ist (Lizenz auf Hugging Face akzeptieren). ComfyUIs Vorlage setzt das Startbild auf ein Viertel verkleinert ein, bei 1080p wurde dadurch das ganze Video weich; NVAI-open nimmt jetzt das Vollbild. Gleicher Seed: Gesicht und Stoffe bleiben über die ganze Länge scharf (Kantenschärfe des Gesichts nach 2 s: 625 statt 211), dafür rund dreimal so lang (5 s: 786 statt 241 s). Nicht mit Endbild oder Schleife |
-| Cinemagraph-LoRA | Wirkt nur zusammen mit „Schleife“, die die Oberfläche jetzt mit einschaltet. König vor flackernden Fackeln, 4 s bei 1280 × 704: mit Schleife bewegten sich 6 % des Bildes, das Gesicht stand still; Schleife ohne LoRA 28 %; ohne Schleife 82–84 % (auch mit Stärke 1,2), weil die Kamera heranfuhr |
-| Zeitlupen-LoRA | Getestet mit Lightricks' Einstellungen (Welle an Felsen, 1920 × 1088, 5 s, Zeitlupe 0,2): Die Gischt sank über die ganzen 5 s statt in rund 1,5 s in Echtzeit, die Tropfen blieben scharf. Ohne LoRA stand die Gischt als milchiger Schleier fast still. Mit 1280 × 704 und 0,25 war die Wirkung schwächer |
-| 48 fps | DFR mit `temporal_upscale` hält die Schärfe von 24 fps (gerade und ungerade Frames gleich), 294 statt 118 s für 4 s bei 1280 × 704 |
-| 1080p zuerst | Die Formatliste beginnt mit 1920 × 1088 und sagt dazu, dass es rund 2,7-mal so lange dauert (5 s in 251 s statt 93 s bei 1280 × 704) |
-| Höhere Bitrate | MP4s werden mit CRF 12 statt ComfyUIs 18 gespeichert: bei gleichem Seed 16,0 statt 7,3 Mbit/s, 10 statt 4,5 MB für 5 s. Feine Details ändern sich kaum, das Weiche kommt vom Modell. `crf` je Auftrag |
-| Gesicht nach dem Herauszoomen | Ein Endbild von FLUX 3 (mit denselben Referenzen) hält das Gesicht. Ohne war das Gesicht des Königs im letzten Frame (rund 80 px breit) weich und verzerrt, mit Endbild trifft der letzte Frame das Endbild. 7 s dauerten 648 statt 509 s |
-| Weiteres Endbild | Auf „wider shot“ hielt FLUX 3 den Ausschnitt. Outpainting des Endbilds (`outpaint=[320, 184, 320, 184]`, 1920 × 1088 → 2560 × 1456) ergibt einen Zoom: Die Person endet bei 75 % der Größe |
-
-![Das Gesicht nach 2 s in voller Auflösung: DFR in 0.5.8, Standardweg und DFR in 0.5.9](../images/dfr-before-after-de.jpg)
-
-Prompt-Fallen aus einer Szene mit sprechender Person und Menge: „shouts“ ergibt Grimassen („says
-firmly in a rough, deep voice“ ist ruhiger). Eine Geste, die „aus dem Bild steigen darf“, lässt die
-Kamera ihr folgen. „The camera holds a medium close-up“ wurde zum Heranfahren bis in die extreme
-Nahaufnahme; „Static camera, a locked-off medium shot; the framing stays exactly as in the first
-frame.“ hielt den Ausschnitt. „Proud, calm expression“ wurde zum Grinsen, „stern, determined
-expression and does not smile“ nicht. Dünne Gegenstände wie Gewehre und Fahnenstangen, die im
-Startbild Personen kreuzen, verschmelzen im Video. Im Startbild auseinanderhalten und nicht alle
-zugleich bewegen.
-
-**Krea 2 Turbo** (`krea2-turbo-nvfp4`) ist das dritte empfohlene Bildmodell: am fotografischsten der drei, rund 20 s je Bild, Lizenz nur unter 1 Mio. US-$ Umsatz. Vergleich und Prompt-Tipps in Abschnitt 6.
-
-![Entdeckerin als ganze Figur, gleicher Prompt und Seed: Qwen-Image-2512, FLUX 3 und Krea 2 Turbo](../images/compare-krea2.jpg)
-
-Qwen-Image-2512 gibt es jetzt auch in INT8 für RTX 20/30/40 (`qwen-image-2512-int8`, siehe Abschnitt
-4): auf einer RTX 4060 mit 8 GB 653 statt 1095 s mit NVFP4. Krea 2 war auf derselben Karte mit NVFP4
-schneller (46 statt 82 s): Nur die NVFP4-Fassung passt in ihre 8 GB, und die Karte hängt an einem
-langsamen Riser-Anschluss. An einem normalen Anschluss ist INT8 schneller (siehe Neu in 0.5.10). Im Verlauf zeigt ein Klick auf den Prompt ihn vollständig.
-
-### Neu in 0.5.8
-
-LTX-2.5 (`ltx25-distilled-nvfp4`) ist jetzt das empfohlene Videomodell, mit allen seinen Wegen.
-Gemessen auf einer RTX 5060 Ti bei 24 fps mit Ton; der Grafikspeicher ist dabei fast voll, ComfyUI
-lagert aus.
-
-| Weg | Parameter | Gemessen |
-|---|---|---|
-| Text zu Video | — | 5 s bei 1280 × 704 in 93 s (erster Lauf mit Laden 122 s); 1920 × 1088 in 251 s |
-| Startbild | `image_asset_id` | 5 s bei 1280 × 704 in 109 s |
-| Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erster und letzter Frame treffen die beiden Bilder. Was in beiden gleich ist, steht dazwischen still: Wasser und Rauch bewegten sich so wenig wie das Ufer, auch mit einem Satz, der sie bewegen sollte (vor und nach dem Ereignis meist so wenig wie in der Schleife, 0,3–2 von 255 je halbe Sekunde; dieselbe Szene nur mit Startbild: Wasser 1–9, Rauch 1–12) |
-| Schleife | `loop=True` | 4 s in 125 s; erster und letzter Frame weichen im Mittel um 3,6/255 ab (ohne Schleife 12–44). Nur mit ruhiger Kamera: Mit Kamerafahrt zerfielen die letzten Frames. Wasser und Rauch stehen still wie mit Endbild |
-| Länge automatisch | `auto_duration=True` | eine Tür, die langsam aufgeht: 3 s, in 72 s |
-| Ton vorgeben | `audio_asset_id` | 20 s Blasmusik → 19,7 s Video bei 1024 × 576 in 302 s, der Ton unverändert |
-| Mehrere Einstellungen | `expand_prompt(target="video_multishot")` | 8 s in 170 s: zwei Einstellungen mit sauberem Schnitt, in beiden derselbe Leuchtturmwärter |
-| DFR, Zeitlupe | `quality="dfr"`, `motion_speed` | noch nicht getestet: Sie brauchen LoRAs von Lightricks, deren Lizenz auf Hugging Face akzeptiert werden muss |
-
-Geräusche so laut beschreiben, wie sie sein sollen: Sprache und Schmiede kamen mit −14 bis −18 LUFS,
-ein Lagerfeuer, das „crackles softly“, und ein stiller Dorfplatz mit −41 bis −52 LUFS, mit oder ohne
-Schleife. Der erzeugte Ton läuft jetzt durch denselben Limiter wie alle Audioausgaben, bei Video mit
-−2,5 dBFS, weil AAC bei dichtem Ton bis 1,9 dB überschwingt; vorher erreichte er bis +1,7 dBTP. Neu im
-Video-Reiter: „Person aus einem Foto“ lässt FLUX 3 das Gesicht aus einem Foto übernehmen und vier
-Startbilder in einer beschriebenen Rolle erzeugen (95–98 s bei 1280 × 704), die LTX-2.5 dann belebt;
-Schritt für Schritt in [FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md). Empfohlene LoRAs für LTX-2.5 und wie sie abschnitten:
-[INSTALL.md](INSTALL.md#loras-hugging-face-und-civitai).
-
-### Neu in 0.5.7
-
-| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
+| Modell | Wofür | Gemessen | Lizenz |
 |---|---|---|---|
-| Stable Audio 3 Medium (`stable-audio-3-medium`) | instrumentale Musik, kein Gesang (Chor nur wortlos); in NVAI-open bis 5 Minuten | 60 s in 9–12 s (bis 9,7 GB Grafikspeicher), 300 s in 64 s (16-GB-Karte fast voll) | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
+| Stable Audio Open | Soundeffekte und Atmosphäre bis 47 s | 6 s in rund 12 s | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
+| Stable Audio 3 Medium | Instrumentalmusik bis 5 Minuten, kein Gesang | 60 s in 9–12 s, 300 s in 64 s | Stability AI Community (unter 1 Mio. US-$ Umsatz) |
 
-Den Prompt für Stable Audio 3 als einen Satz schreiben: Gattung mit Hauptinstrumenten, Schichten
-und Schlagwerk, die Stimmung, dann „BPM: 100.“. NVAI-open hängt „Length: N seconds“ passend zur Dauer
-an. „✨ Prompt ausbauen“ schreibt diese Form (`target="music_sa3"`).
+- **Soundeffekte:** den Klang beschreiben, nicht die Szene: „heavy metal sword clash, single impact, bright metallic
+  ring, dry studio recording“; kurze Effekte 3–8 s.
+- **Musik:** ein Satz mit Gattung und Instrumenten, Schlagwerk und Stimmung, dann „BPM: 100.“; ✨ Prompt ausbauen
+  schreibt diese Form. Die Länge hängt NVAI-open selbst an. Ein Modell für Lieder mit Gesang ist nicht dabei.
+- Jede Tonausgabe läuft vor dem Speichern durch den Limiter von NVAI-open (−1 dBFS).
 
-ACE-Step 1.5 Turbo läuft jetzt wie ComfyUIs Vorlage (8 Schritte, CFG 1, shift 3). Vorher nahm NVAI-open
-12 Schritte und CFG 2 ohne shift, das klang hart und gepresst. Die Lizenz ist MIT (im Katalog stand
-Apache-2.0).
+---
 
-Jede Audioausgabe läuft jetzt vor dem Speichern durch NVAI-opens eigenen Limiter (Grenze −1 dBFS, 5 ms
-Vorlauf, 80 ms Rücklauf); ACE-Step wird vorher um 3 dB abgesenkt. Seine rohe Ausgabe hat Spitzen bis
-+5,7 dBFS, und der MP3-Encoder schnitt alles über 0 dB hart ab. Gemessen mit gleichem Seed, True Peak
-der MP3: Industrial +2,3 → 0,0 dBTP, Blaskapelle +2,0 → +0,2 dBTP (nur mit den 3 dB: +1,3 und +0,9).
-Was über −1 dB bleibt, ist MP3-Überschwingen.
+## 3D
 
-### Neu in 0.5.3
+Zwei Schritte: erst ein Bild des Objekts, dann `image_to_3d` (oder `text_to_3d`, das beides macht). Was im Bild steht,
+landet im Mesh: Boden, Tisch und Schlagschatten werden zu Platten, zwei Objekte verschmelzen. Also: ein geschlossenes
+Objekt vor schlichtem Hintergrund, ohne Boden und Schatten („plain flat background, no cast shadow, not standing on a
+floor or table“).
 
-| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
+| Modell | Was | Zeit | Lizenz |
 |---|---|---|---|
-| LTX-2.3 (`ltx23-nvfp4`) | Video mit Ton; Basis der meisten Community-LoRAs für LTX | 4 s in 1280 × 704 in 101 s, Bild zu Video 448 × 832 in 65 s | LTX-2 Community (unter 10 Mio. US-$ Umsatz) |
-| Mochi 1 preview (`mochi-1-preview-fp8`) | Text zu Video mit flüssiger Bewegung | 49 Frames in 848 × 480 in 351 s | Apache-2.0 |
-| Kandinsky 5.0 Video Lite, destilliert (`kandinsky5-lite-t2v-distilled`) | kleines MIT-Videomodell, 5 s | 768 × 512 in rund 300 s | MIT, VAE unter Tencent-Lizenz |
-| Kandinsky 5.0 Video Lite T2V / I2V | dasselbe mit 50 Schritten; I2V nur im Querformat 768 × 512 | rund 26–27 Minuten | MIT, VAE unter Tencent-Lizenz |
+| TripoSG | nur Geometrie, Teil des Setups | rund 60 s warm, 180 s kalt | MIT |
+| TRELLIS.2 4B | Geometrie mit PBR-Texturen (2048²); nur mit einer Installation aus dem Quelltext | rund 75 s warm | MIT |
 
-LoRAs (ebenfalls neu in 0.5.3) laufen mit SDXL, SD 1.5, Qwen-Image, Z-Image, FLUX.1/Chroma, Wan und
-LTX-2/2.3, siehe [INSTALL.md](INSTALL.md#loras-hugging-face-und-civitai). Gemessen: Eine Pixel-Art-LoRA
-an Qwen-Image-2512 änderte bei gleichem Seed deutlich den Stil (168 statt 102 s); ein Orbit-LoRA-Paar
-an Wan 2.2 I2V A14B machte aus einer leichten Drehung eine ganze Kamerafahrt um die Figur.
+**Vorderseite aus dem Bild** (`project_front=True`): Schrift übersteht den Weg zum Mesh nicht; das legt das
+freigestellte Quellbild auf die Flächen, die zur Kamera zeigen, so wurde „HAFEN“ auf einem Wegweiser lesbar (unter einer
+Sekunde zusätzlich zu den 66 s). Beide Modelle liefern Meshes, die nicht sicher wasserdicht sind; vor dem Einsatz im
+Spiel ein Retopo machen.
 
-### Neu in 0.5.2
+![Ein Wegweiser von TripoSG: das Quellbild, das schlichte Mesh, mit der Vorderseite aus dem Bild und von hinten](../images/front-projection-de.jpg)
 
-| Modell | Wofür | Gemessen (RTX 5060 Ti) | Lizenz |
-|---|---|---|---|
-| Boogu-Image 0.1 Turbo (`boogu-image-turbo-nvfp4`) | schnelle Entwürfe, 4 Schritte | 832 × 1216 in ~10 s | Apache-2.0 |
-| Boogu-Image 0.1 Base (`boogu-image-nvfp4`) | volle Qualität, Negativprompt wirkt | 832 × 1216 in ~66 s | Apache-2.0 |
-| Boogu-Image 0.1 Edit (`boogu-image-edit-nvfp4`) | Bild nach Anweisung ändern; im Test änderte sich nur der Hut | ~147 s | Apache-2.0 |
-| HiDream-O1-Image Dev (`hidream-o1-dev-fp8`) | große Bilder, auf ~4 MP trainiert | 1728 × 2304 in ~41 s | MIT |
-| HiDream-O1-Image (`hidream-o1-fp8`) | dasselbe mit 40 Schritten und Negativprompt | ~142 s | MIT |
-| LTX-2.5 (`ltx25-distilled-nvfp4`) | Video mit Ton, aus Text oder Startbild | 4 s in 1280 × 704 in ~72 s | LTX-2 Community (unter 10 Mio. US-$ Umsatz) |
+---
 
-### Zensiert oder unzensiert
+## Alte Fotos
 
-Jedes Bild- und Videomodell in der Liste trägt ein Abzeichen: *unzensiert*, *teilweise
-zensiert*, *zensiert* oder *Zensur unbekannt*. Der Tooltip nennt Beleg und Quelle (Modellkarte,
-technischer Bericht). NVAI-open selbst filtert nichts. Dieselbe Angabe steht in `GET /api/models`
-(`content`, `content_note`, `content_source`).
+Der Reiter **„Restaurieren“** (`POST /api/image/restore`, MCP `restore_image`, auch im PhotoCraft-Add-on), drei
+schaltbare Schritte:
 
-| Abzeichen | Modelle (Stand Oktober 2026) |
+| Schritt | Was passiert | Gemessen |
+|---|---|---|
+| Schäden entfernen | FLUX 3 entfernt Kratzer, Staub, Risse, Flecken und Ausbleichen; das Ergebnis wird deckungsgleich ausgerichtet. **Automatisch** (Vorgabe) fragt den Upsampler von FLUX, ob das Foto Wasserflecken oder Rissnetze zeigt: ja → **Gründlich** (das ganze Bild von FLUX, für flächige Alterung), nein → **Schonend** (nur die Schäden werden ersetzt, Schärfe und Gesichter bleiben in voller Auflösung, für Staub, Kratzer, Risse und Lichteinfall). Bei 20 von 21 Testfotos lag es richtig | 2 Varianten in der Arbeitsgröße 2 MP: 150 s |
+| Einfärben | FLUX 3 färbt ein, übernommen wird aber nur die Farbe; Helligkeit, Detail und Gesichter bleiben die des Fotos | rund 40 s je Variante |
+| Farbhinweise | bekannte Farben unter „Hinweise“ („her dress is red with white dots“) | Farbfehler −40 % |
+| Schärfen | SeedVR2 7B schärft und vergrößert bis 4× (höchstens 16 MP) | 1024 → 2048 in 6 s |
+
+Nach der Art des Schadens wählen, nicht nach der Menge. Gesichter können sich von Variante zu Variante leicht ändern,
+also beide in voller Größe vergleichen; kleine Zeichen wie ein Bindestrich können fehlen, also Schrift prüfen; an gleich
+hellen Kanten kann Farbe überlaufen. Was FLUX 3 rechnet, fällt unter die FLUX Kommunity License.
+
+![Gesicht: Original, FLUX 3 allein, NVAI-open mit nur übernommener Farbe](../images/restore-face-de.jpg)
+
+![Graustufen, eingefärbt, eingefärbt mit Farbhinweisen, Original](../images/colorize-hints-de.jpg)
+
+---
+
+## Zensiert oder unzensiert
+
+Jedes Bild- und Videomodell in der Liste trägt ein Etikett, mit Beleg und Quelle im Tooltip (auch in `GET /api/models`
+als `content`, `content_note`, `content_source`). NVAI-open selbst filtert nichts.
+
+| Etikett | Modelle |
 |---|---|
 | unzensiert | Chroma1-HD, Pony Diffusion V6 XL, NoobAI-XL, Illustrious XL |
 | teilweise zensiert | SDXL, Z-Image, Wan 2.1 / 2.2 |
 | zensiert | Qwen-Image-2512, FLUX 3 Image Klein, Krea 2, FLUX.1 schnell |
-| Zensur unbekannt | Juggernaut XL, Qwen-Image 2.1, LongCat-Image, LTX-Video |
+| Filterung unbekannt | Juggernaut XL, Qwen-Image 2.1, LongCat-Image, LTX-Video |
 
-In 0.5.2 aus dem Katalog genommen (installierte Dateien bleiben): SD 3.5 Medium/Large,
-FLUX.1 dev, Chroma v37 (stattdessen Chroma1-HD), HunyuanVideo 1.5 (Lizenz schließt die EU aus;
-stattdessen Wan 2.2).
+Aus dem Katalog genommen (installierte Dateien bleiben): SD 3.5, FLUX.1 dev, Chroma v37 und HunyuanVideo 1.5, dessen
+Lizenz die EU ausschließt.
 
-## 3. Zugriff aus einem anderen Projekt
+---
 
-### Voraussetzung
+## Auf dem Mac
 
-Der NVAI-open-Server muss laufen. Er lauscht auf `http://127.0.0.1:8100`. Beim Windows-Setup
-startet ihn der Startmenü-Eintrag **NVAI-open**, im Quelltext-Stand:
+NVAI-open für Mac rechnet mit eigenen, nativen Modellen auf Apple Silicon (MLX). Gemessen auf einem Mac mini M1 mit
+8 GB:
 
-```powershell
-scripts\start.ps1     # meldet sich, falls er schon läuft
-```
+| Modell | Was | Gemessen |
+|---|---|---|
+| FLUX.2 Klein 4B | Bilder: generieren, überarbeiten, füllen, erweitern, bis zu 3 Referenzen; LoRAs (Pixel-Art, Sprite-Sheet, Anime …) | 512² in 40,5 s |
+| Z-Image Turbo | fotografische Bilder und Schrift, 8 Schritte | 512² in 101 s, 1 MP in 399 s |
+| LTX-Video 2B | Video aus Text oder einem Startbild, 24 fps, ohne Ton | 4 s in 768 × 512 in 174 s |
+| Stable Audio 3 Medium | Musik und Klänge bis 60 s bei 8 GB | 30 s in 13 s |
+| Qwen3.5 4B, SeedVR2 3B | „Automatisch“ beim Restaurieren; Schärfen | Automatisch rund 20 s; 1024 × 738 → 2× in 9 min |
 
-Das GPU-Backend (ComfyUI) startet beim ersten Job selbst. Das kostet einmalig rund 30 s und
-ist kein Fehler. `health` zeigt, ob alles läuft und welches Modell aktiv ist.
+FLUX.2 Klein entfernt bei alten Fotos weniger Schäden als FLUX 3 unter Windows, und SeedVR2 3B glättet Gesichter etwas
+mehr als der 7B.
 
-### Per MCP (Claude Code)
+![Dasselbe Gesicht auf doppelte Größe geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
 
-Den MCP-Server `nvai` einmal **auf Benutzerebene** registrieren. Dann steht er in jedem
-Claude-Code-Projekt bereit, ohne weitere Einrichtung:
+<a name="neu-in-nvai-open-für-mac-050"></a>
 
-```
-claude mcp add --scope user nvai -- "<Installationsordner>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
-```
+### Videomodelle je Arbeitsspeicher
 
-Beim Windows-Setup zusätzlich den Datenordner mitgeben (`-e "NVAI_DATA_DIR=<Datenordner>"`),
-siehe [CLAUDE_CODE.md](../CLAUDE_CODE.md) (englisch).
+| Arbeitsspeicher | Empfohlen | Ton | Stand |
+|---|---|---|---|
+| unter 16 GB | LTX-Video 2B | nein | gemessen |
+| 16–23 GB | LTX-Video 13B, 4 Bit | nein | Block für Block gegen ComfyUI geprüft, nicht ganz gerechnet |
+| 24–31 GB | LTX-Video 13B, 8 Bit | nein | wie oben |
+| 32–63 GB | LTX-2.3 distilled, 4 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3 |
+| ab 64 GB | LTX-2.5 distilled, 8 Bit | ja | eingebaut, nicht gerechnet; macOS 26.3, gesperrt |
 
-Die wichtigsten Werkzeuge:
+Unter seinem Mindestspeicher lässt sich ein Modell nicht laden. Im Studio rechnen Videoszenen mit dem Modell, das unter
+„Generieren → Video“ gewählt ist. Berichte von Macs mit mehr Speicher sind als
+[Issue](https://github.com/Mantux775/NVAI-open/issues) willkommen.
 
-| Werkzeug | Zweck |
-|---|---|
-| `health` | immer zuerst: Backend, aktive Modelle, Warteschlange |
-| `list_models(kind="image", detailed=True)` | Modelle mit `features` (Abschnitt 8), Pro und Contra, Lizenz |
-| `generate_image(...)` | erzeugt Bilder und blockiert bis fertig. Gibt `files`, `asset_ids`, `seed` zurück, bei FLUX 3 auch `caption` |
-| `list_assets(kind="image")` | letzte Bilder mit Asset-ID und Pfad |
-| `copy_asset(asset_id, ziel)` | Bild in das eigene Projekt kopieren |
+---
 
-Nach einem Update von NVAI-open sieht eine laufende Sitzung die neuen Werkzeugbeschreibungen erst
-nach `/mcp` und Neuverbinden.
+## Für Programme
 
-### Per REST
+Der Server lauscht auf `http://127.0.0.1:8100`; das GPU-Backend startet mit dem ersten Auftrag (einmalig rund 30 s).
+Aus Claude Code geht es über den MCP-Server ([CLAUDE_CODE.md](../CLAUDE_CODE.md), englisch). Per REST:
 
 | Methode und Pfad | Zweck |
 |---|---|
-| `GET /api/health` | Status |
-| `GET /api/version` | Programm-, ComfyUI- und Vertragsversion (`api`), unterstützte Erweiterungen (`features`: `mask`, `references`, `upsampler` …). Vor der ersten Nutzung prüfen |
-| `GET /api/models?kind=image` | Modelle mit `features`, dazu `recommended` und `gpu_note` für die erkannte Karte |
-| `GET /api/models/search?q=…` | weitere Modelle auf Hugging Face (Repos mit Checkpoint-Dateien) |
-| `GET /api/models/inspect?repo=…&file=…` | prüft eine Datei vor dem Laden: Architektur aus dem safetensors-Kopf, Größe. Laden lassen sich SDXL- und SD-1.5-Checkpoints |
-| `POST /api/generate/image` | Job anlegen (JSON, Felder wie in Abschnitt 7). Antwort: Job mit `id` |
+| `GET /api/health` | Zustand, aktive Modelle, Warteschlange |
+| `GET /api/version` | Versionen, Vertrag (`api`) und unterstützte Erweiterungen (`features`) |
+| `GET /api/models?kind=image` | Modelle mit `features`, `recommended` und `gpu_note` |
+| `POST /api/generate/image` (`/video`, `/audio`) | Auftrag anlegen; die Antwort hat seine `id` |
 | `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
-| `GET /api/jobs/{id}/assets` | erzeugte Bilder: `id`, `filename`, `url`, `meta` (Seed, Einstellungen, bei FLUX 3 `caption`) |
-| `POST /api/upload` | eigenes Bild hochladen (multipart, Feld `file`). Die Antwort-`id` taugt als Referenzbild |
-| `GET /files/{filename}` | Bilddatei |
-
-Die Dateien liegen direkt unter `<Datenordner>\assets\<filename>`: im Quelltext-Stand unter
-`data\assets`, beim Setup mit dem voreingestellten Datenordner unter
-`%LOCALAPPDATA%\NV-AI\assets`.
-
-Von einem anderen Gerät aus (Server mit `scripts\start.ps1 -Lan` gestartet) gibt es diesen
-Ordner nicht. Bilder dann über `GET /files/{filename}` laden. Jede Anfrage braucht den Header
-`X-NVAI-Token`, auch die nach `/files`; ohne gültigen Token antwortet der Server mit 401.
-`/api/version` geht ohne Token und zeigt unter `authorized`, ob der mitgeschickte gilt. Die
-REST-API ist in `server/openapi.json` festgehalten (Vertragsversion `api`).
+| `GET /api/jobs/{id}/assets` | die Ergebnisse mit `id`, `filename`, `url`, `meta` (Seed, Einstellungen, `caption`) |
+| `POST /api/upload` | eigenes Bild hochladen (multipart, Feld `file`), etwa als Referenz |
+| `GET /files/{filename}` | die Datei |
 
 ```python
 import json, time, urllib.request
@@ -585,507 +527,59 @@ job = call("POST", "/api/generate/image", {
 while (j := call("GET", f"/api/jobs/{job['id']}"))["status"] not in ("done", "error"):
     time.sleep(2)
 for asset in call("GET", f"/api/jobs/{job['id']}/assets"):
-    print(asset["id"], r"<Datenordner>\assets" + "\\" + asset["filename"])
+    print(asset["id"], asset["url"])
 ```
 
-Der Server arbeitet GPU-Jobs nacheinander ab. Steht ein Job auf `queued`, rechnet gerade ein
-anderer.
+GPU-Aufträge laufen nacheinander; ein Auftrag in `queued` wartet auf den vor ihm. Von einem anderen Gerät (Server mit
+`scripts\start.ps1 -Lan` gestartet) braucht jede Anfrage den Header `X-NVAI-Token`. Die API steht in
+`server/openapi.json`.
 
-## 4. Qwen-Image-2512 (`qwen-image-2512-nvfp4`)
+### Parameter von `generate_image`
 
-### Eckdaten
-
-- 20 Mrd. Parameter (MMDiT). In bf16 wären das 41 GB. Die hier genutzte NVFP4-Quantisierung
-  (`Hippotes/Qwen-Image-2512-quants`, Fassung v2) wiegt 14,9 GB, und RTX-50-Karten rechnen
-  dieses Format in Hardware.
-- Text-Encoder Qwen2.5-VL-7B (fp8, 9,4 GB), VAE von Qwen. Download insgesamt 24,5 GB.
-- 50 Schritte, CFG 4,0, Sampler `euler`, Scheduler `simple`, Shift 3,1. Die Werte stammen aus
-  ComfyUIs Vorlage und Qwens Modellkarte.
-- Lizenz Apache-2.0: kommerziell ohne Einschränkung.
-
-### Was es kann
-
-- **Schrift im Bild buchstabengenau.** Kistenaufschrift und Schilder kommen so, wie sie im
-  Prompt in Anführungszeichen stehen.
-- **Konstruktion.** Im Test liefen die Seilgriffe einer Munitionskiste durch Bohrungen und
-  unter die Leisten. Die destillierte Lightning-Fassung legte sie beim selben Seed ohne Halt
-  aufs Holz.
-- **Lange Prompts.** Der Encoder ist ein Sprachmodell, es gibt keine 77-Token-Grenze wie bei
-  CLIP.
-- **Negativprompt wirkt** (CFG 4). Bleibt er leer, setzt NVAI-open den aus Qwens Modellkarte ein:
-  `低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。`
-  Er steht für niedrige Auflösung, deformierte Glieder und Finger, Übersättigung, Wachsoptik,
-  KI-Look, wirre Komposition und verzerrte Schrift.
-- **Bild als Ausgangspunkt** (`image_asset_id` + `denoise`): Ein fast richtiges Bild wird
-  nachgebessert statt neu gewürfelt.
-- **Inpainting** (`image_asset_id` + `mask_asset_id` + `denoise=1.0`): Nur der weiße Bereich
-  der Maske wird neu gerechnet, schwarz bleibt, Graustufen gehen weich über. Gemessen: Die
-  Aufschrift „MUNITION 7,92" einer Kiste wurde in der Maske zu „FLAK 88" in derselben
-  Schablonenschrift. Außerhalb der Maske wich das Bild im Mittel um 0,6 von 255 ab, also nur um
-  das Rauschen des VAE-Durchlaufs. Mit 28 Schritten dauerte das 82 s einschließlich Kaltstart.
-  Seit 0.5.6 füllt auch **FLUX 3** (`features.mask` = `"reference"`): NVAI-open schneidet den Bereich
-  mit 35 % Umgebung aus, färbt ihn grau, lässt FLUX 3 nach dem Prompt malen, misst den Versatz und
-  setzt nur den Bereich zurück, außerhalb pixelgleich. Gemessen an einem Fischmarkt: Kisten entfernt
-  mit durchlaufendem Pflaster, Möwe aufs Wasser gesetzt, je rund 60–70 s. Etwas Vorhandenes
-  umschreiben (Schrift auf einem Schild) geht besser als Bearbeitung mit Referenzbild: grau gefüllt
-  malte FLUX ein neues, frontales Schild, als Bearbeitung behielt es Lage und Neigung.
-  Für neue Objekte das volle Modell nehmen. Lightning setzt laut Test meist nur die Umgebung
-  fort, was zum Wegretuschieren genügt.
-- **Outpainting** (seit 0.5.4, `image_asset_id` + `outpaint=[links, oben, rechts, unten]` in Pixeln):
-  Das Bild wird über den Rand hinaus erweitert, das Format ist Bild plus Rand. **FLUX 3 nehmen:** Es
-  bekommt das Bild mit grauem Rand als Referenz und führt die Szene weiter, danach legt NVAI-open das
-  Original zurück. FLUX 3 gibt das Bild nie genau an derselben Stelle wieder (je Achse Faktor 0,97–1,055 und bis 43 px
-  Versatz, bei Rand auf allen Seiten zoomte es 25–42 % hinein). Deshalb erweitert NVAI-open Achse für Achse,
-  misst nach jedem Durchgang den Versatz, rückt das Ergebnis zurück und setzt erst dann das Original
-  ein. Gemessen an einer rundum erweiterten Löwenszene: zwei Varianten in 147 s, Nähte in voller
-  Auflösung sauber. Qwen-Image-2512 erweitert per Maske, malte den Rand im
-  Test aber als eigene Szene mit harter Kante (auch mit 128/256 px Übergang und 50 Schritten).
-- **Zweiter Durchgang** (`hires=True`) für Hände, Gesichter und feine Technik.
-
-### Formate
-
-Die allgemeinen Formate um 1 Megapixel funktionieren. Qwen ist aber auf rund 1,76 MP
-trainiert, und seine **nativen Formate** bringen sichtbar mehr Detail:
-
-| Nativ | Seitenverhältnis | Wofür |
-|---|---|---|
-| 1328 × 1328 | 1:1 | Objekte, Icons |
-| 1056 × 1584 | 2:3 | stehende Figuren |
-| 1584 × 1056 | 3:2 | Fahrzeuge, Szenen |
-| 1104 × 1472 / 1472 × 1104 | 3:4 / 4:3 | |
-| 928 × 1664 / 1664 × 928 | 9:16 / 16:9 | Panorama |
-
-Gemessen bei 1328² gegenüber 1024²: feinere Seildrehung und Holzmaserung, dafür die doppelte
-Zeit.
-
-### Laufzeiten (gemessen)
-
-| Lauf | Zeit |
-|---|---|
-| 1024², 50 Schritte | ~100 s (1,84 s pro Schritt) |
-| 1328² nativ, 50 Schritte | ~200 s (3,79 s pro Schritt) |
-| Lightning, 1024², 8 Schritte | ~17 s, vier Bilder ~40 s (gemessen unter ComfyUI 0.30) |
-| erster Job nach dem Start | zusätzlich 15–30 s Laden |
-
-### Prompt schreiben
-
-Ganze englische Sätze. Zuerst Medium und Stil, dann das Motiv mit Material, Farbe, Zustand
-und Konstruktion, dann Licht und Hintergrund. Schrift wörtlich in Anführungszeichen.
-
-```
-Studio product photograph of a weathered wooden ammunition crate. Black stenciled letters on
-the front read "MUNITION 7,92". Rope handles pass through drilled holes in the side boards.
-Plain light grey background, soft even light.
-```
-
-- **Konstruktion ausdrücklich nennen.** Was nicht dasteht, wird erfunden.
-- **Keine Gewichtungsklammern** wie `(full body:1.2)`. Das ist CLIP-Syntax und hier wirkungslos.
-- **Herkunft von Personen benennen**, als Region plus Gesichtsmerkmale: *Central European
-  soldiers with pale northern European features*.
-- **Genau eine Ansicht** nennen („strict side view"), nicht zwei.
-
-### Bekannte Grenzen
-
-- Historische Fahrzeuge erfindet es: Aus „Kübelwagen" wurde im Test ein Willys Jeep.
-- Mit Lightning (8 Schritte) gehen konstruktive Details verloren. Lightning eignet sich nur
-  für Entwürfe.
-- Encoder und Modell passen nicht gleichzeitig in 16 GB. Jeder neue Prompt lädt nach, das
-  steckt in den gemessenen Zeiten schon drin.
-
-### INT8-Fassung für RTX 20/30/40 (`qwen-image-2512-int8`)
-
-Nur RTX-50-Karten rechnen NVFP4 in Hardware; eine RTX 4060 brauchte damit 1095 s pro Bild. Für ältere
-Karten gibt es eine INT8-Fassung, quantisiert mit Comfy-Orgs eigenem Werkzeug comfy-quants (int8
-tensorwise mit ConvRot, dieselbe Schichtauswahl wie die offiziellen Exporte). Sie lädt im normalen
-ComfyUI ohne Zusatz-Node und rechnet auf jeder NVIDIA-Karte ab der RTX-20-Reihe in Hardware. Es ist ein
-Community-Upload (LAXMAYDAY, eine bytegleiche Kopie bei wazimondo), 20,6 GB; Text-Encoder und VAE
-teilt sie mit den NVFP4-Fassungen.
-
-Gemessen auf einer RTX 5060 Ti (16 GB), 1024 × 1024, 50 Schritte: 119 s pro Bild, mit Laden 132 s
-(NVFP4: 101 bzw. 108 s). Die Testkiste kam so gut wie mit NVFP4: Schrift buchstabengenau, Seilgriffe
-durch Bohrungen. Mit 16 GB und weniger lädt ComfyUI Teile des Modells aus dem Arbeitsspeicher nach.
-Auf einer RTX 4060 mit 8 GB (am Riser, PCIe 3.0 x4): 653 s samt Laden, die NVFP4-Fassung 1095 s;
-keine der beiden passt in 8 GB, INT8 rechnet aber in Hardware. Schrift und Seilgriffe auch dort sauber.
-
-## 5. FLUX 3 Image Klein (`flux3-klein-nvfp4`)
-
-### Eckdaten
-
-- Black Forest Labs, veröffentlicht am 15. Oktober 2026. 5,6 Mrd. Parameter im Bildmodell,
-  offizielle NVFP4-Fassung von BFL (5,3 GB).
-- Text-Encoder Qwen3-VL-4B (int8, 4,9 GB), Prompt-Upsampler Qwen3.5-9B (int8, 9,8 GB), VAE von
-  FLUX.2. Download insgesamt 20,2 GB.
-- Destilliert: 16 Schritte ohne Guidance (CFG 1). Laut BFL ist es dasselbe Modell, das hinter
-  ihrer API läuft.
-- Das Repo auf Hugging Face ist gated. Einmal die Lizenz akzeptieren, dann in der Weboberfläche
-  unter **Modelle** einen Hugging-Face-Token eintragen oder im Quelltext-Stand
-  `server\.venv\Scripts\hf.exe auth login` ausführen.
-
-### Der Prompt-Upsampler
-
-FLUX 3 ist auf lange Bildbeschreibungen trainiert, die sein eigener Upsampler schreibt. BFL
-rät, das Modell nie ohne ihn zu benutzen. In NVAI-open läuft er deshalb automatisch vor jedem Bild:
-
-1. Aus der Anfrage schreibt der Upsampler eine Beschreibung von 100 bis 350 Wörtern. Bei Formaten,
-   die nicht quadratisch sind, erfährt er das Seitenverhältnis und komponiert dafür.
-2. Das Bild entsteht aus dieser Beschreibung.
-3. Die Beschreibung landet im Ergebnis unter **`caption`**, bei MCP direkt im Rückgabewert und
-   bei REST in `meta.caption` des Assets.
-
-Er dekodiert deterministisch: Derselbe Prompt ergibt immer dieselbe Beschreibung. NVAI-open
-speichert sie zwischen, deshalb kostet ein neuer Seed mit demselben Prompt nur die Bildzeit.
-Der Zwischenspeicher lebt im Serverprozess und ist nach einem Neustart leer.
-
-`upsample_prompt=False` schaltet den Upsampler ab. Das lohnt nur, wenn der Prompt selbst schon
-eine volle Beschreibung in diesem Stil ist. Ohne Upsampler wurde die Testkiste schlichter und
-kleiner.
-
-**Was das für den Prompt heißt:** Kurz und vollständig reicht. Der Upsampler füllt aber jede
-Lücke selbst. Im Test hängte er Soldaten einen Mantel wie einen Umhang über den Rücken, gab ihnen
-Schnürschuhe statt Marschstiefeln und ließ Seilgriffe lose über die Front einer Kiste hängen.
-Alles, was stimmen muss, gehört deshalb in den Prompt, und der **Stil** gehört an den Anfang.
-Ohne Stilangabe plant der Upsampler ein Foto.
-
-Stimmt am Bild etwas nicht, zuerst `caption` lesen. Stand der Fehler schon dort, den Prompt
-ergänzen, statt neu zu würfeln.
-
-### Prompt ausbauen: der Upsampler für jedes Modell
-
-Derselbe Upsampler arbeitet auch für die anderen Bildmodelle. In der Weboberfläche und im
-PhotoCraft-Add-on schreibt der Knopf **✨ Prompt ausbauen** die volle Beschreibung ins
-Prompt-Feld; man liest sie, streicht, was nicht stimmt, und generiert mit einem beliebigen Modell.
-Per MCP heißt das `expand_prompt(prompt, width, height)`, per REST `POST /api/prompt/expand`.
-Ein FLUX-3-Modell muss dafür geladen sein. Gemessen: 13–16 s, direkt nach dem Start rund 36 s.
-
-NVAI-open für Mac (seit 0.4) und das PhotoCraft-Add-on auf dem Mac haben denselben Knopf und dieselbe
-REST-Route. Dort schreibt der Text-Encoder Qwen3-4B von FLUX.2 Klein die Beschreibung, mit den
-Anweisungen von Black Forest Labs für Text-zu-Bild-Prompts; kein zusätzlicher Download. Gemessen
-auf einem Mac mini M1 mit 8 GB: 22–25 s, beim ersten Mal nach dem App-Start 35 s.
-
-Mit nur „a medieval blacksmith“ malte Qwen-Image-2512 ein Kriegerporträt in Lederrüstung, mit dem
-ausgebauten Text eine arbeitende Schmiede mit Esse, Amboss, Zange und Funken. Der Upsampler füllt
-aber jede Lücke: Er setzte dem Schmied auch einen Eisenhelm auf. Den Text also erst lesen.
-
-Seit 0.5.3 sitzt der Knopf auch in den Reitern **Video**, **Audio** und **3D** (Windows). Derselbe
-Upsampler folgt dann NVAI-opens eigenen Anweisungen (`target` in der API): Bei Video ergänzt er
-Bewegung, eine Kamerafahrt, Ort und Licht, bei LTX-2.5 auch das Hörbare, mit Startbild nur die
-Bewegung. Für Stable Audio schreibt er Klang-Tags (Quelle, Material, Raum, Mikrofon), für Stable Audio 3
-einen Satz mit Gattung, Instrumenten, Stimmung und BPM. Im 3D-Reiter erzeugt „Objekt aus Text“ zuerst mit dem
-aktiven Bildmodell ein Quellbild: ein geschlossenes Objekt ohne Boden und Schatten. Gemessen auf
-der RTX 5060 Ti: 3–12 s je Prompt. Das Modell ist auf Bildbeschreibungen trainiert; Klang-Tags
-beginnen manchmal trotzdem mit einem ganzen Satz.
-
-### Referenzbilder
-
-`reference_asset_ids` nimmt bis zu zehn Asset-IDs: erzeugte Bilder oder eigene Uploads
-(`POST /api/upload`). Im Prompt heißen sie in dieser Reihenfolge „the first image", „the second
-image" usw.
-
-**Bearbeiten** (ein Referenzbild): Der Prompt sagt, was sich ändert und was gleich bleibt.
-
-```
-generate_image(
-  prompt="Replace the rope handles with forged iron handles bolted to the side boards; "
-         "keep everything else unchanged.",
-  model_id="flux3-klein-nvfp4",
-  reference_asset_ids=["ast_b2e2b512098a"],
-)
-```
-
-Im Test blieb die Vorlage bis auf die Griffe gleich: Bretter, Schablonenschrift und Leisten
-waren unverändert, die neuen Griffe sind mit Platten verschraubt. Allerdings setzte das Modell
-drei Griffe statt zwei, einen davon auf die Frontleiste.
-
-**Kombinieren und Konsistenz** (mehrere Referenzen):
-
-```
-prompt="Put the soldier from the first image into the trench from the second image, "
-       "same uniform and helmet, seen from the side."
-```
-
-Bekommt FLUX 3 nur ein `image_asset_id` und keine `reference_asset_ids`, wird das Bild zur
-ersten Referenz; `denoise` gilt dann nicht.
-Die Ausgabegröße bestimmen `width` und `height`, nicht die Referenz. Referenzen fließen mit rund
-1 MP ein.
-
-Laut BFL verankern Referenzen den Inhalt, legen aber die Form nicht fest. Eine Blaupause als
-Referenz macht aus einem erfundenen Fahrzeug also kein maßstabsgetreues.
-
-### Platzierung per Bounding-Box
-
-Am Prompt-Ende eine JSON-Liste anhängen. Jede Box ist `[oben, links, unten, rechts]` auf einem
-Raster von 0 bis 1000, mit dem Ursprung oben links:
-
-```
-Studio product photograph of three separate weathered wooden ammunition crates standing side
-by side on a plain light grey background, soft even light.
-[{"id": "crate_1", "bbox": [430, 30, 820, 320], "desc": "a small crate with a hinged lid"},
- {"id": "crate_2", "bbox": [250, 350, 820, 650], "desc": "a tall crate with rope handles"},
- {"id": "crate_3", "bbox": [560, 680, 820, 970], "desc": "a flat, wide crate"}]
-```
-
-Im Test standen alle drei Kisten genau an ihren Boxen. Damit lassen sich Anzahl und Anordnung
-festlegen, was Diffusionsmodelle über den Text allein nicht zuverlässig schaffen.
-
-- **Die ids nicht im Text als `<crate_1>` zitieren.** Das tut der Upsampler, die Boxen bleiben
-  dabei fest. Zitiert der Text alle ids, gilt er als fertige Beschreibung und geht ohne
-  Upsampler ans Modell. So macht es BFLs Referenzcode.
-- Die Boxen lenken Lage und Größe, sind aber keine harte Maske. Ein Element kann über seine Box
-  hinausragen, sehr kleine Elemente können fehlen.
-
-### Formate
-
-Seiten müssen Vielfache von 16 sein. Die allgemeinen 1-MP-Formate passen. Laut BFL rechnet
-das Modell nativ bis 4K, die NVAI-open-API erlaubt bis 2048 × 2048. Gemessen hat 1440² mehr Detail
-gebracht, zum Beispiel ein Seil, das durch eine Öse mit Metallring läuft, bei 26 statt 13 s.
-Einen zweiten Durchgang (`hires`) gibt es bei FLUX 3 nicht. Wer mehr Detail will, wählt direkt
-ein größeres Format.
-
-### Laufzeiten (gemessen)
-
-| Lauf | Zeit |
-|---|---|
-| neuer Prompt, 1024² | ~30 s (Upsampler 8–15 s, Bild ~12 s) |
-| derselbe Prompt, neuer Seed | 13–16 s |
-| vier Bilder in einem Lauf | ~37 s |
-| 1440 × 1440 | ~26 s |
-| Bearbeiten mit einem Referenzbild | ~45 s |
-| Box-Layout (Upsampler im Layout-Modus) | ~36 s |
-
-FLUX 3 und Qwen liefen im Test abwechselnd ohne Speicherfehler. ComfyUI belegte dabei bis
-15,5 GB, weil es Modelle im Speicher hält, solange Platz ist.
-
-### Befunde aus dem Test (11 Fälle, Bilder in voller Auflösung geprüft)
-
-| Geprüft | Ergebnis |
-|---|---|
-| Schrift „MUNITION 7,92" | 3 von 3 fehlerfrei (BFL selbst warnt, Schrift könne ungenau sein) |
-| Soldaten, Hochformat | 5 von 5 vollständig mit Füßen, Helmform passend. Erfunden wurden ein Mantel als Umhang und Schnürschuhe |
-| Seilgriffe | 3 von 3 ohne sinnvolle Schlaufe, nur einmal (1440²) durch eine Öse |
-| Bearbeiten | Vorlage bis auf die Griffe unverändert |
-| Boxen | 3 von 3 Kisten am vorgegebenen Platz |
-| Szene „Kübelwagen" | Ölgemälde, deutsche Helme passend. Statt des Kübelwagens kam ein kleiner Pritschenwagen |
-| ohne Stilangabe | fotorealistisch |
-
-### Base-Fassung (`flux3-klein-base-nvfp4`)
-
-Diese Fassung ist undestilliert: 50 Schritte, CFG 3,5, und der Negativprompt wirkt. BFL bietet
-sie vor allem für Feintuning und LoRA-Training an. Gemessen braucht sie 53 s pro Bild. Im Test
-brachte sie keinen sichtbaren Gewinn gegenüber der destillierten Fassung.
-
-### INT8-Fassung für RTX 20/30/40 (`flux3-klein-int8`)
-
-NVFP4 rechnet nur auf RTX 50 in Hardware. Ältere Karten laden es zwar, entpacken es aber
-Schicht für Schicht und sind deutlich langsamer. Für sie gibt es BFLs offizielle INT8-Fassung
-(`flux3-image-klein-int8-convrot`, 5,8 GB). INT8 rechnet ab RTX 20 auf jeder NVIDIA-Karte in
-Hardware. Wie in BFLs eigener INT8-Vorlage gehört der kleinere Upsampler dazu (w4a8, 6,7 statt
-9,8 GB). Laut BFL läuft das auf 8-GB-Karten wie der RTX 3070, auf einer RTX 4070 in unter 9 s
-pro Bild (16 Schritte, 1 MP). Von uns noch nicht gemessen. Prompts, Referenzbilder, Boxen und
-Upsampler funktionieren wie bei NVFP4.
-
-NVAI-open erkennt die Karte (`compute_cap` per nvidia-smi) und markiert in `list_models` passende
-Modelle mit `recommended`: auf RTX 50 Qwen, FLUX 3 und LTX-2.5 in NVFP4, auf älteren Karten
-Qwen-Image-2512, FLUX 3, Z-Image und LTX-2.5 in INT8. Ein Format, das auf der erkannten Karte nicht in Hardware rechnet, bekommt
-einen Hinweis in `gpu_note`.
-
-### Lizenz: FLUX Kommunity License v1.0
-
-Das ist kein Rechtsrat; maßgeblich ist der Volltext im Repo (`LICENSE.md`).
-
-- Kommerzielle Nutzung der Bilder ist nur für „Qualifying Users" erlaubt: Jahresumsatz zusammen
-  mit verbundenen Unternehmen unter 5 Mio. US-$ (Abschnitte 1.e und 2.a).
-- Bedingungen (Abschnitt 2.e): entweder einen Inhaltsfilter einsetzen **oder** jedes Bild vor der
-  Veröffentlichung auf rechtswidrige und rechteverletzende Inhalte prüfen. Dazu eine
-  KI-Kennzeichnung, soweit ein Gesetz sie verlangt.
-- BFL kann die Lizenz jederzeit per Mitteilung kündigen (8.b).
-- Bilder dürfen kein anderes Bildmodell trainieren (4.b).
-- Keine EU-Sperre.
-- Text-Encoder und Upsampler stehen unter Apache-2.0.
-
-Bei jedem FLUX-3-Bild, das in ein verkauftes Produkt geht, auf diese Lizenz hinweisen. Ohne diese
-Bedingungen: Qwen.
-
-## 6. Krea 2 Turbo (`krea2-turbo-nvfp4`)
-
-### Eckdaten
-
-- Von Krea.ai, Juni 2026: ein Diffusion-Transformer mit 12 Mrd. Parametern, offen veröffentlicht als
-  Raw (zum Feintunen) und Turbo (destilliert). NVAI-open nimmt Turbo mit den Werten aus ComfyUIs
-  Vorlage `image_krea2_turbo_t2i.json`: 8 Schritte, CFG 1, Sampler `euler`, Scheduler `simple`.
-- Text-Encoder Qwen3-VL-4B, bytegleich mit der Datei von FLUX 3; der VAE ist der von Qwen-Image,
-  ebenfalls bytegleich (SHA-256 verglichen). Ist eines der beiden Modelle installiert, kommen nur noch
-  die 7,7 GB von Krea selbst dazu, sonst 12,8 GB (dazu 0,46 GB für die optionale Stil-LoRA). Die Dateien stammen aus Comfy-Org/Krea-2, das anders
-  als Kreas eigene Repos nicht gated ist.
-- Ausgaben von 1 bis 2 MP (Herstellerangabe). Der Negativprompt wirkt nicht (CFG 1).
-- Keine Maske, kein zweiter Durchgang (`hires`). Seit 0.5.10 ein oder zwei Bilder als Stilvorlage
-  (optionale Stil-LoRA, siehe unten); zum Bearbeiten bleibt FLUX 3.
-- Lizenz: Krea 2 Community License, siehe unten.
-
-### Im Vergleich mit Qwen und FLUX 3 (gemessen)
-
-Gleicher Prompt und Seed, RTX 5060 Ti, Bilder in voller Auflösung geprüft:
-
-| Motiv | Qwen-Image-2512 | FLUX 3 | Krea 2 Turbo |
-|---|---|---|---|
-| Alter Fischer flickt ein Netz, 1024² (erstes Bild, mit Laden) | 160 s | 36 s | 41 s |
-| Munitionskiste mit Aufschrift, 1024² | 109 s | 31 s | 21 s |
-| Entdeckerin als ganze Figur, 832 × 1216 | 113 s | 32 s | 20 s |
-
-- **Am fotografischsten der drei.** Hände und Gesichter wirkten natürlich; Haut, Wolle und Leder
-  haben Struktur statt KI-Glätte.
-- **Schrift:** „MUNITION 7,92“ kam buchstabengenau, die Seilgriffe laufen durch Bohrungen. Die Kiste
-  kam ohne Deckel, den der Prompt nicht nannte: Was da sein muss, ausdrücklich nennen.
-- **Ganze Figur:** Die stehende Entdeckerin hat beide Stiefel im Bild.
-- **Bildausschnitt nennen.** Der Fischer-Prompt betont die wettergegerbten Hände, und Krea schnitt
-  den Kopf in drei von drei Bildern oben ab (zwei Seeds, auch bei 1408 × 1408). Mit dem Satz „Medium
-  shot from the waist up, his whole head and face inside the frame with free space above his head.“
-  war der Kopf in zwei von zwei Bildern drin. Ohne diesen Satz hatte FLUX 3 hier den besten Bildaufbau.
-
-### Laufzeiten (gemessen)
-
-| Lauf | Zeit |
-|---|---|
-| 1024², 8 Schritte | 20–21 s |
-| 1408 × 1408 (2 MP) | 37 s |
-| erstes Bild nach FLUX 3 (Laden) | 41 s |
-
-### Prompt schreiben
-
-Wie bei Qwen: ganze englische Sätze, erst Stil und Medium, dann das Motiv mit Material, Farbe und
-Konstruktion, dann Licht und Hintergrund; Schrift wörtlich in Anführungszeichen. Den Bildausschnitt
-nennen („medium shot from the waist up“, „full body, both boots inside the frame“). Krea 2 ist auf
-ausführliche Beschreibungen trainiert; ein paar Worte vorher mit **✨ Prompt ausbauen** ausbauen
-(Kreas eigene Vorlage macht das ebenso).
-
-### Stilvorlage (seit 0.5.10)
-
-Mit der Stil-LoRA von ostris (`ostris/krea2_turbo_style_reference`, 0,46 GB, Krea 2 Community License,
-nicht gated) nimmt Krea 2 ein oder zwei Bilder als Stilvorlage. Malweise, Farben und Licht kommen aus dem
-Bild, der Inhalt aus dem Prompt. Die LoRA ist optional: Ein neuer Download von Krea 2 bringt sie mit, bei
-einem installierten Krea 2 holt sie „Zusätze laden“ unter „Modelle“. Bis dahin ist
-`features.references` 0 und `features.missing.style_reference` nennt die Hugging-Face-Seite. Die Bilder
-gehen wie bei FLUX 3 in `reference_asset_ids`; die Weboberfläche beschriftet sie als Stilvorlagen.
-
-Gemessen bei 1024², Prompt „A lighthouse on a rocky cliff above a stormy sea, waves crashing against the
-rocks below.“, Vorlagen von FLUX 3 (Bild in Abschnitt 2):
-
-| Lauf | Zeit | Ergebnis |
-|---|---|---|
-| ohne Vorlage | 24 s | fotografisch, dunkle Sturmwolken |
-| Aquarell-Vorlage | 48 s | Aquarell; der Sturmhimmel übernahm das pastellige Abendlicht der Vorlage |
-| Holzschnitt-Vorlage | 41 s | Holzschnitt in Schwarz, Rot und Creme wie die Vorlage |
-| beide Vorlagen | 71 s | fast ganz die erste Vorlage |
-
-Im Prompt nur den Inhalt beschreiben. Licht und Farben kommen aus der Vorlage, auch wo der Prompt etwas
-anderes sagt (aus dem Sturm wurde Pastell); mit zwei Vorlagen setzt sich die erste durch, eine reicht
-also. Krea übernimmt den Stil der Vorlage, nicht ihren Inhalt: Zum Ändern eines Bildes bleibt FLUX 3.
-
-Der Graph folgt ComfyUIs Vorlage `image_krea2_turbo_int8_image_style_reference.json`: die LoRA mit
-Stärke 1,0, `ModelSamplingFlux` (1,15 / 0,5), die Bilder über `TextEncodeQwenImageEditPlus` (der
-Qwen3-VL-Encoder hat den Bildteil) und `FluxKontextMultiReferenceLatentMethod`, 8 Schritte, CFG 1.
-
-### Lizenz: Krea 2 Community License
-
-- Kommerziell nur unter 1 Mio. US-$ Jahresumsatz, verbundene Unternehmen eingeschlossen.
-- Vorgeschrieben ist ein Inhaltsfilter oder die Prüfung jedes Bildes von Hand.
-- KI-Kennzeichnung, soweit gesetzlich verlangt.
-- Krea kann die Lizenz mit 30 Tagen Frist kündigen.
-- Ohne diese Bedingungen: Qwen-Image-2512 (Apache-2.0).
-
-### INT8-Fassung für RTX 20/30/40 (`krea2-turbo-int8`)
-
-Comfy-Orgs INT8-Fassung (ConvRot), rechnet auf jeder NVIDIA-Karte ab der RTX-20-Serie in Hardware.
-Die Modelldatei hat 13,5 GB (18,6 GB mit Text-Encoder und VAE); auf Karten mit weniger Speicher lädt
-ComfyUI Teile aus dem Arbeitsspeicher nach.
-
-Gemessen auf einer RTX 4060 mit 8 GB (am Riser, PCIe 3.0 x4), 1024 × 1024, die Kiste von oben: erstes
-Bild 193 s, danach 82 s, Schrift genau wie mit NVFP4. Die NVFP4-Fassung brauchte auf derselben Karte 46 s
-samt Laden, obwohl die 4060 FP4 nicht in Hardware rechnet: Mit 7,7 GB passt sie in den Grafikspeicher,
-die INT8-Fassung mit 13,5 GB nicht und wird bei jedem Schritt über den langsamen Riser (3,9 GB/s)
-nachgeladen. An einem normalen Anschluss ist es umgekehrt: Die RTX 5060 Ti ohne ihre FP4-Einheiten
-(PCIe 4.0 x8) brauchte mit INT8 bei 8 GB 13,0 statt 25,1 s und bei 16 GB 12,2 statt 25,0 s. **Auf RTX
-20/30/40 die INT8-Fassung nehmen, NVFP4 nur an einem langsamen Anschluss (bis 4 GB/s)**; so empfiehlt
-es NVAI-open (Abschnitt 2, Neu in 0.5.10).
-
-## 7. Parameter von `generate_image`
-
-Gilt gleichermaßen für das MCP-Werkzeug und den Body von `POST /api/generate/image`.
-
-| Parameter | Qwen-50 | FLUX 3 | Hinweis |
+| Parameter | Qwen-Image-2512 | FLUX 3 | Hinweis |
 |---|---|---|---|
 | `prompt` | ausführlich, ganze Sätze | kurz und vollständig, Stil zuerst | |
-| `negative_prompt` | wirkt; leer = Modellkarten-Standard | wirkungslos | ~10 Begriffe, keine Stil-Verbote |
-| `model_id` | `qwen-image-2512-nvfp4` | `flux3-klein-nvfp4` | leer = aktives Modell |
+| `negative_prompt` | wirkt; leer = Vorgabe der Modellkarte | wirkungslos | ~10 Begriffe, keine Stilverbote |
 | `width`, `height` | Vielfache von 8, nativ ~1,76 MP | Vielfache von 16, bis 2048 | Format nach Silhouette |
-| `steps`, `cfg` | 50 / 4,0 | 16 / 1 | leer lassen = Modellstandard |
-| `sampler`, `scheduler` | euler / simple | euler / simple | `karras` und `exponential` meiden |
-| `seed` | ✓ | ✓ | |
-| `batch_size` | ✓ | ✓ (4 Bilder ~37 s) | ein Modell-Load statt vieler |
-| `hires`, `hires_scale`, `hires_denoise` | ✓ | — | |
-| `image_asset_id` + `denoise` | Bild nachbessern | wird zur ersten Referenz | |
-| `mask_asset_id` | ✓ Inpainting (mit `image_asset_id`, `denoise=1.0`) | ✓ seit 0.5.6 per Referenz: Bereich grau, ausgerichtet eingesetzt | weiß = neu, schwarz = behalten; Maske per `POST /api/upload` |
-| `outpaint` | ✓ per Maske, oft harte Kante | ✓ nahtlos, Original pixelgenau | `[links, oben, rechts, unten]`, Format ergibt sich |
-| `reference_asset_ids` | — | bis 10 | Fehlermeldung bei anderen Modellen |
-| `upsample_prompt` | — | Standard an | |
-| `slg`, `controlnet_*` | — | — | nur für SD-3.5-Modelle |
+| `steps`, `cfg` | 50 / 4 | 16 / 1 | leer = Vorgabe des Modells |
+| `seed`, `batch_size` | ✓ | ✓ (4 Bilder ~37 s) | ein Modell-Laden für mehrere Bilder |
+| `hires` | ✓ | — | |
+| `image_asset_id` + `denoise` | Bild verfeinern | wird zur ersten Referenz | |
+| `mask_asset_id` | Füllen mit Maske | Füllen über eine Referenz | weiß = neu, schwarz = behalten |
+| `outpaint` | über Maske, oft harte Kante | nahtlos | `[links, oben, rechts, unten]` |
+| `reference_asset_ids` | — | bis zu 10 | |
+| `upsample_prompt` | — | an als Vorgabe | |
 
-Format nach Silhouette: stehende Figur 832 × 1216 (Qwen nativ 1056 × 1584), Fahrzeug quer
-1216 × 832 (1584 × 1056), Objekt und Icon 1024 × 1024 (1328 × 1328).
+Format nach Silhouette: stehende Figur 832 × 1216, Fahrzeug im Querformat 1216 × 832, Objekt oder Icon 1024 × 1024.
 
-## 8. Das Feld `features`
+### Das Feld `features`
 
-`GET /api/models` und `list_models(detailed=True)` liefern je Bildmodell ein Feld `features`.
-Andere Programme können ihre Bedienung danach ausrichten, so wie es die NVAI-open-Weboberfläche
-tut.
+`GET /api/models` und `list_models(detailed=True)` liefern für jedes Modell `features`, damit ein Programm seine
+Bedienelemente anpassen kann wie die Weboberfläche: `steps` und `cfg` (Vorgaben), `negative_prompt` (wirkt er?),
+`default_negative`, `upsampler`, `references` (Höchstzahl), `bbox`, `img2img`, `mask` (true oder `"reference"`),
+`outpaint` (`"mask"`, `"reference"`), `hires`, `text_rendering`, `sizes` (empfohlene Formate), `recommended` (die
+gemessenen Bestwerte), `prompt_hint` und `placeholder`, dazu `missing` für optionale Dateien, die noch fehlen.
 
-| Schlüssel | Bedeutung | Qwen-50 | FLUX 3 |
-|---|---|---|---|
-| `steps`, `cfg` | Standardwerte | 50, 4,0 | 16, 1,0 |
-| `negative_prompt` | wirkt der Negativprompt? | true | false |
-| `default_negative` | greift, wenn keiner angegeben ist | Qwens Standard | leer |
-| `upsampler` | Prompt-Upsampler vorhanden | false | true |
-| `references` | maximale Zahl an Referenzbildern | 0 | 10 |
-| `bbox` | Platzierung per Box | false | true |
-| `img2img` | Startbild mit `denoise` | true | false |
-| `mask` | Inpainting mit `mask_asset_id` (true = Maske, `"reference"` = über ein grau markiertes Referenzbild) | true | "reference" |
-| `outpaint` | Weg beim Erweitern (`"mask"`, `"reference"`, null) | "mask" | "reference" |
-| `hires` | zweiter Durchgang sinnvoll | true | false |
-| `text_rendering` | Schrift im Bild | true | true |
-| `sizes` | zusätzliche empfohlene Formate `{label, w, h}` | 7 native | 4 bis 2048² |
-| `prompt_hint` | Kurzanleitung, deutsch | ✓ | ✓ |
-| `placeholder` | Beispielprompt | ✓ | ✓ |
+---
 
-## 9. Bekannte Fallen
+## Bekannte Fallen
 
-- **Historische Fahrzeuge:** Kein Modell kennt die Silhouette eines Panzer IV oder Kübelwagens.
-  Mehr Seeds ergeben nur andere Fantasiefahrzeuge. Für Treue bräuchte es eine Vorlage plus
-  ControlNet, und das ist für keines der beiden Modelle eingebunden.
-- **FLUX-3-Upsampler erfindet Lücken:** Was zählt, ausdrücklich in den Prompt schreiben und
-  `caption` prüfen.
-- **Box-ids im Text zitiert:** Dann läuft kein Upsampler, siehe Abschnitt 5.
-- **Negativprompt bei FLUX 3 und Lightning:** wird gar nicht berechnet. Ausschlüsse deshalb
-  positiv formulieren, etwa *plain light grey background* statt *no background*.
-- **PyTorch cu130 ist Pflicht für NVFP4.** Mit cu128 schaltet ComfyUI seine NVFP4-Kernel ab,
-  alles wird drei- bis fünfmal langsamer. `setup_comfyui.ps1` installiert cu130.
-- **ComfyUI ab 0.41** für FLUX 3. `install.ps1` pinnt v0.42.1.
-- **Ergebnisse in voller Auflösung prüfen:** Verkleinerte Vorschauen verstecken genau die Fehler,
-  auf die es ankommt, etwa einen Seilgriff ohne Bohrung.
+- **Historische Fahrzeuge:** Kein Modell kennt die Silhouette eines Panzer IV oder Kübelwagens; mehr Seeds geben nur
+  andere Fantasiefahrzeuge. Treue bräuchte eine Vorlage und ein ControlNet, und keins ist eingebaut.
+- **Der Upsampler von FLUX 3 füllt Lücken mit Erfundenem:** was zählt, in den Prompt schreiben und `caption` prüfen.
+- **Negativprompt bei FLUX 3, Krea 2 und Lightning:** wirkt nicht. Ausschlüsse positiv formulieren („plain light grey
+  background“ statt „no background“).
+- **NVFP4 braucht PyTorch mit cu130:** Mit cu128 wird alles drei- bis fünfmal langsamer. Das Setup installiert cu130.
+- **Ergebnisse in voller Auflösung prüfen:** Verkleinerte Vorschauen verstecken genau die Fehler, auf die es ankommt,
+  etwa einen Seilgriff ohne Loch.
 
-## 10. Für die Wartung
+## Für die Wartung
 
 | Was | Wo |
 |---|---|
-| Katalogeinträge, `features`, Texte | `server/nvai/catalog.py` |
-| ComfyUI-Graphen (`build_qwen_image`, `build_flux3`, `build_krea2`) | `server/nvai/workflows.py` |
-| Upsampler, Box-Logik, Zwischenspeicher | `server/nvai/flux3_prompt.py` (nach BFLs Referenzcode, Apache-2.0) |
-| Upsampler-Systemprompts von BFL | `server/nvai/flux3_pup_prompts.json` |
-| Ablauf (Upsampler, dann Bild; Referenzen bereitstellen) | `server/nvai/jobs.py`, `_txt2img` |
+| Katalogeinträge, `features`, Texte | `server/nvai/catalog.py`, englische Texte `catalog_en.py` |
+| ComfyUI-Graphen | `server/nvai/workflows.py` (nach ComfyUIs Vorlagen) |
+| Upsampler, Box-Logik, Cache | `server/nvai/flux3_prompt.py` (nach BFLs Referenzcode, Apache-2.0) |
+| MiniMax H3 | `server/nvai/minimax.py` |
+| Ablauf der Aufträge | `server/nvai/jobs.py` |
 | MCP-Anleitung und Werkzeugtexte | `server/nvai/mcp_server.py` |
-| Modelldateien | `external/comfyui/models/{diffusion_models,text_encoders,vae,loras}` (beim Windows-Setup im bei der Installation gewählten Modellordner) |
-
-Die Graphen sind ComfyUIs mitgelieferten Vorlagen nachgebaut: `image_qwen_Image_2512.json`,
-`image_flux3_klein_*`, `image_krea2_turbo_t2i.json` und für die Stilvorlage
-`image_krea2_turbo_int8_image_style_reference.json`. CLIPLoader-Typen sind `qwen_image`, `flux3`
-und `krea2`, das Leerlatent ist `EmptySD3LatentImage`, `EmptyFlux2LatentImage` bzw.
-`EmptyLatentImage`, Referenzen laufen über
-`ReferenceMultiLatent`, der Upsampler über `TextGenerate`.

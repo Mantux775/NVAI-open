@@ -24,7 +24,11 @@ enum Studio {
     static let scaleRange = 0.1...8.0   // 10 bis 800 %
     static let defaultImageSeconds = 5.0
 
-    static func ticks(_ seconds: Double) -> Int { Int((seconds * Double(ticksPerSecond)).rounded(.toNearestOrEven)) }
+    /// Auf ±1 000 000 s begrenzt (rund 277 h): darüber liefe Int über, und Swift bricht dann ab
+    static func ticks(_ seconds: Double) -> Int {
+        let s = seconds.isFinite ? min(max(seconds, -1_000_000), 1_000_000) : 0
+        return Int((s * Double(ticksPerSecond)).rounded(.toNearestOrEven))
+    }
     static func seconds(_ ticks: Int) -> Double { Double(ticks) / Double(ticksPerSecond) }
 
     /// Neue ID wie db.new_id unter Windows: Präfix, Unterstrich, 12 Hex-Zeichen.
@@ -435,7 +439,10 @@ typealias StudioParams = [String: JSONValue]
 extension Dictionary where Key == String, Value == JSONValue {
     /// Zeit aus `key` (Ticks) oder `key_s` (Sekunden), wie _time() unter Windows.
     func time(_ key: String) -> Int? {
-        if let v = self[key], !v.isNull, let d = v.doubleValue { return Int(d) }  // wie int(): schneidet ab
+        if let v = self[key], !v.isNull, let d = v.doubleValue {  // wie int(): schneidet ab
+            guard d.isFinite else { return nil }
+            return Int(Swift.min(Swift.max(d, -2.5e17), 2.5e17))  // Ticks für ±1 000 000 s, siehe Studio.ticks; Swift.: Dictionary hat eigene min/max
+        }
         if let v = self["\(key)_s"], !v.isNull, let d = v.doubleValue { return Studio.ticks(d) }
         return nil
     }

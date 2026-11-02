@@ -47,6 +47,7 @@ _current_download_id: str | None = None
 _cancel_requested: set[str] = set()
 # Der Task des laufenden GPU-Jobs -- nur so laesst er sich einzeln abbrechen.
 _current_gpu_task: asyncio.Task | None = None
+_stopping = False  # shutdown laeuft: ein abgebrochener Job-Task beendet dann auch seine Schleife
 # Sprache je Job. Die Worker-Loops laufen seit dem Serverstart als eigene Tasks und
 # erben deshalb nicht den contextvars-Stand der Anfrage: submit() merkt sich die
 # Sprache der Anfrage, _run_one setzt sie im Task des Jobs wieder.
@@ -169,7 +170,7 @@ def download_queue_depth() -> int:
 def models_downloading() -> list[str]:
     """IDs aller Modelle, fuer die gerade ein Download laeuft oder wartet."""
     out = []
-    for job in db.list_jobs(limit=200):
+    for job in db.list_jobs(limit=1000, kind="download", active=True):
         if job.kind == "download" and job.status in ("queued", "running"):
             mid = (job.params.get("entry") or {}).get("id")
             if mid:
@@ -183,7 +184,7 @@ def model_in_use(model_id: str) -> str | None:
     Nur so ein Job darf das Loeschen blockieren. Ein laufender Bild-Job ist
     kein Grund, ein Videomodell nicht loeschen zu duerfen.
     """
-    for job in db.list_jobs(limit=200):
+    for job in db.list_jobs(limit=1000, active=True):
         if job.status not in ("queued", "running"):
             continue
         if job.kind == "download":
@@ -259,8 +260,10 @@ async def _worker_loop(queue: asyncio.Queue[str], name: str) -> None:
         try:
             await task
         except asyncio.CancelledError:
-            # Wurde der Loop selbst abgebrochen (Shutdown)? Dann durchreichen.
-            if not task.cancelled():
+            # Wurde der Loop selbst abgebrochen (Shutdown)? Dann durchreichen. Beim Shutdown reicht asyncio den
+            # Abbruch an den Job-Task weiter, task.cancelled() ist dann auch wahr; ohne den Merker liefe die Schleife
+            # weiter zu queue.get() und Beenden hinge fuer immer.
+            if _stopping or not task.cancelled():
                 raise
         except Exception:  # noqa: BLE001 - der Worker darf nie sterben
             traceback.print_exc()
@@ -304,6 +307,11 @@ async def cancel_current() -> dict[str, Any]:
     if job_id is None:
         return {"ok": False,
                 "reason": t("Es laeuft gerade kein Job.", "No job is running right now.")}
+    # Task jetzt festhalten: Waehrend das Backend unten anhaelt (ein Mesh-Worker braucht Sekunden), kann der Job schon
+    # enden und die Schleife den naechsten starten, der sonst mit abgebrochen wuerde
+    task = _current_gpu_task
+    if task is not None and task.get_name() != f"nvai-job-{job_id}":
+        task = None
 
     job = db.get_job(job_id)
     stopped: list[str] = []
@@ -313,12 +321,11 @@ async def cancel_current() -> dict[str, Any]:
         # Prozessende bricht das wirklich ab.
         for w in mesh_workers.all_workers():
             if await w.is_running():
-                w.stop()
+                await asyncio.to_thread(w.stop)  # wartet bis zu 15 s auf das Prozessende, nicht im Event-Loop
                 stopped.append(w.name)
     elif await comfy.interrupt():
         stopped.append("ComfyUI")
 
-    task = _current_gpu_task
     if task is not None and not task.done():
         task.cancel()
 
@@ -333,11 +340,10 @@ async def _requeue_orphans() -> None:
     obwohl die Queues leer sind.
 
     Nichts wird automatisch fortgesetzt -- auch keine Downloads. Ein Job, den der
-    Server von selbst wieder anwirft, ist ein Job, den niemand gestartet hat; der
-    Teilfortschritt bleibt im HF-Cache erhalten, ein Klick auf 'Neu laden' setzt
-    also ohne Verlust fort.
+    Server von selbst wieder anwirft, ist ein Job, den niemand gestartet hat; fertige
+    Dateien bleiben liegen, und "Fortsetzen" unter "Modelle" laedt nur, was fehlt.
     """
-    for job in db.list_jobs(limit=500):
+    for job in db.list_jobs(limit=100000, active=True):
         if job.status not in ("queued", "running"):
             continue
         db.update_job(
@@ -362,11 +368,14 @@ async def start() -> None:
 
 
 async def shutdown() -> None:
+    global _stopping
+    _stopping = True
     for w in _workers:
         w.cancel()
-    for w in _workers:
-        with contextlib.suppress(asyncio.CancelledError):
-            await w
+    if _workers:
+        # nicht ewig warten: Ein Handler, der seinen Abbruch verschluckt, darf das Beenden nicht aufhalten (sonst
+        # liefen comfy.stop() und das Beenden der Mesh-Worker im Lifespan nie)
+        await asyncio.wait(_workers, timeout=15)
     _workers.clear()
 
 
@@ -893,7 +902,8 @@ async def _prepare_outpaint(p: dict[str, Any], entry: dict[str, Any], ref_ids: l
     deckungsgleich zurueck.
     """
     feats = registry.features_for(entry)
-    by_reference = feats.get("references", 0) > 0
+    # Stilvorlagen (Krea 2) bearbeiten nichts: Erweitern per Referenz gaebe dort ein fremdes Bild
+    by_reference = feats.get("references", 0) > 0 and feats.get("reference_kind") != "style"
     if not by_reference and not feats.get("mask"):
         raise RuntimeError(t(
             f"'{_name(entry)}' kann nicht erweitern. FLUX 3 liefert dafuer die nahtlosesten "
@@ -1032,6 +1042,13 @@ async def _txt2img(job: Job, ctx: JobContext) -> list[str]:
     if len(ref_ids) > max_refs:
         raise RuntimeError(t(f"Hoechstens {max_refs} Referenzbilder.",
                              f"At most {max_refs} reference images."))
+    if style_refs and ref_ids and (p.get("image_asset_id") or p.get("outpaint")):
+        # Der Graph mit Stilvorlage rechnet aus einem leeren Bild: ein Startbild oder Erweitern wuerde still ignoriert
+        raise RuntimeError(t(
+            f"'{_name(entry)}' nimmt eine Stilvorlage nur ohne Startbild und ohne Erweitern. Für ein vorhandenes Bild "
+            "die Stilvorlage weglassen, zum Bearbeiten FLUX 3 nehmen.",
+            f"'{_name(entry)}' takes a style template only without a start image and without extending. For an "
+            "existing image leave the style template out; to edit, use FLUX 3."))
     if ref_ids:
         p["reference_images"] = [
             _stage_image(a, t(f"Referenzbild {i + 1}", f"Reference image {i + 1}"))

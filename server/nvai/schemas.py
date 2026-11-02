@@ -351,9 +351,9 @@ class ExpandPromptRequest(BaseModel):
                     "reference_asset_ids mit), sfx (Stable Audio), music (wie music_sa3), "
                     "3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",
     )
-    width: int = Field(1024, ge=256, le=2048, multiple_of=8,
+    width: int = Field(1024, ge=256, le=2560, multiple_of=8,  # wie GenerateImageRequest (HiDream-O1 bis 2560)
                        description="Geplantes Format -- der Upsampler richtet den Bildaufbau danach")
-    height: int = Field(1024, ge=256, le=2048, multiple_of=8)
+    height: int = Field(1024, ge=256, le=2560, multiple_of=8)
     reference_asset_ids: list[str] = Field(
         default_factory=list, max_length=10,
         description="Optional: Bilder, die der Upsampler mitliest (Bearbeiten mit FLUX 3, "
@@ -416,9 +416,10 @@ class Generate3DRequest(BaseModel):
     texture_size: int = Field(2048, ge=512, le=4096, description="Nur TRELLIS.2: Texturaufloesung")
     background_mode: Literal["birefnet", "flood", "alpha"] = Field(
         "birefnet",
-        description="Wie freigestellt wird. birefnet = Segmentierungsmodell (sauberste "
+        description="Wie TRELLIS.2 freistellt. birefnet = Segmentierungsmodell (sauberste "
                     "Kanten, verhindert Hintergrund-Artefakte im Mesh); flood = schneller "
-                    "Randfarben-Fuellalgorithmus; alpha = Bild bringt Alphakanal mit.",
+                    "Randfarben-Fuellalgorithmus; alpha = Bild bringt Alphakanal mit. TripoSG "
+                    "stellt immer per Flood-Fill frei (alpha behaelt den eigenen Alphakanal).",
     )
     clean_specks: bool = Field(
         True,

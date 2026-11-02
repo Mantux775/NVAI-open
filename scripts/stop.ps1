@@ -7,7 +7,10 @@ $targets = @(
     @{ Port = 8100; Match = "nvai.main:app"; Name = "NVAI-open-Orchestrator" },
     @{ Port = 8188; Match = "main.py";       Name = "ComfyUI" },
     # Zweites ComfyUI fuer Sprachmodelle (mehrere Grafikkarten, experimentell seit 0.5)
-    @{ Port = 8189; Match = "main.py";       Name = "ComfyUI (Text)" }
+    @{ Port = 8189; Match = "main.py";       Name = "ComfyUI (Text)" },
+    # 3D-Worker: nach einem harten Ende des Servers gehoeren sie keinem Prozess mehr und behielten den VRAM
+    @{ Port = 8200; Match = "triposg_worker";  Name = "TripoSG-Worker" },
+    @{ Port = 8201; Match = "trellis2_worker"; Name = "TRELLIS.2-Worker" }
 )
 
 foreach ($t in $targets) {

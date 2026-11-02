@@ -43,7 +43,10 @@ struct HistoryView: View {
             }
         }
         .sheet(item: $preview) { asset in
-            PreviewSheet(assets: state.images, index: state.images.firstIndex(of: asset) ?? 0).environmentObject(state)
+            // Nie eine leere Liste: Wird das letzte Bild von außen gelöscht (Claude per REST), griff die Großansicht
+            // sonst auf assets[-1] zu und die App stürzte ab
+            let list = state.images.contains(asset) ? state.images : [asset]
+            PreviewSheet(assets: list, index: list.firstIndex(of: asset) ?? 0).environmentObject(state)
         }
         .sheet(item: $playing) { asset in VideoPlayerSheet(asset: asset) }
         .onAppear {

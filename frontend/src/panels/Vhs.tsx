@@ -149,10 +149,14 @@ export function VhsPanel({ event, downloads, onShowModels }: Props) {
     setAnalyzing(true)
     setAnalysis(null)
     setError(null)
+    // Nur die Antwort zum gerade gewählten Video übernehmen: Kam die Analyse eines vorher gewählten langen Videos
+    // später an, rechnete „Aufwerten“ sonst das falsche Video
+    let alive = true
     api.vhsAnalyze(sourceId)
-      .then((a) => { setAnalysis(a); setS(a.defaults); setStart(0) })
-      .catch((e) => setError(String(e)))
-      .finally(() => setAnalyzing(false))
+      .then((a) => { if (alive) { setAnalysis(a); setS(a.defaults); setStart(0) } })
+      .catch((e) => { if (alive) setError(String(e)) })
+      .finally(() => { if (alive) setAnalyzing(false) })
+    return () => { alive = false }
   }, [sourceId])
 
   useEffect(() => {

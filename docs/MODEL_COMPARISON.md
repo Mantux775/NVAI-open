@@ -124,7 +124,7 @@ Krea 2 image, not a real person.
 
 In an earlier test, "the camera holds a medium close-up" turned into a push-in to an extreme close-up, while
 "Static camera, a locked-off medium shot" kept the framing. More tips for this chain are in
-[MODELS.md](MODELS.md#new-in-058).
+[MODELS.md](MODELS.md#ltx-25).
 
 ## Reproduce it
 

@@ -36,7 +36,7 @@ from typing import Any
 
 import av
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from scipy.signal import lfilter
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "comfy_nodes"))
@@ -196,7 +196,8 @@ class VideoSource:
 
 class ImageSource:
     def __init__(self, path: str, width: int, height: int) -> None:
-        self.img = fit(np.asarray(Image.open(path).convert("RGB")), width, height)
+        # aufrecht wie im Monitor: Handyfotos tragen die Drehung oft nur als EXIF-Angabe
+        self.img = fit(np.asarray(ImageOps.exif_transpose(Image.open(path)).convert("RGB")), width, height)
 
     def frame_at(self, t: float) -> np.ndarray:
         return self.img
@@ -449,8 +450,17 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
         sinks.append(Sink(preview_path, "h264", pe, width, height, fps, rate, PREVIEW_BITRATE))
 
     black = np.zeros((height, width, 3), np.uint8)
+    # Wie lange ein Clip nach seinem Ende noch gelesen werden kann: als Vorgänger in einer Überblendung
+    max_tr = max((float((c.get("transition") or {}).get("seconds") or 0) for c in plan["clips"]), default=0.0)
+    every = max(1, int(round(float(fps))))
     for f in range(n_frames):
         t = f / float(fps)
+        if f % every == 0 and sources:
+            # Quellen schließen, deren Clip samt möglicher Überblendung vorbei ist: Lange Projekte hielten sonst je
+            # Clip einen Decoder mit Threads und Puffern bis zum Schluss offen. Wird einer doch wieder gebraucht,
+            # öffnet source() ihn neu.
+            for i in [i for i in sources if plan["clips"][i]["start"] + length_of(plan["clips"][i]) + max_tr + 1.0 < t]:
+                sources.pop(i).close()
         canvas = None
         for track in video_tracks:
             i = active(track, t)

@@ -126,6 +126,7 @@ final class StudioModel: ObservableObject {
     func open(_ id: String) async {
         do {
             let p = try await StudioGenerator.shared.refresh(store, id)
+            if project?.id != p.id { exportJob = nil }  // sonst zeigte die Leiste den Export des vorigen Projekts
             project = p
             UserDefaults.standard.set(id, forKey: "studio.project")
             clearSelection()
@@ -303,6 +304,8 @@ final class StudioModel: ObservableObject {
                 if let mine, mine.id != self.exportJob?.id || mine.status != self.exportJob?.status
                     || abs(mine.progress - (self.exportJob?.progress ?? -1)) > 0.004 {
                     self.exportJob = mine
+                } else if mine == nil, self.exportJob != nil {
+                    self.exportJob = nil  // dieses Projekt hat (noch) keinen Export
                 }
             }
         }

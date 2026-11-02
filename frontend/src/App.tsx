@@ -31,6 +31,11 @@ const LANGS: { id: Lang; label: string; name: string }[] = [
 
 export function App() {
   const [tab, setTab] = useState<Tab>('studio')
+  // Reiter, die nach dem ersten Besuch bestehen bleiben (siehe unten bei <main>)
+  const [kept, setKept] = useState<{ generate?: boolean; vhs?: boolean }>({})
+  useEffect(() => {
+    if ((tab === 'generate' || tab === 'vhs') && !kept[tab]) setKept((k) => ({ ...k, [tab]: true }))
+  }, [tab, kept])
   const [health, setHealth] = useState<Health | null>(null)
   const [events, setEvents] = useState<ServerEvent | null>(null)
   // Eigener Platz: Studio speichert oft, das darf ein job.done im gemeinsamen Platz nicht verdrängen
@@ -274,8 +279,8 @@ export function App() {
                 <button
                   className="dl-cancel"
                   onClick={() => downloads.cancel(id)}
-                  title={t('Download abbrechen (fertige Teile bleiben zum Fortsetzen)',
-                    'Cancel download (finished parts stay to resume)')}
+                  title={t('Download abbrechen (fertige Dateien bleiben, „Fortsetzen“ lädt den Rest)',
+                    'Cancel download (finished files stay; “Resume” downloads the rest)')}
                   aria-label={t(`${d.name}: Download abbrechen`, `${d.name}: cancel download`)}
                 >
                   ✕
@@ -287,10 +292,18 @@ export function App() {
       )}
 
       <main className={tab === 'studio' ? 'content studio-mode' : 'content'}>
-        {tab === 'generate' && (
-          <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+        {/* Generieren und VHS bleiben nach dem ersten Besuch bestehen, nur ausgeblendet: Ein laufender Auftrag behält so
+            Fortschritt und „Abbrechen“, Prompt und Einstellungen bleiben (vorher war beim Zurückkommen alles weg) */}
+        {(tab === 'generate' || kept.generate) && (
+          <div hidden={tab !== 'generate'}>
+            <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+          </div>
         )}
-        {tab === 'vhs' && <VhsPanel event={events} downloads={downloads} onShowModels={() => setTab('models')} />}
+        {(tab === 'vhs' || kept.vhs) && (
+          <div hidden={tab !== 'vhs'}>
+            <VhsPanel event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+          </div>
+        )}
         {tab === 'history' && <HistoryPanel event={events} />}
         {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} />}
         {tab === 'studio' && <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} />}

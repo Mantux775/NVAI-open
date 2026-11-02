@@ -70,27 +70,34 @@ enum HFRange {
         let tmp = target.appendingPathExtension("part")
         FileManager.default.createFile(atPath: tmp.path, contents: nil)
         let file = try FileHandle(forWritingTo: tmp)
-        var length = UInt64(json.count).littleEndian
-        try file.write(contentsOf: withUnsafeBytes(of: &length) { Data($0) })
-        try file.write(contentsOf: json)
-        var done: Int64 = 0
-        var i = 0
-        while i < ordered.count {
-            try Task.checkCancellation()
-            let first = ordered[i]
-            var end = first.tensor.start + first.tensor.count
-            var j = i
-            while j + 1 < ordered.count, ordered[j + 1].url == first.url, ordered[j + 1].tensor.start == end,
-                  end - first.tensor.start < 64 << 20 {
-                j += 1
-                end = ordered[j].tensor.start + ordered[j].tensor.count
+        do {
+            var length = UInt64(json.count).littleEndian
+            try file.write(contentsOf: withUnsafeBytes(of: &length) { Data($0) })
+            try file.write(contentsOf: json)
+            var done: Int64 = 0
+            var i = 0
+            while i < ordered.count {
+                try Task.checkCancellation()
+                let first = ordered[i]
+                var end = first.tensor.start + first.tensor.count
+                var j = i
+                while j + 1 < ordered.count, ordered[j + 1].url == first.url, ordered[j + 1].tensor.start == end,
+                      end - first.tensor.start < 64 << 20 {
+                    j += 1
+                    end = ordered[j].tensor.start + ordered[j].tensor.count
+                }
+                try file.write(contentsOf: try await data(first.url, first.tensor.start, end - first.tensor.start))
+                done += end - first.tensor.start
+                progress(done)
+                i = j + 1
             }
-            try file.write(contentsOf: try await data(first.url, first.tensor.start, end - first.tensor.start))
-            done += end - first.tensor.start
-            progress(done)
-            i = j + 1
+            try file.close()
+        } catch {
+            // Abgebrochen oder gescheitert: keine halbe Datei liegen lassen (der 13B schreibt bis zu 13 GB)
+            try? file.close()
+            try? FileManager.default.removeItem(at: tmp)
+            throw error
         }
-        try file.close()
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: tmp, to: target)
     }

@@ -154,7 +154,7 @@ struct PreviewSheet: View {
         self.useAsReference = useAsReference
     }
 
-    private var asset: AssetRecord { assets[min(max(0, index), assets.count - 1)] }
+    private var asset: AssetRecord { assets[min(max(0, index), max(0, assets.count - 1))] }
 
     private var original: AssetRecord? {
         guard let id = asset.meta["source_asset_id"]?.stringValue else { return nil }

@@ -511,6 +511,7 @@ actor JobQueue {
             switch model {
             case .flux(let m):
                 await CoreMLEngine.shared.unload()
+                await self.freeHelpers()  // lädt nach dem Download gleich in den Speicher: vorher Platz machen
                 try await Flux2Engine.shared.load(m, progress: report)
             case .coreml(let m):
                 try await CoreMLInstaller.install(m, progress: report)
@@ -693,6 +694,8 @@ actor JobQueue {
                 meta["loras"] = .array(req.loras.map { .object(["model_id": .string($0.id), "strength": .double($0.strength)]) })
             }
 
+            // Abgebrochen, während das Bild noch dekodiert wurde: nicht mehr in den Verlauf (wie beim Ton)
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
                                                              modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: index == 0 ? loadSeconds : 0,
@@ -712,6 +715,7 @@ actor JobQueue {
         }
         update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         await Flux2Engine.shared.unload()
+        await freeHelpers()  // ein Modell zur Zeit, wie bei den anderen Wegen (Stable Audio blieb sonst daneben geladen)
         let loadStart = Date()
         let alreadyLoaded = await CoreMLEngine.shared.currentModelID() == model.id
         try await CoreMLEngine.shared.load(model)
@@ -752,6 +756,8 @@ actor JobQueue {
             ]
             if index == 0 && loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
             if let a = req.imageAssetID { meta["image_asset_id"] = .string(a); meta["denoise"] = .double(req.denoise) }
+            // Abgebrochen, während das Bild noch dekodiert wurde: nicht mehr in den Verlauf (wie beim Ton)
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
                                                              modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: index == 0 ? loadSeconds : 0,
@@ -829,6 +835,7 @@ actor JobQueue {
                 "duration_s": .double((seconds * 10).rounded() / 10), "peak_memory_mb": .int(Int(peak)),
                 "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
             ]
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt, modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: 0, width: req.width, height: req.height,
                                           steps: req.steps, mode: "txt2img", modelID: model.id)
@@ -956,6 +963,11 @@ actor JobQueue {
             meta["image_asset_id"] = .string(image)
             meta["image_noise_scale"] = .double((Double(LTXPipeline.imageNoiseScale) * 100).rounded() / 100)
         }
+        // Abgebrochen, während das Video dekodiert oder geschrieben wurde (LTX-2.3/2.5 prüfen gar nicht): nicht ablegen
+        if jobs[id]?.cancelRequested == true {
+            try? FileManager.default.removeItem(at: result.url)
+            throw CancellationError()
+        }
         let asset = try await AssetStore.shared.addVideo(mp4: result.url, jobID: id, prompt: req.prompt,
                                                          modelID: req.model.id, meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
@@ -1044,6 +1056,8 @@ actor JobQueue {
             await AudioEngine.shared.unload()
             await ZImageEngine.shared.unload()
             await VideoEngine.shared.unload()
+            // SeedVR2 bleibt nach einem abgebrochenen Schärfen geladen: vor FLUX.2 weg damit (8 GB reichen nicht für beide)
+            if req.repair || req.colorize { await SeedVR2Engine.shared.unload() }
         }
         var kind: (mode: String, answer: String?)?
         if req.repair && req.repairMode == "auto" {

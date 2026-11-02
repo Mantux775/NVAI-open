@@ -102,6 +102,8 @@ enum ModelCatalog {
         repos.formUnion(ZImageCatalog.all.map { $0.repo.lowercased() })
         repos.insert(ZImageModel.preciseRepo.lowercased())
         repos.insert(VideoCatalog.ltxRepo.lowercased())
+        repos.insert("lightricks/ltx-2")      // LTX-2.3 (LTX2Engine lädt aus Lightricks/LTX-2)
+        repos.insert("lightricks/ltx-2.5")    // LTX-2.5, gesperrt
         return repos
     }
 

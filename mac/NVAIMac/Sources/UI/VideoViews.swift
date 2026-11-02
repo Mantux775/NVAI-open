@@ -131,9 +131,10 @@ struct VideoModelCard: View {
                         .foregroundStyle(installed ? .green : .secondary)
                 }
                 Text(model.description).font(.callout)
-                Text(String(format: t("Download %.1f GB · ab %d GB Arbeitsspeicher · LTX-Video Open Weights License",
-                                      "Download %.1f GB · from %d GB of memory · LTX-Video Open Weights License"),
-                            model.downloadGB, model.minRAMGB))
+                Text(String(format: t("Download %.1f GB · ab %d GB Arbeitsspeicher · %@",
+                                      "Download %.1f GB · from %d GB of memory · %@"),
+                            model.downloadGB, model.minRAMGB,
+                            model.isLTX2 ? "LTX-2 Community License" : "LTX-Video Open Weights License"))
                     .font(.caption).foregroundStyle(.secondary)
                 if tooSmall && !installed {
                     Text(t("Braucht mindestens \(model.minRAMGB) GB Arbeitsspeicher, dieser Mac hat \(SystemInfo.memoryGB) GB.",
@@ -155,8 +156,7 @@ struct VideoModelCard: View {
                         .font(.caption).foregroundStyle(encoderInstalled ? .green : .orange)
                 }
                 if let download {
-                    ProgressView(value: download.progress)
-                    Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                    DownloadProgressRow(download: download)
                 } else if let lastError {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }

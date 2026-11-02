@@ -273,9 +273,20 @@ async def _before(s: dict[str, Any], work: Path, ctx: jobs.JobContext, base: flo
              "stabilize": False, "sharpen": "off", "audio_denoise": False, "loudnorm": False}
     name = f"vhs_{db.new_id('cmp')}.before.mp4"
     out = config.ASSET_DIR / name
-    await _tool_json("run", {**plain, "out": str(out), "audio_out": str(work / "before.wav")}, work, ctx=ctx,
-                     base=base, span=span, stage=t("Vergleich: nur entflochten", "comparison: deinterlaced only"))
+    try:
+        await _tool_json("run", {**plain, "out": str(out), "audio_out": str(work / "before.wav")}, work, ctx=ctx,
+                         base=base, span=span, stage=t("Vergleich: nur entflochten", "comparison: deinterlaced only"))
+    except BaseException:
+        out.unlink(missing_ok=True)  # abgebrochen oder gescheitert: keine halbe Datei ohne Eintrag liegen lassen
+        raise
     return name if out.exists() else None
+
+
+def _drop(*names: str | None) -> None:
+    """Dateien eines gescheiterten oder abgebrochenen Auftrags, die noch keinen Eintrag haben, aus assets/ löschen."""
+    for name in names:
+        if name:
+            (config.ASSET_DIR / name).unlink(missing_ok=True)
 
 
 @jobs.register("vhs_clean")
@@ -289,11 +300,15 @@ async def _clean(job: Job, ctx: jobs.JobContext) -> list[str]:
     stem = db.new_id("vhs")
     name = f"{stem}.mp4"
     t0 = time.time()
+    before = None
     try:
         before = await _before(s, work, ctx, 0.0, 0.1) if p.get("preview") else None
         base = 0.1 if p.get("preview") else 0.0
         result = await _tool_json("run", {**s, "out": str(config.ASSET_DIR / name), "audio_out": str(work / "audio.wav")},
                                   work, ctx=ctx, base=base, span=0.99 - base, stage=t("bereitet auf", "processing"))
+    except BaseException:
+        _drop(name, before)
+        raise
     finally:
         shutil.rmtree(work, ignore_errors=True)
     meta = {"vhs": {k: v for k, v in s.items() if k not in ("info", "src")}, "source_asset_id": p["asset_id"],
@@ -379,7 +394,6 @@ async def _ai(job: Job, ctx: jobs.JobContext) -> list[str]:
                             "size": [tw, th], "chunk": chunk, "seed": seed, "rife": rife})
     await jobs._ensure_backend(ctx)
     t0 = time.time()
-    before = await _before(s, work, ctx, 0.0, 0.02) if p.get("preview") else None
     audio_wav = work / "audio.wav"
     has_audio = False
     if info.get("audio"):
@@ -415,8 +429,10 @@ async def _ai(job: Job, ctx: jobs.JobContext) -> list[str]:
         tail_out = work / f"tail_{i:05d}.mkv"
         tail_in = work / f"tail_{i - 1:05d}.mkv" if i else None
         parts.append(str(part_path))
-        if part_path.exists() and (last or tail_out.exists()):
-            continue                                   # schon fertig (fortgesetzter Auftrag)
+        # Schon fertig (fortgesetzter Auftrag): Teil und Ende liegen da, oder der naechste Teil auch, der das Ende
+        # verbraucht und geloescht hat. Teile entstehen unter Arbeitsnamen, ein vorhandener ist also vollstaendig.
+        if part_path.exists() and (last or tail_out.exists() or (work / f"part_{i + 1:05d}.mp4").exists()):
+            continue
         if ctx.should_stop():
             raise asyncio.CancelledError
         ts = time.time()
@@ -463,8 +479,14 @@ async def _ai(job: Job, ctx: jobs.JobContext) -> list[str]:
     stem = db.new_id("vhs")
     name = f"{stem}.mp4"
     out = config.ASSET_DIR / name
-    await _tool_json("concat", {"parts": parts, "out": str(out), "audio_out": str(audio_wav) if has_audio else None},
-                     work)
+    try:
+        await _tool_json("concat", {"parts": parts, "out": str(out), "audio_out": str(audio_wav) if has_audio else None},
+                         work)
+        # Der Vergleichsclip erst am Ende: Bei einem Abbruch davor bliebe er sonst ohne Eintrag liegen
+        before = await _before(s, work, ctx, 0.985, 0.01) if p.get("preview") else None
+    except BaseException:
+        _drop(name)
+        raise
     took = round(time.time() - t0, 1)
     shutil.rmtree(work, ignore_errors=True)
     spf = round(sum(seg_times) / sum(seg_frames), 2) if seg_frames else None

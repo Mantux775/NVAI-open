@@ -543,17 +543,29 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   })
-  if (!res.ok) {
-    const body = await res.text()
-    let detail = body.slice(0, 400)
-    try {
-      detail = JSON.parse(body).detail ?? detail
-    } catch {
-      /* Klartext-Fehler unveraendert lassen */
-    }
-    throw new Error(detail)
-  }
+  if (!res.ok) throw new Error(errorText(await res.text()))
   return res.json() as Promise<T>
+}
+
+/** Fehlertext einer Serverantwort: FastAPI schickt {detail: "…"}, bei ungültigen Feldern (422) aber eine Liste
+ * [{loc, msg}] -- die erschien sonst als „[object Object]“, und niemand sah, welches Feld nicht passt. */
+export function errorText(body: string): string {
+  try {
+    const detail = JSON.parse(body).detail
+    if (typeof detail === 'string') return detail
+    if (Array.isArray(detail)) {
+      return detail
+        .map((d: { loc?: unknown[]; msg?: string }) => {
+          const field = (d.loc ?? []).filter((x) => x !== 'body').join('.')
+          return field ? `${field}: ${d.msg ?? ''}` : String(d.msg ?? '')
+        })
+        .join('; ')
+    }
+    if (detail != null) return JSON.stringify(detail)
+  } catch {
+    /* Klartext-Fehler unveraendert lassen */
+  }
+  return body.slice(0, 400)
 }
 
 /** Welche Upsampler-Fassung die Karte der Sprachmodelle bekommt und ob sie ganz hineinpasst. */
@@ -741,6 +753,8 @@ export const api = {
    * Projektordnern, '' nur der allgemeine Verlauf, 'Studio/<Name>' ein Projektordner. */
   jobs: (limit = 50, offset = 0, exclude?: string, folder?: string) =>
     req<Job[]>(`/api/jobs?limit=${limit}&offset=${offset}${exclude ? `&exclude=${exclude}` : ''}${folder !== undefined ? `&folder=${encodeURIComponent(folder)}` : ''}`),
+  /** Alle wartenden und laufenden Aufträge einer Art, unabhängig davon, wie viele neuere es gibt */
+  activeJobs: (kind: string) => req<Job[]>(`/api/jobs?limit=1000&kind=${encodeURIComponent(kind)}&active=true`),
   job: (id: string) => req<Job>(`/api/jobs/${id}`),
   jobAssets: (id: string) => req<Asset[]>(`/api/jobs/${id}/assets`),
   assets: (kind?: string, limit = 100) =>
@@ -790,16 +804,7 @@ export const api = {
     fd.append('file', file)
     // wie upload: den Content-Type (multipart mit Boundary) setzt der Browser
     const res = await fetch('/api/studio/import', { method: 'POST', body: fd, headers: { 'Accept-Language': getLang() } })
-    if (!res.ok) {
-      const body = await res.text()
-      let detail = body.slice(0, 400)
-      try {
-        detail = JSON.parse(body).detail ?? detail
-      } catch {
-        /* Klartext */
-      }
-      throw new Error(detail)
-    }
+    if (!res.ok) throw new Error(errorText(await res.text()))
     return (await res.json()) as StudioProject
   },
   revealAsset: (id: string) => req<{ ok: boolean; path: string }>(`/api/assets/${id}/reveal`, { method: 'POST' }),

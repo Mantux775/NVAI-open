@@ -17,6 +17,16 @@ const KIND_FILTERS = [
   { id: 'mesh', label: '3D' },
 ]
 
+/** Zustand eines Auftrags als Text (die Marke zeigte sonst „done“, „queued“ auch auf Deutsch) */
+const STATUS_TEXT: Record<string, () => string> = {
+  queued: () => t('wartet', 'queued'),
+  running: () => t('läuft', 'running'),
+  done: () => t('fertig', 'done'),
+  error: () => t('Fehler', 'error'),
+  cancelled: () => t('abgebrochen', 'cancelled'),
+}
+const filterLabel = (id: string) => KIND_FILTERS.find((f) => f.id === id)?.label ?? id
+
 /** Einträge je Seite im Verlauf. */
 const PAGE = 50
 
@@ -196,8 +206,8 @@ export function HistoryPanel({ event }: Props) {
                       `Delete all ${jobs.length} entries including their files?`,
                     )
                   : t(
-                      `Alle ${shown.length} ${filter}-Einträge löschen?`,
-                      `Delete all ${shown.length} ${filter} entries?`,
+                      `Alle ${shown.length} Einträge der Art „${filterLabel(filter)}“ löschen?`,
+                      `Delete all ${shown.length} ${filterLabel(filter)} entries?`,
                     )}
                 {folders.length > 0 && t(' Projektordner des Studios und was ein Projekt nutzt, bleiben.',
                   ' Studio project folders and anything a project uses stay.')}
@@ -217,7 +227,7 @@ export function HistoryPanel({ event }: Props) {
             >
               {filter === 'all'
                 ? t('Verlauf leeren', 'Clear history')
-                : t(`${filter} leeren`, `Clear ${filter} entries`)}
+                : t(`„${filterLabel(filter)}“ leeren`, `Clear ${filterLabel(filter)} entries`)}
             </button>
           ))}
       </div>
@@ -240,7 +250,7 @@ export function HistoryPanel({ event }: Props) {
         return (
           <article key={job.id} className="panel run">
             <header className="run-head">
-              <span className={`badge ${job.status}`}>{job.status}</span>
+              <span className={`badge ${job.status}`}>{STATUS_TEXT[job.status]?.() ?? job.status}</span>
               {prompt ? (
                 <span
                   className={openPrompts.has(job.id) ? 'prompt open' : 'prompt'}

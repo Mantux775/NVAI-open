@@ -54,7 +54,8 @@ export function useDownloads(
 
   const sync = useCallback(async () => {
     try {
-      const next = fromJobs(await api.jobs(50))
+      // alle offenen Downloads, nicht nur die unter den neuesten 50 Aufträgen (ein langer Download fiel sonst heraus)
+      const next = fromJobs(await api.activeJobs('download'))
       // Was eben noch lief und jetzt fehlt, ist fertig geworden (oder abgebrochen).
       if (Object.keys(activeRef.current).some((id) => !(id in next))) setFinished((n) => n + 1)
       setActive(next)

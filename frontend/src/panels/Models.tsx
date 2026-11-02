@@ -74,8 +74,8 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
       setMessage(
         res.cancelled
           ? t(
-              `${res.cancelled} Download(s) abgebrochen. Fertige Teile bleiben zum Fortsetzen liegen.`,
-              `${res.cancelled} download(s) cancelled. Finished parts stay so they can resume.`,
+              `${res.cancelled} Download(s) abgebrochen. Fertige Dateien bleiben, „Fortsetzen“ lädt den Rest.`,
+              `${res.cancelled} download(s) cancelled. Finished files stay; “Resume” downloads the rest.`,
             )
           : t('Es lief kein Download.', 'No download was running.'),
       )
@@ -568,16 +568,26 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                     )}
                   </>
                 ) : m.partially_installed ? (
-                  <button
-                    className="btn small primary"
-                    title={t(
-                      'Unvollständigen Stand löschen und komplett neu laden',
-                      'Delete the incomplete download and download everything again',
-                    )}
-                    onClick={() => download(m, true)}
-                  >
-                    {t('Neu laden', 'Download again')}
-                  </button>
+                  <>
+                    {/* Fortsetzen lädt nur, was fehlt; fertige Dateien bleiben (vorher löschte der einzige Knopf sie) */}
+                    <button
+                      className="btn small primary"
+                      title={t('Nur die fehlenden Dateien laden; fertige bleiben', 'Download only the missing files; finished ones stay')}
+                      onClick={() => download(m)}
+                    >
+                      {t('Fortsetzen', 'Resume')}
+                    </button>
+                    <button
+                      className="btn small ghost"
+                      title={t(
+                        'Unvollständigen Stand löschen und komplett neu laden',
+                        'Delete the incomplete download and download everything again',
+                      )}
+                      onClick={() => download(m, true)}
+                    >
+                      {t('Neu laden', 'Download again')}
+                    </button>
+                  </>
                 ) : (
                   <button className="btn small primary" onClick={() => download(m)}>
                     {t('Herunterladen', 'Download')}

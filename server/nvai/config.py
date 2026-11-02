@@ -101,8 +101,21 @@ TRELLIS2_ROOT = Path(os.getenv("NVAI_TRELLIS2_ROOT", ROOT / "external" / "trelli
 TRELLIS2_URL = os.getenv("NVAI_TRELLIS2_URL", "http://127.0.0.1:8201")
 
 
+MODELS_UNREACHABLE: str | None = None  # Grund, wenn der Modellordner fehlt (externe Platte nicht angeschlossen)
+
+
 def ensure_dirs() -> None:
-    for d in (DATA_DIR, ASSET_DIR, UPLOAD_DIR, MODELS_DIR):
+    global MODELS_UNREACHABLE
+    for d in (DATA_DIR, ASSET_DIR, UPLOAD_DIR):
         d.mkdir(parents=True, exist_ok=True)
-    if MODEL_DIR_OVERRIDE:
-        COMFY_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    # Der Modellordner darf auf einer anderen Platte liegen (Modelle → Speicherorte). Fehlt die, startet der Server
+    # trotzdem: Verlauf, Studio und Material gehen, nur Generieren nicht
+    try:
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        if MODEL_DIR_OVERRIDE:
+            COMFY_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        MODELS_UNREACHABLE = None
+    except OSError as exc:
+        if MODELS_UNREACHABLE is None:
+            print(f"Modellordner nicht erreichbar / model folder unreachable: {exc}", flush=True)
+        MODELS_UNREACHABLE = str(exc)

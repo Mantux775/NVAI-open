@@ -268,6 +268,9 @@ def _follow_name(p: dict[str, Any]) -> None:
     current = project_folder(p)
     wanted = _free_folder(_folder_label(p["name"]), current)
     if wanted != current:
+        if _folder_busy(p):
+            _rename_later[p["id"]] = time.time()  # nach dem Auftrag holt refresh das nach
+            return
         try:
             db.rename_folder(current, wanted)
         except OSError:
@@ -275,6 +278,22 @@ def _follow_name(p: dict[str, Any]) -> None:
             return
         p["folder"] = wanted
     _rename_later.pop(p["id"], None)
+
+
+def _folder_busy(p: dict[str, Any]) -> bool:
+    """Wartet oder läuft ein Auftrag, der Dateien im Projektordner über feste Pfade liest (Export, VHS)? Dann darf der
+    Ordner nicht umbenannt werden, der Auftrag fände seine Dateien sonst nicht mehr."""
+    folder = p.get("folder") or ""
+    for job in db.list_jobs(limit=1000, active=True):
+        if job.status not in ("queued", "running"):
+            continue
+        if job.kind == "studio_export" and job.params.get("project_id") == p["id"]:
+            return True
+        if job.kind in ("vhs", "vhs_clean") and folder:
+            src = db.get_asset(str(job.params.get("asset_id") or ""))
+            if src is not None and (src.folder == folder or src.folder.startswith(folder + "/")):
+                return True
+    return False
 
 
 def folder_list() -> list[dict[str, Any]]:
@@ -291,6 +310,14 @@ def folder_list() -> list[dict[str, Any]]:
         out.append({"path": folder, "name": folder.split("/", 1)[1], "items": items, "updated_at": last,
                     "project_id": p["id"] if p else None, "project_name": p["name"] if p else None})
     return out
+
+
+def clip_owner(asset_id: str) -> str | None:
+    """Name des Projekts, in dessen Schnitt das Asset als Clip liegt, sonst None."""
+    for p in _all_projects():
+        if any(c.get("asset_id") == asset_id for c in p.get("clips", [])):
+            return p.get("name") or p.get("id")
+    return None
 
 
 def used_asset_ids() -> set[str]:
@@ -510,6 +537,11 @@ def apply(pid: str, name: str, params: dict[str, Any] | None = None) -> tuple[di
         result = COMMANDS[name](p, dict(params or {}))
         p["updated_at"] = time.time()
         _save(p)
+        if p["name"] != before["name"]:
+            # Ordner erst umbenennen, wenn der Befehl (auch jeder in einem batch) gelungen und gespeichert ist; sonst
+            # stünde das Projekt auf dem alten Ordner und das Material im neuen
+            _follow_name(p)
+            _save(p)
         stack = _undo.setdefault(pid, [])
         stack.append(before)
         del stack[:-UNDO_LIMIT]
@@ -582,8 +614,7 @@ def history(pid: str) -> dict[str, int]:
 @command("project.update", "Name oder Einstellungen: name, width, height, fps [num, den], video_quality (dfr|standard)")
 def _project_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     if "name" in a:
-        p["name"] = str(a["name"]).strip() or p["name"]
-        _follow_name(p)
+        p["name"] = str(a["name"]).strip() or p["name"]  # den Ordner benennt apply erst nach dem Speichern um
     s = p["settings"]
     for key in ("width", "height"):
         if key in a:
@@ -1438,7 +1469,21 @@ def _last_frame_asset(asset_id: str, title: str = "", folder: str = "") -> str:
     if proc.returncode != 0:
         raise StudioError(t("Letztes Bild nicht lesbar.", "Cannot read the last frame."))
     label = t(f"Letztes Bild von „{title}“", f'Last frame of "{title}"') if title else t("Letztes Bild", "Last frame")
-    return db.create_asset(kind="upload", filename=name, prompt=label, meta={"studio_last_frame_of": asset_id}).id
+    return db.create_asset(kind="upload", filename=name, prompt=label, model_id=_publish_badge_model([asset_id]),
+                           meta={"studio_last_frame_of": asset_id}).id
+
+
+def _publish_badge_model(asset_ids: list[str]) -> str:
+    """model_id eines verwendeten Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3, solange
+    seine Lizenz nicht bestätigt ist), sonst "". Export und letztes Bild tragen sie weiter: Verlauf und Material zeigen
+    die rote Marke anhand der model_id."""
+    confirmed = registry.get_licenses()
+    for aid in asset_ids:
+        a = db.get_asset(aid)
+        entry = registry.get_entry(a.model_id) if a is not None and a.model_id else None
+        if entry and entry.get("output_badge") and entry.get("license", "") not in confirmed:
+            return a.model_id
+    return ""
 
 
 def _known_model(model_id: str | None, kind: str) -> str | None:
@@ -1492,10 +1537,12 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
                                                       "reference_asset_ids", "sparse_attention", "int8_attention",
                                                       "recommended")}
     if entry and entry.get("family") == "ltx25" and "quality" not in extra:
-        # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und kein Endbild
-        # verlangt ist (gemessen 5 s 1080p: Details bleiben über die ganze Länge, 786 statt 241 s)
+        # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und weder Endbild
+        # noch Schleife verlangt sind, die DFR nicht kann (gemessen 5 s 1080p: Details über die ganze Länge, 786 statt
+        # 241 s)
         wants = p["settings"].get("video_quality", "dfr")
-        dfr = wants == "dfr" and registry.features_for(entry).get("dfr") and not extra.get("end_image_asset_id")
+        dfr = (wants == "dfr" and registry.features_for(entry).get("dfr")
+               and not (extra.get("end_image_asset_id") or extra.get("loop")))
         extra["quality"] = "dfr" if dfr else "standard"
     image_id = params.get("image_asset_id")
     chain_id = None
@@ -1832,6 +1879,7 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
     result: dict[str, Any] = {}
     # stderr nebenher leeren, sonst kann ein voller Puffer den Renderer anhalten
     err_task = asyncio.create_task(proc.stderr.read()) if proc.stderr else None
+    ok = False
     try:
         assert proc.stdout is not None
         async for raw in proc.stdout:
@@ -1849,14 +1897,30 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
         err = (await err_task).decode(errors="replace") if err_task else ""
         if await proc.wait() != 0 or not out.exists():
             raise RuntimeError(t(f"Export fehlgeschlagen: {err[-400:]}", f"Export failed: {err[-400:]}"))
+        ok = True
     finally:
         if proc.returncode is None:
             proc.kill()
+            try:
+                await asyncio.wait_for(proc.wait(), 10)  # erst danach gibt Windows die halbe Datei frei
+            except (asyncio.TimeoutError, ProcessLookupError):
+                pass
         plan_path.unlink(missing_ok=True)
+        if not ok:
+            # Abgebrochen oder gescheitert: die halbe Ausgabe hat keinen Eintrag und wäre sonst unsichtbarer Ballast
+            for f in (out, preview):
+                if f is not None:
+                    try:
+                        f.unlink(missing_ok=True)
+                    except OSError:
+                        pass
     meta = {"studio_project": pid, "preset": preset, **result}
     if preview is not None and preview.exists():
         meta["preview"] = preview.name
-    asset = db.create_asset(kind="video", filename=name, job_id=job.id, prompt=p["name"], meta=meta)
+    # Enthält der Schnitt Material eines Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3), trägt
+    # auch der Export dessen rote Marke
+    asset = db.create_asset(kind="video", filename=name, job_id=job.id, prompt=p["name"],
+                            model_id=_publish_badge_model([c["asset_id"] for c in p["clips"]]), meta=meta)
     return [asset.id]
 
 

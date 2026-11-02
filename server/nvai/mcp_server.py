@@ -181,6 +181,26 @@ QUEUE_LIMIT = 3600.0
 FINISHED = ("done", "error", "cancelled")
 
 
+async def _get_job(c: httpx.AsyncClient, job_id: str) -> dict[str, Any]:
+    """Der Auftrag vom Server. Gibt es ihn nicht mehr (im Verlauf geloescht), ein beendeter Auftrag mit Meldung, damit
+    das Werkzeug sagt, was passiert ist, statt an einem fehlenden Feld zu scheitern."""
+    r = await c.get(f"/api/jobs/{job_id}")
+    if r.status_code == 404:
+        return {"id": job_id, "status": "error", "progress": 0.0, "stage": "",
+                "error": "The job no longer exists (deleted from the history)."}
+    r.raise_for_status()
+    return r.json()
+
+
+def _detail(r: httpx.Response) -> str:
+    """Die Meldung einer Fehlerantwort des Servers (FastAPI: {"detail": …})."""
+    try:
+        detail = r.json().get("detail")
+    except ValueError:
+        detail = None
+    return str(detail or f"HTTP {r.status_code}")
+
+
 async def _wait_for_job(job_id: str, ctx: Context | None = None, run_limit: float = RUN_LIMIT,
                         queue_limit: float = QUEUE_LIMIT) -> dict[str, Any]:
     """Wartet, bis der Auftrag fertig ist. Laeuft er laenger als run_limit oder wartet er laenger als queue_limit
@@ -190,7 +210,7 @@ async def _wait_for_job(job_id: str, ctx: Context | None = None, run_limit: floa
     last_progress = -1.0
     async with await _client() as c:
         while True:
-            job = (await c.get(f"/api/jobs/{job_id}")).json()
+            job = await _get_job(c, job_id)
             if ctx and job["progress"] != last_progress:
                 last_progress = job["progress"]
                 await ctx.report_progress(job["progress"], 1.0)
@@ -338,7 +358,7 @@ async def job_status(job_id: str, wait_s: int = 0, ctx: Context | None = None) -
         async with await _client() as c:
             while job["status"] not in FINISHED and loop.time() < deadline:
                 await asyncio.sleep(POLL_INTERVAL)
-                job = (await c.get(f"/api/jobs/{job_id}")).json()
+                job = await _get_job(c, job_id)
                 if ctx:
                     await ctx.report_progress(job["progress"], 1.0)
     return await _job_output(job)
@@ -410,8 +430,10 @@ async def download_model(model_id: str, ctx: Context) -> dict[str, Any]:
         model_id: ID from list_models(), e.g. 'sdxl-base'.
     """
     async with await _client() as c:
-        job = (await c.post("/api/models/download", json={"model_id": model_id})).json()
-    result = await _wait_for_job(job["id"], ctx, run_limit=3600.0)
+        r = await c.post("/api/models/download", json={"model_id": model_id})
+    if r.status_code >= 400:
+        return {"ok": False, "model_id": model_id, "error": _detail(r)}
+    result = await _wait_for_job(r.json()["id"], ctx, run_limit=3600.0)
     if result["status"] not in FINISHED:
         return {**_pending(result), "model_id": model_id}
     if result["status"] != "done":
@@ -1011,10 +1033,12 @@ async def image_to_3d(
         faces: Target triangle count after reduction. For game assets 10,000-100,000.
         seed: For reproducible results.
         texture_size: TRELLIS.2 only: texture resolution 1024/2048/4096.
-        background_mode: 'birefnet' (cleanest edges, recommended), 'flood' (fast,
-            only with a calm background) or 'alpha' (the image brings its own alpha).
-        clean_specks: Remove loose mesh fragments -- the typical floating strands
-            and pillars.
+        background_mode: TRELLIS.2: 'birefnet' (cleanest edges, recommended), 'flood' (fast,
+            only with a calm background) or 'alpha' (the image brings its own alpha). TripoSG
+            always cuts out by flood fill from the borders ('alpha' keeps the image's own alpha),
+            so give it a plain background.
+        clean_specks: TRELLIS.2 only: remove loose mesh fragments -- the typical floating
+            strands and pillars.
         steps: TripoSG only: sampling steps.
         project_front: Put the source image onto the visible front of the mesh (planar
             projection) so lettering and stickers stay readable; TRELLIS.2 otherwise paints
@@ -1346,7 +1370,10 @@ async def studio_generate(project_id: str, scene_ids: list[str] | None = None, w
         loop = asyncio.get_running_loop()
         deadline = loop.time() + 3600.0
         while True:
-            project = (await c.get(f"/api/studio/projects/{project_id}", params={"format": "summary"})).json()
+            pr = await c.get(f"/api/studio/projects/{project_id}", params={"format": "summary"})
+            if pr.status_code >= 400:  # etwa in der Oberfläche gelöscht, während erzeugt wurde
+                return {"ok": False, "jobs": out["jobs"], "error": _detail(pr)}
+            project = pr.json()
             busy = [s for s in project["scenes"] if s["id"] in ids and s["status"] in ("running", "waiting")]
             if not wait or not busy or loop.time() > deadline:
                 break
@@ -1371,8 +1398,9 @@ async def studio_export(project_id: str, preset: str = "youtube-1080p", ctx: Con
 
     Args:
         project_id: The project.
-        preset: youtube-1080p (H.264), youtube-2160p (H.265), shorts-1080x1920, av1-1080p, project (H.264 in the
-            project's size).
+        preset: youtube-1080p (H.264, 24 Mbit/s), youtube-2160p (H.265), shorts-1080x1920 (vertical), av1-1080p,
+            project (H.264 in the project's size), master (FFV1 in MKV, pixel-exact) or prores (ProRes 4444 in MOV,
+            for other editing software).
     """
     async with await _client() as c:
         r = await c.post(f"/api/studio/projects/{project_id}/export", json={"preset": preset})

@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 from scipy import ndimage as ndi
 from scipy.ndimage import uniform_filter
 
@@ -252,18 +252,24 @@ def colorize(color: Image.Image, luminance: Image.Image, guide_filter: bool = Tr
     return Image.fromarray(lab_to_rgb(out)), info
 
 
+def _open(path: str) -> Image.Image:
+    """Bild aufrecht laden: Handyfotos tragen die Drehung oft nur als EXIF-Angabe; ComfyUI und der Browser wenden sie
+    an, also hier auch."""
+    return ImageOps.exif_transpose(Image.open(path))
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     mode = sys.argv[1]
     if mode == "--align":
         min_score = float(sys.argv[5]) if len(sys.argv) > 5 else 0.5
-        out, info = align(Image.open(sys.argv[2]), Image.open(sys.argv[3]), min_score)
+        out, info = align(_open(sys.argv[2]), _open(sys.argv[3]), min_score)
         out.save(sys.argv[4])
     elif mode == "--merge":
-        out, info = merge_damage(Image.open(sys.argv[2]), Image.open(sys.argv[3]))
+        out, info = merge_damage(_open(sys.argv[2]), _open(sys.argv[3]))
         out.save(sys.argv[4])
     elif mode == "--colorize":
-        out, info = colorize(Image.open(sys.argv[2]), Image.open(sys.argv[3]),
+        out, info = colorize(_open(sys.argv[2]), _open(sys.argv[3]),
                              guide_filter="--no-guide" not in sys.argv)
         out.save(sys.argv[4])
     else:

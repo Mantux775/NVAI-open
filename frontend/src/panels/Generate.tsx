@@ -112,6 +112,9 @@ interface Props {
   onShowModels: () => void
 }
 
+/** Hochgeladene Dateien, die als Quellbild taugen */
+const IMAGE_FILE = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i
+
 export function GeneratePanel({ health, event, downloads, onShowModels }: Props) {
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -264,6 +267,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const jobRef = useRef<string | null>(null)
   jobRef.current = jobId
 
+  // Nur neu laden, wenn sich die aktiven Modelle wirklich ändern: health kommt alle 5 s als neues Objekt, und jedes Mal
+  // die ganze Modellliste (samt Fragen an Hugging Face) zu holen belastete den Server
+  const activeKey = JSON.stringify(health?.active_models ?? {})
   useEffect(() => {
     api.models().then((all) => {
       setModels(all)
@@ -281,7 +287,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
         return next
       })
     })
-  }, [health?.active_models, downloads.finished])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeKey steht für health.active_models
+  }, [activeKey, downloads.finished])
 
   // Bildauswahl (Quell-, Start-, Referenzbild, Foto): die neuesten Bilder und Uploads, mit „Weitere 50 laden“
   // wie der Verlauf (Nutzerwunsch 25.10.2026, vorher fest 40 Bilder und 20 Uploads). Die Grenze steht in einem
@@ -291,7 +298,9 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   const loadSources = () => {
     const limit = sourceLimit.current
     Promise.all([api.assets('image', limit + 1), api.assets('upload', limit + 1)]).then(([imgs, ups]) => {
-      const merged = [...imgs, ...ups].sort((a, b) => b.created_at - a.created_at)
+      // Uploads sind auch Videos und Töne (VHS-Bänder, Studio-Material): als Quellbild nur Bilder
+      const pics = ups.filter((a) => IMAGE_FILE.test(a.filename))
+      const merged = [...imgs, ...pics].sort((a, b) => b.created_at - a.created_at)
       const all = merged.slice(0, limit)
       setSourceMore(merged.length > limit)
       setSourceImages(all)
@@ -314,24 +323,57 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     loadSources()
   }, [mode])
 
+  const applyDone = (id: string) => {
+    api.jobAssets(id).then((assets) => {
+      setResults(assets)
+      // 3D aus Text und Person aus einem Foto: das frische Bild gleich als Quell- bzw. Startbild auswählen.
+      if ((mode === '3d' || mode === 'video') && assets[0]?.kind === 'image') {
+        setSourceId(assets[0].id)
+        loadSources()
+      }
+    })
+    setJobId(null)
+    setProgress(1)
+    setStage(t('fertig', 'done'))
+    if (mode === 'image') loadSources()
+  }
+
+  // Rückfall, wenn das Ende-Ereignis verpasst wurde (der Auftrag scheiterte schon vor der Antwort auf das Absenden,
+  // der Live-Feed verband neu, ein Folgeereignis überschrieb es): den Auftrag selbst nachsehen, gleich und alle 5 s.
+  // Sonst blieb Generieren gesperrt, bis man die Seite neu lud.
+  useEffect(() => {
+    if (!jobId) return
+    let alive = true
+    const check = () =>
+      api
+        .job(jobId)
+        .then((j) => {
+          if (!alive || jobRef.current !== jobId) return
+          if (j.status === 'done') applyDone(jobId)
+          else if (j.status === 'error') {
+            setError(j.error ?? t('Fehler', 'Error'))
+            setJobId(null)
+          } else if (j.status === 'cancelled') {
+            setJobId(null)
+            setStage(t('abgebrochen', 'cancelled'))
+          }
+        })
+        .catch(() => {})
+    check()
+    const timer = setInterval(check, 5000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [jobId])
+
   useEffect(() => {
     if (!event || !('job_id' in event) || event.job_id !== jobRef.current) return
     if (event.type === 'job.progress') {
       setProgress(event.progress)
       setStage(event.stage)
     } else if (event.type === 'job.done') {
-      api.jobAssets(event.job_id).then((assets) => {
-        setResults(assets)
-        // 3D aus Text und Person aus einem Foto: das frische Bild gleich als Quell- bzw. Startbild auswählen.
-        if ((mode === '3d' || mode === 'video') && assets[0]?.kind === 'image') {
-          setSourceId(assets[0].id)
-          loadSources()
-        }
-      })
-      setJobId(null)
-      setProgress(1)
-      setStage(t('fertig', 'done'))
-      if (mode === 'image') loadSources()
+      applyDone(event.job_id)
     } else if (event.type === 'job.error') {
       setError(event.error)
       setJobId(null)
@@ -346,8 +388,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     if (!jobId) return
     try {
       const res = await api.cancelJob(jobId)
-      if (!res.ok && res.reason) setError(res.reason)
-      else {
+      if (!res.ok) {
+        // „schon beendet“: dann den Endstand übernehmen, statt gesperrt zu bleiben
+        const j = await api.job(jobId).catch(() => null)
+        if (j && ['done', 'error', 'cancelled'].includes(j.status)) {
+          setJobId(null)
+          if (j.status === 'error') setError(j.error ?? res.reason ?? null)
+        } else if (res.reason) setError(res.reason)
+      } else {
         setJobId(null)
         setStage(t('abgebrochen', 'cancelled'))
       }
@@ -449,8 +497,13 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
   // Sparse Attention und INT8-Attention. Danach gilt, was der Nutzer einstellt; Video-Aufträge schicken alles
   // ausdrücklich mit (recommended: false). Der Server nimmt auf älteren Karten und AMD aus, was dort nicht läuft.
   const recFor = selected && (mode === 'image' || mode === 'audio' || mode === 'video') ? `${mode}:${selected.id}` : ''
+  // Je Reiter das zuletzt vorgewählte Modell: Kehrt man nur aus einem anderen Reiter zurück, bleibt, was man eingestellt
+  // hatte (vorher kamen Format, Länge und DFR wieder, der nächste Lauf dauerte dann 13 statt gut 1 Minute)
+  const presetFor = useRef<Record<string, string>>({})
   useEffect(() => {
     if (!recFor || !selected) return
+    if (presetFor.current[mode] === selected.id) return
+    presetFor.current[mode] = selected.id
     const rec = selected.features?.recommended
     const [w, h] = rec?.size ?? [0, 0]
     if (mode === 'image') {
@@ -465,7 +518,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     const size = videoSizes.find((s) => s.w === w && s.h === h)
     if (size) setVidSize(size)
     if (rec?.seconds) setLtxSeconds(rec.seconds)
-    if (rec?.quality) setQuality(rec.quality === 'dfr' && dfrReady ? 'dfr' : 'standard')
+    if (rec?.quality && !qualityTouched.current) setQuality(rec.quality === 'dfr' && dfrReady ? 'dfr' : 'standard')
     setSparse(rec?.sparse_attention ?? '')
     setInt8(!!rec?.int8_attention)
     const picks = (rec?.loras ?? []).filter((r) => loraChoices.some((l) => l.id === r.model_id))
@@ -584,10 +637,19 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
     setConfirmClearSources(false)
     setError(null)
     try {
-      // Nur Bilder und Uploads — erzeugte Meshes bleiben erhalten.
-      await Promise.all(sourceImages.map((a) => api.deleteAsset(a.id)))
-      setSourceImages([])
-      setSourceId('')
+      // Nur Bilder und Uploads des allgemeinen Verlaufs: Meshes und alles in Projektordnern (Studio) bleiben.
+      const gone = sourceImages.filter((a) => !a.folder)
+      // Was als Clip im Studio-Schnitt liegt, lehnt der Server ab (409): das bleibt, der Rest geht
+      const done = await Promise.allSettled(gone.map((a) => api.deleteAsset(a.id)))
+      const deleted = new Set(gone.filter((_, i) => done[i].status === 'fulfilled').map((a) => a.id))
+      const rest = sourceImages.filter((a) => !deleted.has(a.id))
+      setSourceImages(rest)
+      setSourceId((cur) => (rest.some((a) => a.id === cur) ? cur : ''))
+      const kept = gone.length - deleted.size
+      if (kept) {
+        setError(t(`${kept} Bild(er) liegen als Clip im Studio-Schnitt und bleiben.`,
+          `${kept} image(s) are clips in a Studio edit and stay.`))
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -993,16 +1055,19 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 title={a.prompt || a.filename}
               >
                 <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => setSourceId(a.id)} />
-                <button
-                  className="source-del"
-                  title={t('Dieses Quellbild löschen', 'Delete this source image')}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeSource(a)
-                  }}
-                >
-                  ×
-                </button>
+                {/* Bilder in Projektordnern gehören dem Studio (Startbilder, Takes): hier nicht löschbar */}
+                {!a.folder && (
+                  <button
+                    className="source-del"
+                    title={t('Dieses Quellbild löschen', 'Delete this source image')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeSource(a)
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -1013,7 +1078,8 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             {confirmClearSources ? (
               <span className="confirm">
                 <span className="muted small">
-                  {t('Alle Quellbilder löschen?', 'Delete all source images?')}
+                  {t('Alle Quellbilder des Verlaufs löschen? Bilder in Projektordnern bleiben.',
+                    'Delete all source images of the History? Images in project folders stay.')}
                 </span>
                 <button className="btn small danger" onClick={clearSources}>{t('Ja', 'Yes')}</button>
                 <button className="btn small ghost" onClick={() => setConfirmClearSources(false)}>
@@ -2148,10 +2214,14 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
             )}
 
             <h3>{t('Freistellen', 'Background removal')}</h3>
-            <select value={bgMode} onChange={(e) => setBgMode(e.target.value as typeof bgMode)}>
-              <option value="birefnet">
-                {t('BiRefNet — sauberste Kanten (empfohlen)', 'BiRefNet — cleanest edges (recommended)')}
-              </option>
+            {/* BiRefNet hat nur der TRELLIS.2-Worker; TripoSG stellt immer per Randfarben-Füllung frei */}
+            <select value={!isTextured && bgMode === 'birefnet' ? 'flood' : bgMode}
+              onChange={(e) => setBgMode(e.target.value as typeof bgMode)}>
+              {isTextured && (
+                <option value="birefnet">
+                  {t('BiRefNet — sauberste Kanten (empfohlen)', 'BiRefNet — cleanest edges (recommended)')}
+                </option>
+              )}
               <option value="flood">
                 {t(
                   'Randfarben-Füllung — schnell, nur bei ruhigem Hintergrund',

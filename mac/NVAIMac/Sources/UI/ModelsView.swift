@@ -421,8 +421,7 @@ struct LoRACard: View {
                 Text(String(format: "%.0f MB · %@ · %@", row.model.sizeMB, row.model.license, row.model.repo))
                     .font(.caption).foregroundStyle(.secondary)
                 if let download {
-                    ProgressView(value: download.progress)
-                    Text(download.stage).font(.caption).foregroundStyle(.secondary)
+                    DownloadProgressRow(download: download)
                 } else if let lastError {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }
@@ -442,6 +441,30 @@ struct LoRACard: View {
                 }
             }
             .padding(6)
+        }
+    }
+}
+
+
+/// Fortschritt eines Downloads mit „Abbrechen“. Die Karten für Video, Ton und LoRAs zeigten nur den Balken: Große
+/// Downloads (bis 70 GB) ließen sich nicht stoppen und hielten die Warteschlange für alle anderen Aufträge auf.
+struct DownloadProgressRow: View {
+    @EnvironmentObject var state: AppState
+    let download: JobRecord
+
+    var body: some View {
+        ProgressView(value: download.progress)
+        HStack {
+            Text(download.stage).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button(t("Abbrechen", "Cancel")) {
+                Task {
+                    _ = try? await JobQueue.shared.cancel(download.id)
+                    await state.refresh()
+                }
+            }
+            .controlSize(.small)
+            .disabled(download.cancelRequested)
         }
     }
 }

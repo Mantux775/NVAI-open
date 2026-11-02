@@ -165,10 +165,16 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
     api.studioPresets().then(setPresets).catch(() => {})
   }, [open])
 
+  // Eine Antwort nur übernehmen, wenn sie nicht älter ist als der Stand, den die Ansicht schon hat: GET und Befehle laufen
+  // im Server nebeneinander, ein spätes GET setzte sonst einen überholten Stand (etwa ein eben Rückgängig-gemachtes)
+  const accept = useCallback((next: StudioProject) => {
+    setProject((cur) => (cur && cur.id === next.id && (next.updated_at ?? 0) < (cur.updated_at ?? 0) ? cur : next))
+  }, [])
+
   const reload = useCallback(async () => {
     if (!pid) return
     try {
-      setProject(await api.studioProject(pid))
+      accept(await api.studioProject(pid))
     } catch {
       /* bleibt beim alten Stand */
     }
@@ -179,7 +185,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
       if (!pid) return undefined
       try {
         const r = await api.studioCommand(pid, command, params)
-        setProject(r.project)
+        accept(r.project)
         setNotice(null)
         return r.result
       } catch (e: any) {
@@ -344,7 +350,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const undo = async () => {
     if (!pid) return
     try {
-      setProject(await api.studioUndo(pid))
+      accept(await api.studioUndo(pid))
     } catch (e: any) {
       setNotice(String(e.message ?? e))
     }
@@ -352,7 +358,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const redo = async () => {
     if (!pid) return
     try {
-      setProject(await api.studioRedo(pid))
+      accept(await api.studioRedo(pid))
     } catch (e: any) {
       setNotice(String(e.message ?? e))
     }

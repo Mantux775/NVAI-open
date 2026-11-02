@@ -84,13 +84,24 @@ def anonymize(text: str) -> str:
     return text
 
 
+# Zugriffszeilen von uvicorn ("GET /files/Studio/<Projekt>/… HTTP/1.1"): Pfade unter /files nennen Projekt- und
+# Dateinamen, Suchanfragen (?q=…, &folder=…) eigene Begriffe; beides kann Personennamen enthalten
+_ACCESS_FILES = re.compile(r"(\"[A-Z]+ /files/)[^\" ]*")
+_ACCESS_QUERY = re.compile(r"(\"[A-Z]+ /[^\" ?]*)\?[^\" ]*")
+
+
 def _tail(path: Path, lines: int) -> list[str]:
     if not path.exists():
         return []
     content = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    # ANSI-Farben aus ComfyUI-Logs entfernen, sonst sind sie auf GitHub unlesbar
-    return [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in content[-lines:]
-            if not _TRANSCRIPT_HEADER.match(line)]
+    out = []
+    for line in content[-lines:]:
+        if _TRANSCRIPT_HEADER.match(line):
+            continue
+        line = re.sub(r"\x1b\[[0-9;]*m", "", line)  # ANSI-Farben aus ComfyUI-Logs, auf GitHub unlesbar
+        line = _ACCESS_QUERY.sub(r"\1?…", _ACCESS_FILES.sub(r"\1<FILE>", line))
+        out.append(line)
+    return out
 
 
 def _driver() -> str:

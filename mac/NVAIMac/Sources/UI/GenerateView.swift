@@ -449,9 +449,11 @@ struct GenerateView: View {
             .border(.quaternary)
         ExpandPromptRow(text: $videoPrompt, target: .video, message: $message)
         Text(t("Ein Absatz im Präsens: Einstellung, Ort und Licht, die Handlung mit Verben, dann die Kamera. Bewegung "
-               + "ausdrücklich beschreiben. Schrift im Bild gelingt LTX-Video 2B nicht. Ohne Ton, 24 Bilder je Sekunde.",
+               + "ausdrücklich beschreiben. Schrift im Bild gelingt LTX-Video nicht. 24 Bilder je Sekunde; Ton nur mit "
+               + "LTX-2.3 und LTX-2.5.",
                "One paragraph in the present tense: shot, setting and light, the action with verbs, then the camera. "
-               + "Describe motion explicitly. LTX-Video 2B cannot render lettering. No sound, 24 frames per second."))
+               + "Describe motion explicitly. LTX-Video cannot render lettering. 24 frames per second; sound only with "
+               + "LTX-2.3 and LTX-2.5."))
             .font(.caption).foregroundStyle(.secondary)
         videoStartBox
         Picker(t("Format", "Size"), selection: $videoSizeIndex) {

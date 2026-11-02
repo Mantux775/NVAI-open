@@ -59,7 +59,12 @@ struct StudioInspector: View {
 // MARK: - Bausteine
 
 /// Sekunden mit Komma oder Punkt.
-func parseSeconds(_ text: String) -> Double? { Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)) }
+/// Sekunden aus einem Eingabefeld; nur endliche Werte bis 1 000 000 s („inf“ oder „1e12“ ließen sonst Int überlaufen)
+func parseSeconds(_ text: String) -> Double? {
+    guard let d = Double(text.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces)),
+          d.isFinite, abs(d) <= 1_000_000 else { return nil }
+    return d
+}
 
 func formatSeconds(_ ticks: Int, digits: Int = 2) -> String { formatDecimal(Studio.seconds(ticks), digits: digits) }
 
@@ -198,8 +203,13 @@ private struct ProjectInspector: View {
                     Text(String(format: "%.3f fps", Double(project.settings.fps[0]) / Double(project.settings.fps[1]))).tag(current)
                 }
             }
-            Text(t("Videoszenen rechnet die Mac-Fassung mit LTX-Video 2B (ohne Ton, 24 fps); Format und Länge passen sich dem Speicher dieses Macs an.",
-                   "The Mac version renders video scenes with LTX-Video 2B (no sound, 24 fps); size and length follow this Mac's memory."))
+            // das Modell, mit dem Szenen wirklich rechnen (unter „Generieren“ > „Video“ gewählt), nicht fest der 2B
+            let video = VideoCatalog.active
+            Text(video.hasAudio
+                 ? t("Videoszenen rechnet die Mac-Fassung mit \(video.name), 24 fps; Format und Länge passen sich dem Speicher dieses Macs an.",
+                     "The Mac version renders video scenes with \(video.name), 24 fps; size and length follow this Mac's memory.")
+                 : t("Videoszenen rechnet die Mac-Fassung mit \(video.name) (ohne Ton, 24 fps); Format und Länge passen sich dem Speicher dieses Macs an.",
+                     "The Mac version renders video scenes with \(video.name) (no sound, 24 fps); size and length follow this Mac's memory."))
                 .font(.caption).foregroundStyle(.secondary)
             Text(t("\(project.scenes.count) Szenen, \(project.clips.count) Clips, Schnitt \(formatSeconds(project.editDuration, digits: 1)) s.",
                    "\(project.scenes.count) scenes, \(project.clips.count) clips, edit \(formatSeconds(project.editDuration, digits: 1)) s."))

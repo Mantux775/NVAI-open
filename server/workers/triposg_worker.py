@@ -25,7 +25,7 @@ import numpy as np
 import torch
 import trimesh
 from fastapi import FastAPI, HTTPException
-from PIL import Image
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 ROOT = Path(os.environ.get("TRIPOSG_ROOT", "")).resolve()
@@ -136,7 +136,7 @@ def _segment_background(img: Image.Image, tolerance: int = 28) -> Image.Image:
 
 
 def _prepare(path: Path, remove_bg: bool) -> Image.Image:
-    img = Image.open(path)
+    img = ImageOps.exif_transpose(Image.open(path))  # Handyfotos: EXIF-Drehung anwenden
     has_alpha = img.mode in ("RGBA", "LA") and np.asarray(img.split()[-1]).min() < 250
     if has_alpha:
         img = img.convert("RGBA")

@@ -18,19 +18,39 @@ enum ImageFiles {
     }
 
     static func load(_ url: URL) throws -> CGImage {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = upright(source) else {
             throw Failure.unreadable(url.lastPathComponent)
         }
         return image
     }
 
     static func load(_ data: Data) throws -> CGImage {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), let image = upright(source) else {
             throw Failure.unreadable(t("Daten", "data"))
         }
         return image
+    }
+
+    /// EXIF-Orientierung des ersten Bildes, 1 = aufrecht, 5–8 = um 90° gedreht.
+    private static func orientation(_ props: [CFString: Any]?) -> Int {
+        (props?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    }
+
+    /// Das Bild aufrecht: Handyfotos tragen die Drehung oft nur als EXIF-Angabe. Ohne sie gingen Restaurieren,
+    /// Bild-zu-Bild, Referenzen und Startbild quer los, während die Vorschau das Foto richtig herum zeigte.
+    private static func upright(_ source: CGImageSource) -> CGImage? {
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        guard orientation(props) != 1, let w = props?[kCGImagePropertyPixelWidth] as? Int,
+              let h = props?[kCGImagePropertyPixelHeight] as? Int else {
+            return CGImageSourceCreateImageAtIndex(source, 0, nil)
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(w, h),
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
     }
 
     static func pngData(_ image: CGImage) throws -> Data {
@@ -74,6 +94,6 @@ enum ImageFiles {
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int
         else { return nil }
-        return (w, h)
+        return (5...8).contains(orientation(props)) ? (h, w) : (w, h)  // aufrechte Maße wie beim Laden
     }
 }

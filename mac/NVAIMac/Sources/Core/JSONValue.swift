@@ -76,7 +76,8 @@ enum JSONValue: Codable, Sendable, Equatable {
     var intValue: Int? {
         switch self {
         case .int(let i): return i
-        case .double(let d) where d.rounded() == d: return Int(d)
+        // Bereich prüfen: Int(1e19) bricht das Programm ab (eine große Zahl in einer Anfrage beendete die ganze App)
+        case .double(let d) where d.rounded() == d && abs(d) < 9.0e18: return Int(d)
         default: return nil
         }
     }

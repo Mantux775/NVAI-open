@@ -1,1571 +1,621 @@
 # Using NVAI-open from Claude Code
 
-NVAI-open includes an MCP server, `nvai`, that makes local media generation on your own NVIDIA GPU
-available to Claude Code: images, audio, video and 3D meshes for game assets, as a replacement
-for paid cloud generation. The MCP server is a thin client of the NVAI-open REST server, so the web
-UI and Claude Code behave identically and share the same job queue.
+NVAI-open includes an MCP server, `nvai`, that gives Claude Code local media generation on the user's own graphics
+card: images, video with sound, music, 3D meshes, restored photos and whole videos in the Studio. The MCP server is a
+thin client of the NVAI-open REST server, so the web interface and Claude Code share the same job queue and history.
 
-This guide covers setup, the tools, and practical advice on model choice, prompts, sizes and
-settings. Run times were measured on an RTX 5060 Ti 16 GB. The advice is written so that you can
-also paste the parts you need into a project's `CLAUDE.md`.
+This guide covers the setup, the tools and what we measured about models, prompts and settings, on an RTX 5060 Ti with
+16 GB. Copy the parts you need into a project's `CLAUDE.md`.
 
 ## Setup
 
-### The server must be running
+**The server must be running.** All tools talk to `http://127.0.0.1:8100`; without it every tool fails. With the
+Windows setup, the Start menu entry **NVAI-open** starts it and **Quit NVAI-open** stops it; in a source checkout use
+`scripts\start.ps1` and `scripts\stop.ps1`. The GPU backend (ComfyUI) starts with the first job, which takes about 30 s
+once; that is not an error.
 
-All tools talk to `http://127.0.0.1:8100`. If the server is not running, every tool fails.
-
-- **Windows setup:** Start menu → **NVAI-open** starts it, **Quit NVAI-open** shuts it down.
-- **Source checkout:**
-
-```powershell
-scripts\start.ps1        # reports if one is already running
-scripts\stop.ps1         # stops NVAI-open and ComfyUI specifically
-```
-
-**Always call `health` first.** It shows in one go whether the GPU backend is running, which
-model is active per category, how full the queues are, and whether the 3D worker is set up.
-
-The GPU backend (ComfyUI) starts automatically with the first job — this costs ~30 s once.
-Don't treat it as an error.
-
-### Registering the MCP server
-
-Register the server once at user scope, so that it is available in every Claude Code project:
-
-```
-claude mcp add --scope user nvai -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
-```
-
-`<install folder>` is the repository folder of a source checkout, or the program folder of the
-Windows setup (default `%LOCALAPPDATA%\Programs\NV-AI`).
-
-With the Windows setup, also pass your data folder. The MCP server builds the file paths it
-returns from `NVAI_DATA_DIR` and otherwise assumes `data` inside the install folder, which is not
-where the setup keeps its data (default `%LOCALAPPDATA%\NV-AI`):
+**Register the MCP server** once at user scope, so it is there in every project:
 
 ```
 claude mcp add --scope user nvai -e "NVAI_DATA_DIR=<data folder>" -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
 ```
 
-If NVAI-open listens on a port other than 8100, pass its address the same way, for example
-`-e "NVAI_API_URL=http://127.0.0.1:8101"`.
-
-After an NVAI-open update, a running Claude Code session only sees the new tool descriptions after
-`/mcp` and reconnecting.
+`<install folder>` is the program folder of the setup (default `%LOCALAPPDATA%\Programs\NV-AI`) or the repository of a
+source checkout. `NVAI_DATA_DIR` tells the MCP server where the files are, so the paths it returns are right (setup
+default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-open listens on another port, add
+`-e "NVAI_API_URL=http://127.0.0.1:8101"`. After an update, `/mcp` and reconnecting load the new tool descriptions.
 
 ## Tools
 
 | Tool | Purpose |
 |---|---|
-| `health` | Always first. Backend, active models, queues |
-| `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros/cons and `features` |
+| `health` | Always first: backend, active models, queues |
+| `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros, cons and `features` |
 | `download_model` / `delete_model` / `set_active_model` | Model management |
 | `generate_image` | Image → file paths |
-| `list_models(kind="lora")` | Downloaded LoRAs with their family and trigger words; pass them as `loras=[{model_id, strength}]` to `generate_image` / `generate_video` (the model's `lora_bases` says which fit) |
-| `expand_prompt` | A few words → full prompt for every image model; `target` = video, video_sound, video_start, sfx, music or 3d for the other kinds (needs FLUX 3 downloaded) |
-| `generate_audio` | SFX or music → file paths |
-| `generate_video` | Short clip → file paths; `wait=False` returns the `job_id` at once |
-| `job_status` | State of a job (`wait_s` up to 600 waits for it); once done the same result as the `generate_*` call |
-| `image_to_3d` | Image asset → GLB mesh |
-| `text_to_3d` | Text → image → GLB mesh in one go |
-| `restore_image` | Old photo → repaired, colorized and/or sharpened photo (since 0.5.11) |
+| `expand_prompt` | A few words → a full prompt; `target` = `image`, `video`, `video_sound`, `video_start`, `video_multishot`, `sfx`, `music_sa3` or `3d` (needs FLUX 3 downloaded) |
+| `generate_audio` | Sound effect or music → file paths |
+| `generate_video` | Clip → file paths; `wait=False` returns the `job_id` at once |
+| `job_status` | State of a job; `wait_s` up to 600 waits for it; once done, the same result as the `generate_*` call |
+| `image_to_3d` / `text_to_3d` | Image (or text → image) → GLB mesh |
+| `restore_image` | Old photo → repaired, colorized and/or sharpened |
 | `list_assets` / `delete_asset` / `clear_history` | History |
-| `copy_asset` | Copy an asset to `Assets/Generated/` or similar |
-| `studio_*` | Studio projects: compose scenes, generate them, conform, cut and export a whole video (since 0.5.13, see [Studio](#studio-whole-videos-from-scenes-since-0513)) |
+| `copy_asset` | Copy an asset into a project, e.g. `Assets/Generated/` |
+| `studio_*` | Studio projects: scenes, generating, conforming, cutting, export ([Studio](#studio-whole-videos-from-scenes)) |
 
-All `generate_*` tools **block until done** and return absolute file paths. Internally the MCP server polls the
-REST API and sends MCP progress notifications. Limits: 65 min of render time for a video job (the server itself
-stops a video workflow after 60 min), 30 min for everything else, and up to an hour in the queue; queue time does
-not count as render time. A call that runs past its limit does not fail: it returns `pending: true` with the
-`job_id`, the job keeps running on the server and lands in the history. Never submit it again; call
-`job_status(job_id, wait_s=600)` until it is done.
+`list_models(kind="lora")` lists downloaded LoRAs with family and trigger words; pass them as
+`loras=[{"model_id": "…", "strength": 0.8}]` (a model's `lora_bases` says which fit).
 
-For long renders use the non-blocking form right away: `generate_video(..., wait=False)` returns the `job_id`,
-then `job_status(job_id, wait_s=600)` until `status` is `done`. Worth it from about 10 minutes: 1080p with
-`quality="dfr"` takes ~13 min for 5 s and ~25 min for 6 s with a start image, and an 8 s DFR clip at 1920 × 832
-that spilled over 16 GB took 20 to over 60 minutes. `progress` counts sampling passes equally, not time, so
-`job_status` gives no ETA; estimate from the [run times](#run-times-measured-on-an-rtx-5060-ti-16-gb).
-Before 0.5.16 a blocking call gave up after 30 minutes counted from submission, queue time included, while the
-server allowed a video job 60 minutes, and the result never reached Claude.
+All `generate_*` tools **block until done** and return absolute file paths. Limits: 65 minutes of render time for a
+video, 30 for everything else, plus up to an hour in the queue. A call that runs past its limit does not fail: it
+returns `pending: true` with the `job_id`, and the job keeps running and lands in the history. **Never submit it
+again**; call `job_status(job_id, wait_s=600)` until it is done. For long renders (1080p with `quality="dfr"`: 5 s about
+13 minutes, 6 s with a start image about 25) use `generate_video(..., wait=False)` right away. `progress` counts
+sampling passes, not time, so estimate from the [run times](#run-times).
 
 ## Workflow
 
-1. `health` — is everything running, is a model of the needed category active?
-2. If one is missing: `list_models(kind=...)` → `download_model` → `set_active_model`
-3. Generate
-4. `copy_asset` into the target project, or pass the path straight to `Unity_ImportExternalModel`
-
-When a model is missing, **don't guess** — `list_models` shows size, VRAM requirement and
-license. Downloads are several GB; ask the user first.
+1. `health`: is everything running, is a model of the needed kind active?
+2. If one is missing: `list_models(kind=...)` → `download_model` → `set_active_model`. **Don't guess**: `list_models`
+   shows size, memory needs and license. Downloads are several GB, so ask the user first.
+3. Generate. For video and 3D, tell the user up front how long it will take.
+4. `copy_asset` into the target project, or pass the path straight on (for a mesh in Unity:
+   `Unity_ImportExternalModel`).
 
 ## Recommended settings at a glance
 
-The short version of everything below, as measured on an RTX 5060 Ti 16 GB. The web UI shows the same
-list per tab under **Recommended settings** (since 0.5.11); keep both in step when a new finding comes in.
+The short version of everything below. The web interface shows the same per tab under **Recommended settings**; keep
+both in step when a new finding comes in.
 
 | Task | Recommended | Why (measured) |
 |---|---|---|
-| Final image asset, text in the image | `qwen-image-2512-nvfp4`, 50 steps, full English sentences, text in quotation marks | Letter-perfect crate lettering; rope handles drawn through drilled holes where Lightning laid them on the wood |
-| Edit an image, keep a character consistent | `flux3-klein-nvfp4` with `reference_asset_ids`; say what changes and what stays | Only the handles changed, the rest stayed; 13–30 s |
-| Exact construction, counts or gaze with FLUX 3 | `upsample_prompt=False` with a full prompt in whole sentences | With the upsampler a second fishing line appeared in 4 of 6 images, without it in 0 of 2 (same seed) |
-| Photographic look | `krea2-turbo-nvfp4`, state the framing ("medium shot from the waist up, his whole head inside the frame") | Without the framing the head was cut off in 3 of 3 images, with it in 0 of 2; ~20 s |
-| Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | Text letter-perfect in every test; rope handles through drilled holes in 3 of 3 with 50 steps, 2 of 3 with 25; ~51 s |
-| Best result without settings (since 0.5.18) | Leave size, length and quality empty: the model's preselection (`features.recommended`) fills them in the web UI (on model change), over MCP and in the Studio: Qwen-Image-2512 native 1328², FLUX 3 1440², Krea 2 and MOSS-Image 1408², HiDream-O1 2048², LTX-2.5 1920 × 1088 for 5 s with `quality='dfr'`, Stable Audio 3 60 s, Stable Audio Open 6 s | Qwen native: finer rope twist and wood grain at double the time (197 instead of 98 s); FLUX 3 1440² in 26 instead of 12 s, and at 1 MP a restored face drifted; Krea 2 1408² in 37 instead of 20 s; LTX-2.5 DFR kept faces and fabric sharp over the clip (5 s: 786 instead of 241 s) |
-| Size | Object: the preselection above; standing figure portrait (Qwen 1056 × 1584, otherwise 832 × 1216), vehicle landscape (`features.sizes`) | In a square, figures lose their feet more often |
-| Choosing | `batch_size=4`, compare at full resolution | One model load instead of four; anatomy errors are a failure rate |
-| Video | LTX-2.5, one present-tense paragraph, loud sound sources named | 5 s 720p in ~93 s; sounds described as soft came out at −41 to −52 LUFS; "a heavy explosion" without "loud" stayed silent for 2–2.5 s and then reached −20 to −36 dBFS, "the loud, rising whistle …, then a massive, booming explosion" −10 to −17 dBFS from 0.5–1 s |
-| MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | Preselected: turbo LoRA 8 steps v1.1 + `sparse_attention='sol-attn'` + `int8_attention=True` (`recommended=True`, the default); describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; attention is the bottleneck (sol-attn and INT8 each halve the sampling time); it moves about half as much as LTX-2.5, pace in the prompt raised an explosion by 30–55 %, FastH3 moves almost like LTX |
-| Long video render (from ~10 min) | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min, 6 s with a start image ~25 min; a blocking call that runs out of time returns `pending` with the `job_id`, never resubmit |
-| Fixed video framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." | "stays still" pushed in to an extreme close-up |
-| Video loop | `loop=True` only with a still camera, and only if the background may stand still | With a push-in the loop fell apart in the last frames; water and smoke stood still (see the next row) |
-| Moving background (water, smoke, wind) | Only a start image: no `end_image_asset_id`, no `loop=True`; describe the motion | In a loop, water and smoke changed 0.3–2.0/255 per half second, as little as the static shore, even with a sentence asking them to move; with an end image mostly the same before and after the event. The same scene with only a start image (same prompts and seeds): water 1–9, smoke 1–12, and the camera of that medium-wide side view stayed put in 14 of 18 (four times it pushed in by 5–7 %, always in part 2). Only what the prompt asks for as an event moved, and an explosion's bright veil faded back exactly to the start image |
-| Joining two clips | `chain_asset_id=<clip 1>` (since 0.5.17; `extend_asset_id` does the same and joins both into one file, the Studio does it at a `chain` marker): the last 25 frames of clip 1 go into the new clip as an image batch through `LTXVImgToVideoInplace` (strength 1.0 in both stages, pins 4 latent frames); join with a 25-frame crossfade | The first frame was 2.4–6.4/255 off its start image on every path; at a hard cut the frame step stood out 1.9–2.5× from its neighbours, with the carried frames and crossfade at most 1.4–1.6×, like ordinary motion |
-| A person who should stay still | A short prompt (4–8 sentences in Lightricks' order), the stillness in one positive sentence ("sits perfectly still like a statue … and he stays that way through everything that happens"), the small final reaction named exactly ("his eyes and his chin move slightly down"); rewrite the prompt instead of appending a sentence per correction | 8 instead of 14 sentences (249 instead of 633 words, nearly all of them about the person): 38–49 % less motion in the person's area with the same seeds, background and camera unchanged; "does not reach into the bucket" was ignored twice at CFG 1 |
-| A small reaction in video (a start, a glance) | Describe it small and physical, avoid "fright", "flinch", "jerk", and say what does not move | "he flinches briefly, his head and shoulders jerk back a little" looked like a sneeze to the user; "his head lifts by a few centimeters" became a clear look up in one of two clips; "his upper body twitches back" came with a lean forward first in 2 of 2 |
-| A recognizable person in video | Start image with FLUX 3 and a frontal, sharp reference, medium shot or closer (face 250 px or more), few extras; an end image edited from the start image to hold framing and face; no `extend_asset_id`; on 16 GB at most 6 s at 1920 × 832. Most faithful: the real photo itself as the start image, outpainted to 16:9 with FLUX 3, with `loop=True` or as end image too. For an action with objects: the end image is the start image with only the result filled in by a mask (FLUX 3), and say what the hands do not do | "Static camera" still pushed in (3 of 3); with the end image the last frame matched (similarity 0.98); faces of 100–200 px and running extras melted; 8 s DFR took 20–60 min; close-up from the photo: similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the start image only; fishing gag with a masked end image: one fish with one tail and the hands on the rod in 2 of 2 seeds, the action played out although start and end differed only by the fish |
-| A character from a reference sheet instead of a start image (IC-LoRA Ingredients; ComfyUI test setup, not in NVAI-open) | Not for a recognizable person. If used: sheet as a guide on frame 0, LoRA 1.5 with `euler_ancestral_cfg_pp` at 960 × 544; a second stage for 1080p needs the IC-LoRA and the sheet again | The user recognized the character in none of the clips; refined without the IC-LoRA the face became a stranger's; a frontal close-up made the LoRA copy the sheet for all 5 s |
-| Video from several shots | Studio: one scene per shot, a `chain` marker where two shots must join (since 0.5.17 the latent chain with a dissolve), conform, export `youtube-1080p` | The chained clip started with the same knight in the same pose; 9 s exported in 4.1 s with NVENC at −14.6 LUFS |
-| Zoom on a clip in the Studio | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and at the end (e.g. 1.5) | The focus point stayed within 0.5 px in the export, the zoom grew exactly as keyed (test pattern) |
-| Explainer video with a presenter | Studio: start images with FLUX 3 in the video size (more shots of the same person via `reference_asset_ids`) as `params.image_asset_id`, the spoken line in the LTX prompt at about 2 words per second, `params.quality="dfr"` only for shots with a face, title cards as Qwen image scenes at 1664 × 928, music on A2 lowered with `gain_db` | Same face, glasses, hair and clothing in 4 of 4 reference images; 15 spoken words ran past the end of a 6 s shot, 11 fit; title cards letter-perfect in 3 of 3; see [Recipe](#recipe-an-explainer-video-with-a-presenter) |
-| Keep video quality through editing | Leave `master` on (default): the Studio exports from the lossless copy; YouTube 1080p at 24 Mbit/s | Export from the copy 42.3 dB instead of 37.7 dB from the MP4; 24 Mbit/s 42.8 dB, 4:2:0 limit 43.9 dB; costs about 32 MB per second at 1080p |
-| Sound effects / instrumental music | Stable Audio Open / Stable Audio 3 Medium | Describe the sound for SFX; Stable Audio 3 up to 5 min, one sentence with BPM, no vocals (ACE-Step was removed in 0.5.13) |
-| 3D source image | One object, plain background, no floor, no cast shadow; `project_front=True` for lettering | Floor and shadow become a plate under the mesh; painted lettering became a distorted relief |
-| Old photo | `restore_image` with `repair_mode="auto"` (default; picks thorough for water stains and crack networks, otherwise gentle), `batch_size=2`, known colors in `notes` | See [Old photos](#old-photos-restore-colorize-sharpen-since-0511): auto chose as expected on 20 of 21 test photos; heavily aged 0.689 thorough vs 0.648 gentle, on real glass plates gentle kept the sharpness; color hints cut the color error by 40 % |
+| Final image, text in the image | `qwen-image-2512-nvfp4`, 50 steps, whole English sentences, text in quotation marks | lettering letter-perfect; rope handles through drilled holes where Lightning laid them on the wood |
+| Edit an image, keep a character | `flux3-klein-nvfp4` with `reference_asset_ids`; say what changes and what stays | only the handles changed, the rest stayed; 13–30 s |
+| Exact construction, counts or gaze with FLUX 3 | `upsample_prompt=False` with a full prompt in whole sentences | a second fishing line in 4 of 6 images with the upsampler, in 0 of 2 without |
+| Photographic look | `krea2-turbo-nvfp4`, state the framing ("medium shot from the waist up, his whole head inside the frame") | without it the head was cut off in 3 of 3 images, with it in 0 of 2; ~20 s |
+| Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | letter-perfect in every test; ~51 s |
+| Best result without settings | leave size, length and quality empty: `features.recommended` fills them (Qwen-Image-2512 1328², FLUX 3 1440², Krea 2 and MOSS-Image 1408², LTX-2.5 1920 × 1088 for 5 s with `quality="dfr"`, Stable Audio 3 60 s) | Qwen native: finer detail at double the time; LTX-2.5 DFR keeps faces and fabric sharp (5 s: 786 instead of 241 s) |
+| Size | standing figure portrait (832 × 1216, Qwen 1056 × 1584), vehicle landscape (`features.sizes`) | in a square, figures lose their feet more often |
+| Choosing | `batch_size=4`, compare at full resolution | one model load instead of four; anatomy errors are a failure rate |
+| Video | LTX-2.5, one present-tense paragraph of 4–8 sentences, loud sound sources named | sounds described as soft came out at −41 to −52 LUFS |
+| Long video render | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min; a blocking call returns `pending`, never resubmit |
+| Fixed framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame."; if it must hold, an end image too | "stays still" pushed in to an extreme close-up; the prompt alone pushed in 3 of 3 times |
+| Loop or end image | only with a still camera, and only if the background may stand still | water and smoke stood as still as the shore, even when the prompt asked them to move |
+| Moving background (water, smoke, wind) | only a start image, describe the motion | water and smoke kept moving; the camera of a medium-wide side view stayed put in 14 of 18 clips |
+| Two clips without a seam | `chain_asset_id=<clip 1>` (or `extend_asset_id` for one file, or a `chain` marker in the Studio), joined with a 25-frame crossfade | the last 25 frames carry the motion over; at a hard cut the frame step stood out 1.9–2.5×, with the chain at most 1.6× |
+| A person who should stay still | a short prompt (4–8 sentences), the stillness in one positive sentence ("sits perfectly still like a statue …"), the small reaction named exactly; rewrite instead of appending | 8 instead of 14 sentences: 38–49 % less motion with the same seeds |
+| A small reaction (a start, a glance) | small and physical, say what does not move; avoid "fright", "flinch", "jerk" | "flinches briefly … jerk back" looked like a sneeze |
+| A recognizable person in video | start image with FLUX 3 from a frontal, sharp reference, face 250 px or more, few extras, an end image or `loop=True`, no extending; most faithful: the real photo outpainted to the video size | face similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 with the start image only |
+| Video from several shots | Studio: one scene per shot, `chain` marker where shots must join, conform, export `youtube-1080p` | the chained clip went on with the same knight in the same pose |
+| Zoom on a clip | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and the end (e.g. 1.5) | the focus point stayed within 0.5 px in the export |
+| Quality through editing | leave `master` on (default); YouTube 1080p at 24 Mbit/s | export from the lossless copy 42.3 dB instead of 37.7 from the MP4 |
+| MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | the preselection: turbo LoRA 8 steps v1.1 + `sparse_attention="sol-attn"` + `int8_attention=True`; describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; it moves about half as much as LTX-2.5 |
+| Sound effects / music | Stable Audio Open / Stable Audio 3 Medium | describe the sound for effects; music as one sentence with BPM, up to 5 minutes, no vocals |
+| 3D source image | one object, plain background, no floor, no cast shadow; `project_front=True` for lettering | floor and shadow become a plate; lettering became a distorted relief |
+| Old photo | `restore_image` with `repair_mode="auto"` (default), `batch_size=2`, known colors in `notes` | auto chose right on 20 of 21 test photos; color hints cut the color error by 40 % |
 
-## Run times (measured on an RTX 5060 Ti 16 GB)
+## Run times
+
+Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15–30 s for loading.
 
 | Task | Model | Time |
 |---|---|---|
-| Image 1024², 28 steps | SDXL Base | ~20 s |
-| Image 1024², 8 steps | Qwen-Image-2512 NVFP4 + Lightning | ~17 s, first run ~28 s |
-| Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 NVFP4 | ~98 s |
-| Image 1328² (Qwen native), 50 steps | Qwen-Image-2512 NVFP4 | ~197 s |
-| Image 1024², new prompt (upsampler + 16 steps) | FLUX 3 Klein NVFP4 | ~30 s |
-| Image 1024², known prompt, new seed | FLUX 3 Klein NVFP4 | 13–16 s, four images ~37 s |
-| Image 1440² / editing with a reference image | FLUX 3 Klein NVFP4 | ~26 s / ~45 s |
-| Image 1024², 50 steps, cfg 3.5 | FLUX 3 Klein Base NVFP4 | ~53 s |
-| Image 1024² / 1408², 8 steps | Krea 2 Turbo NVFP4 | ~20 s / ~37 s, first image after FLUX 3 ~41 s |
-| Image 1024² with one / two style templates | Krea 2 Turbo NVFP4 + style LoRA | ~41–48 s / ~71 s (without ~24 s) |
-| Image 1024², 50 steps, cfg 4 | Qwen-Image-2512 INT8 (for RTX 20/30/40) | ~119 s, with loading ~132 s |
-| Image 1 MP, 50 / 25 steps (prompt expansion ~11 s extra the first time) | MOSS-Image SFT INT8 | ~51 s / ~28 s |
-| Audio 6 s SFX, 50 steps | Stable Audio Open | ~12 s |
-| Instrumental 60 s / 20 s / 300 s | Stable Audio 3 Medium (8 steps, CFG 1) | ~9–12 s / ~7 s / ~64 s |
-| Video 832×480, 25 frames | Wan 2.1 T2V 1.3B | ~120 s |
-| Image 1728 × 2304 (4 MP) | HiDream-O1 Dev fp8 | ~41 s, first run ~87 s |
-| Image 832 × 1216, 4 steps | Boogu-Image Turbo NVFP4 | ~10 s, first run ~17 s |
-| Edit 832 × 1216 | Boogu-Image Edit NVFP4 | ~147 s |
-| Video with sound 1280 × 704, 5 s | LTX-2.5 NVFP4 (graph since 0.5.8) | ~93 s, first run with loading ~122 s; with a start image ~109 s |
+| Image 1024², 50 steps / 1328² native | Qwen-Image-2512 NVFP4 | ~98 s / ~197 s |
+| Image 1024², 8 steps (draft) | Qwen-Image-2512 Lightning | ~17 s |
+| Image 1024², new / known prompt; four images; editing with a reference | FLUX 3 Klein NVFP4 | ~30 s / 13–16 s; ~37 s; ~45 s |
+| Image 1024² / 1408²; with a style template | Krea 2 Turbo NVFP4 | ~20 s / ~37 s; 41–48 s |
+| Image 1 MP, 50 steps | MOSS-Image INT8 | ~51 s (first expansion ~11 s extra) |
+| Sound effect 6 s / music 60 s / 300 s | Stable Audio Open / Stable Audio 3 | ~12 s / 9–12 s / ~64 s |
+| Video with sound 1280 × 704, 5 s; with a start image | LTX-2.5 NVFP4 | ~93 s; ~109 s |
 | Start and end image 5 s / loop 4 s, 1280 × 704 | LTX-2.5 NVFP4 | ~154 s / ~125 s |
-| Video with sound 1920 × 1088, 5 s / multishot 1280 × 704, 8 s | LTX-2.5 NVFP4 | ~251 s / ~170 s |
+| Video 1920 × 1088, 5 s, standard / DFR | LTX-2.5 NVFP4 | ~251 s / ~786 s |
+| 1920 × 832 from a start image, DFR 6 s / 5 s / extend by 3 s | LTX-2.5 NVFP4 | ~305–326 s / ~242 s / ~146–150 s |
+| 1920 × 832, DFR 8 s (exceeds 16 GB, avoid) | LTX-2.5 NVFP4 | 20 to over 60 min |
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
-| Best quality (DFR) 1920 × 1088, 5 s | LTX-2.5 NVFP4 | ~786 s (standard path ~241 s) |
-| From a start image, 1920 × 1088: 6 s DFR / 4 s standard (Studio scenes) | LTX-2.5 NVFP4 | ~1519 s / ~249 s |
-| From a start image, 1920 × 832 (2.39:1), DFR: 6 s / 5 s / extend by 3 s | LTX-2.5 NVFP4 | ~305–326 s / ~242–245 s / ~146–150 s |
-| 1920 × 832: start and end image 6 s / DFR 8 s (exceeds 16 GB, avoid) | LTX-2.5 NVFP4 | ~393 s / 1206 s to over 3600 s |
-| DFR 1280 × 704, 4 s / with 48 fps | LTX-2.5 NVFP4 | ~118 s / ~294 s |
-| Extend a video, 5 s + 4 s, 1920 × 1088 | LTX-2.5 NVFP4 | ~255 s for the new part including joining |
-| Video with sound 1280 × 704, 4 s | LTX-2.3 NVFP4 | ~101 s; image to video 448 × 832 ~65 s |
-| Video 848 × 480, 49 frames | Mochi 1 preview fp8 | ~351 s with loading |
-| Video 768 × 512, 5 s | Kandinsky 5 Lite distilled | ~300 s; 50 steps (T2V, I2V) ~26–27 min |
-| Mesh from image | TripoSG | ~180 s cold, ~60 s warm |
-| Mesh with the front from the image | TripoSG | ~66 s warm, the projection itself under 1 s |
-| Restore a photo 1216 × 1600, thorough + colorize, 1 variant | FLUX 3 Klein NVFP4 | ~115 s |
-| Automatic mode: the upsampler checks the kind of damage | Qwen3.5-9B upsampler | ~2.5 s, cached per photo |
-| Restore a photo, gentle + colorize, 1 variant | FLUX 3 Klein NVFP4 | ~140 s (putting the damage in costs extra) |
-| Remove damage only, thorough, 2 variants | FLUX 3 Klein NVFP4 | ~130–150 s, measured with a game running alongside |
-| Sharpen 1200 × 864 → 3840 × 2770 / 1024² → 2048² | SeedVR2 7B NVFP4 | ~18.5 s with loading / ~6 s |
-
-The first job after a start costs an extra ~15–30 s of model loading. For video and 3D, warn the
-user up front instead of leaving them waiting.
+| Mesh from an image | TripoSG | ~60 s warm, ~180 s cold |
+| Restore a photo, 2 variants at 2 MP / with colorizing | FLUX 3 Klein NVFP4 | ~150 s / ~200 s |
+| Sharpen 1024² → 2048² | SeedVR2 7B NVFP4 | ~6 s |
+| Studio export, 5 s 1080p from the lossless copy | NVENC 24 Mbit/s | ~4 s |
 
 ## Images
 
 ### Model choice: the four recommended models
 
-- **Qwen-Image-2512, full version `qwen-image-2512-nvfp4`** (50 steps, cfg 4) — first choice for
-  **final assets**, **text in the image** and **structural details**. Crate lettering comes out
-  letter-perfect; with the same seed, this version ran a crate's rope handles through drilled
-  holes, while Lightning laid them on the wood without any attachment. Apache-2.0, 20B parameters
-  in NVFP4. `negative_prompt` works; empty = Qwen's recommended one from the model card (set by
-  the server). For more detail, use Qwen's **native sizes** (1328², 1056 × 1584, 1584 × 1056 …):
-  measured finer rope twist and wood grain at twice the time (197 instead of 98 s).
-  `qwen-image-2512-lightning` (8 steps, cfg 1) only for drafts and composition tests.
-- **FLUX 3 Image Klein, `flux3-klein-nvfp4`** (Black Forest Labs, 16 steps, cfg 1) — when working
-  with **reference images**: edit an image ("replace the rope handles with iron handles, keep
-  everything else unchanged"), keep a character consistent across several images, combine
-  subjects from up to ten images. Plus placement by bounding box. A bundled **upsampler** first
-  expands every prompt into a full image description — that is what the model is trained on; the
-  final description is stored in the asset as `caption`. `negative_prompt` has no effect.
-  **Mind the license** (see [Licenses](#licenses--before-using-assets-in-a-game-you-sell)):
-  commercial use only below US$5 million revenue, and every image must be reviewed before it is
-  published.
-  Strong in testing: editing left the source unchanged except for the modified handles, three
-  crates landed exactly at their box positions, text came out error-free three times out of
-  three, five of five soldiers stood fully inside the frame. Weak: whatever the prompt leaves
-  open, the upsampler invents — a greatcoat worn as a cape on the soldiers, lace-up shoes instead
-  of marching boots, ropes hanging loosely across the front instead of handle loops. Without a
-  style it plans a photo.
-  `flux3-klein-base-nvfp4` is the undistilled version (50 steps, cfg 3.5, the negative prompt
-  works) — according to BFL mainly intended for fine-tuning; in testing 53 instead of 13 s
-  without a visible gain.
-- **`flux3-klein-int8`** — the same FLUX 3 in BFL's INT8 version for cards without FP4 units
-  (RTX 20/30/40, from 8 GB according to BFL). On an RTX 50 card such as the RTX 5060 Ti, the
-  NVFP4 version is the right one. `list_models` marks what suits the detected card with
-  `recommended` and explains in `gpu_note` when a format does not run in hardware there. On RTX
-  20/30/40 that is INT8, and NVFP4 only on a slow connection (up to 4 GB/s) where only the NVFP4
-  version fits into the graphics memory (measured, see Krea 2 below).
-  `qwen-image-2512-int8` is the same for Qwen-Image-2512.
-- **Krea 2 Turbo, `krea2-turbo-nvfp4`** (Krea.ai, June 2026, 12B parameters, 8 steps, cfg 1) — the
-  third choice: **photographic images with little AI look**, fast. Measured with the same prompt and
-  seed: about 20 s per 1 MP image (41 s for the first one after FLUX 3), 1408² in 37 s; Qwen-Image-2512
-  took 109–160 s, FLUX 3 31–36 s. Natural hands and faces, letter-perfect crate lettering, ropes
-  through drilled holes, a standing figure with both boots in the frame. Weak: **name the framing**,
-  otherwise it moves what the prompt stresses into view — an old fisherman ("weathered hands") lost
-  his head at the top of the frame in three of three images; with "Medium shot from the waist up, his
-  whole head and face inside the frame with free space above his head." in none of two. The crate came
-  without a lid, which the prompt did not mention. No mask, `negative_prompt` has
-  no effect. Text encoder (Qwen3-VL-4B) and VAE are the same files as FLUX 3's and Qwen-Image's, so
-  only 7.7 GB remain to download. **Mind the license** (see Licenses): commercial use only below
-  US$1 million revenue. `krea2-turbo-int8` for RTX 20/30/40: on a normal connection it was faster
-  than NVFP4 even where it did not fit into the graphics memory (13.0 instead of 25.1 s with 8 GB).
-  Only on an RTX 4060 on a slow riser (PCIe 3.0 x4) was NVFP4 faster (46 s against 193/82 s);
-  `list_models` recommends accordingly.
-  **Style template (since 0.5.10):** with ostris' optional style LoRA (0.46 GB) Krea 2 takes one or
-  two images in `reference_asset_ids` as a style template: the way of painting, colors and light come
-  from the image, the content from the prompt. Measured: a lighthouse took a watercolor or a woodcut
-  template clearly, in 41–48 instead of 24 s; light and colors follow the template even against the
-  prompt (the storm turned pastel); with two templates 71 s, and the first one wins. Describe only the
-  content. If the LoRA is missing, `features.missing.style_reference` says so ("Download extras"
-  under "Models").
-- **MOSS-Image, `moss-image-sft-int8`** (OpenMOSS, October 2026, 5B parameters, 50 steps, cfg 3) — the
-  fourth choice since 0.5.11: **text and layout in the image** (posters, signs, graphics) under
-  **Apache-2.0**, so images can be sold without a revenue limit or review obligation. The text encoder
-  is Qwen3.5-9B (W4A8; not FLUX 3's upsampler), with the small FLUX.2 VAE (Apache-2.0). Short prompts
-  are first expanded by MOSS's own text encoder (system prompt from ComfyUI's template; the result is
-  in `caption`, `upsample_prompt=False` switches it off); a JSON with "summary" and "items" as the
-  prompt sets the layout and goes to the model without expansion. The negative prompt works. Measured
-  with the same prompts and seeds: OpenMOSS's settings (50 steps, cfg 3, euler — the default) 51 s per
-  1 MP image, plus ~11 s for the expansion the first time; ComfyUI's template (25 steps, cfg 2.5,
-  er_sde) 28 s. Text letter-perfect in every image, the soldier with both boots and the fisherman with
-  his head in the frame; crate rope handles through drilled holes in 3 of 3 with 50 steps, in 2 of 3
-  with 25. Text to image only (no reference images, no mask, no hires pass); not available on the Mac
-  (no MLX version).
+- **Qwen-Image-2512, `qwen-image-2512-nvfp4`** (50 steps, cfg 4, Apache-2.0): first choice for **final assets**,
+  **text in the image** and **structural details**. Lettering comes out letter-perfect, and rope handles pass through
+  drilled holes, where the Lightning version (`qwen-image-2512-lightning`, drafts only) laid them on the wood.
+  `negative_prompt` works; left empty, the server inserts Qwen's recommended one. Its native sizes (1328², 1056 × 1584,
+  1584 × 1056 …) give finer detail at twice the time.
+- **FLUX 3 Image Klein, `flux3-klein-nvfp4`** (16 steps, cfg 1): when working with **reference images**: edit an image,
+  keep a character consistent over several images, combine up to ten images, place things with bounding boxes. A
+  bundled upsampler first expands every prompt into a full description and returns it as `caption`; whatever the prompt
+  leaves open, it invents (a greatcoat worn as a cape, lace-up shoes instead of boots), and without a style it plans a
+  photo. `negative_prompt` has no effect. **License:** commercial use only below US$5 million revenue, every image
+  reviewed before publishing (see [Licenses](#licenses)). The Base version brought no visible gain.
+- **Krea 2 Turbo, `krea2-turbo-nvfp4`** (8 steps, cfg 1, ~20 s): **photographic images with little AI look**, natural
+  hands and faces, letter-perfect lettering. **Name the framing**, otherwise it moves what the prompt stresses into
+  view: a fisherman with "weathered hands" lost his head at the top of the frame in 3 of 3 images. No upsampler of its
+  own, so `expand_prompt` first. With the optional style LoRA it takes one or two images in `reference_asset_ids` as a
+  style template (describe only the content; with two, the first one wins; `features.missing.style_reference` says if
+  the LoRA is missing). **License:** commercial use only below US$1 million revenue.
+- **MOSS-Image, `moss-image-sft-int8`** (50 steps, cfg 3, ~51 s, Apache-2.0): **text and layout** (posters, signs,
+  graphics) with no revenue limit. It expands short prompts itself (`caption`, `upsample_prompt=False` switches it off),
+  and a JSON with "summary" and "items" as the prompt sets the layout. Text letter-perfect in every test. Text to image
+  only: no references, no mask; an existing character came out as a different person.
 
-What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under
-`features`: whether the negative prompt works, reference images, upsampler, recommended sizes,
-prompt hint. The web UI's **Generate** page shows and hides its controls accordingly. In detail,
-with REST examples and all test findings: [MODELS.md](MODELS.md).
+On RTX 20/30/40 use the INT8 versions (`…-int8`); `list_models` marks what suits the detected card as `recommended` and
+explains other formats in `gpu_note`. NVFP4 needs PyTorch cu130 in the ComfyUI venv; with cu128 it is three to five
+times slower. What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under `features`.
+More models (SDXL, Pony, Illustrious …) come from **Models → Search Hugging Face**; ask before downloading. Details and
+all test findings: [MODELS.md](MODELS.md).
 
-The web UI finds more models under **Models → Search Hugging Face** (REST: `/api/models/search`,
-`/api/models/inspect`). Each file is checked before downloading; SDXL and SD 1.5 checkpoints
-(Juggernaut, Pony, Illustrious …) can be downloaded. These are multi-GB downloads as well — ask
-the user first.
+### Prompts for Qwen, FLUX 3, Krea 2 and MOSS-Image
 
-NVFP4 needs PyTorch **cu130** in the ComfyUI venv (`setup_comfyui.ps1` installs it); with cu128
-everything is three to five times slower, because ComfyUI then disables its fast NVFP4 kernels.
-FLUX 3 needs ComfyUI 0.41 or newer (`install.ps1` pins v0.42.1).
-Since 0.5.12 the ComfyUI venv uses PyTorch 2.14.1 + cu130 and torchvision 0.29.1 (what ComfyUI's own package for
-0.42.1 ships; before: 2.11.0), without torchaudio, which nothing imports. Measured against 2.11.0 with fixed seeds:
-expanded prompts and upsampler captions word for word the same, images 51–57 dB PSNR apart (numeric noise). MOSS-Image
-was 30 dB apart: the same poster with the same lettering, but a small island appeared on the horizon, so the same seed
-can change small details after such an update. Restoring with sharpening (34 dB) and LTX-2.5 frames (33–35 dB) looked
-the same. Run times were the same (one run each), FLUX 3 with a new prompt 30.5 instead of 33.6 s; the full function
-test passed 39 of 39.
-comfy-kitchen stays at ComfyUI's pin (0.2.39): 0.2.40 broke Qwen3.5 text generation with ComfyUI 0.42.1 (MOSS-Image
-"gated_delta_decode_deferred launch rejected", the FLUX 3 upsampler never stopped).
-The CUDA 13.2 build of the same PyTorch (cu132) was measured against cu130 with driver 621.01: the same time per step
-(FLUX 3 0.510/0.518 s, Qwen-Image 1.780/1.770 s, LTX-2.5 1.26/1.26 s) and bit-identical images, video frames and
-texts, so NVAI-open stays on cu130 like ComfyUI's own package. The driver update from 610.62 to 621.01 changed neither
-speed nor results either.
+These read the prompt with a language model, not with CLIP, so the CLIP rules (77 tokens, `(word:1.3)`) do not apply.
 
-### Prompts for Qwen, FLUX 3 and Krea 2
-
-All three read the prompt with a language model (Qwen2.5-VL-7B, and Qwen3-VL-4B for FLUX 3 and
-Krea 2), not with CLIP. The old CLIP rules further down (77 tokens, `(word:1.3)`) do **not** apply to them.
-
-- **Full English sentences.** First medium and style, then the subject with material, color and
-  condition, then lighting and background. Long prompts are no problem.
-- **State the construction explicitly**, otherwise it gets invented: *"rope handles pass through
-  drilled holes in the side boards"*, *"the lid is held by two iron hinges at the back"*.
-- **Text in quotation marks**, verbatim, with position and type: *"black stenciled letters on
-  the front read \"MUNITION 7,92\""*.
-- **No weighting brackets** — for the language-model encoder they are noise, and the FLUX 3
-  upsampler carries them into its description.
-- **FLUX 3:** short and complete is enough — **style first** (otherwise it becomes a photo),
-  then subject, count, arrangement, construction, text. The upsampler writes 100–350 words from
-  it and fills every gap by itself: specify clothing, shoes and fastenings explicitly if they
-  have to be right. If the image is wrong, read `caption` first: if the error was already there,
-  extend the prompt instead of rerolling. Use `upsample_prompt=False` only when the prompt itself
-  is already a full description in this style — without the upsampler, the test crate came out
-  plainer. **For exact construction, counts and gaze, switch it off:** a fishing rod seen from
-  the side got a second line from the upsampler in 4 of 6 images (one under the rod that ended in
-  the air in front of the hands, or two at the tip) plus once a swivel halfway down the line;
-  without it, with the same seed, 0 of 2: exactly one bare line. The upsampler also dropped the
-  sentence about the light on the face and turned "looks along the line" into a straight gaze.
-  In the same series a float that "floats on the water" hung taut in mid-air in 4 of 4, while
+- **Whole English sentences:** medium and style first, then the subject with material, color and condition, then light
+  and background. Long prompts are fine.
+- **State the construction**, otherwise it gets invented: "rope handles pass through drilled holes in the side boards".
+- **Text in quotation marks**, verbatim, with position and kind: `black stenciled letters on the front read "MUNITION 7,92"`.
+- **No weighting brackets:** noise for these encoders, and the FLUX 3 upsampler copies them into its text.
+- **FLUX 3:** style first, then subject, count, arrangement, construction, text; specify clothing and fastenings. If the
+  image is wrong, read `caption` first and extend the prompt instead of rerolling. **For exact construction, counts and
+  gaze use `upsample_prompt=False`** with a full prompt: the upsampler added a second fishing line in 4 of 6 images,
+  without it 0 of 2. Positive wording matters there too: a float that "floats on the water" hung in mid-air in 4 of 4,
   "lies on the surface … half under water, with small rings" lay on the water in 4 of 4.
-- **FLUX 3 with reference images** (`reference_asset_ids`, up to 10): say "the first image",
-  "the second image" in the prompt. Editing = say what changes and what stays the same.
-- **FLUX 3 boxes:** append a table to the end of the prompt:
-  `[{"id": "crate_1", "bbox": [top, left, bottom, right], "desc": "…"}]` on a 0–1000 grid. Do
-  **not** cite the ids in the text as `<crate_1>` — the upsampler does that, and the boxes stay
-  fixed. If the text cites all ids, it counts as a finished description and goes to the model
-  without the upsampler (that is how BFL's reference code does it). The boxes steer position and
-  size but are not a hard mask.
-- **Krea 2:** as for Qwen, and **name the framing** ("medium shot from the waist up, his whole head
-  inside the frame", "full body, both boots inside the frame"). It has no upsampler of its own:
-  expand a few words with `expand_prompt` first.
+- **FLUX 3 references:** "the first image", "the second image"; to edit, say what changes and what stays.
+- **FLUX 3 boxes:** append `[{"id": "crate_1", "bbox": [top, left, bottom, right], "desc": "…"}]` on a 0–1000 grid. Do
+  not cite the ids in the text as `<crate_1>`: then the text counts as finished and skips the upsampler.
+- **Krea 2:** like Qwen, plus the framing ("medium shot from the waist up", "full body, both boots inside the frame").
+- **MOSS-Image:** describe what the finished image looks like; text with position, size and typeface, line breaks set
+  yourself.
 
-### Decide first: scene or isolated object?
+### Scenes and people
 
-The two cases need different sizes and different prompts.
+- **Never count, arrange.** "exactly one truck" has no effect. Instead: "the front tanker truck rolls through the
+  barrier. Behind it a line of separate tanker trucks waits nose to tail, each with its own dark cab." Without
+  "separate" and "each with its own", similar objects merge.
+- **Style and light first**, said positively ("oil on canvas with visible brush strokes" instead of "not a photo"); one
+  sentence per image element; **name the time of day**, otherwise it becomes dusk. With about eight conditions no model
+  hits everything: make several candidates.
+- **People need pixels.** As soon as people are recognizable, use `hires=True` (against missing feet and broken
+  faces); with FLUX 3 choose a larger size instead, it has no second pass.
+- **Name people's origin** as region plus features ("two Central European dock workers with pale northern European
+  features"); without it the faces vary.
+- **Style bans in the negative prompt flatten the picture** ("sketch, loose brushwork …"); keep it to about ten terms.
 
-**Narrative scene** (several objects, an action, a mood). Rules:
+### Size
 
-- **Never count — arrange.** "exactly one truck" has no effect — the number of objects comes from
-  the initial noise, not from the number in the text. Instead: *"the front tanker truck rolls
-  through the barrier. Behind it a line of separate tanker trucks waits nose to tail, each with
-  its own dark cab."* Without "separate"/"each with its own", similar objects merge into a single
-  impossible contraption.
-- **Style and lighting at the start**, in sentences of their own. Say positively what it *is*:
-  *"A painted illustration in oil on canvas with visible brush strokes."* instead of "not a
-  photo".
-- **One sentence per image element.** Qwen, FLUX 3, Chroma and LongCat cope with long prompts;
-  a single colon-laden sentence with five statements, on the other hand, gets squashed together.
-  With FLUX 3, a box table can additionally pin down the arrangement.
-- **State the time of day explicitly**, otherwise you end up at dusk.
-- With ~8 simultaneous conditions, no model hits everything on the first try — even the best stay
-  below 31 %. Generate several candidates and pick one.
-
-**Isolated object or figure** → continue with the size rules below.
-
-### People in the image — two measured traps
-
-**Figures need pixels.** At 1024×1024, a person in the middle ground is about 80 px tall — that
-produces blobs instead of faces, and feet go missing entirely. Measured with the same prompt and
-seed, shapeless figures turned into clean people as soon as three things came together:
-`width=1216, height=832`, `steps=26` and **`hires=True`**.
-
-Remember: **as soon as people are recognizable in the image, use `hires=True`.** It is the most
-effective single switch against missing feet and broken faces. `steps=16` is only enough for
-dark, atmospheric scenes without faces. (Measured with Chroma. FLUX 3 has no second pass —
-choose a larger size directly there; the model works natively up to 4K.)
-
-**Style bans in the negative prompt flatten the look.** Terms like `loose brushwork,
-impressionistic, sketch, visible pencil lines, smudged, unfinished` forbid any visible paint
-texture — what remains is smooth cel shading. Equally contradictory: `photographic detail` in the
-positive and `photorealistic` in the negative prompt. Keep the negative prompt to ~10 terms.
-
-**State people's origin explicitly.** Without it, the figures' appearance varies; in testing,
-the same prompt produced European faces one time and South Asian faces another. With it, every
-variant was unambiguous. The effective pattern is **region + facial features**:
-
-```
-Two Central European dock workers with pale northern European features, ...
-```
-
-"German soldier" alone hardly steers appearance; "with pale northern European features" does.
-This applies in both directions — for a Pacific setting, the matching description belongs in the
-prompt just as explicitly.
-
-### The size matters more than the prompt
-
-**A standing figure belongs in portrait format.** In a square, it is more likely to lose legs or
-feet, and it simply gets fewer pixels for the part that matters. The image format should match
-the subject's silhouette — portrait for standing figures, landscape for vehicles.
+The format decides more than the prompt: a standing figure in a square loses its feet more often.
 
 | Size | Use for |
 |---|---|
-| **832 × 1216** | standing figures, soldiers, characters |
-| 896 × 1152 | figures, less extreme portrait format |
-| **1024 × 1024** | objects, icons, symbols |
-| **1216 × 832** | vehicles, buildings in side view |
-| 1344 × 768 | wide scenes, panoramas |
+| **832 × 1216** (Qwen 1056 × 1584) | standing figures |
+| **1024 × 1024** (Qwen 1328 × 1328) | objects, icons |
+| **1216 × 832** (Qwen 1584 × 1056) | vehicles, buildings in side view |
+| 1344 × 768 | wide scenes |
 | 512 × 512 | sprites, tiles |
 
-These are all around 1 megapixel and suit every model. Beyond that, it depends on the model:
+FLUX 3 works up to 2048 × 2048 (multiples of 16); older models (Chroma, SDXL) become incoherent above 1 MP.
+`features.sizes` lists the sizes per model. Name exactly one view ("strict side view"), use common type names ("Panzer
+IV") to call up a learned shape, plan hands out of the picture instead of describing them, and use `batch_size=4`
+instead of four calls.
 
-- **Qwen** is trained at ~1.76 MP: 1328 × 1328, 1056 × 1584 (figures), 1584 × 1056 (vehicles),
-  1104 × 1472, 1472 × 1104, 928 × 1664, 1664 × 928. Measured: more detail at twice the time.
-- **FLUX 3** works natively up to 4K; the API allows up to 2048 × 2048. Sides must be multiples
-  of 16.
-- Older models (Chroma, SDXL) become noticeably incoherent above 1 MP.
-
-`features.sizes` in `list_models` lists the sizes for each model.
-
-### Prompt patterns
-
-For **Qwen and FLUX 3** — full sentences, no brackets:
-
-```
-Figure:   "Studio photograph of a single WW2 German infantry soldier in full body, standing
-           at attention in strict side view, both boots fully inside the frame. Weathered
-           field grey uniform, steel helmet, rifle slung over the shoulder. Plain light grey
-           background, even soft studio light."
-Object:   "Studio product photograph of a weathered wooden ammunition crate. Black stenciled
-           letters on the front read \"MUNITION 7,92\". Rope handles pass through drilled
-           holes in the side boards. Plain light grey background, soft even light."
-FLUX 3,   prompt="Replace the rope handles with forged iron handles bolted to the side
-editing:         boards; keep everything else unchanged", reference_asset_ids=[crate]
-```
-
-For **CLIP models** (SDXL, Pony, Illustrious, FLUX.1, Chroma with T5):
-
-```
-Figure:   "a WW2 German infantry soldier, (full body:1.2), standing at attention,
-           (feet inside the frame:1.2), strict side view, weathered field grey
-           uniform, plain light grey background, even studio lighting"
-negative: "(cropped:1.3), cut off, multiple figures, text, watermark, blurry"
-```
-
-- **Weighting only works there**: `(term:1.3)` emphasizes, `(term:0.7)` dampens. Apply it to
-  composition anchors, not to style.
-- **Stay under ~55 words** (CLIP only): the global conditioning vector is built from the first
-  77 tokens.
-
-For all models:
-
-- **Name exactly one view.** "side view" and "three-quarter" together produce exactly the
-  distortions you want to avoid.
-- **Common type designations** ("Panzer IV", "Sherman M4", "Sd.Kfz. 251") call up a learned
-  shape instead of a free interpolation.
-- **Plan hands out of the picture** instead of describing them: a medium shot instead of a
-  close-up, hands on the rifle or gloved. "five fingers" in the prompt doesn't help.
-- **`batch_size=4`** instead of four calls: one model load instead of four. Anatomy errors are a
-  failure rate — generating several candidates and taking the best is the most effective method.
-
-### The quality switches
+### Quality switches
 
 | Parameter | When |
 |---|---|
-| Qwen's native sizes | final assets with Qwen: 1328², 1056 × 1584, etc. More detail, twice the time |
-| `hires=True` | anything with hands, faces, fine technical detail (not with FLUX 3). Recomputes details in a second pass. Costs ~50 % more time |
-| `reference_asset_ids` | FLUX 3: change an almost-right image in a targeted way instead of rerolling |
-| `image_asset_id` + `denoise` | other models: refine an almost-right image. 0.3 gentle, 0.5 noticeable. With FLUX 3 the image becomes the first reference |
-| `image_asset_id` + `mask_asset_id` + `denoise=1.0` | regenerate only one area (inpainting): white in the mask is recomputed, black is kept, gray levels blend smoothly. Upload the mask via `POST /api/upload`. Measured with full Qwen: lettering cleanly replaced, 0.6 out of 255 deviation outside the mask. In testing, Lightning (cfg 1) mostly just continued the surroundings. Since 0.5.6 FLUX 3 fills too (`features.mask == "reference"`): the server greys the area, lets FLUX 3 paint it and puts back only the area, aligned. Measured: crates removed with the cobblestones running on, a seagull added. To change something already there (lettering on a sign), edit with a reference image instead |
-| `steps=16` | with Chroma instead of the default 26 — measured 58 instead of 90 s at the same quality |
-| `batch_size=4` | whenever you want to choose. One model load instead of four |
+| Qwen's native sizes | final assets with Qwen; more detail at twice the time |
+| `hires=True` | hands, faces, fine technical detail (not FLUX 3); about 50 % more time |
+| `reference_asset_ids` | FLUX 3: change an almost-right image in a targeted way |
+| `image_asset_id` + `denoise` | other models: refine an almost-right image (0.3 gentle, 0.5 clear) |
+| `mask_asset_id` + `denoise=1.0` | regenerate one area (white = new). Qwen replaced lettering cleanly; FLUX 3 fills through a greyed reference (`features.mask == "reference"`): good for removing and adding, to change something already there edit with a reference instead |
+| `outpaint=[left, top, right, bottom]` | extend an image: models with `features.outpaint == "reference"` (FLUX 3) first; the mask way of Qwen gave a hard edge |
+| `batch_size=4` | whenever you want to choose |
 
-`slg` only has an effect with SD 3.5 models, and `controlnet_*` only with SD 3.5 Large and the SD
-3.5 ControlNets from the catalog. No ControlNets are integrated for Qwen, FLUX 3, Chroma or
-LongCat.
+**What doesn't help:** "bad anatomy, extra fingers" in the negative prompt, raising CFG (burnt colors, not better
+shapes), the `karras` or `exponential` scheduler (more deformations), more steps than the model default (detail, not
+structure).
 
-### Historical vehicles — honest expectations
+**Historical vehicles:** no model knows the silhouette of a Panzer IV; two seeds gave two different invented vehicles.
+More seeds do not help here, tell the user. Accuracy would need a template and a ControlNet, and none is built in;
+reference images fix the content, not the shape.
 
-With tanks, aircraft and ships, no prompt helps against wrong geometry: **no model knows the
-silhouette of a Panzer IV.** Tested — two seeds with an identical prompt produced two completely
-different invented vehicles, both cleanly drawn, both historically wrong.
+**Other models in the catalog:** Chroma1-HD fp8 (painterly, atmospheric, unfiltered, `steps=16`), LongCat-Image (when
+an action must be visible), FLUX.1 schnell (fast previews, no negative prompt), SDXL and Juggernaut (largest LoRA
+ecosystem), Illustrious and NoobAI (Danbooru tags, not sentences), Pony V6 XL (`score_9, score_8_up, …`). For these CLIP
+models weighting such as `(full body:1.2)` works, and prompts should stay under about 55 words.
 
-It follows that **more seeds don't help here.** Unlike with figures, the model is not rolling
-between good and bad but between different fantasy vehicles. Tell the user that instead of
-rerolling ten times.
+## Old photos: restore, colorize, sharpen
 
-When historical accuracy matters, you need a template (blueprint, three-view drawing, blockout)
-and a matching ControlNet. None is currently integrated for Qwen, FLUX 3, Chroma or LongCat. FLUX
-3 does take a photo or drawing as a reference image, but according to BFL references fix the
-content, not the shape — they don't replace a ControlNet.
+`restore_image(image_path=...)` (or `image_asset_id`; REST `POST /api/image/restore`, the **Restore** tab) runs up to
+three steps, each switchable:
 
-### Other models in the catalog
+1. **`repair`: remove damage.** FLUX 3 gets the photo as a reference with a fixed restore instruction (your `notes` are
+   appended), works at 2 MP (at 1 MP a soldier in a group photo got a stranger's face) and the result is aligned with
+   the photo.
+   - `repair_mode="thorough"`: the whole picture from FLUX; cracks, crack networks, water stains and fading go, film
+     grain partly stays.
+   - `repair_mode="gentle"`: only the detected damage (dust, spots, scratches, tears, light leaks, writing) goes into
+     the photo at full resolution; sharpness and faces stay the photo's.
+   - **Choose by the kind of damage, not its amount:** overall aging → thorough, separate damage on an otherwise good
+     photo → gentle. `repair_mode="auto"` (default) does this: the upsampler answers "Are there water stains, rings
+     left by water, or crack networks (craquelure) in this photograph?" (about 2.5 s); "no" → gentle, anything else →
+     thorough. It chose right on 20 of 21 test photos; `meta.repair.auto` holds the choice.
+   - Faces vary with the seed: keep `batch_size=2` and compare at full resolution. Small marks such as a hyphen can
+     disappear: check lettering. To keep a sepia tone, don't write "black and white" into `notes`.
+2. **`colorize`:** FLUX 3 colorizes, but only the color is laid onto the photo's brightness, so faces stay. Known colors
+   in `notes`, in English ("his suit is dark brown, her dress is dark red with white dots"), cut the color error by
+   40 %; without them colors are guesses (a brown suit came out blue). Color can bleed across edges of equal brightness.
+3. **`sharpen` with `scale` 1–4:** SeedVR2 7B sharpens and enlarges, at most 16 MP (1024² → 2048² in 6 s); at strong
+   enlargement it invents fine detail.
 
-- **Chroma1-HD (fp8)** — best painterly style, best atmosphere, `negative_prompt` works
-  (cfg 4.0), Apache-2.0, unfiltered. Run it with `steps=16`
-- **LongCat-Image** — when an **action** must be visible; it hits actions most reliably, but
-  easily turns photorealistic. `negative_prompt` works
-- **FLUX.1 schnell** — fast for previews, but `negative_prompt` has **no effect** (cfg 1.0):
-  phrase exclusions positively there
-- **Chroma1-HD (bf16)** — don't use it; it doesn't fit into 16 GB and is slower with the same
-  result
-- **SDXL Base / Juggernaut** — largest LoRA ecosystem, fast and frugal
-- **Illustrious / NoobAI** — stylized, 2D; they need **Danbooru tags**, not sentences
-- **Pony V6 XL** — characters, needs `score_9, score_8_up, …` in the prompt
-
-### What doesn't help
-
-- **"bad anatomy", "extra fingers", "mutated hands"** in the negative prompt — SD 1.5 folklore
-  with no counterpart in these models' training. It only dilutes the rest of the negative
-  prompt.
-- **Cranking up CFG** — burnt colors, not better shapes. Keep the model default
-  (`features.cfg`).
-- **`karras` or `exponential` as scheduler** — they squeeze the shape-forming phase into a few
-  giant steps and make deformations worse.
-- **More steps than the model default** — buys detail, not structure. Whether a figure has two
-  legs is decided after a third of the steps. (A distilled version like Qwen Lightning is a
-  different matter: compared with the original, it really does lose construction.)
-
-## Old photos: restore, colorize, sharpen (since 0.5.11)
-
-`restore_image(image_path=...)` (or `image_asset_id`) runs up to three steps in this order, each one
-switchable. The REST route is `POST /api/image/restore`, the web UI has the **Restore** tab, the
-PhotoCraft add-on a **Restore** mode.
-
-**1. `repair` — remove damage.** FLUX 3 Klein gets the photo as a reference with a fixed restore
-instruction (your `notes` are appended) and redraws it at 2 MP, capped at the photo's size. NVAI-open
-then aligns the result with the photo (measured correlation 0.88–0.99), so it stays congruent.
-
-- **`repair_mode="thorough"`:** the whole picture comes from FLUX. Cracks, crack networks, fine
-  scratches, water stains and fading go. Film grain partly stays, because FLUX reproduces it.
-- **`repair_mode="gentle"`:** only the damage NVAI-open detects (dust, spots, scratches, stripes,
-  tears, light leaks, writing on the print) is put into the photo at full resolution, plus FLUX's
-  contrast and fading correction. Sharpness, faces and fine detail stay exactly the photo's.
-- **Rule, by the kind of damage rather than its amount:** overall aging (water stains, crack networks,
-  grain, fading) → thorough. Separate damage on an otherwise good photo (dust, scratches, stripes,
-  tears, light leaks, writing) → gentle.
-- **`repair_mode="auto"` (default) applies that rule.** Before the FLUX run, FLUX 3's prompt upsampler
-  (Qwen3.5-9B, it sees the photo at 1 MP) answers one question, greedy decoding, about 2.5 s: *"Are there
-  water stains, rings left by water, or crack networks (craquelure) in this photograph? Answer yes or
-  no."* (system prompt: *"You are an expert in restoring old photographs. Answer with one word: yes or
-  no."*). An answer starting with "no" → gentle, anything else → thorough. The FLUX run is the same for
-  both modes, so auto costs nothing else. `meta.repair.auto` holds the choice, `meta.repair.auto_answer`
-  the answer, and the history label says "restored thoroughly" or "restored gently". On 21 test photos
-  it picked the expected mode 20 times: all 8 heavily aged ones yes, all 8 lightly aged ones no, the
-  ferrotype yes, the baseball player, Iwo Jima and the torn print no; only the pigeons in Paris (a
-  sharp glass plate with dust) got yes, where gentle would have been sharper. Live on the installed
-  version: the heavily aged portrait "Yes" → thorough, the baseball player "No. The photograph contains
-  scattered scratches, …" → gentle.
-- **The wording of that question matters.** "Does this photograph show water stains, water rings or a
-  network of fine cracks across the picture?" got 18 of 21 right, "Is this photograph damaged by water
-  stains or by a network of fine cracks?" only 14 (it said yes to clean glass plates). Asking for one
-  of two words, OVERALL or SEPARATE, got OVERALL for all 16 photos asked, and SEPARATE first still
-  missed three; a 0–10 degradation score gave 7–9 to almost everything.
-- **Measured on test photos with a known undamaged original** (8 photos generated with Krea 2 and aged
-  synthetically, both modes from the same FLUX run; structural similarity of the brightness at a
-  quarter of the size, 1 = identical): heavily aged, the damaged photo scored 0.601, gentle 0.648,
-  thorough 0.689 (thorough ahead on all four photos); lightly aged 0.921, 0.932 and 0.911: there gentle
-  was closer, and thorough drew the faces in a group photo differently and ended up below the
-  untouched photo.
-- **Seen on five real old photos (public domain):** gentle kept the sharpness and the faces on the
-  glass plates (a 1911 baseball player with emulsion damage, 1925 pigeons in Paris with dust spots), on
-  Iwo Jima 1945 with a light leak and on a 1945 print with a torn-off corner; thorough came out softer
-  or invented texture there. On an 1860 ferrotype speckled all over, thorough was cleaner.
-- **How this came about.** The first build defaulted to gentle. A user restored and colorized a
-  heavily aged portrait and found it "only looks colorized, the quality is even worse than before": the
-  water-stain ring, the grain and the faded look were all still there, now in color. Thorough removed
-  the ring and the fading and even brought back the moustache that the fading had washed out (the
-  undamaged original has it); some grain stayed. When auto cannot ask (no upsampler) or the answer is
-  unclear, it takes thorough, whose worst case (softer, a slightly changed face) is milder than
-  gentle's (the damage stays).
-- **What did not work as an automatic switch** (all measured on the same photos): the damage share that
-  gentle detects (light 0.5–0.9 %, heavy 5.2–10.4 %, but the baseball player 3.1–4.6 % and Iwo Jima
-  8.9–9.1 %, gentle better on both: it measures the amount, not the kind); film grain; how much fine
-  detail FLUX keeps and how well it correlates with the photo (FLUX reproduces grain in place); a
-  second detection pass on the gentle result (water stains and crack networks are below its
-  thresholds).
-- **Faces vary with the seed.** In one of two thorough variants a 1911 portrait got a wider face and
-  a different smile. Keep `batch_size=2` and compare the faces at full resolution; if none fits,
-  try gentle.
-- **Working size 2 MP:** at 1 MP a soldier in a group photo (Iwo Jima, 1945) got a stranger's face.
-  2 MP costs about twice the time.
-- The instruction keeps "the original tones": with "black-and-white tones" sepia turned grey. To keep
-  a sepia tone, don't write "black and white" into `notes` either.
-- Small marks that FLUX leaves out disappear in both modes (a hyphen and a comma in a caption):
-  check lettering.
-
-**2. `colorize`.** FLUX 3 colorizes at 1 MP, but only the color (Lab a/b) is taken over and laid onto
-the brightness of the photo (or of the repaired picture) at full resolution with a guided filter.
-FLUX alone smoothed the skin and changed a smile; with the transfer the face stays. Known colors in
-`notes`, in English ("his suit is dark brown, her dress is dark red with white dots"), cut the
-measured color error from ΔE 17.4–17.7 to 10.2–10.6. Without hints the colors are plausible guesses:
-the brown suit of a test portrait came out blue. Color can bleed across edges of equal brightness (a
-light cap brim in front of a light sky).
-
-**3. `sharpen` with `scale` 1–4.** SeedVR2 7B (ByteDance, Apache-2.0, `list_models(kind="upscale")`)
-sharpens and enlarges to photo size × `scale`, at most 16 MP: 1024² → 2048² in ~6 s, 1200 × 864 →
-3840 × 2770 in 18.5 s with loading. Crisp, with slightly more contrast; at strong enlargement it
-invents fine detail (feathers on pigeons). Trap for your own graphs: SeedVR2 reads a batch of images
-as one video, so NVAI-open runs the variants one by one.
-
-**Not built in, with reasons:** DDColor (Apache-2.0, 0.2 s, but it needs extra ComfyUI architectures
-and the generic upscale node tiles at 512 px, so every tile gets its own colors; in the ColorFLUX paper
-(CVPR 2026) FLUX Kontext came out ahead of DDColor); CodeFormer (not commercial) and GFPGAN need face
-detection. FireRed Image Edit 1.1 (Apache-2.0) and Mage-Flow-Edit (MIT) can restore according to their
-makers; untested, but a possible way around the FLUX license.
-
-**License:** what FLUX 3 computes (repair, colorize) falls under the FLUX Kommunity License; review
-every image before publishing. SeedVR2 output is free (Apache-2.0).
+What FLUX 3 computes falls under the FLUX Kommunity License; SeedVR2 output is free (Apache-2.0).
 
 ## Audio
 
-Three different models — adapt the prompt style to the model:
-
-**Stable Audio Open** → sound effects and ambience. Describe the **sound**, not the music:
-
-```
-"heavy metal sword clash, single impact, bright metallic ring, dry studio recording"
-"footsteps on gravel, close mic, no music"
-"rain on canvas tent, distant thunder, loop"
-```
-
-Up to 47 s. For loops, generate generously and let the user trim.
-
-**ACE-Step (v1 and 1.5) was removed in 0.5.13**: its results were consistently poor in practice. Our graph matched ComfyUI's
-template `audio_ace_step_1_5_checkpoint`; ComfyUI 0.42.1 also ships ACE-Step 1.5 XL templates (about 20 GB with the 4B
-planning model), untested here. There is no model for songs with vocals now; `music` as an expand target stays for older
-clients and means Stable Audio 3, and `lyrics`, `bpm`, `time_signature` and `key_scale` are still accepted but have no
-effect.
-
-**Stable Audio 3 Medium** (since 0.5.7) → instrumental music up to 5 minutes, no vocals (a choir
-only without words). Write the prompt as **one sentence**: genre with the main instruments,
-layers and percussion, the mood, then "BPM: 100.". NVAI-open appends "Length: N seconds" to match
-`seconds`. `expand_prompt` with `target="music_sa3"` writes exactly this form.
+- **Stable Audio Open** → sound effects and ambience, up to 47 s (short effects 3–8 s). Describe the **sound**:
+  "heavy metal sword clash, single impact, bright metallic ring, dry studio recording", "footsteps on gravel, close
+  mic, no music".
+- **Stable Audio 3 Medium** → instrumental music up to 300 s (music 30–120 s), no vocals. **One sentence:** genre with
+  the main instruments, layers and percussion, the mood, then "BPM: 100."; `expand_prompt(target="music_sa3")` writes
+  this form, and NVAI-open appends the length.
 
 ```
-prompt: "A dark orchestral war theme with low brass, taiko drums and a wordless male choir,
-         slowly building tension over a steady march rhythm. BPM: 90."
+"A dark orchestral war theme with low brass, taiko drums and a wordless male choir,
+ slowly building tension over a steady march rhythm. BPM: 90."
 ```
 
-Measured: 300 s in 64 s, but the 16 GB card was almost full (60 s: 9.7 GB).
-
-**Levels:** since 0.5.7 every audio output goes through NVAI-open's own limiter before it is saved
-(ceiling −1 dBFS). Measured with the limiter: Stable Audio 3 −12 to −15 LUFS, true peak −0.5 to
-−0.8 dBTP (what is left above −1 dB is MP3 overshoot).
-Normalize before putting a track into a video (ffmpeg `loudnorm`, −14 LUFS).
-
-`seconds` controls the length (up to 300). Short SFX: 3–8 s. Music: 30–120 s.
+Every audio output goes through NVAI-open's limiter (−1 dBFS; video sound −2.5 dBFS). There is no model for songs with
+vocals. Normalize before putting a track into a video (−14 LUFS); the Studio export does that itself.
 
 ## Video
 
-### First choice: LTX-2.5 (fully built out since 0.5.8, the recommended video model)
+### LTX-2.5, the first choice
 
-`ltx25-distilled-nvfp4` (RTX 50) or `ltx25-distilled-int8` (RTX 20/30/40, not measured yet): picture
-and sound in one pass, MP4. Lightricks, LTX-2 Community License (free below US$10 million revenue).
-Write the prompt as Lightricks recommends: one paragraph in the present tense, 4 to 8 sentences in the
-order shot → setting and light → the action with verbs → people (physical cues instead of emotion
-words) → camera movement → sound; spoken lines in quotation marks; write pacing and pauses out.
-Use `fps=24`, sizes from `features.sizes` (multiples of 64; 1280 × 704 is 720p), frames 8n+1
-(97 = 4 s, 121 = 5 s, 481 = 20 s).
+`ltx25-distilled-nvfp4` (RTX 50) or `ltx25-distilled-int8` (RTX 20/30/40): picture and sound in one pass, MP4.
+LTX-2 Community License, free below US$10 million revenue. `fps=24`, sizes from `features.sizes` (multiples of 64;
+1280 × 704 is 720p, 1920 × 1088 is 1080p), frames 8n+1 (97 = 4 s, 121 = 5 s, up to 481 = 20 s). Prefer the higher
+quality and say what it costs: 1920 × 1088 takes about 2.7 times as long as 1280 × 704, `quality="dfr"` about three
+times. On 16 GB keep a clip at 1920 × 832 to 6 s at most (8 s with DFR ran 20 to over 60 minutes); build longer scenes
+from parts.
 
-`generate_video` options for LTX-2.5:
-- `image_asset_id`: start image (image to video).
-- `end_image_asset_id`: last frame; with a start image the clip is a transition. `loop=True` uses the
-  start image as the end image too, for a seamless loop. Both hold whatever is the same in the two images:
-  water and smoke stand still (see "End image and loop freeze the background" below).
-- `quality="dfr"`: Diffusion Fidelity Rendering — detail keyframes plus a detail IC-LoRA, sharper and
-  slower; `temporal_upscale=True` doubles the frame rate (48 fps). Not together with an end image.
-- `auto_duration=True`: the model picks the length (1–20 s) from the described action.
-- `audio_asset_id`: a given sound (e.g. music from `generate_audio`); the picture follows it, the
-  original sound ends up in the MP4, the clip takes its length (at most 20 s).
-- `motion_speed` below 1: slow motion (0.5 = 2×, 0.2 = 5×, 0.1 = 10×), reliable with the Slow Motion
-  Control LoRA and a start image.
-- Several shots in one clip: no parameter — write every cut out in prose ("A hard cut transitions to a
-  close-up of …"), 2–4 shots; `expand_prompt(target="video_multishot")` writes that form.
-- `extend_asset_id` (since 0.5.10): continue an existing video. Since 0.5.17 the new part starts with the
-  video's last 25 frames (1 s at 24 fps), carried in latent space (see "Chaining two clips in latent space"
-  below), and is appended with a 25-frame crossfade, the sound with 40 ms; with 48 fps, an end image or automatic
-  length the last frame becomes the start image as before. Size and frame rate come from the video, the result is a
-  new asset (`meta.extended_from`, `meta.carry_frames`). The prompt describes what happens next, `frames` the length
-  of the new part. Not together with a start image, a loop or a given sound. Measured at 1080p with the last frame
-  (0.5.10): 5 s + 4 s → 9.04 s in 255 s.
-- `chain_asset_id` (since 0.5.17): the same latent chain without joining. The new clip starts with the last 25
-  frames of the given video and is `frames` + 24 frames long; size and frame rate come from the video
-  (`meta.chain_asset_id`, `meta.carry_frames`). Lay it 25 frames before the end of the source and crossfade over
-  those frames; the Studio's `edit.conform` does that. LTX-2.5 only, up to 30 fps; not with a start or end image,
-  a loop, a given sound, 48 fps or automatic length. Use it when the parts are cut separately, `extend_asset_id`
-  for one file.
+**Writing the prompt** (Lightricks' order): one paragraph in the present tense, 4–8 sentences: shot → setting and
+light → the action with verbs → people by physical cues instead of emotion words → camera → sound. Spoken lines in
+quotation marks with the voice; pacing and pauses written out ("For the first two seconds nothing happens: …"; timing
+words are followed only roughly). **Name loud sound sources explicitly**: sounds described as soft came out at −41 to
+−52 LUFS, speech and a forge at −14 to −18. Keep it short and rewrite instead of appending corrections: 8 instead of 14
+sentences gave 38–49 % less motion where a person should stay still. Say stillness in one positive sentence ("sits
+perfectly still like a statue … through everything that happens") and don't name what must not happen, not even
+negated: "does not reach into the bucket" was ignored twice.
 
-DFR, automatic length and 48 fps need small optional files; the detail IC-LoRA for DFR sits in its own
-gated repo. If something is missing, `features.missing` names the Hugging Face page.
+`generate_video` options:
 
-Measured on an RTX 5060 Ti (24 fps, with sound, graphics memory almost full): see the table above.
-A loop's first and last frame differ by 3.6/255 on average (12–44 without a loop), but only with a
-still camera: with "the camera pushes in" the last frames of a loop fell apart. Automatic length
-gave 3 s for a door that opens slowly; 20 s of a given sound became a 19.7 s clip. Sounds described
-as quiet ("crackles softly") come out at −41 to −52 LUFS, speech and a forge at −14 to −18 LUFS:
-name loud sources explicitly. Generated sound goes through the audio limiter (−2.5 dB, because AAC
-overshoots dense sound by up to 1.9 dB) since 0.5.8; a
-given sound stays unchanged.
+- `image_asset_id`: start image. Describe only the motion; match its aspect ratio.
+- `end_image_asset_id`: last frame; `loop=True` uses the start image as the end image too (only with a still camera,
+  otherwise the last frames fall apart).
+- `quality="dfr"`: detail over the whole clip (edge sharpness of a face after 2 s 625 instead of 211), about three
+  times the time; needs the detail IC-LoRA (gated); not with an end image or a loop. `temporal_upscale=True` gives
+  48 fps.
+- `auto_duration=True`: the model picks the length from the action. `audio_asset_id`: the picture follows a given sound
+  (at most 20 s), which stays unchanged in the MP4.
+- `motion_speed` below 1: real slow motion only with the Slow Motion LoRA (spray fell over 5 s instead of 1.5 s).
+- Several shots in one clip: write each cut out in prose ("A hard cut transitions to a close-up of …", 2–4 shots);
+  `expand_prompt(target="video_multishot")` writes that form.
+- `chain_asset_id=<clip 1>`: the new clip starts with the last 25 frames of clip 1, carried in latent space, and
+  continues its motion; it is `frames` + 24 frames long. Lay it 25 frames before the end of clip 1 and crossfade over
+  those frames (the Studio's `edit.conform` does that). `extend_asset_id` does the same and joins both into one file.
+  Not with a start or end image, a loop, a given sound, 48 fps or automatic length (then the last frame becomes the
+  start image). At a hard cut the frame step stood out 1.9–2.5×, with the chain at most 1.6×, like ordinary motion.
+- `crf` (default 12, about 16 Mbit/s at 1080p; the softness comes from the model, not the encoder).
 
-**DFR** (accept the license of the detail IC-LoRA on Hugging Face first): ComfyUI's template
-video_ltx2_5_dfr_i2v.json inserts the start image at a quarter of its size in every stage, and
-LTXVImgToVideoInplace scales a smaller image up to the latent size and fixes it as the first frame. At
-1080p the whole video turned soft (same seed: edge sharpness of the face in the first frame 14 instead
-of 554 on the standard path). Since 0.5.9 NVAI-open uses the full image in stages 2 and 3. Measured
-afterwards (edge sharpness of the face at 0 / 0.5 / 2 / 4.5 s): DFR 445 / 395 / 625 / 523, standard
-554 / 548 / 211 / 411 — the detail stays over the whole clip, at 786 instead of 241 s (5 s, 1080p).
-The web interface makes DFR the default once the IC-LoRA is installed; an end image or a loop switches
-back to standard. `temporal_upscale=True` (48 fps) kept the same sharpness, even and odd frames alike,
-at 294 instead of 118 s (4 s, 1280 × 704).
+If an optional file is missing (DFR, 48 fps, automatic length), `features.missing` names the Hugging Face page.
 
-**Cinemagraph LoRA:** only works with a start image and `loop=True` (the web interface switches the
-loop on when you activate the LoRA). Measured with a king in front of flickering torches (4 s): with
-the loop 6 % of the picture moved and the face stood still, a loop without the LoRA 28 %, without a
-loop 82–84 % (also at strength 1.2), because the camera pushed in.
+**End image and loop freeze the background.** Whatever is pixel for pixel the same in start and end image stands
+still in between: water and smoke changed as little as the static shore (0.3–2 of 255 per half second), even with a
+sentence asking them to move. With only a start image they kept moving (water 1–9, smoke 1–12), and the camera of a
+medium-wide side view stayed put in 14 of 18 clips. So: end image or loop to hold a face or the framing, only a start
+image for a moving background. Say this before rendering.
 
-**Slow Motion LoRA:** with Lightricks' settings (1920 × 1088, 121 frames, `motion_speed=0.2`, strength
-1.0) the spray of a wave against rocks fell over the whole 5 s instead of about 1.5 s at speed 1.0, with
-sharp droplets: real slow motion. Without the LoRA the spray stood almost still as a milky veil. At
-1280 × 704 and 0.25 the effect was weaker. 5 s at 1080p took 232–275 s.
+**Prompt traps:** "shouts" gives grimaces ("says firmly in a rough, deep voice" is calmer); a gesture that "may rise
+out of the frame" makes the camera follow it; "The camera holds a medium close-up" pushed in to an extreme close-up,
+while "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." held; "proud, calm
+expression" became a grin ("stern, determined expression and does not smile" did not); a raised fist filling the frame
+lost a finger; thin props that cross people (rifles, flag poles) morph into each other, so keep them apart in the start
+image and don't move them all at once.
 
-**Recommended LoRAs** (`list_models(kind="lora")`, `features.recommended_for` contains `ltx25`,
-`features.strength` is the suggested strength): Cinemagraph and Slow Motion Control (official, gated),
-Transition (Apache-2.0), Crisp Enhance, Fantasy Anime, Fantasy Painterly, Claymation, Paper Cut-Out,
-Sci-fi Cyberpunk (no license stated), Audio Reactive. Lightricks' IC-LoRAs (Restore, Relight,
-Day-To-Night, Alpha-Gen …) need a source video; NVAI-open has no video to video yet. Tested on
-LTX-2.5: Fantasy Anime and Fantasy Painterly show clearly; Paper Cut-Out only at strength 1.5 (now its
-`features.strength`); Claymation is only hinted at; Transition hardly changed a day-to-night
-transition; with Audio Reactive the brightness followed the music a little more closely, but LTX-2.5
-already pulses to a given sound without it.
+**LoRAs** (`features.recommended_for` contains `ltx25`, `features.strength` is the suggested strength): Cinemagraph only
+with a start image and `loop=True` (6 % of the picture moved, the face stood still); Slow Motion as above; Fantasy Anime
+and Fantasy Painterly change the look clearly; Paper Cut-Out only at 1.5; Claymation and Transition hardly. Lightricks'
+other IC-LoRAs need a source video, which NVAI-open does not take.
 
-### LTX-2.5: sharpness, bitrate and prompt traps (measured at 1920 × 1088)
+### Person from a photo
 
-- **Prefer the higher quality and say so:** final videos at 1920 × 1088 (about 2.7 times as long as
-  1280 × 704), start images in that size too, and `quality="dfr"` when `features.dfr` is true (about
-  three times as long).
-- **Bitrate:** MP4s are saved with CRF 12 instead of ComfyUI's 18 (`crf` per request). With the same
-  seed 16.0 instead of 7.3 Mbit/s, 10 instead of 4.5 MB for 5 s. Fine detail barely changes: the
-  softness comes from the model, not from the encoder.
-- **Face after a zoom out: give an end image.** Without one, the face in the last frame of a 7-second
-  zoom out (about 80 px wide) came out soft and distorted. An end image made with FLUX 3 (same
-  references) keeps it: the last frame matches the end image, 648 instead of 509 s. Asked for a
-  "wider shot", FLUX 3 kept the framing; a wider end image comes from outpainting
-  (`outpaint=[320, 184, 320, 184]` turns 1920 × 1088 into 2560 × 1456, the person then ends at 75 %).
-- **End image or standard path:** with an end image the picture stood almost still for the first
-  second and faces turned soft during big moves, but the ending matched the end image sharply. The
-  standard path moves at once and keeps faces sharper during the motion. Use the end image when the
-  face has to be right at the end (zoom, ending at rest).
-- **End image and loop freeze the background** (measured 30 October 2026 on the lossless copies of a
-  scene with a water-filled crater and smoke on the horizon, mean luma change per region over 0.5 s,
-  0–255): in a loop, water and smoke changed 0.3–2.0 over the whole clip, as little as the static
-  shore; with an end image they stood just as still before the event and in the last half second
-  (water 1.8, smoke 0.9–1.3, shore 1.7), in two of five clips a little motion remained at the end
-  (water 5–8.5 with the shore at 2–5.7). A sentence asking them to
-  move ("the smoke keeps rising and swirling, small waves run across the water") made no difference:
-  a loop without that sentence measured the same. Only the event the prompt asked for moved (a shell
-  hitting the water, a fish flying into a bucket, a man bending over); the explosion's bright veil
-  (the far shore from 80 to 197) faded back exactly to the start image's values by the end. The
-  counter-test without end image and loop (same prompts and seeds, DFR, three chains of two parts):
-  water 8–9 before the event instead of 0.5, in the last second 5.4–6.9 (with the end image 2.7 and
-  8.5, see above); in part 2 water 1–5.5 and smoke 1–12 instead of 0.3–2. The camera stayed put in all six clips (scale 1.000–1.005 against
-  the first frame); in two more rounds with more sentences about the hands, the fish and the head it
-  pushed in in two of three part-2 clips each time (scale 1.045–1.070 at 4 s), so 14 of 18 overall,
-  all four push-ins in part 2. The seam fell to 3.2–3.7. The price: part 2 ended 15.6–16.4 away from its first
-  frame (2.4–2.7 as a loop), and in part 2 the banks, which stood still before, changed 2–6 too
-  (content, not brightness). The reason for the frozen background: the
-  water and smoke are pixel for pixel the same in start and end image, so LTX has to land on them
-  again and leaves them where they are. The earlier loop test with a king in front of torches points
-  the same way: 28 % of the picture moved with the loop, 82–84 % without (where the camera also
-  pushed in). For a moving background give only a start image and hold the framing with the prompt
-  alone (which still pushed in, see above).
-- **No path takes the start image exactly:** the first frame was 2.4–5.6/255 off the start image on
-  the standard path and 4.6–6.4 with an end image or loop; two neighbouring frames inside a clip
-  differ by 0.3–0.4. A chain of clips (the last frame of one as the start image of the next) shows a
-  small jump at every seam (4.8/255 measured), with or without an end image.
-- **Chaining two clips in latent space** (measured 30 October 2026 as a ComfyUI graph, built into NVAI-open since
-  0.5.17 as `chain_asset_id`, in `extend_asset_id` and in the Studio's chain; Lightricks' own `ltx-pipelines` chain
-  windows the same way): decode the last 25 frames of clip 1 from its lossless copy and pass
-  them as an image batch to `LTXVImgToVideoInplace` in both stages of the standard path with strength 1.0. The node
-  encodes the batch as video and pins the first 4 latent frames (noise mask 0). Clip 2 gets 121 frames, 25 carried and
-  96 new; then join clip 1, a linear 25-frame crossfade and the rest of clip 2, with a 40 ms equal-power crossfade for
-  the sound. The seam no longer stood out: the largest frame step in the crossfade was 1.4–1.6× its neighbours, against
-  1.9–2.5× at a hard cut, and within the range of ordinary motion. 158–177 s per 5 s clip 2 at 1920 × 832. Measured
-  in NVAI-open 0.5.17 (a sailboat crossing a lake, 1280 × 704, 2 s + 2 s, same prompts and seeds): with only the last
-  frame the change per frame fell at the seam from 5.4 to 2.1/255, the new clip started a calmer motion of its own;
-  with the latent chain it went on at 4.4 (5.2 before). The chained clip (73 frames) took 66 s, its first 25 frames
-  were 3.4/255 off the originals. Note that
-  `LTXVAddGuide` and `LTXVAddLatentGuide` do not replace frames in place; they append guide tokens (noise mask
-  max(0, 1 − strength)), so on the end-image path frame 0 is regenerated at 0.7.
-- **Timing words are followed only roughly:** clip 2 asked for "the first two and a half seconds" of stillness; the fish
-  slapped its tail 1.25–1.75 s in with all three seeds.
-- **Masked end image** (measured 30 October 2026): `LTXVAddGuide` takes an `attention_mask` (ComfyUI 0.42.1). An end image
-  masked to the person, stool and bucket (27 % of the frame), with the start image pinned by `LTXVImgToVideoInplace` 1.0:
-  the person and bucket in the last frame were nearly as close to the end image as without a mask (11 against 9/255),
-  the water kept moving (15 against 3–8 in the last second), the first frame was 5 instead of 6.4/255 off the start
-  image. The user saw no visible benefit over leaving the end image out, so it is not in NVAI-open.
-- **Prompt traps** (a speaking person in front of a crowd, two seeds each): "shouts" gives grimaces
-  ("says firmly in a rough, deep voice" is calmer). A gesture that "may rise out of the top of the
-  frame" makes the camera follow it. "The camera holds a medium close-up" became a push-in to an
-  extreme close-up; "Static camera, a locked-off medium shot; the framing stays exactly as in the first
-  frame." held the framing. "Proud, calm expression" became a grin; "stern, determined expression and
-  does not smile" did not. A raised fist filling the frame lost a finger; keep it small next to the
-  head.
-- **Start image:** thin props that cross people (rifles, flag poles) morph into each other in the
-  video. Keep them apart in the start image (FLUX 3 edit in the video size) and do not move them all
-  at once in the prompt.
-- **Big body moves:** a person landing after a jump (8 s) worked as a motion, but the face was
-  unrecognizable afterwards. Check start images of full-size people at 100 % for their eyes before
-  rendering.
+Turn a portrait into a video: the face from the photo in a role, saying a line (web interface: Video tab → "Person
+from a photo").
 
-### Person from a photo (since 0.5.8)
+1. **Start image with FLUX 3:** the photo as `reference_asset_ids=[photo]`, prompt "Cinematic film still. The person
+   from the first image, with exactly the same face, eyes, nose, mouth and hair color: <role>. Medium shot from the
+   waist up, the face clearly visible, free space above the head.", in the video size with `batch_size=4` (1280 × 704:
+   95–98 s). Crop the photo to head and shoulders and name the clothing. FLUX makes faces a little slimmer and younger,
+   so compare the four with the photo at full resolution.
+2. **Video with LTX-2.5** from the chosen image: motion only, the line in quotation marks with the voice, then the
+   sounds; to keep the face, `loop=True` (still camera) or the same image as `end_image_asset_id`.
 
-Turn a portrait into a video: the face from the photo in a role, saying a line. Two steps (web
-interface: Video tab → "Person from a photo"; by hand over MCP/REST the same way):
-1. **Start image with FLUX 3:** the photo as a reference (`reference_asset_ids=[photo]`), prompt
-   "Cinematic film still. The person from the first image, with exactly the same face, eyes, nose,
-   mouth and hair color: <role>. Medium shot from the waist up, the face clearly visible, free space
-   above the head." in the video size with `batch_size=4` (1280 × 704: 95–98 s). Crop the photo to head
-   and shoulders and name the clothing explicitly. FLUX makes faces a little slimmer and younger, so
-   compare the four variants with the photo at full resolution.
-2. **Video with LTX-2.5** from the chosen image: motion only, the spoken line in quotation marks with
-   the voice ("says in a rough, deep, gravelly voice: "…""), then the sounds. 5 s at 1280 × 704 in 82–128 s.
+With a real photo, the photo itself is the most faithful start image: outpaint it to the video size with FLUX 3, the
+face stays pixel for pixel. The voice is generated, never the person's real one.
 
-Measured with two portraits: "pulls back a little" became a wide shot, "holds a steady medium shot" kept
-the framing longer. If the person turns away, LTX redraws the face afterwards and it looks less alike;
-"keeps facing the camera" keeps it in view, but on a push-in LTX still smooths it toward an average
-face. The voice is generated by LTX, never the person's real one.
+### Keeping faces, voices and characters over several clips
 
-To keep the face to the end, pass the start image as the end image too (`loop=True` with a still camera, or
-`end_image_asset_id`). With a real photo, the photo itself makes the most faithful start image: outpaint it to
-the video size with FLUX 3, the face stays pixel for pixel. Measured in a close-up (see "Close-up with the photo
-as start and end image" below): similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 after 2 s with the
-start image only. The price: the background stands still too (water, smoke, see "End image and loop freeze the
-background"); say so before rendering.
+Measured with one character over many comedy clips and an explainer video:
 
-### LTX-2.5: keeping faces, voices and characters (measured 27 October 2026)
+1. **Face reference:** frontal, looking into the lens, nothing in front of it, sharpened with SeedVR2 (`restore_image`
+   with only `sharpen`). A reference with a sideways glance came back from FLUX 3 as a crooked stare; with a good one,
+   face and eyes were right in 4 of 4 images. Start images with FLUX 3; MOSS-Image draws a different person, and the
+   Ingredients IC-LoRA (a reference sheet instead of a start image) never gave a recognizable face.
+2. **Face size:** 250 px or more (medium shot or closer), few extras far in the back. At 100–200 px eyes blurred and
+   running extras melted; LTX works on 32-px cells, so a 30-px eye is a single cell.
+3. **Hold camera and face with an end image** (edited from the start image with FLUX 3) or `loop=True`: similarity
+   0.80–1.0 over 5 s, against 0.29–0.44 with the start image only. "Static camera" alone still pushed in (3 of 3).
+4. **Extending** used to see only the last frame, and a different man appeared; since 0.5.17 it carries the last
+   second, but face fidelity over long pieces is not measured. Build longer scenes from parts with clean start and end
+   images; each seam still jumps slightly (the first frame is 2.4–6.4/255 off its start image).
+5. **Nothing in front of the face:** an explosion right behind the person, flying dirt or darkness gave a different
+   face a second later. A teacup in front of the mouth did no harm.
+6. **Voice:** LTX-2.5 draws the voice anew for every clip from the description, the visible face and the seed. Let
+   people speak only with their face in the picture, keep the voice description word for word the same, and make 2–3
+   variants per line for the user to listen to (Claude cannot hear). To **lock a voice**, cut an approved line out of
+   its take, upload it as WAV and pass it as `audio_asset_id`: four clips carried exactly her line and LTX moved the
+   lips to it. The clip length then comes from the sound.
+7. **Start image without a face** (from behind): when the person turns round, LTX invents a face. Keep them turned
+   away, or give an end image with the face.
+8. **Pin an action down through the end image:** the start image with only the result filled in by a mask (FLUX 3:
+   a fish in the bucket, everything else pixel for pixel) as `end_image_asset_id`. The whole action played out, one
+   fish with one tail, the hands stayed on the rod. If the pose changes, edit with references instead (result image
+   first, face second). Simplify props (a rod without a reel).
+9. **Small reactions:** describe them small and physical and say what does not move. "flinches briefly, his head and
+   shoulders jerk back a little" looked like a sneeze; "his upper body twitches back" came with a lean forward first.
+10. **Name what must be seen** with size and place (the incoming shell), say where the person does not look, and pin
+    down counts ("exactly one fish … there is no second fish").
 
-The user on eight comedy clips with one soldier: all of them had problems, "above all the face", the eyes in
-particular, and one frame of a lawn-mower gag showed running soldiers whose faces had melted. Measured on the old
-clips and three new ones (similarity = normalized cross-correlation of the face crop with the first frame):
-- **Face reference:** frontal, looking into the lens, nothing in front of it, large, sharpened 2× with SeedVR2
-  (`restore_image` with only `sharpen`, 13 s; the eyes kept their shape, skin and brows got finer). The old reference
-  (a sideways glance, leaves in front of the chin, taken from an 802p video) came back from FLUX 3 as a crooked,
-  restless stare; with the new one face and eyes were right in 4 of 4 images (134.5 s for four at 1920 × 832). The eye
-  problems came from the reference and from small faces, not from FLUX itself.
-- **MOSS-Image** (text to image only): clean, symmetric eyes, but a different man in 4 of 4 images (younger, fuller
-  beard, lighter eyes), although the face shape, hair, beard and ears were described in detail (313.5 s for four at
-  1920 × 832). Not usable for an existing character; fine for new ones.
-- **Face size:** LTX works on cells of 32 × 32 px, and the first stage runs at half resolution, so an eye of 30–40 px
-  is a single cell. In the old clips the faces were 100–200 px tall: blurred eyes, extras in motion without faces,
-  rifles turned into sticks. In the new ones 260–300 px, and the eyes stayed clean for the whole clip. Use a medium
-  shot or closer and few extras, far in the back (Lightricks' guide: "A few clear characters and actions read better
-  than a crowded frame").
-- **Camera:** "Static camera, a locked-off medium close shot; … the camera does not move or zoom" still pushed in to a
-  close-up in 3 of 3 new clips, and LTX redrew the face on the way. **An end image holds the framing:** edit the start
-  image with FLUX 3 (the start image as the first reference, the face as the second, "Change only this: …, keep his
-  face … the framing and everything else exactly as in the first image", four variants in 209 s) and pass it as
-  `end_image_asset_id`. The camera stayed put, the last frame matched the end image (similarity to the starting face
-  0.98), the explosion in the background was visible and the eyes stayed clean (6 s in 393 s). Camera-control LoRAs
-  ("Static", "Dolly In" …) exist as open weights only for LTX-2 (19B), not for 2.5; the `camera_motion` field on
-  ltx.io belongs to Lightricks' hosted API.
-- **Extending loses the face:** the new part only sees the last frame, and in several extended clips a different man
-  appeared in it. When the face matters, build longer shots from a chain of clean stills (FLUX 3, same face and
-  framing) with a start and an end image per part, so every seam lands on a clean frame. The picture still jumps
-  slightly at each seam (the first frame is 2.4–6.4/255 off its start image), and the end images freeze water and
-  smoke.
-- **Occlusion:** an explosion right behind the person, flying dirt or sudden darkness gave a different face one second
-  later (similarity 0.22). Keep explosions far in the back and nothing in front of the face. A teacup in front of the
-  mouth did no harm; the same face came back after the sip.
-- **Length and VRAM (16 GB):** DFR at 1920 × 832 took 391 s for 6 s (145 frames), but 1206 s for 8 s (193 frames),
-  and another 8 s run hit the server's one-hour limit: with the detail IC-LoRA the model (17.8 GB) no longer fits,
-  and ComfyUI streams it in (550–1990 s per step of the detail stage). Keep clips at 1920 × 832 to 6 s on 16 GB and
-  build longer scenes from parts.
-- **From Lightricks' documentation:** img_compression 18 for 2.4/2.5, the DiffVAE `ltx-2.5-video-vae-bf16` and the
-  distilled model at CFG 1 are what NVAI-open uses. Image to video has no identity lock; the start image is only the
-  first frame. Open: Lightricks' own pipeline runs the detail IC-LoRA at a fixed 0.5, ComfyUI's template and NVAI-open
-  at 1.0 (its card says it invents new detail). The guide wants characters described with age, hairstyle, clothing and
-  distinguishing features; the new clips did that, but it was not measured on its own.
-- **Voice** (explainer video, 27 October; the user: "how can it be that you can't get the voice right"). Why it changes:
-  LTX-2.5 makes picture and sound in one pass and has no input for a voice sample. The voice is drawn anew for every
-  clip from the voice description, the visible face (age, figure, style) and the seed. It matched when her face was in
-  the picture and the description stayed word for word the same ("in a warm, cheerful, clear female voice"). It was
-  off for an off-screen voice in a shot without her ("that is not her voice"), for a shot from behind, and for a single
-  helper clip with the same start image and seed as an accepted take ("wrong voice and pitch"). Of three variants built
-  like the MCP take (231–297 s each) the user chose seed 16 at 235 Hz over seed 15 at 271 Hz. Neither pitch (accepted
-  takes 256–302 Hz, rejected ones 221–225 Hz) nor a simple timbre profile predicted his choice.
-  How to avoid it: (1) let people speak only where their face is in the picture; (2) keep the voice description word
-  for word the same in every scene; (3) make 2–3 variants per line and let the user listen, since Claude cannot hear;
-  (4) leave a shot without a face silent, or cut the chosen line out of a variant with her face and lay it on A1 under
-  that shot (no lips to sync there); (5) do not expect a line added later in a clip of its own to sound the same.
-  **Locking a voice** (since 0.5.14): cut an approved line out of its take, upload
-  it as WAV and pass it to new clips as `audio_asset_id`. `_stage_audio` now accepts uploaded sound (WAV, MP3, FLAC …)
-  and the Studio passes `audio_asset_id` on from the scene parameters (before, it was dropped there and one clip came
-  out with a stranger's voice). In the vertical Short every one of the four spoken clips carried exactly her line
-  (correlation 1.000) and LTX moved the lips to it (257 s per clip at 1088 × 1920, standard). The length comes from
-  the sound (8n+1 frames up to its length), so add a little tail when the clip needs 0.5 s after the cut. Later: a
-  narrator voice from a voice sample for new lines (Studio stage 3). Not tested yet: ComfyUI 0.42.1 ships the node
-  `LTXVReferenceAudio` ("LTXV Reference Audio (ID-LoRA)"), which transfers a speaker's identity from about 5 s of
-  reference audio and needs a matching ID-LoRA; a possible way to keep one voice across clips.
-- **Start image without a face** (over the shoulder, from behind): when the person turns to the camera, LTX invents a
-  face, here with darker skin, other glasses and heavier brows (the user: she should not turn around "because the face
-  does not match"). Options: (1) keep her turned away ("She keeps facing the monitor the whole time and never turns
-  around"), which was used; (2) an end image with her face (FLUX 3 with the face reference, same room and framing), so
-  LTX lands on the right face (similarity 0.98 with the soldier); (3) a start image in profile or three-quarter view
-  that shows part of the face; (4) cut instead of turning: a separate shot with her face; (5) a chain of clean stills
-  with a start and an end image per part.
-- **Restore IC-LoRA with a face reference: rejected** (27 October, evening; the user after the test: "no, it doesn't
-  get better", "it creates new artifacts and even jumps"). Lightricks' `ltx-2.5-22b-ic-lora-restore-1.0` (1.6 GB, gated)
-  is meant for archive footage; per its card a face reference on a grey background goes in as a second guide before
-  the first frame. Tested on an extended fishing clip (a different man from 7 s on), a 960 × 544 crop at full
-  resolution (the training tile), 97 frames from 5–9 s, 8 steps `euler`, CFG 1, in a ComfyUI test copy: 113–154 s per
-  run, up to 15.1 GB. Without a reference it got sharper (edge sharpness in the face 7.8 instead of 5.5) and more
-  contrasty, the haze disappeared (the mood changed), and the wrong face stayed. With the start image or a frontal
-  reference it was almost unchanged (NCC to the reference 0.50–0.51, like the input). Only with the head blurred in the
-  input did the reference act (narrower face, brows and nose closer), and it was still a different man. Traps: the
-  core `LTXVAddGuide` counts a negative `frame_idx` from the end (the reference landed on the last frame), Lightricks'
-  `LTXAddVideoICLoRAGuide` puts -1 before the first frame; `LTXVAddLatentGuide` takes negative values only in whole
-  latent frames (-1 = frame -8).
-- **IC-LoRA Ingredients** (27/28 October; test setup in a ComfyUI copy, not built into NVAI-open). Lightricks'
-  `ltx-2.5-22b-ic-lora-ingredients-0.9` (1.22 GB, gated) takes a reference sheet instead of a start image: per
-  character a face close-up and a turnaround, then props and a location panel, on black, no text. The sheet is repeated
-  over all frames and pinned as a guide at frame 0, so it does not become the first frame; the prompt has two parts,
-  "Reference sheet: …" naming the panels by their position, then "Generated video: …". Built from core nodes
-  (`LoraLoaderModelOnly`, `RepeatImageBatch`, `LTXVAddGuide`, `LTXVCropGuides`). Lightricks' `LTXICLoRALoaderModelOnly`
-  and `LTXAddVideoICLoRAGuide` (ComfyUI-LTXVideo, `iclora.py`) do the same as these core nodes of ComfyUI 0.42.1; the
-  loader also reads `reference_downscale_factor` from the file's metadata (1 here).
-  - **Single stage at 960 × 544** (sheet scaled to a shorter side of 544, as in Lightricks' template), 121 frames,
-    8 distilled steps, CFG 1, seed 42: 165–235 s, up to 15.8 GB. Strength and sampler decide. 1.0 with
-    `euler_ancestral` turned the sheet itself into the video (the face on it blinked); 1.3 with
-    `euler_ancestral_cfg_pp` showed the sheet for 1.5 s and then cut to the scene; 1.5 with `euler_ancestral_cfg_pp`
-    gave the whole clip as the scene. There the character sat in the crater from the location panel, with bucket and
-    stool from the props panel and the turnaround's clothes, the same man throughout, but his face was only about
-    90 px tall and soft. Lightricks' template `LTX-2.5_ICLoRA_Ingredients_Single_Stage_Distilled` uses 1.0 with
-    `euler_ancestral_cfg_pp` (cfg_pp switches off ComfyUI's shortcut at CFG 1 and evaluates the negative prompt too);
-    that exact combination is still untested. Single stage at 1280 × 704 (473 s) showed the sheet for the first 1.5 s
-    again.
-  - **Two stages to 1080p** (28 October): stage 1 as above, then latent ×2 (`LTXVLatentUpsampler`) and refine at
-    1920 × 1088 with the sound from stage 1. Refined like NVAI-open's standard path (base model without the IC-LoRA,
-    only the "Generated video" part, sigmas 0.85/0.725/0.4219/0, `euler_ancestral`; 407 s, up to 15.7 GB), the eyes
-    were sharp for the whole clip at a face height of about 250 px, but it was a different man (the user: "looks ok
-    already, but it is a stranger's face … surely something is missing with the LoRAs"). Lightricks' two-stage IC-LoRA
-    templates (`LTX-2.5_ICLoRA_Inpaint_Two_Stage_Distilled`) run stage 2 with the same model including the IC-LoRA and
-    with the conditioning of stage 1, from 0.725 (sigmas 0.725/0.4219/0, `euler`). Done that way, hair and beard came
-    closer (168 s for stage 2). With the sheet also pinned at full size as a guide in stage 2 and the full two-part
-    prompt, hair and beard came closer still, the eyes were sharp at 1:1, and the sheet never showed in the
-    picture: 324 s for stage 2, up to 15.6 GB. Stage 1 was still in ComfyUI's cache for these two
-    runs; from scratch that makes an estimated 9 min for 5 s. Rule: **a second stage after an IC-LoRA needs the
-    IC-LoRA and its reference again; refining with the plain model redraws the face.**
-  - **Sound** came out almost silent in every Ingredients run (mean −60 to −65 dB, peaks −23 to −40 dBFS), also after
-    the sound sentence got more explicit ("a clear creak", "a soft plop"); no loud source was named in the prompt.
-  - **Building the sheet** (all with FLUX 3, four variants per panel to choose from, about 3 min each): the face from
-    a portrait, its background faded softly into black; the turnaround with that portrait as reference; the props as
-    product shots; the location empty and **seen from the direction of the later shot**. "a spot where a man could
-    sit" put a person into the location panel in 4 of 4 images.
-  - **The user's verdict** (28 October, night): "he is not recognizable … in none of the clips is it him", B
-    included; my judgement by hair and beard had been too generous, the distinctive features of the portrait were
-    missing everywhere. Likely cause: in every clip he is seen in three-quarter view or from the side, and that view
-    comes from the turnaround, whose profile FLUX had already invented (the user: "from the side he is already
-    estranged"). A second sheet with three real head shots taken from the original video instead of the turnaround
-    (two three-quarter views, one profile), together with a frontal close-up looking into the lens, gave no scene at
-    all: the LoRA (1.5, cfg_pp, two stages like B) turned the sheet itself into the video for all 5 s (518.6 s, up
-    to 15.6 GB); a frontal close-up looks too much like the face panel. With loud sources named ("a steady cold
-    wind blowing loudly", "crows cawing nearby", "a heavy artillery explosion booming") the sound came up to
-    −31 dB instead of −60 dB. **Here the start image carries a recognizable face, not Ingredients** (next point).
-- **Close-up with the photo as start and end image** (28 October, night; the user: "test a scene where he looks
-  straight into the camera, close"): the portrait (745 × 1092) outpainted to 1920 × 1088 with FLUX 3
-  (`outpaint=[588, 0, 587, 0]`, two variants in 110 s; the face stays pixel for pixel, one variant got a smeared strip
-  along the top edge), then LTX-2.5 at 1920 × 1088, 5 s, seed 42, "Static camera, a locked-off close-up …; the man
-  keeps facing the camera and looks straight into the lens the whole time …"; similarity = normalized
-  cross-correlation of the head crop with the start image. **Start image only** (standard path, 320.5 s): 0.73 after
-  1 s, then the camera pushed in anyway and LTX redrew the face (0.29–0.44; mouth open at 4 s, eyes closed at 5 s).
-  **Start and end image = the photo** (`loop=True`, keyframe path at full resolution, 503.6 s): the framing held,
-  similarity 0.80–0.997 throughout, first and last frame 4.2 and 4.4 of 255 from the start image; sound around
-  −45 dB, the explosion did not come through loudly.
-- **A scene with real side views as FLUX references** (28 October, night; the user: "yes, try it with the
-  fishing scene"): start images with FLUX 3 at 1920 × 1088 from four references: the portrait, two real head
-  shots of the same man taken from his original video (three-quarter view and profile, uploaded as images) and the
-  chosen location; prompt "The man from the first image, the same man as in the second and third images, with
-  exactly the same face, eyes, eyebrows, nose, ears, mouth, beard and hair …", "He faces the camera and looks
-  straight into the lens", "Medium shot from the waist up". Two images per 220 s, the face about 330 px tall; all
-  four looked clearly more like him than the earlier FLUX images. **Trap:** five references with `batch_size=4`
-  at 1920 × 1088 do not fit into 16 GB: 165–177 s per step (ComfyUI streams the model, the GPU drew only 69 W),
-  stopped after 12 min; with four references and `batch_size=2` it ran normally. Video: the chosen image as start
-  and end image (`loop=True`), 1920 × 1088, 5 s, seed 42, 454.9 s: similarity of the head crop to the start image
-  0.93–0.995 (a blink at 4 s), first and last frame 4.8 and 5.0 of 255 from the start image. Instead of the rod
-  tip twitching ("the man does not react") he jerked the rod up at 2–2.5 s and lowered it again, rings on the
-  water at 3–3.5 s, the rod stayed intact. Sound quiet up to 3.5 s (−56 to −47 dB), then the explosion from 4 s
-  (peak −3 dBFS); the wind described as loud did not come through loudly.
-- **Short rules for one character over several clips** (soldier and explainer together):
-  1. Frontal, unobstructed face reference, sharpened with SeedVR2; start images with FLUX 3. MOSS-Image takes no
-     reference and draws a different person. Most faithful is the real photo itself as the start image, outpainted to
-     the video format with FLUX 3 (the face stays pixel for pixel). Ingredients never gave a recognizable face here.
-  2. Face 250 px or more (medium shot or closer), few extras far in the back.
-  3. Hold camera and face with an end image; "static camera" in the prompt alone still pushed in. The price: water
-     and smoke then stand as still as the shore, a sentence in the prompt does not change that; say so beforehand.
-  4. No extending; build longer scenes from parts with clean start and end images; on 16 GB at most 6 s per clip at
-     1920 × 832.
-  5. Nothing in front of the face (explosions, dirt, darkness); a teacup in front of the mouth did no harm.
-  6. Speech only with the face in the picture and the same voice description; several variants per line to listen to.
-  7. Start image without a face: keep the person turned away, or give an end image with the face.
-  8. Pin down an action with objects through the end image: the start image with only the result of the action
-     filled in by a mask (FLUX 3), so the face and everything else stay pixel for pixel; keep edges that must not
-     change outside the mask. Say explicitly what the hands do not do. Simplify props (a rod without a reel) and get
-     their construction right in the start and end image. If the pose changes (bent over), edit with references
-     instead of a mask: the image with the result first, the face second.
-  9. Describe reactions small and physical and say what does not move: LTX exaggerates ("flinches briefly … jerk
-     back" looked like a sneeze to the user, "his upper body twitches back" came with a lean forward first).
-  10. Name what must be seen (the incoming shell) with its size and place, say explicitly where he does not look, and
-      pin down counts ("exactly one fish … there is no second fish").
-- **Fishing gag as the user directed it** (29 October, night): seen from the side, a bare line from the tip of a
-  bamboo pole, the shell hits the crater, the fish flies into the empty bucket, he does not flinch, then bends over to
-  look at it; a short pause, the tail slaps, he startles slightly. Each step as four variants for the user to choose.
-  What carried it: start image (FLUX 3, one face reference, `upsample_prompt=False`) → end image with the result
-  (fish by mask: the mask height above the rim sets how far it sticks out, 200 px gave 85–90 %, 115 px about 40 %; the
-  bent pose by editing with references) → part 1 with start and end image (5 s, 300–315 s) → part 2 as a loop over the
-  end image (4 s, 234 s), so every seam lies on a clean frame. The user on 30 October: "the water doesn't move", "the
-  smoke doesn't move either"; measured, both stood as still as the shore in every clip with an end image or loop (see
-  "End image and loop freeze the background"), and the seam from part 1 to part 2 still jumped by 4.8/255. Part 1: the fish flew in and stayed one fish with one
-  tail, the hands stayed on the pole with seed 42, but with seed 202 he took a hand off the pole towards the bucket
-  despite "his hands stay on the pole"; the incoming shell only appeared once the prompt described it, first too large
-  and too close (spray over his face) and he turned his head towards it. Part 2: "he flinches briefly, his head and
-  shoulders jerk back a little" was too much. Sound stayed silent before the event (−71 to −75 dB); a "quiet cold
-  wind" never came through.
-- **Fishing gag rebuilt with a masked end image** (28 October, late evening; the user about the first version: the
-  face was not recognizable later, the fish had two tails, he reached into the bucket oddly, line and reel were
-  distorted and physically wrong). The old clip frame by frame: the shell hit the same crater right next to him, the
-  fish appeared on his lap under his hand (white, no head, two dark ends), he put it into the bucket and left his hand
-  in it for 3.3 s (the prompt only said "looks down into the bucket"), the reel was a shapeless blob that changed every
-  second with a second loop of line into nothing, and from 6.5 s (the extended part) a different man. Rebuilt: start
-  image with FLUX 3 at 1920 × 832 from the four references above, "a plain one-piece bamboo cane pole of the simplest
-  kind … the fishing line tied directly to the tip" (no reel in 4 of 4), bucket on an upturned ammunition crate so it
-  stays in the frame; "medium shot from the thighs up" still gave a shot from the knees up, face about 190 px. The
-  float hung taut above the shore: refilled with a mask, it floats on the water, 0.0 of 255 difference outside the
-  mask. **End image by mask, not by editing:** only the fish in the bucket. A mask over the opening and the upper wall
-  gave a correct carp but a rim redrawn about 55 px higher; a mask only above the rim and inside the opening (front
-  rim, rim ends and wall outside) gave one carp head first with one forked tail fin, everything else identical to the
-  start image. LTX-2.5 with start and end image, 6 s, 1920 × 832, seeds 42 and 202, 376–395 s: although start and end
-  differ only by the fish, both clips played the whole action (explosion on the left behind the bucket, the fish drops
-  into the bucket, one fish with one tail from then on); "His hands stay on the fishing pole the whole time and he
-  does not touch the bucket or the fish" held in both, rod, line and float stayed intact. Head crop 0.99 at the start,
-  0.47–0.62 while he looks into the bucket (turned away), 0.98 at the end. Sound: the explosion up to −2 dBFS, almost
-  silent from 3.5 s; the wind at the end of the sound sentence did not come.
+### MiniMax H3
 
-### Kandinsky 6 (tested 27 October 2026, not built in)
+> **License:** The MiniMax H3 Community License excludes the EU, the UK, South Korea and the USA, private use and the
+> generated videos included (sections I.3, I.5, V.4). Without a separate license from MiniMax
+> (<https://platform.minimax.io/h3-license>) it must not be used there, and nothing made with it may be published,
+> stills and screenshots included. The web interface marks the model and every result in red until the user ticks "I
+> have obtained a permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the user
+> before using it unless `license_confirmed` is true. Anyone offering third parties a tool for generating with it must
+> prevent prohibited content (section V.5); NVAI-open filters nothing.
 
-The user: "I want to try Kandinsky 6 … what variants are there, even if it only just runs on my hardware"; after the
-test: "Pro meets the expectations, Lite produces artifacts, the fishing rod falls apart". **Decision:** "back to
-LTX-2.5, that is the best we have right now; Kandinsky 6 Pro takes too long, only for emergencies." The upscaler test
-was dropped and all 55 GB of Kandinsky files were deleted; for an emergency, download them again as described here.
-- **Model:** Kandinsky Lab (Sber), MIT, since 6 October 2026. Picture and sound (44 kHz, lip-synced, speech as
-  `<S>…<E>`) in one pass, 5 s at 864 × 480, 24 fps (121 frames); full HD only through the super-resolution model
-  `kandinsky-6-sr` (2×, 2.25× = 1944 × 1080, 4×). Lite 3B and Pro 29B, each normal (50 steps, CFG 5) and distilled
-  (PiFlow, 10 steps, CFG 1, the negative prompt has no effect); the pretrain versions are only for further training.
-- **Files:** bf16 Lite 6.96 / Lite distilled 5.94 / Pro 64.95 (gated) / Pro distilled 56.2 GB. INT8 ConvRot by t8star
-  (Lite 4.5 / Lite distilled 3.5 / Pro distilled 32.6 GB, for the node `kandinsky-t8`) and by kabachuha (for ComfyUI
-  PR 16825). Shared: Qwen2.5-VL 7B (Qwen-Image's fp8 works), CLIP-L, the HunyuanVideo VAE, the audio VAE `v1-44.pth`
-  (MMAudio) and BigVGAN, 2.3 GB new in total; SR 16.3 GB (DiT 3.0, latent upscaler 6.8, KVAE 6.5). Pro in bf16 does
-  not fit into 64 GB of RAM next to Windows and the text encoder.
-- **ComfyUI:** the official node `kandinsky6` 1.0.2 (plus `kandinsky6-sr`) loads only bf16; `kandinsky-t8` 0.1.4
-  (T8mars, linked by Kandinsky Lab) takes INT8 and was checked on Windows with torch 2.14.1+cu130. It needs librosa,
-  loguru and omegaconf, which NVAI-open's ComfyUI does not have. Without extra nodes only once ComfyUI PR 16825 is
-  merged. In ComfyUI only text → video + sound and start image → video + sound; end image, sound → video and
-  video → sound exist only in Kandinsky's own Python pipeline.
-- **Measured** (RTX 5060 Ti, ComfyUI test copy 0.42.1, node T8 with INT8, 864 × 480, 5 s with sound, seed 42):
-
-  | Run | Time | VRAM | Free RAM at least |
-  |---|---|---|---|
-  | Lite distilled, blacksmith (text), first run | 499 s | 16.0 GB | – |
-  | Lite distilled, fishing with a start image (fresh start) | 250–254 s | 16.0 GB | 44.0 GB |
-  | Pro distilled, blacksmith (text), with loading | 966 s | – | – |
-  | Pro distilled, fishing with a start image | 928 s | 15.9 GB | 17.6 GB |
-  | Super-resolution 2.25× (1944 × 1080) on the Pro fishing clip | about 10 min per tile, 9 tiles; stopped, test dropped | 15.8–16.0 GB | 16.4 GB |
-
-  Kandinsky Lab quotes 174 s (Lite distilled) and 718 s (Pro distilled) for this card, with SageAttention,
-  torch.compile and Qwen in NF4, none of which ComfyUI has. Cross-check with LTX-2.5, same start image and action
-  (1280 × 704, standard path, seed 42): 114 s; it put a fish into the bucket without reeling in the line, the face
-  stayed, and the sound was almost silent up to 3.5 s (−62 dB).
-- **Findings:** **Pro** met the expectations: a blacksmith with tongs, a big shower of sparks at the first blow and
-  speech into the camera; the fishing scene reeled in the line and put the catch into the bucket, the face in
-  three-quarter view the same man throughout. **Lite** produced artifacts and the rod fell apart; its blacksmith held
-  the glowing iron in his bare hand, and the angler put the rod down without a fish.
-  - "cinematic" in the prompt put black letterbox bars into Pro's picture (39 rows at the top and bottom); the
-    negative prompt does nothing in the distilled versions, so leave the word out.
-  - Sound was quiet: blacksmith peaks −8 to −9 dBFS, fishing −16 (Pro) and −28 dBFS (Lite). Name loud sources.
-  - **Super-resolution** in the ComfyUI node ran out of memory twice while decoding (also with `--lowvram`): the node
-    decodes a fixed 16 frames per piece (6.4 GB) and ComfyUI unloads nothing for it ("0 models unloaded"). Patched
-    into the test copy: `KVAE_DECODE_SEG=4` as in Kandinsky Lab's own pipeline for the 5060 Ti, and an unload before
-    decoding. After that it no longer ran out, but KVAE (3.4 GB) and the latent upscaler (4.3 GB) are convolutions and
-    stay loaded; the card sat at 15.8–16.0 GB and decoding ran at 37–45 W instead of 127–146 W. 2.25× to 1944 × 1080
-    splits 5 s into 9 tiles (3 × 3, 512 × 768 each), measured about 10 min per tile, roughly 1.5 h for 5 s, and the
-    finished tiles pile up in RAM (16 instead of 34 GB free). Kandinsky Lab quotes about 7 min with their own pipeline.
-- **License:** the models are MIT; the video VAE comes from HunyuanVideo (Tencent, not valid in the EU, the UK and
-  South Korea, as with Kandinsky 5); the audio VAE from MMAudio is CC BY-NC 4.0 and the bundled NVIDIA code
-  (`edm2_utils.py`) CC BY-NC-SA 4.0, so the sound cannot be used commercially.
+- **Versions:** `minimax-h3-fl2va-int8` (text and an optional start image), `minimax-h3-ref2va-int8` (up to 9
+  `reference_asset_ids`, in the prompt `<Picture 1>`, `<Picture 2>` … in their order), `minimax-h3-fasth3-8step-int8`
+  (fixed 8 steps). Picture and stereo sound, 24 fps, frames on the 17k+5 grid (124 = 5.2 s, up to 362 = 15 s), up to
+  768p.
+- **Preselection:** turbo LoRA 8 steps v1.1, `sparse_attention="sol-attn"` and `int8_attention=True`: 9.4 s at
+  1344 × 576 in 6.6–6.9 instead of 37 minutes. `recommended=True` (default) fills what a call leaves open,
+  `recommended=False` takes the call literally. Fastest: turbo 4 + sol-attn (4.5–4.8 min).
+- **Slow motion:** it moves about half as much as LTX-2.5; describe the pace of every movement ("bursts in a split
+  second", "at full real-time speed"), which made an explosion 30–55 % stronger. FastH3 moves almost like LTX.
+- **Prompt:** full English sentences, style first, then the scene, several shots as a timeline (`[0s-2s] Shot 1: …`)
+  with the camera, the sound last (dialogue in quotation marks with the speaker).
+- Test series and hardware advice: [MODELS.md](MODELS.md#minimax-h3-since-0518).
 
 ### Other video models
 
-```
-prompt: "a burning torch mounted on a dark stone wall, flame flickering,
-         warm light, slow subtle camera push in"
-```
+- **Wan:** describe the motion explicitly, or little happens. 832 × 480 is the cheap default, frames 4n+1, output WEBM.
+  Wan 2.1 T2V 1.3B for fast tries, Wan 2.2 TI2V 5B for quality (13 GB VRAM). **Wan 2.2 I2V A14B** (image to video,
+  loads two experts one after the other): on 16 GB 5 s at 1280 × 560 took 55 minutes, with the 4-step LoRA 6.5 minutes,
+  and both came out in slow motion; for people in a scene LTX-2.5 stays the better choice.
+- Text-to-video models take no start image; an image-to-video model without `image_asset_id` fails with a clear
+  message.
+- Tested and not built in: **Kandinsky 6** (Pro 928–966 s per 5 s against 114 s with LTX-2.5, Lite fell apart, its
+  sound parts are non-commercial and its video VAE is not licensed in the EU), the **Restore** IC-LoRA (did not bring a
+  changed face back and added artifacts) and **Ingredients** (see above). HunyuanVideo 1.5 is not an option in the EU.
 
-- **Describe motion explicitly** — without a motion cue, little happens.
-- Leave `negative_prompt` empty; the default is already sensible.
-- **832×480 is the cheapest Wan default.** 720p costs many times as much.
-- `frames` is rounded to **4n+1** (Wan) or 8n+1 (LTX). 49 frames at 16 fps ≈ 3 s.
-- Output is **WEBM/VP9** (Wan, Mochi; LTX and Kandinsky give MP4) — plays in the browser; convert it
-  for Unity if needed.
+## Studio: whole videos from scenes
 
-Without LTX-2.5: **Wan 2.1 T2V 1.3B** for fast iteration, **Wan 2.2 TI2V 5B** for quality (13 GB
-VRAM — don't keep anything else loaded). Kandinsky 6 was tested and not built in, see
-[Kandinsky 6](#kandinsky-6-tested-27-october-2026-not-built-in).
-
-### MiniMax H3 (since 0.5.18)
-
-> **License:** The MiniMax H3 Community License excludes the EU, the UK, South Korea and the USA, private use and
-> the generated videos included (sections I.3, I.5, V.4). Without a separate license from MiniMax
-> (<https://platform.minimax.io/h3-license>) it must not be used there, and nothing made with it may be published,
-> stills and screenshots included. The web UI marks the model and every result in red until the user ticks
-> "I have obtained a permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the
-> user before using it unless `license_confirmed` is true. Anyone offering third parties a tool for generating with
-> it must prevent prohibited content (section V.5); NVAI-open filters nothing.
-
-- **Versions:** `minimax-h3-fl2va-int8` (text and an optional start image), `minimax-h3-ref2va-int8` (up to 9
-  `reference_asset_ids`, addressed in the prompt as `<Picture 1>`, `<Picture 2>` … in their order; no start image),
-  `minimax-h3-fasth3-8step-int8` (fixed 8 steps, start image or text). Picture and stereo sound in one pass, 24 fps,
-  frames on the 17k+5 grid (124 = 5.2 s, up to 362 = 15 s), up to 768p.
-- **Preselection (measured on an RTX 5060 Ti 16 GB, 9.4 s at 1344 × 576):** turbo LoRA 8 steps v1.1 by lightx2v
-  (if downloaded), `sparse_attention='sol-attn'` and `int8_attention=True`: 6.9 min (start image) and 6.6 min
-  (reference) instead of 37 min with 20 steps. `recommended=True` (default) adds whatever a call leaves open;
-  `recommended=False` takes the call literally. On cards older than RTX 30 sol-attn drops out (comfy-kitchen needs
-  sm80), older than RTX 20 also INT8 attention (sm75); on AMD both drop out (untested).
-- **Fastest:** turbo 4 + sol-attn, 4.5–4.8 min. **Veda** (only offered when the node pack Veda-on-ComfyUI is
-  installed) was fastest, but jumped near the end at 1344 × 576. Only one turbo LoRA at a time: it sets the steps
-  and the shift (start image LoRAs at 768p 6/3, reference LoRAs 12/3; NVAI-open sets both).
-- **Slow motion:** the files are 24 fps, but MiniMax moved about half as much as LTX-2.5 in the same scene. Describe
-  the pace of every movement ("bursts in a split second", "at full real-time speed"): that raised the explosion by
-  30–55 %. FastH3 moved almost like LTX.
-- **Prompt:** one block of full English sentences, style and look first, then the scene, several shots as a timeline
-  (`[0s-2s] Shot 1: …`) with the camera, the sound last (dialogue in quotation marks with the speaker).
-- Full test series and hardware advice: [MODELS.md](MODELS.md#minimax-h3-since-0518).
-
-### Image to video
-
-Bring an existing image to life instead of generating one from nothing — pass `image_asset_id`
-to `generate_video`:
-
-```
-1. generate_image("a woman in a red dress standing on a beach at sunset, cinematic")
-2. list_assets(kind="image", limit=1)      → asset_id
-3. generate_video(prompt="gentle wind moves her dress and hair, slow camera push in",
-                  image_asset_id=asset_id, model_id="wan22-i2v-a14b",
-                  width=832, height=480, frames=49)
-```
-
-Rules that make the difference:
-
-- **Describe only the motion in the prompt.** The image is already there; retelling it costs
-  prompt budget and gains nothing.
-- **Match the start image's aspect ratio.** A different `width`/`height` is hard-cropped or
-  scaled.
-- Without `image_asset_id`, an I2V model fails with a clear message — it doesn't guess.
-
-| Model | Use for |
-|---|---|
-| **Wan 2.2 I2V A14B** | First choice. Best motion, Apache-2.0, 720p possible |
-| **Wan 2.1 I2V 480p 14B** | 10 GB smaller, no expert switch — otherwise weaker |
-| **Wan 2.2 TI2V 5B** | Does both; I2V with a start image, T2V without |
-
-**Wan 2.2 I2V A14B loads two experts one after the other** (high-noise for motion, low-noise for
-details). That costs a model switch in the middle of the run — expect considerably more time than
-with text-to-video, and tell the user beforehand.
-
-Measured on 16 GB (RTX 5060 Ti, fp8 experts, 1280 × 560, 81 frames = 5 s at 16 fps, 30 October 2026): with
-lightx2v's 4-step LoRA pair (`Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1`, Apache-2.0, strength 1.0, cfg 1) 384–396 s,
-but the motion looked like slow motion; without the LoRA (20 steps, cfg 3.5) 3281 s, and the motion still looked slow.
-lightx2v's own workflow uses shift 5 (NVAI-open: 8). For the person-in-a-scene use case LTX-2.5 stayed the better
-choice on 16 GB. HunyuanVideo 1.5 is not an option in the EU: its licence excludes the EU, UK and South Korea.
-
-## Studio: whole videos from scenes (since 0.5.13)
-
-A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four
-lanes, `video` (video clips or still images), `voice`, `music` and `sfx`, plus markers that say what goes
-where. The **edit** holds the real clips on the tracks V1, V2 (above V1) … and A1, A2 …, with in and out
-points, speed, gain and transitions; tracks can be added, hidden and muted. The web UI (tab "Studio", the first tab and open when the app starts) uses the
-same commands as the MCP tools, so the user sees every change live and can undo it. User guide with
-screenshots: [STUDIO.md](STUDIO.md).
-
-NVAI-open for Mac (0.4.9 and later) has the same Studio with the same REST interface (`/api/studio/*` on
-`http://127.0.0.1:8100`) and the same project and package format; the MCP tools ship with the Windows version.
-On the Mac, video scenes use the active video model (the one chosen in the app, else the one recommended for the
-Mac's memory: LTX-Video 2B; from 16 GB the 13B, from 32 GB LTX-2.3 and from 64 GB LTX-2.5 with sound;
-`list_models(kind="video")` marks it `recommended`, a scene's `model_id` can pick another installed one), a chained scene starts from the last frame (no latent chain), and the export offers
-YouTube 1080p/4K, Shorts, project format and ProRes 4444
-([On the Mac](STUDIO.md#on-the-mac-nvai-open-for-mac-049)).
+A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four lanes, `video`
+(video clips or still images), `voice`, `music` and `sfx`, plus markers that say what goes where. The **edit** holds
+the real clips on the tracks V1, V2 (above V1) … and A1, A2 …, with in and out points, speed, gain, transitions and
+zoom. The web interface uses the same commands as the MCP tools, so the user sees every change live and can undo it.
+User guide: [STUDIO.md](STUDIO.md). NVAI-open for Mac has the same Studio, REST interface (`/api/studio/*`) and project
+format; there video scenes use the Mac's video model and a chain starts from the last frame.
 
 | Tool | Purpose |
 |---|---|
 | `studio_projects` | Projects, newest first |
 | `studio_create(name, width, height, fps)` | New project, returned in compact form (times in seconds) |
-| `studio_get(project_id, conform_plan=False)` | Scenes with status (`empty`, `waiting`, `running`, `done`, `error`) and take, markers, tracks, clips, length. Finished jobs are already entered as takes. `conform_plan=True` adds what `edit.conform` would do |
-| `studio_command(project_id, command, params)` | One command; the tool's description lists them all: `scene.add/update/delete/take`, `marker.add/update/delete`, `edit.conform`, `clip.add/move/trim/razor/delete/update`, `track.add/delete/update`, `batch`, `project.update` |
-| `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; with `wait` it blocks until all are finished, chained ones included, for at most an hour. For long runs (several DFR scenes) use `wait=False` and poll `studio_get` |
-| `studio_export(project_id, preset)` | Renders the edit, returns the MP4 path |
-
-To stop a run (since 0.5.19, Mac 0.5.1), call `POST /api/studio/projects/{id}/cancel` (feature `studio_cancel`): it cancels every queued and running job of the project's scenes and releases chained scenes that are still waiting; finished takes stay. The web UI and the Mac app show the running scene with its percentage next to "Conform" and cancel from there. Never cancel a run the user started without asking.
+| `studio_get(project_id, conform_plan=False)` | Scenes with status (`empty`, `waiting`, `running`, `done`, `error`) and take, markers, tracks, clips, the project `folder`; `conform_plan=True` adds what `edit.conform` would do |
+| `studio_command(project_id, command, params)` | One command: `scene.add/update/delete/take`, `marker.add/update/delete`, `edit.conform`, `clip.add/move/trim/razor/delete/update/key`, `track.add/delete/update`, `batch`, `project.update` (the tool description lists the parameters) |
+| `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; `wait` blocks for at most an hour. For several DFR scenes use `wait=False` and poll `studio_get` |
+| `studio_export(project_id, preset)` | Renders the edit, returns the file path |
 
 Workflow:
 
-1. `studio_create`, then one `scene.add` per shot. Write each video prompt like for `generate_video`
-   (one present-tense paragraph: shot, light, action, camera, sound). Add `marker.add` with
-   `kind="chain"` where two shots must join seamlessly and `kind="transition"` for dissolves.
-2. `studio_generate(wait=True)`, then look at the takes and regenerate the scenes that missed with
-   `studio_generate(scene_ids=[...])`.
-3. `edit.conform`, cuts with `clip.razor`, `clip.trim`, `clip.delete`, then `studio_export`. If the user has
-   already worked on the edit, read `studio_get(conform_plan=True)` first and pass `scenes` (only these) and
-   `overwrite` (new clips that may cover others) instead of conforming blindly: the web UI asks the user the
-   same way.
-4. Markers of kind `ai` that are not done are tasks the user left for you: carry them out, then
-   `marker.update` with `done=true`.
+1. `studio_create`, then one `scene.add` per shot, each video prompt written like for `generate_video`. Add
+   `marker.add` with `kind="chain"` where two shots must join seamlessly and `kind="transition"` for dissolves.
+2. Tell the user how long it will take, then `studio_generate`. Look at three frames of every video take at full
+   resolution; for a scene that missed, set a new seed with `scene.update` (`params.seed`) and run
+   `studio_generate(scene_ids=[…])`. The old take stays, `scene.take` switches back.
+3. `edit.conform`, cuts with `clip.razor`, `clip.trim`, `clip.delete`, then `studio_export`. If the user has already
+   worked on the edit, read `studio_get(conform_plan=True)` first and pass `scenes` and `overwrite` instead of
+   conforming blindly. Many users cut themselves: after new takes, conform them into the edit and let the user decide
+   before exporting a final version.
+4. Markers of kind `ai` that are not done are tasks the user left for you: carry them out, then `marker.update` with
+   `done=true`.
 
-Times are seconds with the suffix `_s` (`start_s`, `duration_s`, `at_s`, `in_s`, `to_s`) or ticks
-(254 016 000 000 per second, as in FilmCraft, which divides every frame and sample rate).
+To stop a run, `POST /api/studio/projects/{id}/cancel` (feature `studio_cancel`) cancels every queued and running job of
+the project's scenes and releases waiting chained scenes; finished takes stay. Never cancel a run the user started
+without asking.
 
-Editing tools (since 0.5.14, modeled on FilmCraft):
+**Times** are seconds with the suffix `_s` (`start_s`, `duration_s`, `at_s`, `in_s`) or ticks (254 016 000 000 per
+second). Set clip starts in ticks when they follow other clips: rounded seconds (4.7917 + 4.5) left a 0.03 ms gap and a
+black frame in the export.
 
-- **Speed:** `clip.update` with `speed` (1.0 = 100 %, 0.1 to 10). In and out stay media time, the clip's length
-  on the timeline is (out − in) / speed; the export keeps the pitch of the sound (atempo). If a slower clip
-  would run into the next one, the command is refused with the clips it hits; pass `overlap`: `clamp` (end at
-  the next clip), `ripple` (push the later clips of the track) or `overwrite`. Measured: 80 % on a 6 s clip
-  gave 7.5 s, the exported frames from the right media time (checked 4 and 7 s into the clip).
-- **Transitions:** `transition={kind, duration_s}` with `dissolve`, `dip_black`, `dip_white` or `wipe`,
-  computed classically in preview and export. A `transition` marker acts at once on the video clip that
-  starts at it (± 0.5 s) and moves the transition along when the marker moves.
-- **Scale and zoom (since 0.5.16):** on video tracks `clip.update` takes `scale` (1.0 = 100 %, 0.1 to 8, used
-  when there are no keyframes), `anchor` [x, y] (focus point 0 to 1 that stays in place, like CSS
-  transform-origin; default center) and `scale_keys` [{at_s, value}] (all keyframes at once, in media time).
-  `clip.key` sets one keyframe: `id`, `at_s` (timeline position inside the clip) and `value`; `delete=true`
-  removes it, `clear=true` all of them. Linear between keyframes, the first and last value hold before and
-  after; below 1.0 the clip lies over the track below (picture in picture). Keyframes live in media time like
-  in/out, so a cut keeps them on both parts and a different speed keeps the zoom on the same moment. Measured
-  on a test pattern: the focus point stayed within 0.5 px in the export, the distance of two marks grew exactly
-  with the scale (100, 150, 200 %), picture in picture at 50 % sat in the corner of its focus point. In the web
-  UI: tool Z, drag in the monitor (a keyframe at the playhead), click for the focus point.
-- **Tracks:** `track.add` (`video`: new top track, `audio`: new bottom track), `track.delete` (not V1/A1;
-  the clips go with it, the tracks above move down a number), `track.update` with `hidden` (picture off) and
-  `muted` (sound off, on video tracks the sound of their clips); both apply to the export.
-- **Groups:** `clip.move` with `moves=[{id, start_s, track}]` moves several clips as one block; `batch` with
-  `commands=[{command, params}]` runs several commands as one undo step.
+**Editing commands:**
 
-Project folders (since 0.5.15): every project has its own folder `assets/Studio/<name>`
-(`folder` in `studio_get`, as an absolute path); renaming the project renames the folder. Takes, exports, last
-frames for chains and uploads made in the folder land there; the web UI's History shows them with the folder
-name and can filter by folder (`GET /api/jobs?folder=`). `list_assets(folder="Studio/<name>")` lists them,
-`folder=""` the general History, without `folder` everything. Images, videos, sound and restored photos made for
-a project outside its scenes (start images, reference images, a voice line) go straight into its folder with
-`project_id` on `generate_image`, `generate_video`, `generate_audio` and `restore_image`; the result names the
-`folder`. The web UI's Generate tab has the same as "Save to".
-On the first start after the update, media that only one project uses (takes, clips, start and end images,
-given sound, exports, last frames, uploads) moves into its folder; media shared by several projects, or that a
-History job needs as a reference, stays. "Clear history" (`clear_history`) leaves project folders and anything a
-project uses alone. `copy_asset` copies the file without the folder part.
+- **Speed:** `clip.update` with `speed` (0.1 to 10); the sound keeps its pitch. If a slower clip would run into the
+  next one, pass `overlap`: `clamp`, `ripple` or `overwrite`.
+- **Transitions:** `transition={kind, duration_s}` with `dissolve`, `dip_black`, `dip_white` or `wipe`; a `transition`
+  marker acts on the clip that starts at it. The outgoing clip runs on past its out point, so a clean dissolve needs
+  about 0.5 s of its own material there; otherwise its last frame freezes.
+- **Zoom:** `clip.update` with `scale` (0.1 to 8), `anchor` [x, y] (the focus point that stays in place) and
+  `scale_keys`, or `clip.key` with `id`, `at_s` and `value` for one keyframe (`delete`, `clear`). Below 1.0 the clip
+  becomes a picture in picture over the track below. Keyframes live in media time, so a cut or a speed change keeps
+  them on the same moment.
+- **Tracks:** `track.add` (`video` on top, `audio` at the bottom), `track.delete` (not V1/A1), `track.update` with
+  `hidden` and `muted`; both apply to the export.
+- **Groups:** `clip.move` with `moves=[{id, start_s, track}]`, and `batch` with `commands=[{command, params}]` as one
+  undo step.
 
-How a scene becomes a job:
+**Project folders:** every project has its own folder `assets/Studio/<name>` (`folder` in `studio_get`). Takes,
+exports, last frames and uploads land there; `list_assets(folder="Studio/<name>")` lists them. Images, videos, sound
+and restored photos made for a project outside its scenes go straight into its folder with `project_id` on
+`generate_image`, `generate_video`, `generate_audio` and `restore_image`. `clear_history` leaves project folders alone.
 
-- **Video:** LTX-2.5 with frames = 8n+1 from the length at 24 fps, 1280 × 704 (projects below 1900 px)
-  or 1920 × 1088; other video models 832 × 480 at 16 fps. `params` in the scene pass on seed, steps,
-  LoRAs, `quality`, `motion_speed` and an end image.
-- **Still image:** about 1 MP in the project's aspect ratio (1360 × 768 in a 1280 × 720 project).
-- **Music and sound:** the scene's length (up to 300 s), lyrics from the scene.
-- **Voice:** no text-to-speech yet; the job fails with a hint. Add a recorded audio file as a take
-  (`scene.take` with `asset_id`).
-- **Chain:** a video scene with `chain_from`, or starting at a `chain` marker (± 0.5 s), continues the
-  earlier scene. With LTX-2.5 (since 0.5.17; not with an end image, a loop, a given sound or 48 fps) it gets the
-  last 25 frames of the earlier take (`chain_asset_id`, the job adds them to the scene's frames), and `edit.conform`
-  lays the new take exactly where those frames run in the earlier take (25 frames before the scene start, one frame
-  later when that take is one frame longer than its scene, as 8n+1 makes it) with a dissolve over exactly those
-  frames; the earlier clip ends there, the edit keeps the length of the scenes. Otherwise the last frame of the earlier scene becomes the start image. If that scene is generated in the same run, the
-  chained one has the status `waiting` and is submitted as soon as its source is done; if the source
-  fails, the chained scene gets an error instead of waiting forever.
-- **Order in the GPU queue:** sound first, then still images, then videos grouped by model, chained
-  scenes last. A chained clip then runs right after its source without LTX-2.5 being unloaded for an
-  image or audio model in between.
+**How a scene becomes a job:**
 
-Export presets: `youtube-1080p` (H.264, 24 Mbit/s), `youtube-2160p` (H.265, 40 Mbit/s),
-`shorts-1080x1920`, `av1-1080p`, `project` (H.264 in the project's size), `master` (FFV1 in MKV, sound as
-float PCM, pixel-exact) and `prores` (ProRes 4444 in MOV, 24-bit sound, for editing software). The
-encoder is chosen by trying one frame: NVENC, AMF, Quick Sync, then software. The sound of all clips is
-mixed, set to −14 LUFS (BS.1770) and limited at −2.5 dBFS (−1 dBFS for PCM). The export runs in its own
-queue next to generation. Browsers cannot play FFV1 or ProRes, so those exports get an H.264 preview
-written in the same pass (`meta.preview`); uploaded MKV, MOV or AVI files get one in the background.
+- **Video:** LTX-2.5 with frames = 8n+1 from the length, 1280 × 704 (projects below 1900 px) or 1920 × 1088 with "Best
+  quality (DFR)" when the detail IC-LoRA is installed (project setting `video_quality`, per scene `params.quality`).
+  `params` pass on seed, size, LoRAs, start and end image and `audio_asset_id`.
+- **Still image:** about 1 MP in the project's aspect ratio (a title card with Qwen: `params` 1664 × 928).
+- **Music and sound:** the scene's length, up to 300 s.
+- **Voice:** no text-to-speech yet; add a recorded audio file as a take (`scene.take` with `asset_id`).
+- **Chain:** a video scene with `chain_from`, or starting at a `chain` marker, continues the earlier scene: with LTX-2.5
+  it takes over the last 25 frames, and `edit.conform` lays the take exactly over them with a dissolve, so the edit
+  keeps the length of the scenes. Otherwise the last frame becomes the start image. If the source is generated in the
+  same run, the chained scene waits (`waiting`) and starts as soon as its source is done.
+- **Order in the GPU queue:** sound, still images, videos grouped by model, chained scenes last, so LTX-2.5 is not
+  unloaded in between.
 
-**HQ 1080p is the default** (the user's focus): new projects are 1920 × 1080, video scenes run LTX-2.5 at
-1920 × 1088 with "Best quality (DFR)" when the detail IC-LoRA is installed (project setting
-`video_quality`, `project.update` with `dfr` or `standard`; 5 s at 1080p: 786 instead of 241 s; say so
-before generating many scenes). The export crops the 8 extra rows instead of rescaling: a clip whose
-aspect ratio is within 5 % of the project's fills the frame, others are letterboxed.
+**Export presets:** `youtube-1080p` (H.264, 24 Mbit/s), `youtube-2160p` (H.265, 40 Mbit/s), `shorts-1080x1920` (H.264,
+10 Mbit/s), `av1-1080p`, `project` (H.264 in the project's size), `master` (FFV1 in MKV, pixel-exact) and `prores`
+(ProRes 4444 in MOV). The encoder is found by trying one frame: NVENC, AMF, Quick Sync, then software. The sound of all
+clips is mixed, set to −14 LUFS and limited at −2.5 dBFS; the export runs in its own queue next to generating. Clips
+within 5 % of the project's aspect ratio fill the frame (LTX's 1920 × 1088 loses 8 rows), others are letterboxed.
 
-**Every generated video also has a lossless copy** (see [Lossless copy](#lossless-copy-of-every-video-since-0513)),
-and the Studio reads from it for the export and for chain start images. Measured: a YouTube 1080p export
-from the MP4 reached 37.7 dB PSNR against the original, from the lossless copy 42.3 dB at 12 Mbit/s and
-42.8 dB at 24 Mbit/s; 4:2:0 color itself caps at 43.9 dB, so more bitrate buys almost nothing.
-
-The media bin in the web UI lists everything from the History; deleting an asset there or with
-`delete_asset` drops it from the scenes' takes, clips whose file is gone are marked `missing` (the export
-then refuses with a message). Assets that lie as a clip in the open edit cannot be deleted from the bin.
-
-Measured on an RTX 5060 Ti 16 GB, everything through the MCP tools: four scenes (two LTX-2.5 clips of
-3 s at 1280 × 704, the second one chained, a Krea 2 still image, 9 s of music with Stable Audio 3) in
-270 s together, in this order: the music 62 s including the backend start, the still image 27 s, the
-first clip 99 s including loading LTX-2.5, the chained clip 78 s right after it (with the old order,
-LTX-2.5 was reloaded before the chained clip and it took 98 s). Conform made 4 clips and 1 dissolve; the
-export of 9 s at 1280 × 720 from the lossless copies took 5.9 s with NVENC, −14.0 LUFS, true peak
-−2.5 dBTP. In the exported video the chained clip starts with the same knight in the same pose: the two
-frames at the cut differ no more than neighbouring frames inside the first clip (22.1 against 21.0 dB
-PSNR).
-
-Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours in
-720p and 8.5 hours in 1080p. Still images with music and voice are much cheaper. Not there yet: voice
-(text-to-speech), titles, subtitles, camera moves on still images, OpenTimelineIO.
+Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours at 720p and 8.5
+hours at 1080p. Still images with music and voice are much cheaper.
 
 ### Recipe: an explainer video with a presenter
 
-How a 30-second tutorial in the style of an animated explainer was built entirely through the MCP tools
-(October 2026, RTX 5060 Ti 16 GB): a cartoon presenter who speaks at the start and at the end, three title
-cards, three illustrating shots and music underneath. What carried over:
-
-1. **Make the start images first, then the scenes.** LTX-2.5 invents a new face in every text-to-video
-   scene, so a character who appears more than once needs start images. Make them with `generate_image`
-   and `flux3-klein-nvfp4` in the video size (`width=1920, height=1088`, `batch_size=4`), style first
-   ("3D animated film still in the style of a modern Pixar movie, …"), and pick at full resolution. For
-   further shots of the same person pass the chosen one as `reference_asset_ids` ("The woman from the
-   first image, with exactly the same face, glasses, curly hair and dark green hoodie, … medium close-up
-   …"): 4 of 4 variants kept face, glasses, hair, clothing and room. Give each video scene its image as
-   `params.image_asset_id`; the scene prompt then only describes motion, speech and sound.
-2. **Speech comes from LTX-2.5.** Put the line in quotation marks with the voice ("says in a warm, cheerful,
-   clear female voice: "…""), and add "Static camera, a locked-off shot; the framing stays exactly as in
-   the first frame." Plan about 2 words per second: a line of 15 words ran into the last frame of a 6 s shot
-   and was cut off mid-word, 11 words ended at 5.7 s, and the 13 words of the closing line at 4.2 s (LTX spoke
-   2.2 and 3.3 words per second). Give the person something to do after the line ("Then she smiles and nods
-   once."). Leave gestures out: "a single quick wave and lowers it back onto the desk right away" still gave
-   2.5 s of waving, 1.4 s of it silent before the first word; with "her hands stay resting on the desk, and right
-   away she says …" she started at 0.6 s. Use commas, not exclamation marks: after "Hi!" LTX paused 0.6 s,
-   which sounded like a dropout over quiet music; after "Hi there," 0.3 s. Keep product names out of the
-   spoken line: how
-   the model pronounces an acronym is a gamble. Show the name instead (on a monitor in the start image, on a
-   title card). You cannot hear the take: check that speech is there (the 300–3400 Hz band rises clearly
-   above the room tone while the person talks) and ask the user to listen to the wording.
-3. **Choose the quality per scene.** `params.quality` overrides the project's `video_quality`: `"dfr"` for
-   the shots with a face and speech, `"standard"` for the illustrating shots. Measured here at
-   1920 × 1088 from a start image: a 6 s DFR shot took 1519 s (25 min; its first DFR step alone took 6½ min
-   while LTX-2.5 with the detail IC-LoRA was loaded into the 16 GB card), a 4 s standard shot 249 s.
-4. **Title cards are image scenes.** `kind: "image"` with `qwen-image-2512-nvfp4` and
-   `params: {"width": 1664, "height": 928}` (Qwen's native 16:9), the text in quotation marks: "A bright 3D
-   cartoon title card in the style of an animated movie, centered composition. Big glossy rounded 3D letters
-   in white with a lime green outline read "1. Write your scenes" … nothing else written anywhere." 3 of 3
-   came out letter-perfect, 188–201 s each (50 steps). The export fills the 16:9 frame with them.
-5. **Music is a scene on the `music` lane** with `stable-audio-3-medium`, one sentence with instruments,
-   mood and tempo ("Playful warm orchestral pop underscore for an animated short with pizzicato strings,
-   glockenspiel, light marimba, soft brushed drums and a bouncy upright bass, cheerful and curious like a
-   cartoon tutorial. BPM: 112."): 30 s in 12.5 s. After `edit.conform` the music lies on A2; lower it under
-   the speech with `clip.update` and `gain_db` (the tutorial used −9 dB).
-6. **Say how long it takes, then let it run.** Add up the times above before you start (two DFR shots
-   with speech make up most of it) and tell the user. The queue runs sound, title cards and videos in that
-   order. Use `studio_generate(wait=False)` and poll `studio_get` every few seconds; finished scenes show up
-   as takes, and the user can watch them arrive in the Studio tab.
-7. **Check before conforming.** Look at three frames of every video take at full resolution (start, middle,
-   end). For a scene that missed, set a new seed with `scene.update` (`params.seed`) and run
-   `studio_generate(scene_ids=[…])`: the new take becomes the scene's take, the old one stays in its list and
-   `scene.take` switches back if it was better. Then `edit.conform` and `studio_export`.
-8. **Editing and sound, after the user re-cut the tutorial himself.** No subtitles: the presenter speaks the lines
-   herself (three scenes again with speech, 5 s standard at 1920 × 1088, 761 s for all three); voice and face over
-   several clips: see "LTX-2.5: keeping faces, voices and characters". The user's "not cleanly cross-faded, is it
-   generated? rather classic, it's cleaner" meant classic cross-dissolves, not hard cuts. They come out clean when every
-   outgoing clip still has 0.5 s of its own material after its out point: the export fades against the outgoing clip
-   running past its out point, and without material its last frame freezes. Double images between similar shots of the
-   same person are part of any dissolve. Set clip starts in ticks, not in rounded seconds: 4.7917 + 4.5 rounded to four
-   places left a gap of 0.03 ms and one black frame in the export. Markers as the user wants them: one note per section
-   saying what happens there and a transition marker at every cut; delete finished and empty notes. He checks and
-   adjusts clips in the timeline himself, so after new takes only conform them into the edit instead of rendering a
-   final version right away.
-9. **Vertical for YouTube Shorts.** A new project at 1080 × 1920; start images from FLUX 3 at 1088 × 1920 with the
-   landscape start image of each shot (layout) and the presenter image (face) as references, four variants each in
-   210–260 s, the same character in all of them. The four spoken clips get her approved line as `audio_asset_id`
-   (see "Locking a voice" above), the over-the-shoulder shot stays silent with her line on A1, music and cuts as in
-   the landscape edit. Export `shorts-1080x1920`: 23.6 s at 10.3 Mbit/s. In the over-the-shoulder shot LTX emptied
-   the timeline on the monitor after 4 s, so that clip was cut at 4.0 s.
+1. **Start images first.** LTX-2.5 invents a new face in every text-to-video scene, so a person who appears more than
+   once needs start images: `flux3-klein-nvfp4` in the video size with `batch_size=4`, style first. For more shots of
+   the same person pass the chosen image as `reference_asset_ids` ("The woman from the first image, with exactly the
+   same face, glasses, curly hair and dark green hoodie, …"): 4 of 4 kept face, clothing and room. Give each scene its
+   image as `params.image_asset_id`; the scene prompt then only describes motion, speech and sound.
+2. **Speech:** the line in quotation marks with the voice, plus "Static camera, a locked-off shot; the framing stays
+   exactly as in the first frame." Plan about 2 words per second (15 words ran past the end of a 6 s shot, 11 fit),
+   give the person something to do after the line, leave gestures out (even "a single quick wave" lasted 2.5 s), use
+   commas rather than exclamation marks (after "Hi!" a 0.6 s pause), and show product names on screen instead of
+   having them spoken. You cannot hear the take: check that speech is there and ask the user to listen.
+3. **Quality per scene:** `params.quality="dfr"` for shots with a face and speech, `"standard"` for the rest (a 6 s DFR
+   shot from a start image at 1920 × 1088 took 25 minutes, a 4 s standard shot 4).
+4. **Title cards** are image scenes with `qwen-image-2512-nvfp4` at 1664 × 928 and the text in quotation marks ("…
+   nothing else written anywhere"): 3 of 3 letter-perfect.
+5. **Music** is a scene on the `music` lane; after `edit.conform` it lies on A2, lower it under speech with `gain_db`
+   (here −9 dB).
+6. **Vertical for Shorts:** a new project at 1080 × 1920, start images from FLUX 3 at 1088 × 1920 with the landscape
+   start image (layout) and the presenter (face) as references, spoken clips with the approved line as
+   `audio_asset_id`, export `shorts-1080x1920`.
 
 ### Recipe: short comedy scenes with one character
 
-Built in October 2026: more scenes for an existing photorealistic short film (1920 × 802, one character with a
-blank stare in absurd war situations), eight gags of 8–9 s, 68 s in all, as one Studio project.
+1. **Keep the format of the original:** for a 1920 × 802 film, scenes at 1920 × 832 (the export crops 15 rows top and
+   bottom). DFR at 1920 × 832 took 305–326 s for 6 s, while 1920 × 1088 took 1248–1519 s.
+2. **The face from the original** (frontal, looking into the lens, sharpened with SeedVR2) as the FLUX 3 reference,
+   clothing written out, medium shot or closer, four variants per scene.
+3. **The joke has to be in the start image.** A soldier holding a washing line in the air is not funny; FLUX tied the
+   line to the gun barrel in 0 of 4 images. When a connection is missing, edit the best variant (it as the first
+   reference, the face as the second, "Change only …, keep … exactly as in the first image"): 4 of 4 right.
+4. **Write the timing into the prompt:** "For the first two seconds nothing happens: …, then the tank suddenly fires"
+   gave 1.3 s of calm build-up; without it the shot came after 0.2 s. Deadpan: "his face completely still, his eyes
+   fixed on the distance".
+5. **Cutting it into an original film:** check it for pulldown first (a 30p file holding 24p repeats every fifth frame)
+   and set the in points so that every original frame appears exactly once. Match the loudness: new scenes came out
+   about 9 dB louder than the original and got `gain_db` −9; measure quiet scenes in their new place.
 
-1. **Keep the format of the original.** Project 1920 × 802, video scenes with `params` 1920 × 832 (multiples of 64;
-   3.6 % off, so the export crops 15 rows top and bottom). Measured with a start image: DFR at 1920 × 832 took
-   305–326 s for 6 s and 242–245 s for 5 s, while 6 s at 1920 × 1088 took 1248–1519 s. The `project` export preset
-   with NVENC and no bitrate wrote 16 Mbit/s.
-2. **The face from the original** (a frontal, unobstructed frame looking into the lens, cropped to head and
-   shoulders and sharpened 2× with SeedVR2) as the reference image for FLUX 3, the clothing written out in the prompt,
-   a medium shot or closer so the face gets 250 px or more, four variants per scene at 1920 × 832 (133–186 s); compare
-   faces at full size. A first round with a sideways-glancing reference gave crooked eyes (see "LTX-2.5: keeping faces,
-   voices and characters").
-3. **The joke has to be in the start image.** The user on the first laundry scene: the soldier "holds the washing line
-   in the air, that is not funny". FLUX tied the line to the tank's gun barrel in 0 of 4 images, and the painter stood
-   on a peaceful meadow in 0 of 4; the hammock strung between two howitzers came right in 4 of 4. When a connection is
-   missing, edit the best variant: it as the first reference image, the face as the second, "Change only …, keep …
-   exactly as in the first image". 4 of 4 correct, 204–207 s.
-4. **Write the timing into the prompt.** "For the first two seconds nothing happens: …, then the tank suddenly fires"
-   gave 1.3 s of calm build-up; without it the shot came after 0.2 s. For the deadpan look: "his face completely
-   still, his eyes fixed on the distance".
-5. **Extend instead of re-rolling** (the user: the clips should "run a little longer, like in the original, so the
-   joke lands"): `generate_video(extend_asset_id=…, frames=73, quality="dfr")` adds 3 s of aftermath (146–150 s per
-   clip, the seam 2.4–3.4 of 255). Then `scene.take` with that `asset_id`, lay the scenes out again, delete the old
-   clips and run `edit.conform` (connected clips keep their in and out otherwise). Later finding: the face changed in
-   several appended parts, because the new part only saw the last frame (up to 0.5.16). When the face matters, use parts of at
-   most 6 s with a start and an end image from FLUX 3 instead.
-6. **Cutting it together with the original.** Upload the original, make a separate project at 24 fps, and lay out
-   the pieces of the original at its own cuts with the new scenes in between, all with `clip.add` (`start_s`, `in_s`,
-   `duration_s`). Check for pulldown first: the original was a 30p file holding 24p, every fifth frame a duplicate
-   (frame difference below 0.3 at i ≡ 2 mod 5 in 99.5 % of the frames). The export takes the last due source frame
-   for each output frame; with the in point exactly on the cut frame it would have shown one frame in four twice and
-   skipped another. Moving each in point 0.22–0.97 of a 30p frame later, depending on where the cut falls in the
-   five-frame cycle, brought every one of the 2397 original frames exactly once and in order (PSNR to the expected
-   frame 44–46 dB), with all 16 cuts frame-accurate. A 30 fps project would have shown the 24p scenes with duplicated
-   frames instead. Sound: the original was at −19.8 LUFS and the new scenes raw at −10.8, so they got `gain_db` −9.
-   The export always normalizes to −14 LUFS: +5.9 dB here, and its limiter took the loudest bangs of the original down
-   by up to 9 dB (more than 3 dB during 1.7 % of the time); −15.6 LUFS after AAC. Measure quiet scenes in their new
-   place: the closing scene (8 s, mostly −50 dBFS, between a flamethrower and a victory party) got +8 dB. 168 s and
-   17 clips, exported in 67 s with NVENC at 16 Mbit/s.
+## Lossless copy of every video
 
-## Lossless copy of every video (since 0.5.13)
-
-Every video model also writes the frames losslessly: FFV1 in MKV, 8-bit RGB, every frame a keyframe, sound
-as 32-bit float PCM taken before the limiter. The MP4 stays the file for previews, browsers and Unity; the
-copy is the source for editing. `generate_video` returns it in `lossless_files`; `master=False` skips it
-when only the MP4 is needed. In the History each video asset carries it as `meta.master`
-(`/files/<name>`); deleting the asset deletes it too, and extending a video joins the copies losslessly.
-
-Measured (RTX 5060 Ti, LTX-2.5, 5 s): 161.7 MB at 1080p next to a 10.5 MB MP4 (about 32 MB per second),
-78.4 MB at 720p (16 MB/s); written at 76 frames/s, round trip frame- and sample-exact. The MP4 (CRF 12,
-4:2:0) against the copy: 41.3 dB PSNR, hardly visible. What it buys is the chain: the Studio's YouTube
-export made from the copy reached 42.3 instead of 37.7 dB at the same file size, and a chain start image
-taken from the copy is pixel-exact (from the MP4: 41.0 dB).
+Every video model also writes the frames losslessly (FFV1 in MKV, sound as float PCM taken before the limiter). The MP4
+stays the file for previews, browsers and Unity; the copy is the source for editing. `generate_video` returns it in
+`lossless_files`, `master=False` skips it. It costs about 32 MB per second at 1080p. The Studio's YouTube export from
+the copy reached 42.3 instead of 37.7 dB PSNR at the same file size, and a chain start image from it is pixel-exact.
 
 ## Image to 3D
 
-Two stages: first generate a suitable image, then run `image_to_3d` on it. TripoSG comes with
-the Windows setup's full installation; TRELLIS.2 is only available when installing from source
-(see [INSTALL.md](INSTALL.md#optional-3d-workers)).
-
-**There is no text prompt for the mesh stage.** TRELLIS.2 and TripoSG work purely from the image.
-The prompt affects the *image*, and the image fully determines the mesh.
-
-That's why `text_to_3d(prompt)` is the most convenient route: it generates image and mesh in one
-pass and automatically appends what the reconstruction needs.
+Two stages: an image, then `image_to_3d` on it. **There is no text prompt for the mesh stage**: the image fully
+determines the mesh. `text_to_3d(prompt)` does both and adds what the reconstruction needs:
 
 ```
 text_to_3d("a weathered stone gargoyle", faces=60000)
 ```
 
-Manually, in two steps:
-
-```
-1. generate_image("a single wooden barrel, medieval game asset, centered, isolated on
-                   plain light grey background, floating, no ground, no shadow, product shot")
-2. list_assets(kind="image", limit=1)      → asset_id
-3. image_to_3d(asset_id, faces=40000)
-```
-
-**What's in the image ends up in the mesh.** The most common mistakes and their consequences:
-
-| In the image | In the mesh |
-|---|---|
-| Floor, table edge, ground | an extra ground plate under the object |
-| Cast shadow under the object | a flat plate under the model |
-| Gradient background, vignette, fog | floating strands and thin pillars |
-| Two objects or a sprite sheet | fused nonsense |
-
-**A base that belongs to the object is not an error.** A sphinx statue stands on its stone slab,
-a monument on its pedestal — that belongs in the mesh. Exclude only what the object is
-additionally *placed* on: floor, table, cast shadow.
-
-So the image prompt should include: `the complete object including any base that belongs to it,
-plain flat background, no cast shadow, not standing on a floor or table`.
-And the negative prompt: `cast shadow, floor, ground plane, table surface, environment` —
-**not** `pedestal` or `base`, which would prompt away the object's own base.
-
-Two adjustments if it still goes wrong:
-
-- **`background_mode="birefnet"`** (default) uses a segmentation model and gives much cleaner
-  edges than `"flood"`, which only removes connected border areas of similar color and fails on
-  soft gradients.
-- **`clean_specks=True`** (default) throws out floating fragments. It only catches loose parts —
-  whatever sticks to the main body has to be prevented through the image.
-
-**Lettering and stickers: `project_front=True`** (since 0.5.10, `image_to_3d` and `text_to_3d`) puts
-the cut-out source image onto the faces that point to the camera, so lettering stays readable;
-TripoSG builds painted letters only as a garbled relief. The rest of a TripoSG mesh gets colors from
-the image, a TRELLIS.2 mesh keeps its texture there (not tested yet). Measured on a direction sign
-reading "HAFEN": readable with the projection, ~66 s for the whole mesh, the projection itself under
-1 s. Faint relief strokes of the TripoSG letters remain visible.
-
-Two models with clearly different results:
+**What's in the image ends up in the mesh:** floor, table edges and cast shadows become plates under the object,
+gradients and fog become floating strands, two objects fuse. A base that belongs to the object (a statue's pedestal)
+is fine. So the image prompt includes "the complete object including any base that belongs to it, plain flat
+background, no cast shadow, not standing on a floor or table", and the negative prompt "cast shadow, floor, ground
+plane, table surface, environment" (not "pedestal" or "base"). With TRELLIS.2, `background_mode="birefnet"` (default)
+gives clean edges and `clean_specks=True` (default) removes loose fragments; TripoSG always cuts out by flood fill from
+the borders, so give it a plain background. `project_front=True` puts the source image onto the front so lettering
+stays readable.
 
 | | TripoSG | TRELLIS.2-4B |
 |---|---|---|
-| Output | geometry only | **geometry + PBR textures** |
-| Time | ~60 s warm | ~145 s |
+| Output | geometry only | geometry + PBR textures (2048²) |
+| Time | ~60 s warm | ~75 s warm, ~160 s with loading |
 | VRAM | ~10 GB | ~14 GB |
-| License | MIT | MIT |
+| Faces | `faces=-1` full (~200k), otherwise 10,000–40,000 | `faces` (default 100,000), `texture_size` |
+| Comes with | the setup | an installation from source |
 
-**TRELLIS.2** delivers albedo and metallic/roughness as real 2048² bitmaps with UVs — that makes
-an asset usable without manual texturing. Parameters: `texture_size` (1024/2048/4096) and `faces`
-(default 100,000). The voxel resolution stays at 512³; 1024³ doesn't fit into 16 GB.
-
-**TripoSG** is faster and more frugal, but delivers an untextured mesh. Useful if you put your
-own materials on it anyway. `faces=-1` keeps the full mesh (~200k, usually too much for Unity),
-otherwise 10,000–40,000.
-
-Neither mesh is guaranteed to be watertight, and both benefit from retopology before they go into
-a game. Tell the user that instead of passing off a raw result as a finished asset.
+Neither mesh is guaranteed to be watertight, and both need retopology before going into a game; tell the user.
 
 ## VRAM: one card, one model
 
-16 GB holds exactly one model. The server serializes GPU jobs itself — but:
+16 GB holds one model; the server runs GPU jobs one after another. Before a model over 13 GB (Wan 2.2 I2V A14B) call
+`POST /api/backend/free` ("Free VRAM" in the web interface). `image_to_3d` frees ComfyUI's memory before the mesh, so
+make all images first and then all meshes. Downloads run in their own queue.
 
-- Before a model that needs >13 GB of VRAM (Wan 2.2 I2V A14B, Chroma bf16), it pays to call
-  `POST /api/backend/free` or use the **Free VRAM** button in the web UI.
-- `image_to_3d` frees ComfyUI's memory **automatically** before TripoSG loads. After that, the
-  next image job needs a fresh model load — plan for it: generate all images first, then all
-  meshes.
-- Downloads run in a **separate queue** and don't block the GPU.
+**Several graphics cards:** without a choice, everything runs on the strongest card. Splitting brought no gain in our
+test (an RTX 5060 Ti plus an RTX 4060 on a riser), and full load on both once made the second card drop off the bus,
+so ask before running both. `GET/PUT /api/gpus` assigns a card per kind.
 
-**Several graphics cards (since 0.5):** without a choice of your own, everything runs on the strongest
-card (memory first, then compute capability). Splitting the work brought no gain in measurements with an
-RTX 5060 Ti 16 GB plus an RTX 4060 8 GB on a PCIe 3.0 x4 riser: FLUX 3 took 29 instead of 9 s on the
-4060, Qwen-Image-2512 1095 instead of 97 s, and moving the text encoder to the second card saved
-nothing. `GET/PUT /api/gpus` assigns image models, language models (upsampler, prompt expansion) and 3D
-to a card each; with the language models on their own card, prompt expansion runs in parallel to image
-jobs (7.5–8.6 s per expansion on the 4060). Full load on both cards at once once made the 4060 drop off
-the bus (a repeat two days later with a newer driver ran clean), so ask the user before running both.
+**AMD Radeon (experimental):** PyTorch with ROCm 10, falling back to 7.2.1. Do not use the `-nvfp4` ids there;
+`list_models` marks the right versions as `recommended` (on a Radeon RX 9000 FP8 and bf16, on others INT8). 3D needs
+NVIDIA.
 
-**AMD Radeon (experimental, since 0.5.12 with ROCm 10):** the setup installs PyTorch 2.13 with ROCm 10.0
-(AMD's multi-architecture packages, as in ComfyUI's README) and falls back to ROCm 7.2.1 if a test
-computation on the card fails. Nothing is measured on a real Radeon yet. Do not use the `-nvfp4` ids there:
-`list_models` marks the matching versions as `recommended` and explains the others in `gpu_note` — on a
-Radeon RX 9000 with 16 GB `qwen-image-2512-fp8`, `flux3-klein-bf16`, `krea2-turbo-fp8`,
-`moss-image-sft-bf16`, `z-image`, `ltx25-distilled-int8` and `seedvr2-7b-fp8`; on other Radeons the INT8
-versions. 3D needs an NVIDIA card. Prompt expansion uses FLUX 3's W4A8 upsampler, which comfy-kitchen
-computes with its own HIP kernels on RDNA3 and RDNA4.
+## Licenses
 
-## Licenses — before using assets in a game you sell
+Before assets go into a game that is sold. `list_models` returns `commercial_ok`. This is not legal advice; the license
+text is authoritative.
 
-`list_models` returns `commercial_ok`. Critical cases:
+- **FLUX Kommunity License** (FLUX 3 Image Klein): commercially only below US$5 million annual revenue including
+  affiliated companies; a content filter **or** a review of every image before publishing; AI labeling where the law
+  requires it; BFL can terminate by notice; the images must not train another image model. No EU exclusion.
+- **Krea 2 Community License:** commercially only below US$1 million revenue, a filter or a review of every image, AI
+  labeling where required, Krea can terminate with 30 days' notice.
+- **Stability Community License** (Stable Audio Open, Stable Audio 3): commercially up to US$1 million revenue.
+- **LTX-2 Community License** (LTX-2.5): free below US$10 million revenue.
+- **MiniMax H3:** not allowed in the EU, UK, South Korea and USA without a separate license; never publish results.
+- **Hunyuan3D:** not licensed in the EU, UK and South Korea; use TripoSG (MIT).
+- Unproblematic: Qwen-Image-2512, MOSS-Image, SDXL, FLUX schnell, Wan, Chroma, TripoSG, TRELLIS.2, SeedVR2.
 
-- **Hunyuan3D** — Tencent Hunyuan Community License, not licensed in the EU, the UK and South Korea. Replacement: **TripoSG** (MIT).
-- **Stability Community License** (Stable Audio Open, Stable Audio 3) — commercial use up to
-  US$1 million in revenue.
-- **FLUX Kommunity License v1.0** (FLUX 3 Image Klein) — images may be used commercially only by
-  "Qualifying Users" below US$5 million annual revenue, including affiliated companies.
-  Conditions (section 2.e): a content filter **or** reviewing every image for unlawful and
-  infringing content before publishing it; AI labeling where the law requires it. BFL can
-  terminate the license at any time by notice (8.b). The images must not be used to train any
-  other image model (4.b). No EU exclusion. The repo is gated — accept the license on Hugging
-  Face and store a token. Without these conditions: **Qwen-Image-2512** (Apache-2.0).
-- **Krea 2 Community License** (Krea 2 Turbo) — commercial use only below US$1 million annual
-  revenue, including affiliated companies; a content filter **or** a review of every image by hand;
-  AI labeling where the law requires it; Krea can terminate the license with 30 days' notice. The
-  files come from Comfy-Org/Krea-2 (not gated). Without these conditions: **Qwen-Image-2512**
-  (Apache-2.0).
-- Unproblematic: SDXL, FLUX schnell, Wan (all variants), Chroma, TripoSG, TRELLIS.2.
-
-`list_models` also returns `content` (`uncensored`, `partial`, `censored` or null for unknown)
-with `content_note` and `content_source`. NVAI-open itself has no content filter.
-
-When in doubt, point the user to the license instead of generating silently. This is not legal
-advice; the original license text is authoritative.
+Without the FLUX or Krea conditions, use Qwen-Image-2512 (Apache-2.0). `list_models` also returns `content`
+(`uncensored`, `partial`, `censored`, null) with its source; NVAI-open itself filters nothing. When in doubt, point the
+user to the license instead of generating silently.
 
 ## Reading errors correctly
 
-- **`clip input is invalid: None`** → The checkpoint has no text encoder; the model is missing
-  files. `list_models` shows which. Don't tinker with the prompt.
+- **`clip input is invalid: None`** → the checkpoint has no text encoder; the model is missing files (`list_models`
+  shows which). Don't tinker with the prompt.
 - **`No <kind> model installed`** → `list_models(kind=...)`, then suggest a download.
-- **`… is an image-to-video model — please provide a start image`** → `image_asset_id` is
-  missing. Either generate an image and pass its asset ID, or choose a T2V model.
-- **Timeout while starting the backend** → `GET /api/backend/log` (or `?worker=triposg`) shows
-  the real reason.
-- **Job stays `queued`** → A GPU job is already running. Downloads don't block.
-- **`No access to … the repo is gated`** → The license of that Hugging Face repo is not accepted yet, or
-  with a different account than the stored token's. Retrying does not help: point the user to the
-  illustrated guide ([HUGGINGFACE.md](HUGGINGFACE.md)); the model card shows when access works.
+- **`… is an image-to-video model — please provide a start image`** → pass `image_asset_id` or choose a text-to-video
+  model.
+- **Timeout while starting the backend** → `GET /api/backend/log` (or `?worker=triposg`) shows the real reason.
+- **Job stays `queued`** → another GPU job is running. Downloads don't block.
+- **`No access to … the repo is gated`** → the license is not accepted yet, or with another account than the token's.
+  Retrying does not help: point the user to [HUGGINGFACE.md](HUGGINGFACE.md).
 
 ## Getting assets into the game
 
@@ -1573,8 +623,6 @@ advice; the original license text is authoritative.
 copy_asset(asset_id, "C:/path/to/UnityProject/Assets/Generated/")
 ```
 
-Unity imports it on its own. For meshes, `Unity_ImportExternalModel` with the path returned by
-`image_to_3d` is the more direct route.
-
-A sensible location: `Assets/Generated/Textures|Audio|Video|Meshes/`. Don't mix generated assets
-into existing folders without asking.
+Unity imports it on its own; for meshes `Unity_ImportExternalModel` with the path from `image_to_3d` is more direct. A
+sensible place: `Assets/Generated/Textures|Audio|Video|Meshes/`. Don't mix generated assets into existing folders
+without asking.

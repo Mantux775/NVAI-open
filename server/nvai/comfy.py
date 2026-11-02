@@ -351,13 +351,41 @@ async def run_workflow(
     """Schickt einen Graphen an ComfyUI, verfolgt den Fortschritt und kopiert die
     Ergebnisse nach data/assets/. Gibt die lokalen Pfade zurueck; verlustfreie Master
     landen in `masters` (in derselben Reihenfolge wie die Videos)."""
-    files, _ = await _execute(workflow, on_progress, timeout, MAIN.url)
+    files, _ = await _execute(_fresh_outputs(workflow), on_progress, timeout, MAIN.url)
     paths = await _collect([f for f in files if not f.get("master")])
     extra = [f for f in files if f.get("master")]
     if extra and masters is not None:
         # verschieben statt kopieren: ein Master hat bei 1080p einige hundert MB
         masters.extend(await _collect(extra, move=True))
     return paths
+
+
+def _fresh_outputs(workflow: dict[str, Any]) -> dict[str, Any]:
+    """Jeder Speicherknoten bekommt je Lauf einen eigenen Dateinamen. Sonst nimmt ComfyUI bei gleichem Graphen (fester
+    Seed) die Ausgabe aus seinem Cache und meldet die Datei des ersten Laufs, die NVAI-open schon verschoben (Master)
+    oder beim Aufraeumen von output/ geloescht hat: Fehler 404 statt Ergebnis. Die Rechenknoten davor kommen weiter aus
+    dem Cache, nur das Speichern laeuft neu."""
+    run = uuid.uuid4().hex[:6]
+    out: dict[str, Any] = {}
+    for nid, node in workflow.items():
+        inputs = node.get("inputs") if isinstance(node, dict) else None
+        if isinstance(inputs, dict) and isinstance(inputs.get("filename_prefix"), str):
+            node = {**node, "inputs": {**inputs, "filename_prefix": f"{inputs['filename_prefix']}_{run}"}}
+        out[nid] = node
+    return out
+
+
+def _clean_output() -> None:
+    """ComfyUIs output/ aufraeumen: NVAI-open kopiert jedes Ergebnis in den Asset-Ordner, das Original bliebe sonst fuer
+    immer liegen (auch nach dem Loeschen im Verlauf; in einer Installation waren es 3,6 GB). Was juenger als ein Tag
+    ist, koennte noch ein laufender Auftrag abholen."""
+    cutoff = time.time() - 24 * 3600
+    for old in (config.COMFY_ROOT / "output").glob("nvai*"):
+        try:
+            if old.is_file() and old.stat().st_mtime < cutoff:
+                old.unlink()
+        except OSError:
+            pass
 
 
 _nodes_seen: set[str] = set()
@@ -452,7 +480,12 @@ async def _execute(
                     elif mtype == "executing" and data.get("node") is None:
                         break
         except TimeoutError as exc:
+            # Sonst rechnete ComfyUI weiter: die GPU bliebe belegt, und der naechste Auftrag stuende unsichtbar dahinter
+            await _drop_prompt(base_url, prompt_id)
             raise RuntimeError(t(f"Timeout nach {timeout}s", f"Timeout after {timeout}s")) from exc
+        except asyncio.CancelledError:
+            await _drop_prompt(base_url, prompt_id)  # auch ein noch wartender Lauf soll nicht spaeter rechnen
+            raise
 
     # Fallback, falls die WS-Nachricht verpasst wurde -- oder ComfyUI die Ausgabe aus
     # seinem Cache nahm und deshalb gar kein "executed" schickte.
@@ -460,6 +493,17 @@ async def _execute(
         outputs, texts = await _outputs_from_history(prompt_id, base_url)
 
     return outputs, texts
+
+
+async def _drop_prompt(base_url: str, prompt_id: str) -> None:
+    """Einen eigenen Lauf in ComfyUI beenden: aus der Warteschlange nehmen und, falls er schon rechnet, gezielt nur
+    diesen unterbrechen (ComfyUI ab 0.4x nimmt prompt_id an /interrupt)."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as c:
+            await c.post(f"{base_url}/queue", json={"delete": [prompt_id]})
+            await c.post(f"{base_url}/interrupt", json={"prompt_id": prompt_id})
+    except (httpx.HTTPError, OSError):
+        pass
 
 
 def _texts_from_output(node_output: dict[str, Any]) -> list[str]:
@@ -501,6 +545,7 @@ async def _outputs_from_history(prompt_id: str, base_url: str) -> tuple[list[dic
 async def _collect(images: list[dict[str, Any]], move: bool = False) -> list[Path]:
     """Holt die Dateien aus ComfyUI und legt sie in data/assets/ ab (mit move verschoben statt kopiert)."""
     config.ensure_dirs()
+    _clean_output()
     paths: list[Path] = []
     async with httpx.AsyncClient(timeout=120.0) as c:
         for img in images:

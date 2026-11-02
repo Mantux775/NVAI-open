@@ -225,6 +225,7 @@ actor AssetStore {
         try? FileManager.default.removeItem(at: fileURL(assets[index].filename))
         assets.remove(at: index)
         save()
+        AssetSnapshot.shared.markDeleted(id)
         return true
     }
 
@@ -328,5 +329,21 @@ final class AssetSnapshot: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return byID[id]
+    }
+
+    /// In dieser Sitzung gelöschte Assets. Das Studio nimmt nur sie aus den Takes: Fehlt ein Asset bloß im gerade
+    /// gelesenen Verlauf (noch nicht geladen, Ablage ohne Mitnehmen gewechselt, Datenträger fehlt), bleibt der Take.
+    private var deletedIDs: Set<String> = []
+
+    func markDeleted(_ id: String) {
+        lock.lock()
+        deletedIDs.insert(id)
+        lock.unlock()
+    }
+
+    func wasDeleted(_ id: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return deletedIDs.contains(id)
     }
 }

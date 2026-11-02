@@ -35,7 +35,7 @@ import json
 import sys
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 BLEND = 96          # weicher Übergang zum neuen Rand (Pixel)
 SEARCH_SIDE = 384   # Kantenlänge der verkleinerten Suchbilder
@@ -248,19 +248,25 @@ def inpaint_composite(result: Image.Image, original: Image.Image, mask: Image.Im
     return full, info
 
 
+def _open(path: str) -> Image.Image:
+    """Bild aufrecht laden: Handyfotos tragen die Drehung oft nur als EXIF-Angabe; ComfyUI und der Browser wenden sie
+    an, also hier auch."""
+    return ImageOps.exif_transpose(Image.open(path))
+
+
 def main() -> None:
     if sys.argv[1] == "--inpaint-prepare":
         veil = float(sys.argv[5]) if len(sys.argv) > 5 else INPAINT_VEIL
-        ref, box = inpaint_prepare(Image.open(sys.argv[2]), Image.open(sys.argv[3]), veil)
+        ref, box = inpaint_prepare(_open(sys.argv[2]), _open(sys.argv[3]), veil)
         ref.save(sys.argv[4])
         print(json.dumps({"box": list(box), "size": list(ref.size)}))
         return
     if sys.argv[1] == "--inpaint":
-        out, info = inpaint_composite(Image.open(sys.argv[2]), Image.open(sys.argv[3]), Image.open(sys.argv[4]))
+        out, info = inpaint_composite(_open(sys.argv[2]), _open(sys.argv[3]), _open(sys.argv[4]))
         out.save(sys.argv[5])
         print(json.dumps(info))
         return
-    result, original = Image.open(sys.argv[1]), Image.open(sys.argv[2])
+    result, original = _open(sys.argv[1]), _open(sys.argv[2])
     edges = [int(v) for v in sys.argv[3:7]]
     reserve = [int(v) for v in sys.argv[8:12]] if len(sys.argv) >= 12 else None
     out, info = composite(result, original, edges, reserve)

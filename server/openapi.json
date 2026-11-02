@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.19",
+  "version": "0.5.20",
   "x-api-version": 1
  },
  "paths": {
@@ -224,10 +224,31 @@
     }
    }
   },
+  "/api/jobs/current/cancel": {
+   "post": {
+    "summary": "Cancel Current Job",
+    "description": "Stoppt den laufenden GPU-Job. Downloads bleiben unberuehrt.",
+    "operationId": "cancel_current_job_api_jobs_current_cancel_post",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Cancel Current Job Api Jobs Current Cancel Post"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/jobs/{job_id}/cancel": {
    "post": {
     "summary": "Cancel Job",
-    "description": "Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads\nnach dem aktuellen Datenblock. Fertige Teile eines Downloads bleiben fuers Fortsetzen.",
+    "description": "Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads\nnach dem aktuellen Datenblock. Fertige Dateien eines Downloads bleiben fuers Fortsetzen.",
     "operationId": "cancel_job_api_jobs__job_id__cancel_post",
     "parameters": [
      {
@@ -259,27 +280,6 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/HTTPValidationError"
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  "/api/jobs/current/cancel": {
-   "post": {
-    "summary": "Cancel Current Job",
-    "description": "Stoppt den laufenden GPU-Job. Downloads bleiben unberuehrt.",
-    "operationId": "cancel_current_job_api_jobs_current_cancel_post",
-    "responses": {
-     "200": {
-      "description": "Successful Response",
-      "content": {
-       "application/json": {
-        "schema": {
-         "additionalProperties": true,
-         "type": "object",
-         "title": "Response Cancel Current Job Api Jobs Current Cancel Post"
         }
        }
       }
@@ -1593,7 +1593,7 @@
   "/api/jobs": {
    "get": {
     "summary": "Get Jobs",
-    "description": "Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten). `folder` (seit\n0.5.15): ohne die Angabe alles samt den Projektordnern des Studios, leer nur der allgemeine Verlauf,\n`Studio/<Name>` die Aufträge mit Dateien in diesem Projektordner.",
+    "description": "Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten). `folder` (seit\n0.5.15): ohne die Angabe alles samt den Projektordnern des Studios, leer nur der allgemeine Verlauf,\n`Studio/<Name>` die Aufträge mit Dateien in diesem Projektordner. `kind` nur diese Art, `active=true` nur\nwartende und laufende Aufträge (etwa alle offenen Downloads).",
     "operationId": "get_jobs_api_jobs_get",
     "parameters": [
      {
@@ -1646,6 +1646,32 @@
         }
        ],
        "title": "Folder"
+      }
+     },
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Kind"
+      }
+     },
+     {
+      "name": "active",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "boolean",
+       "default": false,
+       "title": "Active"
       }
      }
     ],
@@ -2025,7 +2051,7 @@
    },
    "delete": {
     "summary": "Delete Asset",
-    "description": "Loescht ein einzelnes Asset samt Datei.",
+    "description": "Loescht ein einzelnes Asset samt Datei. Was als Clip im Schnitt eines Studio-Projekts liegt, nicht (erst den Clip\nloeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern.",
     "operationId": "delete_asset_api_assets__asset_id__delete",
     "parameters": [
      {
@@ -3270,7 +3296,7 @@
      "width": {
       "type": "integer",
       "multipleOf": 8.0,
-      "maximum": 2048.0,
+      "maximum": 2560.0,
       "minimum": 256.0,
       "title": "Width",
       "description": "Geplantes Format -- der Upsampler richtet den Bildaufbau danach",
@@ -3279,7 +3305,7 @@
      "height": {
       "type": "integer",
       "multipleOf": 8.0,
-      "maximum": 2048.0,
+      "maximum": 2560.0,
       "minimum": 256.0,
       "title": "Height",
       "default": 1024
@@ -3411,7 +3437,7 @@
        "alpha"
       ],
       "title": "Background Mode",
-      "description": "Wie freigestellt wird. birefnet = Segmentierungsmodell (sauberste Kanten, verhindert Hintergrund-Artefakte im Mesh); flood = schneller Randfarben-Fuellalgorithmus; alpha = Bild bringt Alphakanal mit.",
+      "description": "Wie TRELLIS.2 freistellt. birefnet = Segmentierungsmodell (sauberste Kanten, verhindert Hintergrund-Artefakte im Mesh); flood = schneller Randfarben-Fuellalgorithmus; alpha = Bild bringt Alphakanal mit. TripoSG stellt immer per Flood-Fill frei (alpha behaelt den eigenen Alphakanal).",
       "default": "birefnet"
      },
      "clean_specks": {

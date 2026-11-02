@@ -27,7 +27,7 @@ os.environ.setdefault("ATTN_BACKEND", "flash_attn")
 import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException
-from PIL import Image
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
 ROOT = Path(os.environ.get("TRELLIS2_ROOT", "")).resolve()
@@ -214,7 +214,7 @@ def _prepare(path: Path, remove_bg: bool, mode: str) -> Image.Image:
     deutlich sauberere Kanten als unser Flood-Fill, der nur zusammenhaengende
     Randflaechen aehnlicher Farbe entfernt.
     """
-    img = Image.open(path)
+    img = ImageOps.exif_transpose(Image.open(path))  # Handyfotos: EXIF-Drehung anwenden
     has_alpha = img.mode in ("RGBA", "LA") and np.asarray(img.split()[-1]).min() < 250
 
     if has_alpha:

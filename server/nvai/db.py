@@ -52,11 +52,22 @@ CREATE INDEX IF NOT EXISTS idx_assets_created ON assets(created_at DESC);
 """
 
 
+_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
+
+
+def _fold(text: str | None) -> str:
+    """Für die Suche: JSON-Escapes (\\u00fc) auflösen und ohne Groß-/Kleinschreibung vergleichen, auch bei Umlauten."""
+    if not text:
+        return ""
+    return _ESCAPE.sub(lambda m: chr(int(m.group(1), 16)), text).casefold()
+
+
 def init() -> None:
     global _conn
     config.ensure_dirs()
     _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
     _conn.row_factory = sqlite3.Row
+    _conn.create_function("nvai_fold", 1, _fold, deterministic=True)
     with _lock:
         _conn.executescript(SCHEMA)
         # Seit 0.5.15: Unterordner im Asset-Ordner (Studio/<Projekt>); '' = oberste Ebene, der Verlauf
@@ -162,15 +173,22 @@ HISTORY_ONLY = (
 )
 
 
-def list_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, folder: str | None = None) -> list[Job]:
+def list_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, folder: str | None = None,
+              kind: str | None = None, active: bool = False) -> list[Job]:
     """Neueste zuerst; `exclude` laesst eine Art weg (der Verlauf zeigt keine Downloads und blaettert in
     50er-Schritten -- mitgezaehlte Downloads machten die Seiten sonst kuerzer). `folder` (seit 0.5.15): None = alle,
     auch das Material der Studio-Projekte; '' = nur der allgemeine Verlauf (HISTORY_ONLY); 'Studio/<Name>' = Aufträge
-    mit Dateien in diesem Projektordner."""
+    mit Dateien in diesem Projektordner. `kind` nur diese Art, `active` nur wartende und laufende: So findet man einen
+    laufenden Download, auch wenn seither viele andere Aufträge dazukamen."""
     where, args = [], []
     if exclude:
         where.append("kind != ?")
         args.append(exclude)
+    if kind:
+        where.append("kind = ?")
+        args.append(kind)
+    if active:
+        where.append("status IN ('queued', 'running')")
     if folder == "":
         where.append(HISTORY_ONLY)
     elif folder:
@@ -297,8 +315,10 @@ def list_assets(kind: str | None = None, limit: int = 100, offset: int = 0, medi
             where.append(f"(kind = ? OR (kind = 'upload' AND {ext}))")
             args += [media] + eargs
     if query and query.strip():
-        pattern = f"%{query.strip().lower()}%"
-        where.append("(lower(prompt) LIKE ? OR lower(filename) LIKE ? OR lower(meta) LIKE ?)")
+        # nvai_fold statt lower(): SQLite kennt nur ASCII-Kleinschreibung („Äpfel“), und meta steht als JSON mit
+        # Escapes („M\u00fcller“); die Funktion löst sie auf und vergleicht in Python ohne Groß-/Kleinschreibung
+        pattern = f"%{_fold(query.strip())}%"
+        where.append("(nvai_fold(prompt) LIKE ? OR nvai_fold(filename) LIKE ? OR nvai_fold(meta) LIKE ?)")
         args += [pattern, pattern, pattern]
     q = "SELECT * FROM assets" + (" WHERE " + " AND ".join(where) if where else "")
     q += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
@@ -318,21 +338,66 @@ def assets_for_job(job_id: str) -> list[Asset]:
 
 # ------------------------------------------------------------- Loeschen
 
+def _later_list() -> Path:
+    return config.DATA_DIR / "delete_later.txt"
+
+
 def _unlink(filename: str) -> int:
-    """Loescht die Datei zum Asset. Gibt die freigewordenen Bytes zurueck."""
+    """Loescht die Datei zum Asset. Gibt die freigewordenen Bytes zurueck. Haelt Windows sie gerade offen (ein Video,
+    das die Oberflaeche zeigt), kurz wiederholen; sonst kommt sie auf die Liste, die der naechste Start abarbeitet,
+    statt ohne Eintrag fuer immer liegen zu bleiben."""
     path = asset_file(filename)
-    if path is None:
+    if path is None or not path.exists():
         return 0
     try:
         size = path.stat().st_size
-        path.unlink()
-        return size
     except OSError:
         return 0
+    for attempt in range(4):
+        try:
+            path.unlink()
+            return size
+        except FileNotFoundError:
+            return 0
+        except OSError:
+            if attempt < 3:
+                time.sleep(0.25)
+    try:
+        with _later_list().open("a", encoding="utf-8") as fh:
+            fh.write(filename.replace("\\", "/") + "\n")
+    except OSError:
+        pass
+    return 0
 
 
-# Angaben in meta, die eine Datei neben dem Asset nennen (relativ zum Asset-Ordner wie filename)
-FILE_KEYS = ("master", "preview")
+def delete_later_files() -> int:
+    """Beim Start: Dateien loeschen, die beim Loeschen im Verlauf noch offen waren. Gibt die Zahl zurueck."""
+    lst = _later_list()
+    if not lst.exists():
+        return 0
+    names = [n.strip() for n in lst.read_text(encoding="utf-8").splitlines() if n.strip()]
+    keep, done = [], 0
+    with _lock:
+        used = {r[0] for r in _c().execute("SELECT filename FROM assets").fetchall()}
+    for name in dict.fromkeys(names):
+        path = asset_file(name)
+        if path is None or name in used or not path.exists():
+            continue  # wieder benutzt (gleicher Name) oder schon weg
+        try:
+            path.unlink()
+            done += 1
+        except OSError:
+            keep.append(name)
+    if keep:
+        lst.write_text("\n".join(keep) + "\n", encoding="utf-8")
+    else:
+        lst.unlink(missing_ok=True)
+    return done
+
+
+# Angaben in meta, die eine Datei neben dem Asset nennen (relativ zum Asset-Ordner wie filename): verlustfreie Kopie,
+# Browser-Vorschau, Vergleichsclip einer VHS-Vorschau. Löschen, Verschieben und Umbenennen nehmen sie mit.
+FILE_KEYS = ("master", "preview", "vhs_before")
 
 
 def _asset_files(asset: Asset) -> list[str]:
@@ -498,16 +563,26 @@ def clear_history(kind: str | None = None, keep: set[str] | frozenset[str] = fro
     Studio-Projekt benutzt), bleibt; Aufträge, die der Verlauf nicht zeigt (HISTORY_ONLY), auch.
 
     Gibt (Jobs, Assets, freigewordene Bytes) zurueck."""
+    # Wartende und laufende Aufträge bleiben: Ein laufender (Export, VHS) legte sein Ergebnis sonst ohne Eintrag an
     with _lock:
         if kind:
             rows = _c().execute(
                 "SELECT DISTINCT a.job_id FROM assets a JOIN jobs ON jobs.id = a.job_id"
-                f" WHERE a.kind = ? AND a.folder = '' AND {HISTORY_ONLY}", (kind,)
+                f" WHERE a.kind = ? AND a.folder = '' AND {HISTORY_ONLY}"
+                " AND jobs.status NOT IN ('queued', 'running')", (kind,)
             ).fetchall()
             job_ids = [r["job_id"] for r in rows]
         else:
-            rows = _c().execute(f"SELECT id FROM jobs WHERE kind != 'download' AND {HISTORY_ONLY}").fetchall()
+            rows = _c().execute(f"SELECT id FROM jobs WHERE kind != 'download' AND {HISTORY_ONLY}"
+                                " AND status NOT IN ('queued', 'running')").fetchall()
             job_ids = [r["id"] for r in rows]
+    if kind:
+        # Nur Aufträge, deren Ergebnisse alle diese Art haben, wie der Filter im Verlauf sie zählt: Ein 3D-Auftrag hat
+        # neben dem Mesh sein Freistellbild (kind image, meta.cutout_for); „Bilder leeren“ löschte sonst alle Meshes.
+        def only_kind(jid: str) -> bool:
+            results = [a for a in assets_for_job(jid) if not (a.meta or {}).get("cutout_for")]
+            return bool(results) and all(a.kind == kind for a in results)
+        job_ids = [jid for jid in job_ids if only_kind(jid)]
 
     jobs_deleted = assets_deleted = freed = 0
     for jid in job_ids:
@@ -523,7 +598,12 @@ def clear_history(kind: str | None = None, keep: set[str] | frozenset[str] = fro
             orphans = [_row_to_asset(r) for r in _c().execute(
                 "SELECT * FROM assets WHERE job_id IS NULL AND folder = ''"
             ).fetchall()]
-        orphans = [a for a in orphans if a.id not in keep]
+            active = [_row_to_job(r) for r in _c().execute(
+                "SELECT * FROM jobs WHERE status IN ('queued', 'running')").fetchall()]
+        # Uploads, die ein wartender oder laufender Auftrag als Quelle nennt (VHS, Startbild, Referenzen), bleiben
+        busy = {str(v) for j in active for k, v in (j.params or {}).items() if k.endswith("asset_id") and v}
+        busy |= {str(x) for j in active for x in ((j.params or {}).get("reference_asset_ids") or [])}
+        orphans = [a for a in orphans if a.id not in keep and a.id not in busy]
         for a in orphans:
             freed += sum(_unlink(f) for f in _asset_files(a))
             assets_deleted += 1

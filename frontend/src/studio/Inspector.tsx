@@ -3,7 +3,7 @@
 // Löschen); mehrere Objekte zeigen, was für alle gilt; ohne Auswahl das Projekt (Format, Bildrate). Eingaben gelten
 // beim Verlassen des Feldes oder mit Enter; jede Änderung am Projekt ist ein Befehl und lässt sich rückgängig machen.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   fileUrl,
   TPS,
@@ -20,7 +20,7 @@ import {
 import { OutputBadge, licenseBlocked } from '../components/LicenseBadge'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
-import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, tracksOf, trackOrHighest } from './time'
+import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, snapFrame, tracksOf, trackOrHighest } from './time'
 import { selIds, TRANSITION_LABEL, type Selection } from './Timelines'
 
 interface Props {
@@ -101,9 +101,21 @@ function Field({ label, value, onCommit, area = false, rows = 4, placeholder, pr
 }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value])
+  const committed = useRef<string | null>(null)
   const commit = () => {
-    if (v !== value) onCommit(v)
+    if (v !== value && v !== committed.current) {
+      committed.current = v
+      onCommit(v)
+    }
   }
+  // Verschwindet das Feld, bevor es den Fokus verliert (anderes Objekt angeklickt), den getippten Wert noch an sein
+  // eigenes Objekt geben; sonst landete er im neu gewählten oder ging verloren
+  const latest = useRef({ v, value, onCommit })
+  latest.current = { v, value, onCommit }
+  useEffect(() => () => {
+    const { v: cur, value: orig, onCommit: commitTo } = latest.current
+    if (cur !== orig && cur !== committed.current) commitTo(cur)
+  }, [])
   return (
     <label className="st-field">
       <span>{label}</span>
@@ -123,8 +135,12 @@ function Field({ label, value, onCommit, area = false, rows = 4, placeholder, pr
   )
 }
 
-/** Zahl in Sekunden (Komma oder Punkt nach Sprache, beides wird gelesen), intern Ticks. */
-function Seconds({ label, value, onCommit, min = 0 }: { label: string; value: number; onCommit: (ticks: number) => void; min?: number }) {
+/** Zahl in Sekunden (Komma oder Punkt nach Sprache, beides wird gelesen), intern Ticks. Mit `p` rastet der Wert aufs
+ * Bildraster des Projekts ein wie beim Ziehen: Die Anzeige rundet auf 0,01 s, und „2,96“ hinter einen Clip bis Bild 71
+ * (2,958 s) gesetzt ließ sonst ein Bild Lücke, im Export schwarz. */
+function Seconds({ label, value, onCommit, min = 0, p }: {
+  label: string; value: number; onCommit: (ticks: number) => void; min?: number; p?: StudioProject
+}) {
   const text = decimal(sec(value).toFixed(2))
   return (
     <Field
@@ -132,7 +148,9 @@ function Seconds({ label, value, onCommit, min = 0 }: { label: string; value: nu
       value={text}
       onCommit={(v) => {
         const n = parseFloat(v.replace(',', '.'))
-        if (Number.isFinite(n) && n >= min) onCommit(Math.round(n * TPS))
+        if (!Number.isFinite(n) || n < min) return
+        const ticks = Math.round(n * TPS)
+        onCommit(p ? Math.max(min > 0 ? frameTicks(p) : 0, snapFrame(p, ticks)) : ticks)
       }}
     />
   )
@@ -142,23 +160,23 @@ export function Inspector({ project, selection, models, onCommand, onGenerate, o
   const p = project
   if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
   if (selection.type === 'asset') {
-    return asset ? <AssetProps p={p} a={asset} model={models.find((m) => m.id === asset.model_id)} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
+    return asset ? <AssetProps key={asset.id} p={p} a={asset} model={models.find((m) => m.id === asset.model_id)} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
   }
   if ((selection.ids?.length ?? 1) > 1) return <ManyProps p={p} selection={selection} onCommand={onCommand} onGenerate={onGenerate} onSelect={onSelect} />
   if (selection.type === 'scene') {
     const s = p.scenes.find((x) => x.id === selection.id)
-    return s ? <SceneProps p={p} s={s} models={models} onCommand={onCommand} onGenerate={onGenerate} /> : null
+    return s ? <SceneProps key={s.id} p={p} s={s} models={models} onCommand={onCommand} onGenerate={onGenerate} /> : null
   }
   if (selection.type === 'clip') {
     const c = p.clips.find((x) => x.id === selection.id)
-    return c ? <ClipProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} onSpeed={onSpeed} playhead={playhead} onPlayhead={onPlayhead} /> : null
+    return c ? <ClipProps key={c.id} p={p} c={c} onCommand={onCommand} onSelect={onSelect} onSpeed={onSpeed} playhead={playhead} onPlayhead={onPlayhead} /> : null
   }
   if (selection.type === 'transition') {
     const c = p.clips.find((x) => x.id === selection.id)
-    return c?.transition ? <TransitionProps p={p} c={c} onCommand={onCommand} onSelect={onSelect} /> : null
+    return c?.transition ? <TransitionProps key={c.id} p={p} c={c} onCommand={onCommand} onSelect={onSelect} /> : null
   }
   const m = p.markers.find((x) => x.id === selection.id)
-  return m ? <MarkerProps p={p} m={m} onCommand={onCommand} /> : null
+  return m ? <MarkerProps key={m.id} p={p} m={m} onCommand={onCommand} /> : null
 }
 
 /** Mehrere Objekte derselben Art (Rahmen oder Umschalt-Klick): was für alle gilt. */
@@ -288,8 +306,8 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
             </select>
           </label>
         )}
-        <Seconds label={t('Start (s)', 'Start (s)')} value={s.start} onCommit={(v) => update({ start: v })} />
-        <Seconds label={t('Dauer (s)', 'Duration (s)')} value={s.duration} min={0.1} onCommit={(v) => update({ duration: v })} />
+        <Seconds p={p} label={t('Start (s)', 'Start (s)')} value={s.start} onCommit={(v) => update({ start: v })} />
+        <Seconds p={p} label={t('Dauer (s)', 'Duration (s)')} value={s.duration} min={0.1} onCommit={(v) => update({ duration: v })} />
       </div>
       <label className="st-field">
         <span>{t('Modell', 'Model')}</span>
@@ -549,8 +567,8 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed, playhead, onPlayhead }:
         </button>
       )}
       <div className="st-grid2">
-        <Seconds label={t('Start (s)', 'Start (s)')} value={c.start} onCommit={(v) => onCommand('clip.move', { id: c.id, start: v })} />
-        <Seconds label={t('Länge (s)', 'Length (s)')} value={clipLength(c)} min={0.04} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: c.in + Math.round(v * speed) })} />
+        <Seconds p={p} label={t('Start (s)', 'Start (s)')} value={c.start} onCommit={(v) => onCommand('clip.move', { id: c.id, start: v })} />
+        <Seconds p={p} label={t('Länge (s)', 'Length (s)')} value={clipLength(c)} min={0.04} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: c.in + Math.round(v * speed) })} />
         <Seconds label={t('In (s)', 'In (s)')} value={c.in} onCommit={(v) => onCommand('clip.trim', { id: c.id, in: v })} />
         <Seconds label={t('Out (s)', 'Out (s)')} value={c.out} onCommit={(v) => onCommand('clip.trim', { id: c.id, out: v })} />
         {media?.kind !== 'image' && <Speed c={c} onSpeed={onSpeed} />}
@@ -584,6 +602,7 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed, playhead, onPlayhead }:
         <div className="st-grid2">
           <TransitionKind value={c.transition.kind} onChange={(kind) => update({ transition: { kind, duration: c.transition!.duration } })} />
           <Seconds
+            p={p}
             label={t('Dauer (s)', 'Duration (s)')}
             value={c.transition.duration}
             min={0.04}
@@ -705,7 +724,7 @@ function TransitionProps({ p, c, onCommand, onSelect }: { p: StudioProject; c: S
       </p>
       <div className="st-grid2">
         <TransitionKind value={tr.kind} onChange={(kind) => update({ kind })} />
-        <Seconds label={t('Dauer (s)', 'Duration (s)')} value={tr.duration} min={0.04} onCommit={(v) => update({ duration: v })} />
+        <Seconds p={p} label={t('Dauer (s)', 'Duration (s)')} value={tr.duration} min={0.04} onCommit={(v) => update({ duration: v })} />
       </div>
       {marker && (
         <button className="link-btn small" onClick={() => onSelect({ type: 'marker', id: marker.id })}>
@@ -758,8 +777,8 @@ function MarkerProps({ p, m, onCommand }: { p: StudioProject; m: StudioMarker; o
         onCommit={(v) => update({ comment: v })}
       />
       <div className="st-grid2">
-        <Seconds label={t('Position (s)', 'Position (s)')} value={m.at} onCommit={(v) => update({ at: v })} />
-        <Seconds label={t('Dauer (s)', 'Duration (s)')} value={m.duration} onCommit={(v) => update({ duration: v })} />
+        <Seconds p={p} label={t('Position (s)', 'Position (s)')} value={m.at} onCommit={(v) => update({ at: v })} />
+        <Seconds p={p} label={t('Dauer (s)', 'Duration (s)')} value={m.duration} onCommit={(v) => update({ duration: v })} />
       </div>
       {m.kind === 'place' && (
         <>

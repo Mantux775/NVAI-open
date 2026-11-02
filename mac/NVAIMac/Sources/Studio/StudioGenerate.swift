@@ -77,7 +77,9 @@ actor StudioGenerator {
                     p.scenes[i].jobs = pending
                     changed = true
                 }
-                let alive = p.scenes[i].takes.filter { AssetSnapshot.shared.get($0) != nil }
+                // Nur ausdrücklich gelöschte Takes fallen weg (siehe AssetSnapshot.wasDeleted); vorher leerte ein noch
+                // nicht geladener oder gewechselter Verlauf alle Takes eines Projekts
+                let alive = p.scenes[i].takes.filter { !AssetSnapshot.shared.wasDeleted($0) }
                 if alive != p.scenes[i].takes {
                     p.scenes[i].takes = alive
                     if let take = p.scenes[i].take, !alive.contains(take) { p.scenes[i].take = alive.last }

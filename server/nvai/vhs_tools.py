@@ -19,6 +19,7 @@ Gemessen 28.10. an einem kuenstlichen VHS-Clip (720 x 576 interlaced, MPEG-2, Ra
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from fractions import Fraction
@@ -677,7 +678,11 @@ def part(s: dict[str, Any]) -> dict[str, Any]:
     else:
         keep, rest = seg[:-k], seg[-k:]
     h, w = seg[0].shape[:2]
-    with av.open(s["out"], "w", format="mp4") as dst:
+    # Unter Arbeitsnamen schreiben und erst fertig umbenennen: Ein abgebrochener Lauf hinterliesse sonst eine halbe
+    # Datei, die beim Fortsetzen als fertiger Abschnitt gälte. Das Ende zuerst, dann der Teil: Gibt es den Teil, gibt
+    # es auch sein Ende.
+    out_tmp, tail_tmp = s["out"] + ".part", s["tail_out"] + ".part"
+    with av.open(out_tmp, "w", format="mp4") as dst:
         vs = _video_stream(dst, s.get("codec", "h264"), w, h, fps, s.get("bitrate"))
         for i, arr in enumerate(keep):
             f = av.VideoFrame.from_ndarray(arr, format="rgb24").reformat(format="yuv420p")
@@ -687,7 +692,7 @@ def part(s: dict[str, Any]) -> dict[str, Any]:
         for p in vs.encode(None):
             dst.mux(p)
     if rest:
-        with av.open(s["tail_out"], "w", format="matroska") as dst:
+        with av.open(tail_tmp, "w", format="matroska") as dst:
             ts = dst.add_stream("ffv1", rate=fps)
             ts.width, ts.height, ts.pix_fmt = w, h, "bgr0"
             ts.options = {"level": "3", "g": "1"}
@@ -698,6 +703,8 @@ def part(s: dict[str, Any]) -> dict[str, Any]:
                     dst.mux(p)
             for p in ts.encode(None):
                 dst.mux(p)
+        os.replace(tail_tmp, s["tail_out"])
+    os.replace(out_tmp, s["out"])
     return {"frames": len(keep), "tail": len(rest), "blended": m}
 
 

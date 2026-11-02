@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import hmac
 import ipaddress
+import re
 import shutil
 import signal
 import time
@@ -51,6 +52,10 @@ from . import vhs  # noqa: E402  (registriert die Auftraege vhs und vhs_clean)
 async def lifespan(app: FastAPI):
     config.ensure_dirs()
     db.init()
+    try:
+        db.delete_later_files()  # beim Löschen noch offene Dateien (Video lief gerade in der Oberfläche)
+    except Exception:  # noqa: BLE001 - Aufräumen darf den Start nicht verhindern
+        traceback.print_exc()
     # Einmal je Projekt (vor 0.5.15 angelegt): Ordner anlegen, was nur dieses Projekt nutzt, hineinlegen
     try:
         await asyncio.to_thread(studio.migrate_folders)
@@ -328,7 +333,7 @@ async def health() -> dict[str, Any]:
         "ok": True,
         "comfy_running": stats is not None,
         "gpu": gpu,
-        "active_models": registry.get_active_models(),
+        "active_models": await asyncio.to_thread(registry.get_active_models),  # kann Hugging Face fragen, s. o.
         "queue_depth": jobs.queue_depth(),
         "current_job": jobs.current_job_id(),
         "download_queue_depth": jobs.download_queue_depth(),
@@ -437,26 +442,30 @@ async def backend_free() -> dict[str, Any]:
     return {"ok": True, "freed": freed}
 
 
-@app.post("/api/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str) -> dict[str, Any]:
-    """Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads
-    nach dem aktuellen Datenblock. Fertige Teile eines Downloads bleiben fuers Fortsetzen."""
-    if db.get_job(job_id) is None:
-        raise HTTPException(404, t(f"Unbekannter Job: {job_id}", f"Unknown job: {job_id}"))
-    return await jobs.cancel_job(job_id)
-
-
+# Vor /api/jobs/{job_id}/cancel: Routen gelten in der Reihenfolge ihrer Deklaration, sonst fing {job_id} „current“ ab
+# (404 „Unbekannter Job: current“, der Stopp-Knopf der Kopfzeile brach nie etwas ab)
 @app.post("/api/jobs/current/cancel")
 async def cancel_current_job() -> dict[str, Any]:
     """Stoppt den laufenden GPU-Job. Downloads bleiben unberuehrt."""
     return await jobs.cancel_current()
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str) -> dict[str, Any]:
+    """Einen Job abbrechen: wartende sofort, laufende Generierung sofort, laufende Downloads
+    nach dem aktuellen Datenblock. Fertige Dateien eines Downloads bleiben fuers Fortsetzen."""
+    if db.get_job(job_id) is None:
+        raise HTTPException(404, t(f"Unbekannter Job: {job_id}", f"Unknown job: {job_id}"))
+    return await jobs.cancel_job(job_id)
+
+
 # ----------------------------------------------------------- Modelle
 
 @app.get("/api/models", response_model=list[ModelInfo])
 async def get_models(kind: str | None = None) -> list[ModelInfo]:
-    return registry.list_models(kind=kind)
+    # im Thread: list_models fragt Hugging Face nach gesperrten Repos (bis 8 s je Repo ohne Netz); im Event-Loop stünde
+    # solange der ganze Server (Fortschritt, Live-Feed, Abbrechen)
+    return await asyncio.to_thread(registry.list_models, kind=kind)
 
 
 @app.get("/api/settings/hf-token")
@@ -582,8 +591,12 @@ async def download_model(req: DownloadRequest) -> Job:
     elif req.repo and req.file:
         if req.kind == "lora" and req.family not in loras.BASES:
             raise HTTPException(400, t(f"Unbekannte LoRA-Basis: {req.family}", f"Unknown LoRA base: {req.family}"))
+        target = "loras" if req.kind == "lora" else req.target
+        # nur ein Unterordner des Modellordners (checkpoints, diffusion_models …), kein Pfad nach draußen
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", target or ""):
+            raise HTTPException(400, t(f"Ungültiger Zielordner: {target}", f"Invalid target folder: {target}"))
         entry = registry.register_custom(
-            req.repo, req.file, "loras" if req.kind == "lora" else req.target, req.kind, req.family,
+            req.repo, req.file, target, req.kind, req.family,
             None if req.kind == "lora" else req.workflow,
             license_=req.license, size_gb=req.size_gb,
             trigger=req.trigger, source_url=req.source_url, url=req.url,
@@ -618,7 +631,7 @@ async def delete_model(model_id: str, forget: bool = False) -> DeleteResult:
 async def cancel_downloads() -> dict[str, Any]:
     """Bricht alle wartenden und den laufenden Download ab (je Job: POST /api/jobs/{id}/cancel)."""
     cancelled, running = [], None
-    for job in db.list_jobs(limit=300):
+    for job in db.list_jobs(limit=100000, kind="download", active=True):
         if job.kind != "download" or job.status not in ("queued", "running"):
             continue
         await jobs.cancel_job(job.id)
@@ -627,10 +640,10 @@ async def cancel_downloads() -> dict[str, Any]:
             running = job.id
     return {
         "ok": True, "cancelled": len(cancelled), "was_running": running,
-        "note": t("Der laufende Download endet nach dem aktuellen Datenblock; fertige Teile bleiben "
-                  "zum Fortsetzen liegen.",
-                  "The running download stops after the current block; finished parts stay so it "
-                  "can resume."),
+        "note": t("Der laufende Download endet nach dem aktuellen Datenblock; fertige Dateien bleiben, "
+                  "„Fortsetzen“ lädt nur, was fehlt.",
+                  "The running download stops after the current block; finished files stay, and "
+                  "“Resume” downloads only what is missing."),
     }
 
 
@@ -830,7 +843,9 @@ async def restart() -> dict[str, Any]:
     if not folders.managed():
         raise HTTPException(409, t("Neustart geht nur bei der installierten Fassung. Bitte NVAI-open selbst neu starten.",
                                    "Restart only works for the installed version. Please restart NVAI-open yourself."))
-    if jobs.current_job_id():
+    # auch ein Export oder eine VHS-Aufbereitung in der eigenen Warteschlange: der Neustart bräche sie ab
+    if jobs.current_job_id() or any(j.status == "running" and j.kind in jobs.RENDER_KINDS
+                                    for j in db.list_jobs(limit=1000, active=True)):
         raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
                                    "A job is running. Please try again afterwards."))
     folders.restart()
@@ -890,11 +905,13 @@ async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
 # --------------------------------------------------------------- Jobs
 
 @app.get("/api/jobs", response_model=list[Job])
-async def get_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, folder: str | None = None) -> list[Job]:
+async def get_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, folder: str | None = None,
+                   kind: str | None = None, active: bool = False) -> list[Job]:
     """Neueste zuerst. `exclude=download` laesst Downloads weg (Verlauf, laedt in 50er-Schritten). `folder` (seit
     0.5.15): ohne die Angabe alles samt den Projektordnern des Studios, leer nur der allgemeine Verlauf,
-    `Studio/<Name>` die Aufträge mit Dateien in diesem Projektordner."""
-    return db.list_jobs(limit=limit, offset=offset, exclude=exclude, folder=folder)
+    `Studio/<Name>` die Aufträge mit Dateien in diesem Projektordner. `kind` nur diese Art, `active=true` nur
+    wartende und laufende Aufträge (etwa alle offenen Downloads)."""
+    return db.list_jobs(limit=limit, offset=offset, exclude=exclude, folder=folder, kind=kind, active=active)
 
 
 @app.get("/api/jobs/{job_id}", response_model=Job)
@@ -957,7 +974,12 @@ async def get_asset(asset_id: str) -> Asset:
 
 @app.delete("/api/assets/{asset_id}")
 async def delete_asset(asset_id: str) -> dict[str, Any]:
-    """Loescht ein einzelnes Asset samt Datei."""
+    """Loescht ein einzelnes Asset samt Datei. Was als Clip im Schnitt eines Studio-Projekts liegt, nicht (erst den Clip
+    loeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern."""
+    owner = await asyncio.to_thread(studio.clip_owner, asset_id)
+    if owner:
+        raise HTTPException(409, t(f"Liegt als Clip im Schnitt von „{owner}“. Erst den Clip im Studio löschen.",
+                                   f"It is a clip in the edit of \"{owner}\". Delete the clip in the Studio first."))
     ok, freed = db.delete_asset(asset_id)
     if not ok:
         raise HTTPException(404, t("Asset nicht gefunden", "Asset not found"))
@@ -968,8 +990,12 @@ async def delete_asset(asset_id: str) -> dict[str, Any]:
 @app.delete("/api/jobs/{job_id}")
 async def delete_job(job_id: str) -> dict[str, Any]:
     """Loescht einen Verlaufseintrag mit allen erzeugten Dateien."""
-    if jobs.current_job_id() == job_id:
-        raise HTTPException(409, t("Dieser Job läuft gerade.", "This job is running right now."))
+    job = db.get_job(job_id)
+    # Auch Exporte und VHS-Aufbereitung (eigene Warteschlange) und Downloads: Ein laufender Auftrag liefe weiter und
+    # legte am Ende ein Asset ohne Verlaufseintrag an. Wartende darf man löschen, sie werden dann übersprungen.
+    if jobs.current_job_id() == job_id or (job is not None and job.status == "running"):
+        raise HTTPException(409, t("Dieser Job läuft gerade. Erst abbrechen, dann löschen.",
+                                   "This job is running right now. Cancel it first, then delete it."))
     # Was ein Studio-Projekt benutzt, bleibt (als Asset ohne Auftrag), sonst fehlte dort der Clip; sonst wird auch im
     # Projektordner gelöscht, der Verlauf zeigt die Ordner seit 0.5.15 mit
     ok, count, freed = db.delete_job(job_id, await asyncio.to_thread(studio.used_asset_ids))
@@ -1010,8 +1036,12 @@ async def upload(file: UploadFile, folder: str = Form("")) -> Asset:
         raise HTTPException(404, t(f"Ordner nicht gefunden: {folder}", f"Folder not found: {folder}"))
     name = f"{folder}/{db.new_id('upl')}{suffix}" if folder else f"{db.new_id('upl')}{suffix}"
     dest = config.ASSET_DIR / name
-    with dest.open("wb") as fh:
-        shutil.copyfileobj(file.file, fh)
+
+    def _copy() -> None:  # im Thread: ein Band von mehreren GB fröre sonst den Server ein
+        with dest.open("wb") as fh:
+            shutil.copyfileobj(file.file, fh)
+
+    await asyncio.to_thread(_copy)
     asset = db.create_asset(kind="upload", filename=name, meta={"original_name": file.filename})
     jobs.publish({"type": "assets.changed"})
     if suffix.lower() in studio.NO_BROWSER:

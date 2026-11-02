@@ -626,8 +626,8 @@ def hf_token() -> str | None:
 
 
 class DownloadCancelled(Exception):
-    """Der Nutzer hat den Download abgebrochen. Fertige Dateien und .incomplete-Teile
-    bleiben liegen: ein spaeterer Download setzt fort, "Reste loeschen" raeumt auf."""
+    """Der Nutzer hat den Download abgebrochen. Fertige Dateien bleiben liegen, "Fortsetzen" laedt nur, was fehlt;
+    die gerade ladende Datei beginnt neu (huggingface_hub verwirft ihren Teil beim Abbruch)."""
 
 
 def _progress_tqdm(on_progress: Callable[[float, str], None], prefix: str, base: float, span: float,

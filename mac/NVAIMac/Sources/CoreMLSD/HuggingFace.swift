@@ -221,20 +221,18 @@ enum HuggingFace {
                 "LoRA (Zusatz zu einem Modell): lädt NVAI-open für Mac aus der Suche nicht.",
                 "LoRA (an add-on for a model): NVAI-open for Mac does not load it from the search."))
         }
+        // Seit Mac 0.5.0 im Katalog: LTX-Video 2B und 13B, LTX-2.3 (ab 32 GB) und LTX-2.5 (ab 64 GB) mit Ton
         if hat("ltx-2", "ltx2", "ltx_2") {
-            return Einordnung(stand: SystemInfo.memoryGB >= 32 ? .nicht : .zuGross, text: t(
-                "LTX-2 (2.3, 2.5) mit Ton braucht ab 32 GB Arbeitsspeicher und ist in NVAI-open für Mac noch nicht "
-                    + "eingebaut. Die Windows-Fassung rechnet LTX-2.5.",
-                "LTX-2 (2.3, 2.5) with sound needs 32 GB of memory or more and is not built into NVAI-open for Mac "
-                    + "yet. The Windows version runs LTX-2.5."))
+            if SystemInfo.memoryGB < 32 {
+                return Einordnung(stand: .zuGross, text: t(
+                    "LTX-2.3 und LTX-2.5 mit Ton brauchen ab 32 bzw. 64 GB Arbeitsspeicher.",
+                    "LTX-2.3 and LTX-2.5 with sound need 32 or 64 GB of memory."))
+            }
+            return katalogFamilie(id, name: "LTX-2.3 / LTX-2.5", wo: (" bei Video", " in Video"))
         }
         if hat("ltx-video", "ltxv", "ltx_video") {
-            if hat("13b") {
-                return Einordnung(stand: .nicht, text: t(
-                    "LTX-Video 13B ist in NVAI-open für Mac noch nicht eingebaut. Auf dem Mac läuft LTX-Video 2B (Katalog).",
-                    "LTX-Video 13B is not built into NVAI-open for Mac yet. On the Mac, LTX-Video 2B runs (catalog)."))
-            }
-            return katalogFamilie(id, name: "LTX-Video 2B (0.9.8 distilled)", wo: (" bei Video", " in Video"))
+            return katalogFamilie(id, name: hat("13b") ? "LTX-Video 13B" : "LTX-Video 2B (0.9.8 distilled)",
+                                  wo: (" bei Video", " in Video"))
         }
         if hat("wan2", "wan-2", "wan_2") {
             return Einordnung(stand: .nicht, text: hat("1.3b", "1_3b")
@@ -265,8 +263,8 @@ enum HuggingFace {
                 "FLUX.1 is not built into NVAI-open for Mac; FLUX.2 Klein is in the catalog."))
         }
         return Einordnung(stand: .nicht, text: video
-            ? t("Diese Videomodell-Familie ist in NVAI-open für Mac nicht eingebaut. Auf dem Mac läuft LTX-Video 2B (Katalog).",
-                "This video model family is not built into NVAI-open for Mac. On the Mac, LTX-Video 2B runs (catalog).")
+            ? t("Diese Videomodell-Familie ist in NVAI-open für Mac nicht eingebaut. Auf dem Mac laufen LTX-Video und LTX-2 (Katalog).",
+                "This video model family is not built into NVAI-open for Mac. On the Mac, LTX-Video and LTX-2 run (catalog).")
             : t("Dieses Format lädt NVAI-open für Mac nicht. Aus der Suche lassen sich Core-ML-Pipelines laden "
                     + "(Stable Diffusion 1.5, 2 und XL).",
                 "NVAI-open for Mac cannot load this format. From the search it loads Core ML pipelines "

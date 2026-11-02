@@ -138,17 +138,23 @@ struct ZImageModel: Identifiable, Sendable, Equatable {
         try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: tmp.path, contents: nil)
         let file = try FileHandle(forWritingTo: tmp)
-        var length = UInt64(json.count).littleEndian
-        try file.write(contentsOf: withUnsafeBytes(of: &length) { Data($0) })
-        try file.write(contentsOf: json)
-        var done: Int64 = 0
-        for part in parts {
-            try Task.checkCancellation()
-            try file.write(contentsOf: try await Self.range(part.url, part.start, part.count))
-            done += part.count
-            progress(done)
+        do {
+            var length = UInt64(json.count).littleEndian
+            try file.write(contentsOf: withUnsafeBytes(of: &length) { Data($0) })
+            try file.write(contentsOf: json)
+            var done: Int64 = 0
+            for part in parts {
+                try Task.checkCancellation()
+                try file.write(contentsOf: try await Self.range(part.url, part.start, part.count))
+                done += part.count
+                progress(done)
+            }
+            try file.close()
+        } catch {
+            try? file.close()
+            try? FileManager.default.removeItem(at: tmp)  // abgebrochen oder gescheitert: keine halbe Datei
+            throw error
         }
-        try file.close()
         try? FileManager.default.removeItem(at: target)
         try FileManager.default.moveItem(at: tmp, to: target)
     }
