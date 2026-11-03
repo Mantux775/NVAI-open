@@ -10,19 +10,19 @@ Images, videos with sound, music, speech and 3D models, made on your own compute
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.21.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-Setup-0.5.21.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.2.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.20/NVAI-open-0.5.2.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.3.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-0.5.3.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.21 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.21))
+November 2026: NVAI-open 0.5.21 for Windows and 0.5.3 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.21))
 
 - **Narrator voice in the Studio:** voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code. [Details](docs/STUDIO.md#narrator-voice)
 - **A big bug hunt** (0.5.20): the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, phone photos are no longer restored sideways, and the Studio on the Mac no longer loses takes. The documentation is shorter and sorted by topic.
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.21:
+Neu in 0.5.21 (Mac 0.5.3):
 
 - **Sprecherstimme im Studio:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
 - **Große Fehlersuche** (0.5.20): Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, Handyfotos werden nicht mehr quer restauriert, und das Studio auf dem Mac verliert keine Takes mehr. Die Dokumentation ist kürzer und nach Themen geordnet.

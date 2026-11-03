@@ -31,7 +31,7 @@ check after every FLUX.2 step).
 
 Measured on a Mac mini M1 with 8 GB: FLUX.2 Klein 4-bit 512 × 512 in 40.5 s (peak 4.4 GB, bit-identical to the
 package CLI), 1184 × 880 in 109 s; LTX-Video 2B 768 × 512 × 97 frames in 174 s (peak 6.2 GB); 30 s of music in about
-13 s; a described voice in 0.8 times real time (peak 3.3 GB). The 13B and LTX-2 models are recommended by memory
+13 s; a described voice in 0.9 times real time (peak 3.9 GB). The 13B and LTX-2 models are recommended by memory
 from their authors' figures, not measured.
 
 ## Studio

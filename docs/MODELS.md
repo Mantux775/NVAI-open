@@ -494,7 +494,7 @@ NVAI-open for Mac runs its own native models on Apple Silicon (MLX). Measured on
 | Z-Image Turbo | photographic images and lettering, 8 steps | 512² in 101 s, 1 MP in 399 s |
 | LTX-Video 2B | video from text or a start image, 24 fps, no sound | 4 s at 768 × 512 in 174 s |
 | Stable Audio 3 Medium | music and sounds up to 60 s on 8 GB | 30 s in 13 s |
-| Qwen3-TTS (VoiceDesign 1.7B 4-bit, Base 0.6B 8-bit), since Mac 0.5.3 | narrator voice from a description or a recording | 0.8 times real time, at most 3.3 GB |
+| Qwen3-TTS (VoiceDesign 1.7B 4-bit, Base 0.6B 8-bit), since Mac 0.5.3 | narrator voice from a description or a recording | 0.9 times real time, at most 3.9 GB |
 | Qwen3.5 4B, SeedVR2 3B | "Automatic" when restoring; sharpening | Automatic about 20 s; 1024 × 738 → 2× in 9 min |
 
 FLUX.2 Klein removes less damage from old photos than FLUX 3 on Windows, and SeedVR2 3B smooths faces slightly more
