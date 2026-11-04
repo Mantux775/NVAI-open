@@ -4,8 +4,30 @@ import Foundation
 // (seit 0.5.17) und dem Plan, den die Oberfläche vorher zeigt.
 
 extension StudioCommands {
+    /// Die Tonspur „Stimme“ für Sprecherzeilen (Nutzer 3.11.2026: „es sollte es in einer neuen audio track anlegen mit
+    /// namen Stimme (wieder entfernbar) weitere takes landen dann auch hier“). Fehlt sie, kommt sie unten als neue
+    /// Tonspur dazu; wer sie entfernt, bekommt sie beim nächsten Übernehmen einer Zeile wieder. Sind schon
+    /// `Studio.maxTracks` Tonspuren da, landet die Zeile wie bis 0.5.3 auf A1. Wie `_voice_track` in studio.py.
+    static func voiceTrack(_ p: inout StudioProject) -> String {
+        if let have = p.tracks.first(where: { $0.lane == "voice" }) { return have.id }
+        let audio = p.tracks(of: "audio")
+        guard audio.count < Studio.maxTracks else { return p.trackOrHighest(Studio.laneTrack["voice"], kind: "audio") }
+        let track = StudioTrack(id: "A\(audio.count + 1)", kind: "audio", hidden: false, muted: false, lane: "voice")
+        p.tracks.append(track)
+        orderTracks(&p)
+        return track.id
+    }
+
+    /// Name der Spur für den Plan des Übernehmens: nur die Spur „Stimme“ hat einen.
+    static func trackInfo(_ p: StudioProject, _ trackID: String, new: Bool = false) -> [String: JSONValue] {
+        guard let name = p.tracks.first(where: { $0.id == trackID })?.name else { return [:] }
+        return new ? ["track_name": .string(name), "track_new": .bool(true)] : ["track_name": .string(name)]
+    }
+
     /// Wohin das Übernehmen jede Szene legt: Platzieren-Marker (Vorgabe V2, sonst die oberste Spur), sonst an den
     /// Szenenanfang auf die Spur ihrer Bahn. Audio-Marker verschieben dabei die Ton-Szene an die Marke (in `p`).
+    /// Sprecherzeilen zielen auf die Spur „Stimme“; fehlt sie, steht `Studio.newVoiceTrack` da, angelegt wird sie erst
+    /// für einen neuen Clip (`voiceTrack`).
     static func conformTargets(_ p: inout StudioProject) -> [String: (start: Int, track: String)] {
         let ids = Set(p.scenes.map(\.id))
         for m in p.markers where m.kind == "audio" {
@@ -13,9 +35,11 @@ extension StudioCommands {
                 p.scenes[i].start = m.at
             }
         }
+        let voice = p.tracks.first(where: { $0.lane == "voice" })?.id ?? Studio.newVoiceTrack
         var targets: [String: (start: Int, track: String)] = [:]
         for s in p.scenes {
-            targets[s.id] = (s.start, p.trackOrHighest(Studio.laneTrack[s.lane], kind: s.lane == "video" ? "video" : "audio"))
+            targets[s.id] = (s.start, s.lane == "voice" ? voice
+                             : p.trackOrHighest(Studio.laneTrack[s.lane], kind: s.lane == "video" ? "video" : "audio"))
         }
         for m in p.markers where m.kind == "place" {
             if let sid = m.params["scene_id"]?.stringValue, ids.contains(sid) {
@@ -85,7 +109,8 @@ extension StudioCommands {
         for sid in order {
             guard let s = p.scenes.first(where: { $0.id == sid }), let take = s.take else { continue }
             if let only, !only.contains(s.id) { continue }
-            let (start, track) = targets[s.id]!
+            let (start, target) = targets[s.id]!
+            var track = target
             let linked = p.clips.indices.filter { p.clips[$0].sceneID == s.id }
             if !linked.isEmpty {
                 for i in linked where p.clips[i].assetID != take {
@@ -99,6 +124,7 @@ extension StudioCommands {
                 }
                 continue
             }
+            if track == Studio.newVoiceTrack { track = voiceTrack(&p) }  // erste Sprecherzeile: Spur „Stimme“ anlegen
             // Latent-Kette: Der Take beginnt mit der letzten Sekunde seiner Vorlage; er liegt um diese Bilder früher,
             // der Clip davor wird dort gekürzt und läuft unter einer Überblendung genau dieser Länge aus.
             let carry = carryTicks(take, env)
@@ -136,6 +162,7 @@ extension StudioCommands {
     static func conformPlan(_ project: StudioProject, _ env: StudioEnvironment) -> JSONValue {
         var q = project
         let targets = conformTargets(&q)
+        let voiceBefore = q.tracks.contains { $0.lane == "voice" }
         let inEdit = Set(q.clips.map(\.assetID))
         var items: [JSONValue] = []
         var without = 0
@@ -144,16 +171,22 @@ extension StudioCommands {
                 without += 1
                 continue
             }
-            let (start, track) = targets[s.id]!
+            let (start, target) = targets[s.id]!
+            var track = target
+            let linked = q.clips.filter { $0.sceneID == s.id }
+            if linked.isEmpty, track == Studio.newVoiceTrack { track = voiceTrack(&q) }  // die Spur, die entstünde
             var base: [String: JSONValue] = ["scene_id": .string(s.id), "lane": .string(s.lane), "track": .string(track),
                                              "title": .string(!s.title.isEmpty ? s.title : (!s.prompt.isEmpty ? String(s.prompt.prefix(40)) : s.id))]
-            let linked = q.clips.filter { $0.sceneID == s.id }
+            base.merge(trackInfo(q, track, new: !voiceBefore)) { _, new in new }
             if let first = linked.first {
                 let changed = linked.contains { $0.assetID != take }
                 let edited = linked.count > 1 || !untouched(&q, s, start: start, first, env)
                 base["action"] = .string(changed ? "replace" : "same")
                 base["clip_ids"] = .array(linked.map { .string($0.id) })
                 base["track"] = .string(first.track)
+                base.removeValue(forKey: "track_name")
+                base.removeValue(forKey: "track_new")
+                base.merge(trackInfo(q, first.track)) { _, new in new }
                 base["start_s"] = .double(round3(Studio.seconds(first.start)))
                 base["length_s"] = .double(round3(Studio.seconds(linked.reduce(0) { $0 + $1.length })))
                 base["scene_s"] = .double(round3(Studio.seconds(s.duration)))

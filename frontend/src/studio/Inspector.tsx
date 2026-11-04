@@ -28,6 +28,8 @@ interface Props {
   project: StudioProject
   selection: Selection
   models: ModelInfo[]
+  /** aktive Modelle je Art (GET /api/health), für „aktives Modell (Name)“ */
+  active?: Partial<Record<string, string | null>>
   onCommand: (command: string, params: Record<string, unknown>) => Promise<any>
   onGenerate: (sceneIds: string[]) => void
   onSelect: (s: Selection) => void
@@ -157,7 +159,7 @@ function Seconds({ label, value, onCommit, min = 0, p }: {
   )
 }
 
-export function Inspector({ project, selection, models, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead }: Props) {
+export function Inspector({ project, selection, models, active, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead }: Props) {
   const p = project
   if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
   if (selection.type === 'asset') {
@@ -166,7 +168,7 @@ export function Inspector({ project, selection, models, onCommand, onGenerate, o
   if ((selection.ids?.length ?? 1) > 1) return <ManyProps p={p} selection={selection} onCommand={onCommand} onGenerate={onGenerate} onSelect={onSelect} />
   if (selection.type === 'scene') {
     const s = p.scenes.find((x) => x.id === selection.id)
-    return s ? <SceneProps key={s.id} p={p} s={s} models={models} onCommand={onCommand} onGenerate={onGenerate} /> : null
+    return s ? <SceneProps key={s.id} p={p} s={s} models={models} active={active} onCommand={onCommand} onGenerate={onGenerate} /> : null
   }
   if (selection.type === 'clip') {
     const c = p.clips.find((x) => x.id === selection.id)
@@ -251,16 +253,19 @@ function ManyProps({ p, selection, onCommand, onGenerate, onSelect }: {
   )
 }
 
-function SceneProps({ p, s, models, onCommand, onGenerate }: {
+function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
   p: StudioProject
   s: StudioScene
   models: ModelInfo[]
+  active: Props['active']
   onCommand: Props['onCommand']
   onGenerate: Props['onGenerate']
 }) {
   const update = (fields: Record<string, unknown>) => onCommand('scene.update', { id: s.id, ...fields })
   const modelKind = s.lane === 'video' ? (s.kind === 'image' ? 'image' : 'video') : s.lane === 'voice' ? 'speech' : 'audio'
   const usable = models.filter((m) => m.kind === modelKind && m.installed)
+  // Welches Modell „aktiv“ ist, steht dabei (Nutzer 3.11.2026: in der Sprecher-Bahn stand nur „aktives Modell“)
+  const activeName = usable.find((m) => m.id === active?.[modelKind])?.name
   const earlier = p.scenes.filter((x) => x.lane === 'video' && x.id !== s.id && x.start < s.start)
   return (
     <div className="st-inspector">
@@ -318,7 +323,7 @@ function SceneProps({ p, s, models, onCommand, onGenerate }: {
       <label className="st-field">
         <span>{t('Modell', 'Model')}</span>
         <select value={s.model_id ?? ''} onChange={(e) => update({ model_id: e.target.value || null })}>
-          <option value="">{t('aktives Modell', 'active model')}</option>
+          <option value="">{activeName ? t(`aktives Modell (${activeName})`, `active model (${activeName})`) : t('aktives Modell', 'active model')}</option>
           {usable.map((m) => (
             <option key={m.id} value={m.id}>{licenseBlocked(m) ? '⚠ ' : ''}{m.name}</option>
           ))}

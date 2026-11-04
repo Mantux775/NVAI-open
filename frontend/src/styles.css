@@ -1091,7 +1091,9 @@ kbd {
 .st-tool kbd.st-kbd-shift { right: 1px; bottom: 2px; line-height: 0; }
 .st-kbd-shift svg { display: block; }
 .st-track-head { gap: 2px; padding-right: 4px; }
-.st-track-name { flex: 1; }
+.st-track-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Spur „Stimme“ (seit 0.5.22): Name hinter der Kennung */
+.st-track-label { color: var(--text); }
 .st-icon { width: 18px; height: 18px; padding: 0; display: grid; place-items: center; background: transparent; border: 0; border-radius: 3px; color: var(--muted); cursor: pointer; }
 .st-icon:hover { color: var(--text); background: var(--panel-2); }
 .st-icon.off { color: var(--danger); }

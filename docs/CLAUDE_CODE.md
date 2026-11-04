@@ -492,7 +492,8 @@ black frame in the export.
   becomes a picture in picture over the track below. Keyframes live in media time, so a cut or a speed change keeps
   them on the same moment.
 - **Tracks:** `track.add` (`video` on top, `audio` at the bottom), `track.delete` (not V1/A1), `track.update` with
-  `hidden` and `muted`; both apply to the export.
+  `hidden` and `muted`; both apply to the export. Voice lines go to their own audio track (`lane: "voice"`, shown as
+  "Voice"/"Stimme"), which `edit.conform` adds the first time and adds again after `track.delete`.
 - **Groups:** `clip.move` with `moves=[{id, start_s, track}]`, and `batch` with `commands=[{command, params}]` as one
   undo step.
 

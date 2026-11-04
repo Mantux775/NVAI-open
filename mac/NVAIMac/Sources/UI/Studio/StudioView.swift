@@ -405,7 +405,10 @@ struct ConformSheet: View {
         let id = item["scene_id"]?.stringValue ?? ""
         let overlaps = item["overlaps"]?.arrayValue ?? []
         let warned = !overlaps.isEmpty || item["in_edit"]?.boolValue == true
-        var text = "\(item["title"]?.stringValue ?? "") · \(item["track"]?.stringValue ?? "") · "
+        // Spur „Stimme“ mit Namen, neu angelegt mit Hinweis („A3 Stimme, neu“)
+        let trackText = [item["track"]?.stringValue, item["track_name"]?.stringValue].compactMap { $0 }.joined(separator: " ")
+            + (item["track_new"]?.boolValue == true ? t(", neu", ", new") : "")
+        var text = "\(item["title"]?.stringValue ?? "") · \(trackText) · "
             + formatDecimal(item["start_s"]?.doubleValue ?? 0) + " s · " + formatDecimal(item["length_s"]?.doubleValue ?? 0) + " s"
         if let o = overlaps.first {
             text += t(" · würde überdecken: „\(o["title"]?.stringValue ?? "")“ (\(formatDecimal(o["seconds"]?.doubleValue ?? 0)) s) – das Häkchen erlaubt das Überschreiben",

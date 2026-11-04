@@ -92,6 +92,10 @@ enum StudioJSON {
             var o: [String: JSONValue] = ["id": .string(tr.id), "kind": .string(tr.kind)]
             if tr.isHidden { o["hidden"] = .bool(true) }
             if tr.isMuted { o["muted"] = .bool(true) }
+            if let lane = tr.lane, let name = tr.name {
+                o["lane"] = .string(lane)
+                o["name"] = .string(name)
+            }
             return .object(o)
         }
         let clips: [JSONValue] = p.clips.map { c in

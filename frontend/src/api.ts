@@ -988,6 +988,8 @@ export interface StudioTrack {
   hidden?: boolean
   /** Ton der Spur aus, bei Videospuren der Ton ihrer Clips */
   muted?: boolean
+  /** 'voice': die Tonspur „Stimme“, auf die das Übernehmen Sprecherzeilen legt (seit 0.5.22) */
+  lane?: 'voice'
 }
 
 /** Was „Übernehmen“ täte (GET /api/studio/projects/{id}/conform) */
@@ -996,6 +998,10 @@ export interface StudioConformItem {
   title: string
   lane: StudioLane
   track: string
+  /** Name der Spur, nur bei der Spur „Stimme“ */
+  track_name?: string
+  /** die Spur „Stimme“ gibt es noch nicht, das Übernehmen legt sie an */
+  track_new?: boolean
   action: 'create' | 'replace' | 'same' | 'error'
   start_s?: number
   length_s?: number

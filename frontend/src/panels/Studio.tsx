@@ -30,7 +30,7 @@ import { ContextMenu, type MenuItem, type MenuState } from '../studio/ContextMen
 import { Inspector, MARKER_LABEL } from '../studio/Inspector'
 import { Monitor } from '../studio/Monitor'
 import { selIds, Timelines, TRANSITION_LABEL, type MenuTarget, type Selection, type Tool } from '../studio/Timelines'
-import { clipEnd, clipSpeed, decimal, frameTicks, sec, snapFrame, trackKind, trackOrHighest, tracksOf } from '../studio/time'
+import { clipEnd, clipSpeed, decimal, frameTicks, sec, snapFrame, trackKind, trackLabel, trackOrHighest, tracksOf } from '../studio/time'
 
 const KEY_PROJECT = 'nvai-studio-project'
 const KEY_ZOOM = 'nvai-studio-zoom'
@@ -111,6 +111,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [models, setModels] = useState<ModelInfo[]>([])
+  const [active, setActive] = useState<Partial<Record<string, string | null>>>({})
   const [presets, setPresets] = useState<{ id: string; label: string; ext: string }[]>([])
   const [preset, setPreset] = useState('youtube-1080p')
   const [exporting, setExporting] = useState<ExportState | null>(null)
@@ -159,9 +160,11 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
       const pick = list.find((x) => x.id === last) ?? list[0]
       if (pick) open(pick.id)
     })
-    Promise.all([api.models('image'), api.models('video'), api.models('audio')])
+    // Sprachmodelle gehören dazu (Sprecher-Bahn), sonst bot die Auswahl dort nur „aktives Modell“ (bis 0.5.21)
+    Promise.all([api.models('image'), api.models('video'), api.models('audio'), api.models('speech')])
       .then((lists) => setModels(lists.flat()))
       .catch(() => {})
+    api.health().then((h) => setActive(h.active_models)).catch(() => {})
     api.studioPresets().then(setPresets).catch(() => {})
   }, [open])
 
@@ -747,7 +750,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
           {
             label: first
               ? t(`${tr.id} bleibt immer`, `${tr.id} always stays`)
-              : t(`Spur ${tr.id} entfernen${n ? ` (${n} Clip${n > 1 ? 's' : ''})` : ''}`, `Remove track ${tr.id}${n ? ` (${n} clip${n > 1 ? 's' : ''})` : ''}`),
+              : t(`Spur ${trackLabel(tr)} entfernen${n ? ` (${n} Clip${n > 1 ? 's' : ''})` : ''}`, `Remove track ${trackLabel(tr)}${n ? ` (${n} clip${n > 1 ? 's' : ''})` : ''}`),
             separator: true,
             danger: true,
             disabled: first,
@@ -1114,6 +1117,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
                 project={project}
                 selection={selection}
                 models={models}
+                active={active}
                 onCommand={run}
                 onGenerate={generate}
                 onSelect={setSelection}

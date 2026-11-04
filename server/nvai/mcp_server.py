@@ -1371,6 +1371,8 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
                     removes it, clear=true removes all; linear in between, below 1.0 the track below shows
                     (picture in picture). Keyframes stick to media time, so cuts and speed keep them in place
       track.add     kind (video: new top track, audio: new bottom track); track.delete id (not V1/A1);
+                    voice lines get their own audio track (lane "voice", named Voice/Stimme), added by the
+                    first edit.conform and again after it was deleted
       track.update  id, hidden (video picture off), muted (sound off) -- both also apply to the export
       batch         commands=[{command, params}] as one undo step
       project.update name, width, height, fps

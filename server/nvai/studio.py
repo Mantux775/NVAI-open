@@ -42,9 +42,11 @@ TICKS_PER_SECOND = 254_016_000_000
 UNDO_LIMIT = 100
 VERSION = 1
 
-# Bahnen der Komposition und die Spur, auf die das Uebernehmen ihre Takes legt.
+# Bahnen der Komposition und die Spur, auf die das Uebernehmen ihre Takes legt. Sprecherzeilen bekommen seit 0.5.22 eine
+# eigene Tonspur „Stimme“ (Spur mit "lane": "voice", siehe _voice_track); A1 nur, wenn keine Tonspur mehr dazupasst.
 LANES = ("video", "voice", "music", "sfx")
 LANE_TRACK = {"video": "V1", "voice": "A1", "music": "A2", "sfx": "A2"}
+NEW_VOICE_TRACK = "+voice"  # Ziel „neue Spur Stimme“, bis _voice_track sie beim Übernehmen anlegt
 TRACKS = [{"id": "V2", "kind": "video"}, {"id": "V1", "kind": "video"},
           {"id": "A1", "kind": "audio"}, {"id": "A2", "kind": "audio"}]
 MARKER_KINDS = ("place", "transition", "chain", "audio", "ai", "note")
@@ -839,6 +841,35 @@ def _track_or_highest(p: dict[str, Any], wanted: str | None, kind: str) -> str:
     return wanted if wanted in ids else max(ids, key=_track_number)
 
 
+def _voice_track_id(p: dict[str, Any]) -> str | None:
+    return next((tr["id"] for tr in p["tracks"] if tr.get("lane") == "voice"), None)
+
+
+def _voice_track(p: dict[str, Any]) -> str:
+    """Die Tonspur „Stimme“ für Sprecherzeilen (Nutzer 3.11.2026: „es sollte es in einer neuen audio track anlegen mit
+    namen Stimme (wieder entfernbar) weitere takes landen dann auch hier“). Fehlt sie, kommt sie unten als neue Tonspur
+    dazu; wer sie entfernt, bekommt sie beim nächsten Übernehmen einer Zeile wieder. Sind schon MAX_TRACKS Tonspuren da,
+    landet die Zeile wie bis 0.5.21 auf A1."""
+    have = _voice_track_id(p)
+    if have:
+        return have
+    audio = _tracks_of(p, "audio")
+    if len(audio) >= MAX_TRACKS:
+        return _track_or_highest(p, LANE_TRACK["voice"], "audio")
+    track = {"id": f"A{len(audio) + 1}", "kind": "audio", "hidden": False, "muted": False, "lane": "voice"}
+    p["tracks"].append(track)
+    _order_tracks(p)
+    return track["id"]
+
+
+def _track_info(p: dict[str, Any], track_id: str, new: bool = False) -> dict[str, Any]:
+    """Name der Spur für den Plan des Übernehmens: nur die Spur „Stimme“ hat einen."""
+    tr = next((x for x in p["tracks"] if x["id"] == track_id), None)
+    if tr is None or tr.get("lane") != "voice":
+        return {}
+    return {"track_name": t("Stimme", "Voice"), **({"track_new": True} if new else {})}
+
+
 def _order_tracks(p: dict[str, Any]) -> None:
     """Videospuren von oben nach unten (V3, V2, V1), darunter die Tonspuren (A1, A2 …), wie in der Ansicht."""
     p["tracks"] = (sorted(_tracks_of(p, "video"), key=lambda tr: -_track_number(tr["id"]))
@@ -875,7 +906,8 @@ def _track_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
 
 
 @command("track.delete", "Spur entfernen: id. Ihre Clips gehen mit (Rückgängig holt beides zurück); V1 und A1 "
-         "bleiben immer (wie bei FilmCraft). Die Spuren darüber bzw. darunter rücken nach (V3 wird V2)")
+         "bleiben immer (wie bei FilmCraft). Die Spuren darüber bzw. darunter rücken nach (V3 wird V2). Die Spur "
+         "„Stimme“ (lane voice) legt das nächste Übernehmen einer Sprecherzeile wieder an")
 def _track_delete(p: dict[str, Any], a: dict[str, Any]) -> dict[str, int]:
     tr = _track(p, a.get("id", ""))
     if _track_number(tr["id"]) == 1:
@@ -1258,13 +1290,17 @@ def _clip_key(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
 
 def _conform_targets(p: dict[str, Any]) -> dict[str, tuple[int, str]]:
     """Wohin das Übernehmen jede Szene legt: Platzieren-Marker (Vorgabe V2, sonst die oberste Spur), sonst an den
-    Szenenanfang auf die Spur ihrer Bahn. Audio-Marker verschieben dabei die Ton-Szene an die Marke (in `p`)."""
+    Szenenanfang auf die Spur ihrer Bahn. Audio-Marker verschieben dabei die Ton-Szene an die Marke (in `p`).
+    Sprecherzeilen zielen auf die Spur „Stimme“; fehlt sie, steht NEW_VOICE_TRACK da, angelegt wird sie erst für einen
+    neuen Clip (_voice_track)."""
     scenes = {s["id"]: s for s in p["scenes"]}
     for m in p["markers"]:
         if m["kind"] == "audio" and m["params"].get("scene_id") in scenes:
             scenes[m["params"]["scene_id"]]["start"] = m["at"]
-    targets = {s["id"]: (s["start"], _track_or_highest(p, LANE_TRACK[s["lane"]], "video" if s["lane"] == "video"
-                                                       else "audio")) for s in p["scenes"]}
+    voice = _voice_track_id(p) or NEW_VOICE_TRACK
+    targets = {s["id"]: (s["start"], voice if s["lane"] == "voice" else
+                         _track_or_highest(p, LANE_TRACK[s["lane"]], "video" if s["lane"] == "video" else "audio"))
+               for s in p["scenes"]}
     for m in p["markers"]:
         if m["kind"] == "place" and m["params"].get("scene_id") in scenes:
             targets[m["params"]["scene_id"]] = (m["at"], _track_or_highest(p, m["params"].get("track") or "V2", "video"))
@@ -1281,6 +1317,7 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     ist der Vorschlag für das Häkchen."""
     q = copy.deepcopy(p)
     targets = _conform_targets(q)
+    voice_before = _voice_track_id(q)
     in_edit = {c["asset_id"] for c in q["clips"]}
     items, without = [], 0
     for s in q["scenes"]:
@@ -1288,13 +1325,17 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
             without += 1
             continue
         start, track = targets[s["id"]]
-        base = {"scene_id": s["id"], "title": s.get("title") or s.get("prompt", "")[:40] or s["id"],
-                "lane": s["lane"], "track": track}
         linked = [c for c in q["clips"] if c.get("scene_id") == s["id"]]
+        if not linked and track == NEW_VOICE_TRACK:
+            track = _voice_track(q)  # in der Kopie: die Spur, die das Übernehmen anlegen würde
+        base = {"scene_id": s["id"], "title": s.get("title") or s.get("prompt", "")[:40] or s["id"],
+                "lane": s["lane"], "track": track, **_track_info(q, track, new=voice_before is None)}
         if linked:
             changed = any(c["asset_id"] != s["take"] for c in linked)
             edited = len(linked) > 1 or not _untouched(q, s, start, linked[0])
-            items.append({**base, "action": "replace" if changed else "same", "clip_ids": [c["id"] for c in linked],
+            items.append({**{k: v for k, v in base.items() if not k.startswith("track")},
+                          **_track_info(q, linked[0]["track"]),
+                          "action": "replace" if changed else "same", "clip_ids": [c["id"] for c in linked],
                           "track": linked[0]["track"], "start_s": round(seconds(linked[0]["start"]), 3),
                           "length_s": round(seconds(sum(clip_length(c) for c in linked)), 3),
                           "scene_s": round(seconds(s["duration"]), 3), "edited": edited,
@@ -1346,6 +1387,8 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
                         c["in"] = min(c["in"], max(0, c["out"] - frame_ticks(p)))
                     updated += 1
             continue
+        if track == NEW_VOICE_TRACK:
+            track = _voice_track(p)  # erste Sprecherzeile im Schnitt: Spur „Stimme“ anlegen
         # Latent-Kette: Der Take beginnt mit der letzten Sekunde seiner Vorlage; er liegt um diese Bilder früher, der
         # Clip davor wird dort gekürzt und läuft unter einer Überblendung genau dieser Länge aus (studio_render).
         carry = _carry_ticks(s["take"])
@@ -2218,7 +2261,8 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                     "takes": len(s["takes"]), "error": s.get("error")} for s in p["scenes"]],
         "markers": [{"id": m["id"], "at_s": round(seconds(m["at"]), 3), "kind": m["kind"], "name": m["name"],
                      "comment": m["comment"], "params": m["params"], "done": m["done"]} for m in p["markers"]],
-        "tracks": [{"id": tr["id"], "kind": tr["kind"], **{k: True for k in ("hidden", "muted") if tr.get(k)}}
+        "tracks": [{"id": tr["id"], "kind": tr["kind"], **{k: True for k in ("hidden", "muted") if tr.get(k)},
+                    **({"lane": tr["lane"], "name": t("Stimme", "Voice")} if tr.get("lane") == "voice" else {})}
                    for tr in p["tracks"]],
         "clips": [{"id": c["id"], "track": c["track"], "start_s": round(seconds(c["start"]), 3),
                    "end_s": round(seconds(clip_end(c)), 3), "asset_id": c["asset_id"], "scene_id": c.get("scene_id"),

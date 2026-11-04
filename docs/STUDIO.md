@@ -87,7 +87,8 @@ comes from:
   exact words of the recording the way of speaking is copied too. Only use recordings whose speakers agreed.
 
 A voice scene takes the length of its take, so conforming never cuts off the end of a sentence. Conform puts the lines
-on A1, and the export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
+on their own audio track "Voice" (on the Mac since 0.5.4), which it adds the first time; remove it like any other track, and the next conform
+brings it back. The export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
 
 ## Tools, right-click and tracks
 

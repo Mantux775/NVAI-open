@@ -2,30 +2,27 @@
 
 A studio for whole videos, plus images, video with sound, speech, music and 3D models on demand, all made on your own computer. Free, private, no account, no subscription, no cloud.
 
-<p align="center"><img src="docs/images/photo-to-video-captain.gif" width="420" alt="A generated photo becomes a ship captain in a storm who says his line"></p>
-<p align="center"><sub>Made with NVAI-open: a generated photo becomes a ship captain who speaks in a storm. <a href="docs/videos/photo-to-video-captain.mp4">With sound</a></sub></p>
-
 ## Download
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.21.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-Setup-0.5.21.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.22.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-Setup-0.5.22.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.3.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-0.5.3.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.21 for Windows and 0.5.3 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.21))
+November 2026: NVAI-open 0.5.22 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.22))
 
-- **Narrator voice in the Studio:** voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code. [Details](docs/STUDIO.md#narrator-voice)
-- **A big bug hunt** (0.5.20): the whole code was checked, 57 bugs are fixed. Quitting no longer hangs while a job runs, "■ Stop" at the top really cancels, phone photos are no longer restored sideways, and the Studio on the Mac no longer loses takes. The documentation is shorter and sorted by topic.
+- **A track for the narrator:** "Conform" puts the voice lines of the Studio on their own audio track, "Voice". Later lines land there too, and the track can be removed like any other. Voice scenes now offer Qwen3-TTS in their model list. [Details](docs/STUDIO.md#narrator-voice)
+- **Narrator voice in the Studio** (0.5.21): voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code.
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.21 (Mac 0.5.3):
+Neu in 0.5.22:
 
-- **Sprecherstimme im Studio:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
-- **Große Fehlersuche** (0.5.20): Der ganze Code wurde durchgesehen, 57 Fehler sind behoben. Beenden hängt nicht mehr, solange ein Auftrag läuft, „■ Stopp“ oben bricht wirklich ab, Handyfotos werden nicht mehr quer restauriert, und das Studio auf dem Mac verliert keine Takes mehr. Die Dokumentation ist kürzer und nach Themen geordnet.
+- **Eine Spur für den Sprecher:** „Übernehmen“ legt die Sprecherzeilen des Studios auf eine eigene Tonspur „Stimme“. Weitere Zeilen landen dort auch, und die Spur lässt sich wie jede andere entfernen. Sprecher-Szenen bieten jetzt Qwen3-TTS in der Modellwahl an. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
+- **Sprecherstimme im Studio** (0.5.21): Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code.
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
@@ -74,6 +71,9 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
 ### From a portrait to a video
+
+<p align="center"><img src="docs/images/photo-to-video-captain.gif" width="420" alt="A generated photo becomes a ship captain in a storm who says his line"></p>
+<p align="center"><sub>Made with NVAI-open: a generated photo becomes a ship captain who speaks in a storm. <a href="docs/videos/photo-to-video-captain.mp4">With sound</a></sub></p>
 
 ![A photo, the start image from FLUX 3 and two frames of the video from LTX-2.5](docs/images/photo-to-video-captain.jpg)
 
@@ -280,6 +280,9 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
 ### Vom Porträt zum Video
+
+<p align="center"><img src="docs/images/photo-to-video-captain.gif" width="420" alt="Ein erzeugtes Foto wird zum Schiffskapitän im Sturm, der seinen Satz sagt"></p>
+<p align="center"><sub>Mit NVAI-open gemacht: Aus einem erzeugten Foto wird ein Schiffskapitän, der im Sturm spricht. <a href="docs/videos/photo-to-video-captain.mp4">Mit Ton</a></sub></p>
 
 ![Ein Foto, das Startbild von FLUX 3 und zwei Bilder aus dem Video von LTX-2.5](docs/images/photo-to-video-captain-de.jpg)
 

@@ -10,9 +10,13 @@ enum Studio {
     static let undoLimit = 100
     static let version = 1
 
-    /// Bahnen der Komposition und die Spur, auf die das Übernehmen ihre Takes legt.
+    /// Bahnen der Komposition und die Spur, auf die das Übernehmen ihre Takes legt. Sprecherzeilen bekommen seit
+    /// 0.5.4 eine eigene Tonspur „Stimme“ (Spur mit lane "voice", `StudioCommands.voiceTrack`), A1 nur, wenn keine
+    /// Tonspur mehr dazupasst.
     static let lanes = ["video", "voice", "music", "sfx"]
     static let laneTrack = ["video": "V1", "voice": "A1", "music": "A2", "sfx": "A2"]
+    /// Ziel „neue Spur Stimme“, bis das Übernehmen sie anlegt
+    static let newVoiceTrack = "+voice"
     static let markerKinds = ["place", "transition", "chain", "audio", "ai", "note"]
     static let markerColors = ["place": "blue", "transition": "yellow", "chain": "green", "audio": "cyan",
                                "ai": "purple", "note": "gray"]
@@ -203,6 +207,13 @@ struct StudioTrack: Codable, Equatable, Sendable {
     var kind: String  // video | audio
     var hidden: Bool?
     var muted: Bool?
+    /// "voice": die Tonspur „Stimme“ für Sprecherzeilen (seit 0.5.4, wie unter Windows)
+    var lane: String?
+
+    /// Anzeigename: nur die Spur „Stimme“ hat einen.
+    var name: String? { lane == "voice" ? t("Stimme", "Voice") : nil }
+    /// Kennung samt Name, für Spurkopf und Menüs („A3 Stimme“)
+    var label: String { name.map { "\(id) \($0)" } ?? id }
 
     static let defaults = [StudioTrack(id: "V2", kind: "video"), StudioTrack(id: "V1", kind: "video"),
                            StudioTrack(id: "A1", kind: "audio"), StudioTrack(id: "A2", kind: "audio")]

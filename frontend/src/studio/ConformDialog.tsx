@@ -43,7 +43,7 @@ export function ConformDialog({ plan, onRun, onClose }: {
         <span>
           <b>{i.title}</b>{' '}
           <span className="muted">
-            {i.track} · {num(i.start_s)} s · {num(i.length_s)} s
+            {i.track}{i.track_name ? ` ${i.track_name}` : ''}{i.track_new ? t(', neu', ', new') : ''} · {num(i.start_s)} s · {num(i.length_s)} s
           </span>
           {i.action === 'replace' && (
             <span className="small muted">

@@ -1,7 +1,7 @@
 // Zeit im Studio: Ticks wie bei FilmCraft (254 016 000 000 je Sekunde), angezeigt als Zeitcode.
 
-import { TPS, type StudioClip, type StudioProject } from '../api'
-import { getLang } from '../i18n'
+import { TPS, type StudioClip, type StudioProject, type StudioTrack } from '../api'
+import { getLang, t } from '../i18n'
 
 export const sec = (ticks: number) => ticks / TPS
 /** Dezimalzeichen der Oberflächensprache: 7,5 auf Deutsch, 7.5 auf Englisch. */
@@ -78,6 +78,10 @@ export function previousClip(p: StudioProject, c: StudioClip): StudioClip | unde
 /** Spuren einer Art in Anzeigereihenfolge (Video von oben: V3, V2, V1; Ton: A1, A2 …). */
 export const tracksOf = (p: StudioProject, kind: 'video' | 'audio') => p.tracks.filter((tr) => tr.kind === kind)
 export const trackKind = (p: StudioProject, id: string) => p.tracks.find((tr) => tr.id === id)?.kind
+/** Name der Spur: nur die Spur „Stimme“ für Sprecherzeilen hat einen (seit 0.5.22). */
+export const trackName = (tr: StudioTrack) => (tr.lane === 'voice' ? t('Stimme', 'Voice') : null)
+/** Kennung samt Name für Menüs: „A3 Stimme“, sonst nur „A2“. */
+export const trackLabel = (tr: StudioTrack) => (tr.lane === 'voice' ? `${tr.id} ${t('Stimme', 'Voice')}` : tr.id)
 /** Die gewünschte Spur, sonst die mit der höchsten Nummer dieser Art (wie studio._track_or_highest). */
 export function trackOrHighest(p: StudioProject, wanted: string, kind: 'video' | 'audio'): string {
   const ids = tracksOf(p, kind).map((tr) => tr.id)

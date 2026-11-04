@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, type DragEvent, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { TPS, type StudioClip, type StudioLane, type StudioMarker, type StudioProject, type StudioScene, type StudioTrack } from '../api'
 import { t } from '../i18n'
-import { clipEnd, clipLength, clipSpeed, decimal, frameTicks, keyTime, sec, shortTime, snapFrame, tracksOf } from './time'
+import { clipEnd, clipLength, clipSpeed, decimal, frameTicks, keyTime, sec, shortTime, snapFrame, trackLabel, trackName, tracksOf } from './time'
 
 export type SelType = 'scene' | 'clip' | 'marker' | 'asset' | 'transition'
 /** Auswahl; `ids` bei mehreren Objekten derselben Art (enthält `id`). Ein Übergang hat die ID seines Clips. */
@@ -616,7 +616,10 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
 
   const trackHead = (tr: StudioTrack) => (
     <>
-      <span className="st-track-name">{tr.id}</span>
+      <span className="st-track-name" title={trackLabel(tr)}>
+        {tr.id}
+        {trackName(tr) && <span className="st-track-label"> {trackName(tr)}</span>}
+      </span>
       {tr.kind === 'video' && (
         <button
           className={`st-icon${tr.hidden ? ' off' : ''}`}

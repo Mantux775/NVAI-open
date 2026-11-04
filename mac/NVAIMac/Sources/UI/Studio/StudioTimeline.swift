@@ -415,6 +415,9 @@ struct TrackHeader: View {
         let off = track.isHidden || track.isMuted
         HStack(spacing: 4) {
             Text(track.id).font(.caption.monospaced()).foregroundStyle(off ? .secondary : .primary)
+            if let name = track.name {
+                Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+            }
             Spacer(minLength: 2)
             if track.kind == "video" {
                 Button { Task { await model.run("track.update", ["id": .string(track.id), "hidden": .bool(!track.isHidden)]) } } label: {
@@ -443,7 +446,7 @@ struct TrackHeader: View {
                 Button(t("\(track.id) bleibt immer", "\(track.id) always stays")) {}.disabled(true)
             } else {
                 let n = project.clips.filter { $0.track == track.id }.count
-                Button(t("Spur \(track.id) entfernen (\(n) Clips)", "Remove track \(track.id) (\(n) clips)"), role: .destructive) {
+                Button(t("Spur \(track.label) entfernen (\(n) Clips)", "Remove track \(track.label) (\(n) clips)"), role: .destructive) {
                     Task { await model.run("track.delete", ["id": .string(track.id)]) }
                 }
             }
