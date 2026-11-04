@@ -7,19 +7,19 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.22.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-Setup-0.5.22.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.3.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.21/NVAI-open-0.5.3.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-0.5.4.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.22 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.22))
+November 2026: NVAI-open 0.5.22 for Windows and 0.5.4 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.22))
 
 - **A track for the narrator:** "Conform" puts the voice lines of the Studio on their own audio track, "Voice". Later lines land there too, and the track can be removed like any other. Voice scenes now offer Qwen3-TTS in their model list. [Details](docs/STUDIO.md#narrator-voice)
 - **Narrator voice in the Studio** (0.5.21): voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code.
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.22:
+Neu in 0.5.22 (Mac 0.5.4):
 
 - **Eine Spur für den Sprecher:** „Übernehmen“ legt die Sprecherzeilen des Studios auf eine eigene Tonspur „Stimme“. Weitere Zeilen landen dort auch, und die Spur lässt sich wie jede andere entfernen. Sprecher-Szenen bieten jetzt Qwen3-TTS in der Modellwahl an. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
 - **Sprecherstimme im Studio** (0.5.21): Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code.
