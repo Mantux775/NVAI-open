@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
+import { api, LORA_BASE_LABEL, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type LoraUploadResult, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
+import { LoraUpload } from '../components/LoraFile'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
@@ -115,13 +116,15 @@ interface Props {
   health: Health | null
   event: ServerEvent | null
   downloads: Downloads
+  /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde (auch per MCP): Modellliste neu laden */
+  modelsVersion?: number
   onShowModels: () => void
 }
 
 /** Hochgeladene Dateien, die als Quellbild taugen */
 const IMAGE_FILE = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i
 
-export function GeneratePanel({ health, event, downloads, onShowModels }: Props) {
+export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onShowModels }: Props) {
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<Record<Mode, string>>({
@@ -302,7 +305,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       })
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- activeKey steht für health.active_models
-  }, [activeKey, downloads.finished])
+  }, [activeKey, downloads.finished, modelsVersion])
 
   // Bildauswahl (Quell-, Start-, Referenzbild, Foto): die neuesten Bilder und Uploads, mit „Weitere 50 laden“
   // wie der Verlauf (Nutzerwunsch 25.10.2026, vorher fest 40 Bilder und 20 Uploads). Die Grenze steht in einem
@@ -474,6 +477,32 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
       setLoraPicks((list) => list.filter((p) => !models.find((m) => m.id === p.model_id)?.features?.turbo))
     }
     toggleLora(l.id, strength)
+  }
+
+  // Eigene LoRA-Datei direkt in der Auswahl hinzufügen (seit 0.5.24); passt sie zum gewählten Modell, gleich anhaken
+  const [loraUploadOpen, setLoraUploadOpen] = useState(false)
+  const [loraNote, setLoraNote] = useState<string | null>(null)
+  const loraAdded = (r: LoraUploadResult) => {
+    const m = r.model
+    setModels((list) => [...list.filter((x) => x.id !== m.id), m])
+    setLoraUploadOpen(false)
+    const fits = (selected?.lora_bases ?? []).includes(m.family)
+    if (fits && !loraPicks.some((p) => p.model_id === m.id)) toggleLora(m.id)
+    const base = LORA_BASE_LABEL[m.family] ?? m.family
+    setLoraNote(
+      (r.existing
+        ? t(`Diese Datei war schon da („${m.name}“), ihre Angaben sind aktualisiert. `,
+          `This file was already there (“${m.name}”); its details were updated. `)
+        : '')
+      + (fits
+        ? (r.existing ? t(`„${m.name}“ ist angehakt.`, `“${m.name}” is ticked.`)
+          : t(`„${m.name}“ ist hinzugefügt und angehakt.`, `“${m.name}” was added and ticked.`))
+          + (m.trigger ? t(` Trigger-Wörter: ${m.trigger}`, ` Trigger words: ${m.trigger}`) : '')
+        : (r.existing ? '' : t(`„${m.name}“ ist hinzugefügt. `, `“${m.name}” was added. `))
+          + t(`Sie gehört zu ${base} und erscheint bei den Modellen dafür.`,
+            `It belongs to ${base} and shows up with the models for it.`))
+      + (r.warning ? ` ${r.warning}` : ''),
+    )
   }
 
   // LTX-2.5 (seit 0.5.8): eigene Formate, Länge in Sekunden, Zusatzwege laut features.
@@ -1682,6 +1711,7 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 <button className="link-btn" onClick={onShowModels}>
                   {t('Unter „Modelle“ suchen', 'Search under “Models”')}
                 </button>
+                {t(' oder unten eine eigene Datei hinzufügen.', ' or add your own file below.')}
               </p>
             ) : (
               loraChoices.map((l) => {
@@ -1709,6 +1739,20 @@ export function GeneratePanel({ health, event, downloads, onShowModels }: Props)
                 )
               })
             )}
+            <div className="lora-own">
+              <button className="link-btn" onClick={() => {
+                setLoraUploadOpen((o) => !o)
+                setLoraNote(null)
+              }}>
+                {loraUploadOpen
+                  ? t('Eigene LoRA-Datei: schließen', 'Own LoRA file: close')
+                  : t('+ Eigene LoRA-Datei hinzufügen', '+ Add your own LoRA file')}
+              </button>
+              {loraUploadOpen && (
+                <LoraUpload compact catalog={models} preferBase={selected?.lora_bases} onDone={loraAdded} />
+              )}
+              {loraNote && <p className="ok-text small">{loraNote}</p>}
+            </div>
           </details>
         )}
         {mode === 'video' && ((vfeat?.sparse_attention?.length ?? 0) > 0 || vfeat?.int8_attention) && (

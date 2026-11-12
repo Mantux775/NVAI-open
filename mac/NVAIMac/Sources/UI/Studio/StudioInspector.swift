@@ -214,6 +214,17 @@ private struct ProjectInspector: View {
             Text(t("\(project.scenes.count) Szenen, \(project.clips.count) Clips, Schnitt \(formatSeconds(project.editDuration, digits: 1)) s.",
                    "\(project.scenes.count) scenes, \(project.clips.count) clips, edit \(formatSeconds(project.editDuration, digits: 1)) s."))
                 .font(.caption)
+            Divider()
+            // Figuren (seit 0.5.5, wie die Projekteinstellungen unter Windows 0.5.24)
+            Text(t("Figuren", "Characters")).font(.headline)
+            Text(t("Eine Figur bündelt Aussehen (LoRA, etwa selbst trainiert) und Stimme. Bild- und Videoszenen wählen unter „Figuren im Bild“, wer zu sehen ist, Sprecher-Szenen unter „Stimme“, wer spricht. Auf dem Mac nimmt nur FLUX.2 Klein LoRAs, also Standbilder.",
+                   "A character bundles a look (LoRA, e.g. one you trained) and a voice. Picture scenes choose under \"Characters in the picture\" who is seen, voice scenes under \"Voice\" who speaks. On the Mac only FLUX.2 Klein takes LoRAs, so still images."))
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(project.characters) { c in
+                CharacterEditor(model: model, project: project, character: c).id(c.id)
+            }
+            Button(t("+ Figur", "+ Character")) { Task { await model.run("character.add", [:]) } }
+            Divider()
             Text(t("So geht's: Oben komponierst du Szenen mit Prompt (Doppelklick auf eine Bahn), „Szenen erzeugen“ macht Clips, Bilder und Musik, „Übernehmen“ legt die Takes in den Schnitt. Unten schneidest du: V Auswahl, C Schneiden, Z Skalieren, S Magnet, M Marker, Leertaste spielt ab.",
                    "How it works: compose scenes with a prompt at the top (double-click a lane), \"Generate scenes\" makes clips, images and music, \"Conform\" puts the takes into the edit. Edit below: V selection, C razor, Z scale, S magnet, M marker, space plays."))
                 .font(.caption).foregroundStyle(.secondary)
@@ -295,6 +306,7 @@ private struct SceneInspector: View {
             }
             modelPicker
             if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
+            if scene.lane == "video" { SceneCharactersView(project: project, scene: scene, update: update) }
             if scene.lane == "video" && scene.kind == "video" {
                 let earlier = project.scenes.filter { $0.lane == "video" && $0.id != scene.id && $0.start < scene.start }
                 Picker(t("Anschluss an", "Chain to"), selection: Binding(
@@ -374,40 +386,84 @@ private struct SceneInspector: View {
     }
 }
 
-/// Stimme einer Sprecher-Szene (seit 0.5.3, wie unter Windows): beschreiben, gleich wie eine andere Sprecher-Szene
-/// (deren gewählter Take mit seinem Text) oder aus einer Aufnahme des Projekts; dazu die Sprache.
+/// Ton- und Videomaterial eines Projekts, das als Stimmvorlage taugt (Takes, Clips, Aufnahmen der Figuren).
+enum StudioRecordings {
+    static func of(_ project: StudioProject) -> [String] {
+        let ids = project.scenes.flatMap(\.takes) + project.clips.map(\.assetID) + project.characters.compactMap(\.voiceAssetID)
+        var seen = Set<String>()
+        return ids.filter { id in
+            guard seen.insert(id).inserted else { return false }
+            let kind = project.media[id]?.kind ?? StudioMediaCache.shared.get(id)?.kind
+            return kind == "audio" || kind == "video"
+        }
+    }
+
+    static func label(_ id: String) -> String { AssetSnapshot.shared.get(id).map { StudioMaterial.label($0) } ?? id }
+
+    static func sceneName(_ project: StudioProject, _ id: String) -> String {
+        guard let s = project.scenes.first(where: { $0.id == id }) else { return id }
+        return !s.title.isEmpty ? s.title : (!s.prompt.isEmpty ? String(s.prompt.prefix(40)) : s.id)
+    }
+
+    /// Woher die Stimme einer Figur kommt, in einem Satz (wie voiceSummary unter Windows).
+    static func voiceSummary(_ project: StudioProject, _ c: StudioCharacter, sceneID: String? = nil) -> String {
+        if let from = c.voiceFrom, from != sceneID {
+            let name = sceneName(project, from)
+            return t("Stimme wie der Take von „\(name)“.", "Voice like the take of \"\(name)\".")
+        }
+        if let asset = c.voiceAssetID {
+            let name = String(label(asset).prefix(40))
+            return t("Stimme aus der Aufnahme „\(name)“.", "Voice from the recording \"\(name)\".")
+        }
+        return c.voice.isEmpty ? t("Ohne Beschreibung: das Modell wählt eine Stimme.", "No description: the model picks a voice.")
+                               : t("Stimme: \(c.voice)", "Voice: \(c.voice)")
+    }
+}
+
+/// Stimme einer Sprecher-Szene (seit 0.5.3, wie unter Windows): beschreiben, die einer Figur (seit 0.5.5), gleich wie
+/// eine andere Sprecher-Szene (deren gewählter Take mit seinem Text) oder aus einer Aufnahme des Projekts; dazu die
+/// Sprache (bei einer Figur deren Sprache).
 private struct VoiceInspector: View {
     let project: StudioProject
     let scene: StudioScene
     let update: (StudioParams) -> Void
 
+    private var character: StudioCharacter? {
+        guard let id = scene.params["character"]?.stringValue else { return nil }
+        return project.characters.first { $0.id == id }
+    }
     private var source: String {
+        if character != nil { return "character" }
         if !(scene.params["voice_from"]?.stringValue ?? "").isEmpty { return "scene" }
         if !(scene.params["voice_asset_id"]?.stringValue ?? "").isEmpty { return "asset" }
         return "describe"
     }
     private var others: [StudioScene] { project.scenes.filter { $0.lane == "voice" && $0.id != scene.id } }
-    /// Ton- und Videomaterial des Projekts (Takes und Clips)
-    private var recordings: [String] {
-        let ids = project.scenes.flatMap(\.takes) + project.clips.map(\.assetID)
-        var seen = Set<String>()
-        return ids.filter { id in
-            guard seen.insert(id).inserted, let kind = project.media[id]?.kind else { return false }
-            return kind == "audio" || kind == "video"
-        }
-    }
+    private var recordings: [String] { StudioRecordings.of(project) }
 
     var body: some View {
         Picker(t("Stimme", "Voice"), selection: Binding(get: { source }, set: { v in
             update(["params": .object([
+                "character": v == "character" ? (project.characters.first.map { JSONValue.string($0.id) } ?? .null) : .null,
                 "voice_from": v == "scene" ? (others.first.map { JSONValue.string($0.id) } ?? .null) : .null,
                 "voice_asset_id": v == "asset" ? (recordings.first.map { JSONValue.string($0) } ?? .null) : .null])])
         })) {
             Text(t("beschreiben", "describe")).tag("describe")
-            Text(t("gleich wie Szene …", "same as scene …")).tag("scene")
-            Text(t("aus einer Aufnahme", "from a recording")).tag("asset")
+            if !project.characters.isEmpty || source == "character" { Text(t("einer Figur …", "of a character …")).tag("character") }
+            if !others.isEmpty || source == "scene" { Text(t("gleich wie Szene …", "same as scene …")).tag("scene") }
+            if !recordings.isEmpty || source == "asset" { Text(t("aus einer Aufnahme", "from a recording")).tag("asset") }
         }
         switch source {
+        case "character":
+            if let character {
+                Picker(t("Figur", "Character"), selection: Binding(
+                    get: { character.id },
+                    set: { update(["params": .object(["character": .string($0)])]) })) {
+                    ForEach(project.characters) { c in Text(c.name).tag(c.id) }
+                }
+                Text(StudioRecordings.voiceSummary(project, character, sceneID: scene.id))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         case "scene":
             Picker(t("Gleiche Stimme wie", "Same voice as"), selection: Binding(
                 get: { scene.params["voice_from"]?.stringValue ?? "" },
@@ -438,10 +494,202 @@ private struct VoiceInspector: View {
                 update(["params": .object(["voice": .string($0)])])
             }
         }
-        Picker(t("Sprache", "Language"), selection: Binding(
-            get: { scene.params["language"]?.stringValue ?? "auto" },
-            set: { update(["params": .object(["language": .string($0)])]) })) {
-            ForEach(SpeechForm.languageNames, id: \.id) { Text($0.label).tag($0.id) }
+        if character == nil {  // eine Figur bringt ihre Sprache mit
+            Picker(t("Sprache", "Language"), selection: Binding(
+                get: { scene.params["language"]?.stringValue ?? "auto" },
+                set: { update(["params": .object(["language": .string($0)])]) })) {
+                ForEach(SpeechForm.languageNames, id: \.id) { Text($0.label).tag($0.id) }
+            }
+        }
+    }
+}
+
+/// Figuren im Bild (seit 0.5.5, wie SceneCharacters unter Windows): ihre geladenen LoRAs, die zum Modell der Szene
+/// passen, und deren Trigger-Wörter kommen in den Auftrag. „Ton aus Sprecher-Szene“ bleibt im Projekt (Windows spricht
+/// den Satz damit über LTX-2.5 mit den Lippen); kein Videomodell des Macs nimmt einen vorgegebenen Ton.
+private struct SceneCharactersView: View {
+    let project: StudioProject
+    let scene: StudioScene
+    let update: (StudioParams) -> Void
+
+    private var chosen: [String] { scene.params["characters"]?.arrayValue?.compactMap(\.stringValue) ?? [] }
+    /// Modell, mit dem die Szene rechnet, und die LoRA-Basen, die es nimmt
+    private var model: (name: String, bases: [String]) {
+        if scene.kind == "image" {
+            let m = Models.find(scene.modelID) ?? Models.active
+            return (m.name, m.engine == "mlx" ? LoRAFiles.macBases : [])
+        }
+        let v = scene.modelID.flatMap(VideoCatalog.model).flatMap { $0.installed ? $0 : nil } ?? VideoCatalog.active
+        return (v.name, [])
+    }
+    private func fits(_ c: StudioCharacter) -> Bool {
+        let bases = model.bases
+        return c.loras.contains { l in LoRACatalog.find(l.modelID).map { $0.installed && bases.contains($0.base) } ?? false }
+    }
+    private var audioFrom: String { scene.params["audio_from"]?.stringValue ?? "" }
+    private var voices: [StudioScene] { project.scenes.filter { $0.lane == "voice" } }
+
+    var body: some View {
+        if project.characters.isEmpty && !(scene.kind == "video" && !audioFrom.isEmpty) {
+            Text(t("Figuren (Aussehen per LoRA, eigene Stimme) legst du in den Projekteinstellungen an: dafür in der Zeitleiste ins Leere klicken.",
+                   "Characters (look via LoRA, their own voice) are set up in the project settings: click an empty spot in the timeline."))
+                .font(.caption).foregroundStyle(.secondary)
+        } else {
+            if !project.characters.isEmpty {
+                Text(t("Figuren im Bild", "Characters in the picture")).font(.caption).foregroundStyle(.secondary)
+                ForEach(project.characters) { c in
+                    HStack {
+                        Toggle(c.name, isOn: Binding(get: { chosen.contains(c.id) }, set: { on in
+                            let list = on ? chosen + [c.id] : chosen.filter { $0 != c.id }
+                            update(["params": .object(["characters": .array(list.map(JSONValue.string))])])
+                        }))
+                        if chosen.contains(c.id) && !fits(c) {
+                            Text(t("keine LoRA für \(model.name)", "no LoRA for \(model.name)")).font(.caption).foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+            if scene.kind == "video" {
+                Picker(t("Ton aus Sprecher-Szene", "Sound from voice scene"), selection: Binding(
+                    get: { audioFrom },
+                    set: { update(["params": .object(["audio_from": $0.isEmpty ? .null : .string($0)])]) })) {
+                    Text(t("keiner", "none")).tag("")
+                    ForEach(voices) { v in
+                        let who = v.params["character"]?.stringValue.flatMap { id in project.characters.first { $0.id == id }?.name }
+                        Text(StudioRecordings.sceneName(project, v.id) + (who.map { " (\($0))" } ?? "")).tag(v.id)
+                    }
+                    if !audioFrom.isEmpty && !voices.contains(where: { $0.id == audioFrom }) { Text(audioFrom).tag(audioFrom) }
+                }
+                Text(t("Den Satz mit den Lippen sprechen kann nur LTX-2.5 unter NVAI-open für Windows. Auf dem Mac bleibt die Angabe im Projekt: Das Video entsteht ohne diesen Ton, und Übernehmen legt den Satz normal auf die Spur „Stimme“.",
+                       "Speaking the line with the lips needs LTX-2.5 in NVAI-open for Windows. On the Mac the setting stays in the project: the video is made without this sound, and Conform puts the line on the \"Voice\" track as usual."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Eine Figur in den Projekteinstellungen (wie CharacterEditor unter Windows): Name, Aussehen (LoRAs), Stimme, Sprache.
+private struct CharacterEditor: View {
+    @ObservedObject var model: StudioModel
+    let project: StudioProject
+    let character: StudioCharacter
+    @State private var expanded = false
+
+    private func update(_ params: StudioParams) {
+        Task { await model.run("character.update", ["id": .string(character.id)].merging(params) { $1 }) }
+    }
+
+    private func lorasJSON(_ list: [StudioCharacterLoRA]) -> JSONValue {
+        .array(list.map { .object(["model_id": .string($0.modelID), "strength": .double($0.strength)]) })
+    }
+
+    private var voiceScenes: [StudioScene] { project.scenes.filter { $0.lane == "voice" } }
+    private var recordings: [String] { StudioRecordings.of(project) }
+    private var source: String { character.voiceFrom != nil ? "scene" : character.voiceAssetID != nil ? "asset" : "describe" }
+    private var available: [LoRAModel] {
+        LoRACatalog.installed.filter { m in !character.loras.contains { $0.modelID == m.id } }
+    }
+
+    private func name(_ id: String) -> String { LoRACatalog.find(id)?.name ?? id }
+
+    private func status(_ id: String) -> (String, Color) {
+        guard let m = LoRACatalog.find(id) else { return (t("fehlt", "missing"), .orange) }
+        return m.installed ? (m.baseLabel, .secondary) : (t("nicht geladen", "not downloaded"), .orange)
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                CommitField(label: t("Name", "Name"), value: character.name) { v in
+                    let name = v.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty { update(["name": .string(name)]) }
+                }
+                Text(t("Aussehen (LoRAs; je Szene gilt, was zum Modell passt)", "Look (LoRAs; each scene uses those that fit its model)"))
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(character.loras, id: \.modelID) { l in
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(name(l.modelID)).font(.callout).lineLimit(1)
+                            Text(status(l.modelID).0).font(.caption2).foregroundStyle(status(l.modelID).1)
+                        }
+                        .help(LoRACatalog.find(l.modelID).map { $0.trigger.isEmpty ? "" : t("Trigger: \($0.trigger)", "Trigger: \($0.trigger)") } ?? "")
+                        Spacer()
+                        CommitField(label: "", value: formatDecimal(l.strength)) { v in
+                            guard let s = parseSeconds(v), (0...2).contains(s) else { return }
+                            let rounded = (s * 100).rounded() / 100
+                            update(["loras": lorasJSON(character.loras.map { $0.modelID == l.modelID ? StudioCharacterLoRA(modelID: $0.modelID, strength: rounded) : $0 })])
+                        }
+                        .frame(width: 58)
+                        .help(t("Stärke 0 bis 2, meist 0,6 bis 1", "Strength 0 to 2, usually 0.6 to 1"))
+                        Button("✕") { update(["loras": lorasJSON(character.loras.filter { $0.modelID != l.modelID })]) }
+                            .buttonStyle(.borderless)
+                            .help(t("LoRA entfernen", "Remove LoRA"))
+                    }
+                }
+                if !available.isEmpty {
+                    Picker(t("LoRA", "LoRA"), selection: Binding(get: { "" }, set: { id in
+                        guard !id.isEmpty else { return }
+                        update(["loras": lorasJSON(character.loras + [StudioCharacterLoRA(modelID: id, strength: 0.8)])])
+                    })) {
+                        Text(t("+ LoRA hinzufügen …", "+ Add LoRA …")).tag("")
+                        ForEach(available) { m in Text("\(m.name) (\(m.baseLabel))").tag(m.id) }
+                    }
+                } else if LoRACatalog.installed.isEmpty {
+                    Text(t("Noch keine LoRA geladen: unter „Modelle“ laden oder eine eigene LoRA-Datei hinzufügen.",
+                           "No LoRA downloaded yet: download one under \"Models\" or add your own LoRA file."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Picker(t("Stimme", "Voice"), selection: Binding(get: { source }, set: { v in
+                    let fromScene = voiceScenes.first { $0.params["character"]?.stringValue == character.id } ?? voiceScenes.first
+                    update(["voice_from": v == "scene" ? (fromScene.map { JSONValue.string($0.id) } ?? .null) : .null,
+                            "voice_asset_id": v == "asset" ? (recordings.first.map { JSONValue.string($0) } ?? .null) : .null])
+                })) {
+                    Text(t("beschreiben", "describe")).tag("describe")
+                    if !voiceScenes.isEmpty || source == "scene" {
+                        Text(t("wie der Take einer Sprecher-Szene …", "like the take of a voice scene …")).tag("scene")
+                    }
+                    if !recordings.isEmpty || source == "asset" { Text(t("aus einer Aufnahme", "from a recording")).tag("asset") }
+                }
+                switch source {
+                case "scene":
+                    Picker(t("Vorlage", "Reference"), selection: Binding(
+                        get: { character.voiceFrom ?? "" },
+                        set: { update(["voice_from": $0.isEmpty ? .null : .string($0)]) })) {
+                        ForEach(voiceScenes) { s in Text(StudioRecordings.sceneName(project, s.id)).tag(s.id) }
+                    }
+                    Text(t("Deren gewählter Take gibt die Stimme für alle Sätze der Figur vor; ohne Take wird sie zuerst erzeugt (nach der Beschreibung).",
+                           "Its chosen take sets the voice for all of the character's lines; without a take it is generated first (from the description)."))
+                        .font(.caption).foregroundStyle(.secondary)
+                case "asset":
+                    Picker(t("Aufnahme", "Recording"), selection: Binding(
+                        get: { character.voiceAssetID ?? "" },
+                        set: { update(["voice_asset_id": $0.isEmpty ? .null : .string($0)]) })) {
+                        ForEach(recordings, id: \.self) { id in Text(StudioRecordings.label(id)).tag(id) }
+                    }
+                    CommitField(label: t("Was darin gesagt wird (optional)", "What is said in it (optional)"),
+                                value: character.voiceText) { update(["voice_text": .string($0)]) }
+                default:
+                    CommitEditor(label: t("Beschreibung der Stimme", "Description of the voice"), value: character.voice,
+                                 placeholder: t("z. B. eine tiefe, raue Männerstimme, etwa sechzig. Dieselbe Beschreibung klingt je Satz etwas anders: ist ein Satz gut, ihn als Vorlage wählen.",
+                                                "e.g. a deep, rough male voice, about sixty. The same description sounds a little different per line: once a line is good, choose it as the reference."),
+                                 lines: 4) { update(["voice": .string($0)]) }
+                }
+                Picker(t("Sprache", "Language"), selection: Binding(
+                    get: { character.language.isEmpty ? "auto" : character.language },
+                    set: { update(["language": .string($0)]) })) {
+                    ForEach(SpeechForm.languageNames, id: \.id) { Text($0.label).tag($0.id) }
+                }
+                Button(t("Figur löschen", "Delete character"), role: .destructive) {
+                    Task { await model.run("character.delete", ["id": .string(character.id)]) }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(character.name).font(.callout.bold())
+                Text(character.loras.isEmpty ? t("ohne LoRA", "no LoRA") : character.loras.map { name($0.modelID) }.joined(separator: ", "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
     }
 }

@@ -9,6 +9,11 @@ import MLXNN
 /// Utilities for loading Flux.2 model weights from safetensors files
 public class Flux2WeightLoader {
 
+    /// NVAI-open: result of the last `mergeLoRAWeights` (layers merged, LoRA pairs skipped for mismatching shapes),
+    /// so the app can record whether a LoRA was really applied.
+    nonisolated(unsafe) public static var lastMergeCount = 0
+    nonisolated(unsafe) public static var lastMergeSkipped = 0
+
     /// Load all weights from a model directory
     /// - Parameter modelPath: Path to directory containing safetensors files
     /// - Returns: Dictionary of weight name to MLXArray
@@ -783,6 +788,7 @@ public class Flux2WeightLoader {
 
         var mergedCount = 0
         var notFoundCount = 0
+        var shapeMismatchCount = 0
 
         Flux2Debug.log("[LoRA] Merging weights into transformer...")
 
@@ -812,6 +818,23 @@ public class Flux2WeightLoader {
                     continue
                 }
 
+                // NVAI-open: only pairs whose shapes fit this layer ([out, r] x [r, in]). A LoRA for another model
+                // size (e.g. FLUX.2 Klein 9B on 4B) used to reach `mergedWeight + loraDelta` with mismatching shapes,
+                // and MLX ended the whole app on the failed broadcast. Such pairs are skipped and counted instead.
+                func fitting(_ out: Int, _ inDim: Int) -> [(scale: Float, loraA: MLXArray, loraB: MLXArray)] {
+                    let ok = pairs.filter { p in
+                        p.loraA.ndim == 2 && p.loraB.ndim == 2 && p.loraB.dim(1) == p.loraA.dim(0)
+                            && p.loraB.dim(0) == out && p.loraA.dim(1) == inDim
+                    }
+                    if ok.count < pairs.count {
+                        shapeMismatchCount += pairs.count - ok.count
+                        if shapeMismatchCount <= 10 {
+                            Flux2Debug.log("[LoRA] Warning: LoRA shape does not fit \(weightKey) [\(out), \(inDim)], skipped")
+                        }
+                    }
+                    return ok
+                }
+
                 // Check if this layer is a QuantizedLinear
                 if let ql = quantizedModules[layerPath] {
                     // === QuantizedLinear path: dequant → merge → requant ===
@@ -820,9 +843,12 @@ public class Flux2WeightLoader {
                         ql.weight, scales: ql.scales, biases: ql.biases,
                         groupSize: ql.groupSize, bits: ql.bits, mode: ql.mode
                     ).asType(.float16)
+                    // The shape is known before evaluation; without a fitting pair the layer stays untouched
+                    let usable = mergedWeight.ndim == 2 ? fitting(mergedWeight.dim(0), mergedWeight.dim(1)) : []
+                    guard !usable.isEmpty else { continue }
 
                     // 2. Apply all LoRA pairs
-                    for (scale, loraA, loraB) in pairs {
+                    for (scale, loraA, loraB) in usable {
                         if !dtypeLogged {
                             Flux2Debug.log("[LoRA] dtypes - dequantized: \(mergedWeight.dtype), loraA: \(loraA.dtype), loraB: \(loraB.dtype)")
                             dtypeLogged = true
@@ -847,8 +873,10 @@ public class Flux2WeightLoader {
                 } else {
                     // === Non-quantized path (bf16 model) ===
                     var mergedWeight = originalWeight
+                    let usable = originalWeight.ndim == 2 ? fitting(originalWeight.dim(0), originalWeight.dim(1)) : []
+                    guard !usable.isEmpty else { continue }
 
-                    for (scale, loraA, loraB) in pairs {
+                    for (scale, loraA, loraB) in usable {
                         if !dtypeLogged {
                             Flux2Debug.log("[LoRA] dtypes - original: \(originalWeight.dtype), loraA: \(loraA.dtype), loraB: \(loraB.dtype)")
                             dtypeLogged = true
@@ -876,7 +904,9 @@ public class Flux2WeightLoader {
             Flux2Debug.log("[LoRA] ... and \(notFoundCount - 10) more layers not found")
         }
 
-        Flux2Debug.log("[LoRA] Merged \(mergedCount) layers (\(notFoundCount) not found)")
+        Flux2Debug.log("[LoRA] Merged \(mergedCount) layers (\(notFoundCount) not found, \(shapeMismatchCount) pairs with mismatching shapes skipped)")
+        lastMergeSkipped = shapeMismatchCount
+        lastMergeCount = mergedCount
     }
 
     /// Groups LoRA layer paths by their block prefix for batched processing.

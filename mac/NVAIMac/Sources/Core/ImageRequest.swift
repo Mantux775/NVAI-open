@@ -129,6 +129,10 @@ struct ImageJobRequest: Sendable {
                                           "Unknown LoRA: \(entry["model_id"]?.stringValue ?? "?")"))
                 }
                 guard lora.installed else {
+                    if lora.uploaded {
+                        throw APIError(409, t("Die Datei von „\(lora.name)“ fehlt. Unter „Modelle“ die LoRA-Datei erneut hinzufügen.",
+                                              "The file of \"\(lora.name)\" is missing. Add the LoRA file again under \"Models\"."))
+                    }
                     throw APIError(409, t("„\(lora.name)“ ist nicht geladen. Unter „Modelle“ → LoRAs herunterladen.",
                                           "\"\(lora.name)\" is not downloaded. Download it under \"Models\" → LoRAs."))
                 }

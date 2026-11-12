@@ -36,6 +36,7 @@ from typing import Any, Callable
 
 from . import comfy, config, db, jobs, registry, workflows
 from .i18n import t
+from .loras import compatible as lora_fits
 from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateSpeechRequest, GenerateVideoRequest, Job
 
 TICKS_PER_SECOND = 254_016_000_000
@@ -177,7 +178,7 @@ def create(name: str = "", width: int = 1920, height: int = 1080, fps: tuple[int
          "created_at": now, "updated_at": now,
          "settings": {"width": int(width), "height": int(height), "fps": [int(fps[0]), int(fps[1])],
                       "sample_rate": 48000, "video_quality": "dfr"},
-         "scenes": [], "markers": [], "tracks": copy.deepcopy(TRACKS), "clips": [], "media": {}}
+         "scenes": [], "markers": [], "tracks": copy.deepcopy(TRACKS), "clips": [], "media": {}, "characters": []}
     with _lock:
         project_folder(p)
         _save(p)
@@ -635,6 +636,144 @@ def _project_update(p: dict[str, Any], a: dict[str, Any]) -> None:
         s["video_quality"] = a["video_quality"]
 
 
+# ---------------------------------------------------------------------------------------- Figuren (seit 0.5.24)
+#
+# Nutzer 12.11.2026: „lora charachter muss auch im studio zuweisbar sein. inklusive stimme.“ Eine Figur gehört zum
+# Projekt: Name, LoRAs für ihr Aussehen (je Szene greifen die, die zum Modell passen; ihre Trigger-Wörter kommen vorn
+# in den Prompt) und eine Stimme wie bei Sprecher-Szenen (beschreiben, gleich wie eine Sprecher-Szene, aus einer
+# Aufnahme). Bild- und Videoszenen nennen in params.characters, wer zu sehen ist, Sprecher-Szenen in
+# params.character, wer spricht. Eine Videoszene mit params.audio_from (eine Sprecher-Szene) bekommt deren Take als
+# Ton: LTX-2.5 bewegt die Lippen dazu, die Figur spricht im Video mit ihrer Stimme.
+
+VOICE_KEYS = ("voice", "voice_from", "voice_asset_id", "voice_text", "language")
+
+
+def characters(p: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {c["id"]: c for c in p.get("characters") or []}
+
+
+def _character_loras(value: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in value or []:
+        model_id = str((item or {}).get("model_id") or "")
+        entry = registry.get_entry(model_id)
+        if entry is None or entry.get("kind") != "lora":
+            raise StudioError(t(f"Unbekannte LoRA: {model_id}", f"Unknown LoRA: {model_id}"))
+        strength = float(item.get("strength", 0.8))
+        if not 0.0 <= strength <= 2.0:
+            raise StudioError(t("LoRA-Stärke 0 bis 2.", "LoRA strength 0 to 2."))
+        if all(x["model_id"] != model_id for x in out):
+            out.append({"model_id": model_id, "strength": round(strength, 3)})
+    return out
+
+
+def _character_fields(p: dict[str, Any], c: dict[str, Any], a: dict[str, Any]) -> None:
+    if "name" in a:
+        name = str(a["name"] or "").strip()
+        if not name:
+            raise StudioError(t("Die Figur braucht einen Namen.", "The character needs a name."))
+        c["name"] = name[:80]
+    if "loras" in a:
+        c["loras"] = _character_loras(a["loras"])
+    for key in ("voice", "voice_text"):
+        if key in a:
+            c[key] = str(a[key] or "")
+    if "language" in a:
+        c["language"] = str(a["language"] or "auto")
+    if "voice_from" in a:
+        source = a["voice_from"] or None
+        if source is not None and _find(p["scenes"], source, t("Szene", "scene"))["lane"] != "voice":
+            raise StudioError(t("Die Vorlage der Stimme muss eine Sprecher-Szene sein.",
+                                "The voice reference must be a narrator scene."))
+        c["voice_from"] = source
+    if "voice_asset_id" in a:
+        asset_id = a["voice_asset_id"] or None
+        if asset_id is not None:
+            _media(p, asset_id)  # gibt es die Aufnahme?
+        c["voice_asset_id"] = asset_id
+
+
+@command("character.add", "Figur anlegen: name, loras [{model_id, strength}] (ihr Aussehen; je Szene greifen die, "
+         "die zum Modell passen, ihre Trigger-Wörter kommen in den Prompt), Stimme wie bei Sprecher-Szenen: voice "
+         "(Beschreibung), voice_from (Sprecher-Szene als Vorlage), voice_asset_id und voice_text (Aufnahme), language. "
+         "Zuordnen: Bild- und Videoszenen params.characters [ids] (wer zu sehen ist), Sprecher-Szenen "
+         "params.character (wer spricht), Videoszenen params.audio_from (Sprecher-Szene, deren Take der Ton wird)")
+def _character_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
+    chars = p.setdefault("characters", [])
+    c = {"id": db.new_id("chr"), "name": "", "loras": [], "voice": "", "voice_from": None, "voice_asset_id": None,
+         "voice_text": "", "language": "auto"}
+    _character_fields(p, c, {"name": a.get("name") or t(f"Figur {len(chars) + 1}", f"Character {len(chars) + 1}"),
+                             **{k: v for k, v in a.items() if k != "name"}})
+    chars.append(c)
+    return {"id": c["id"]}
+
+
+@command("character.update", "Figur ändern: id + name, loras (ersetzt die Liste), voice, voice_from, voice_asset_id, "
+         "voice_text, language")
+def _character_update(p: dict[str, Any], a: dict[str, Any]) -> None:
+    _character_fields(p, _find(p.get("characters") or [], a.get("id", ""), t("Figur", "character")), a)
+
+
+@command("character.delete", "Figur löschen: id; die Szenen verlieren nur die Zuordnung")
+def _character_delete(p: dict[str, Any], a: dict[str, Any]) -> None:
+    c = _find(p.get("characters") or [], a.get("id", ""), t("Figur", "character"))
+    p["characters"].remove(c)
+    for s in p["scenes"]:
+        params = s.get("params") or {}
+        if params.get("character") == c["id"]:
+            params["character"] = None
+        if c["id"] in (params.get("characters") or []):
+            params["characters"] = [x for x in params["characters"] if x != c["id"]]
+
+
+def _voice_settings(p: dict[str, Any], s: dict[str, Any]) -> dict[str, Any]:
+    """Stimme einer Sprecher-Szene: die ihrer Figur (params.character), sonst ihre eigenen Angaben. Ist die Szene
+    selbst die Vorlage der Figur (voice_from), spricht sie nach deren übrigen Angaben."""
+    params = s.get("params") or {}
+    c = characters(p).get(params.get("character") or "")
+    if c is None:
+        return {k: params.get(k) for k in VOICE_KEYS}
+    out = {k: c.get(k) for k in VOICE_KEYS}
+    if out.get("voice_from") == s["id"]:
+        out["voice_from"] = None
+    return out
+
+
+def _character_look(p: dict[str, Any], s: dict[str, Any], model_id: str | None,
+                    params: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
+    """LoRAs und Prompt einer Bild- oder Videoszene samt ihren Figuren (params.characters): je Figur die geladenen
+    LoRAs, die zum Modell passen, und deren Trigger-Wörter vorn in den Prompt, wenn er sie noch nicht enthält.
+    Eigene LoRAs der Szene (params.loras) bleiben und gehen vor."""
+    out = [dict(x) for x in params.get("loras") or []]
+    prompt = s["prompt"]
+    entry = registry.get_entry(model_id) if model_id else None
+    if entry is None:
+        return out, prompt
+    triggers: list[str] = []
+    chars = characters(p)
+    for cid in params.get("characters") or []:
+        for ref in (chars.get(cid) or {}).get("loras") or []:
+            lora = registry.get_entry(ref["model_id"])
+            if (lora is None or not registry.is_installed(lora) or not lora_fits(lora, entry)
+                    or any(x.get("model_id") == ref["model_id"] for x in out)):
+                continue
+            out.append({"model_id": ref["model_id"], "strength": float(ref.get("strength", 0.8))})
+            trigger = str(lora.get("trigger") or "").strip()
+            if trigger and trigger.lower() not in prompt.lower() and trigger not in triggers:
+                triggers.append(trigger)
+    if triggers:
+        prompt = f"{', '.join(triggers)}, {prompt}"
+    return out, prompt
+
+
+def _spoken_in_video(p: dict[str, Any]) -> set[str]:
+    """Sprecher-Szenen, deren Take eine Videoszene als Ton nimmt (params.audio_from): Der Satz klingt dann schon im
+    Video; Übernehmen legt ihn nicht noch einmal auf die Spur „Stimme“."""
+    voice = {s["id"] for s in p["scenes"] if s["lane"] == "voice"}
+    return {src for s in p["scenes"] if s["lane"] == "video" and s.get("kind") == "video"
+            and (src := (s.get("params") or {}).get("audio_from")) in voice}
+
+
 # ---------------------------------------------------------------------------------------- Szenen
 
 SCENE_FIELDS = ("title", "prompt", "kind", "model_id", "lane", "chain_from", "lyrics")
@@ -683,8 +822,9 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
 
 
 @command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, params "
-         "(wird zusammengeführt, z. B. image_asset_id, quality, seed; Bahn voice: voice, voice_from, "
-         "voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
+         "(wird zusammengeführt, z. B. image_asset_id, quality, seed, characters [Figuren-IDs im Bild], audio_from "
+         "[Sprecher-Szene, deren Take der Ton eines Videos wird]; Bahn voice: character [Figur, deren Stimme spricht], "
+         "voice, voice_from, voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
     for key in SCENE_FIELDS:
@@ -717,6 +857,11 @@ def _scene_delete(p: dict[str, Any], a: dict[str, Any]) -> None:
             other["chain_from"] = None
         if other.get("waiting_for") == s["id"]:
             other.pop("waiting_for")  # der wartende Task sieht das und endet
+        if (other.get("params") or {}).get("audio_from") == s["id"]:
+            other["params"]["audio_from"] = None
+    for c in p.get("characters") or []:
+        if c.get("voice_from") == s["id"]:
+            c["voice_from"] = None  # die Figur behält ihre übrigen Angaben zur Stimme
 
 
 @command("scene.take", "Take wählen oder hinzufügen: id, asset_id (ein Asset aus dem Verlauf wird zum Take)")
@@ -1320,7 +1465,10 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     voice_before = _voice_track_id(q)
     in_edit = {c["asset_id"] for c in q["clips"]}
     items, without = [], 0
+    spoken = _spoken_in_video(q)
     for s in q["scenes"]:
+        if s["id"] in spoken and not any(c.get("scene_id") == s["id"] for c in q["clips"]):
+            continue  # klingt schon im Video (params.audio_from einer Videoszene)
         if not s.get("take"):
             without += 1
             continue
@@ -1356,7 +1504,8 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
                       "length_s": round(seconds(clip_length(clip)), 3), "overlaps": overlaps, "in_edit": dup,
                       "default": not overlaps and not dup})
     transitions = sum(1 for m in q["markers"] if m["kind"] == "transition")
-    return {"items": items, "without_take": without, "transition_markers": transitions}
+    return {"items": items, "without_take": without, "transition_markers": transitions,
+            "spoken_in_video": len([x for x in spoken if not any(c.get("scene_id") == x for c in q["clips"])])}
 
 
 @command("edit.conform", "Komposition übernehmen: legt die gewählten Takes in den Schnitt, tauscht neu erzeugtes "
@@ -1372,11 +1521,14 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
     # Takes mit übernommenem Anfang (Latent-Kette) zuletzt und nach Zeit: Ihre Vorlage liegt dann schon im Schnitt,
     # und eine später gelegte Vorlage überdeckt ihren Anfang nicht
     chained = {s["id"] for s in p["scenes"] if s.get("take") and _carry_ticks(s["take"])}
+    spoken = _spoken_in_video(p)
     for s in sorted(p["scenes"], key=lambda s: (s["id"] in chained, targets[s["id"]][0] if s["id"] in chained else 0)):
         if not s.get("take") or (only is not None and s["id"] not in only):
             continue
         start, track = targets[s["id"]]
         linked = [c for c in p["clips"] if c.get("scene_id") == s["id"]]
+        if s["id"] in spoken and not linked:
+            continue  # der Satz klingt schon im Video, das ihn als Ton nimmt (params.audio_from, seit 0.5.24)
         if linked:
             for c in linked:
                 if c["asset_id"] != s["take"]:
@@ -1555,25 +1707,33 @@ def _known_model(model_id: str | None, kind: str) -> str | None:
     return registry.get_active_model(kind)
 
 
-def _depends_on(s: dict[str, Any]) -> str | None:
-    """Szene, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video) oder die Szene, deren Stimme eine
-    Sprecher-Szene übernimmt (params.voice_from, seit 0.5.21)."""
+def _dependencies(p: dict[str, Any], s: dict[str, Any]) -> list[str]:
+    """Szenen, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video), die Szene, deren Stimme eine
+    Sprecher-Szene übernimmt (params.voice_from, seit 0.5.21, auch über ihre Figur) und die Sprecher-Szene, deren Satz
+    eine Videoszene spricht (params.audio_from, seit 0.5.24)."""
     if s["lane"] == "voice":
-        return (s.get("params") or {}).get("voice_from") or None
-    return s.get("chain_from")
+        source = _voice_settings(p, s).get("voice_from")
+        return [source] if source else []
+    deps = [s["chain_from"]] if s.get("chain_from") else []
+    audio = (s.get("params") or {}).get("audio_from")
+    if s["lane"] == "video" and s.get("kind") == "video" and audio and audio not in deps:
+        deps.append(audio)
+    return deps
 
 
 def _voice_request(p: dict[str, Any], s: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     """Sprecher-Szene: Der Prompt ist der Text. Die Stimme kommt aus params.voice (Beschreibung), params.voice_from
     (gleiche Stimme wie eine andere Sprecher-Szene: deren gewählter Take mit seinem Text als Vorlage) oder
-    params.voice_asset_id (eine Aufnahme, mit params.voice_text wortgenau). Ohne Angabe wählt das Modell selbst."""
+    params.voice_asset_id (eine Aufnahme, mit params.voice_text wortgenau); mit params.character aus der Figur
+    (_voice_settings). Ohne Angabe wählt das Modell selbst."""
     model_id = _known_model(s.get("model_id"), "speech")
     if not model_id:
         raise StudioError(t("Kein Sprachmodell installiert: unter „Modelle“ Qwen3-TTS laden.",
                             "No speech model installed: download Qwen3-TTS under “Models”."))
-    voice_asset, voice_text = params.get("voice_asset_id") or None, str(params.get("voice_text") or "")
-    if params.get("voice_from"):
-        source = _find(p["scenes"], params["voice_from"], t("Szene", "scene"))
+    voice = _voice_settings(p, s)
+    voice_asset, voice_text = voice.get("voice_asset_id") or None, str(voice.get("voice_text") or "")
+    if voice.get("voice_from"):
+        source = _find(p["scenes"], voice["voice_from"], t("Szene", "scene"))
         if source["lane"] != "voice" or source["id"] == s["id"]:
             raise StudioError(t("„Gleiche Stimme wie“ braucht eine andere Sprecher-Szene.",
                                 "“Same voice as” needs another narrator scene."))
@@ -1586,8 +1746,8 @@ def _voice_request(p: dict[str, Any], s: dict[str, Any], params: dict[str, Any])
         # Wortgenau nur, wenn die Vorlage selbst gesprochen wurde (meta.text); bei einer fremden Aufnahme der Text,
         # den ihre Szene dafür nennt, sonst nur der Stimmklang
         voice_text = meta.get("text") if meta.get("speech") else str((source.get("params") or {}).get("voice_text") or "")
-    req = GenerateSpeechRequest(text=s["prompt"], voice=str(params.get("voice") or ""), voice_asset_id=voice_asset,
-                                voice_text=voice_text or "", language=params.get("language") or "auto",
+    req = GenerateSpeechRequest(text=s["prompt"], voice=str(voice.get("voice") or ""), voice_asset_id=voice_asset,
+                                voice_text=voice_text or "", language=voice.get("language") or "auto",
                                 seed=params.get("seed"), model_id=model_id)
     return {**req.model_dump(), "studio_project": p["id"]}
 
@@ -1609,10 +1769,12 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         return "txt2audio", {**req.model_dump(), "studio_project": p["id"]}
     if s["kind"] == "image":
         model_id = _known_model(s.get("model_id"), "image")
-        req = GenerateImageRequest(prompt=s["prompt"], model_id=model_id, **_image_size(p, params, model_id),
+        # Figuren im Bild (seit 0.5.24): ihre LoRAs, die zum Modell passen, und ihre Trigger-Wörter
+        look, prompt = _character_look(p, s, model_id, params)
+        req = GenerateImageRequest(prompt=prompt, model_id=model_id, **_image_size(p, params, model_id), loras=look,
                                    **{k: v for k, v in params.items() if k in ("seed", "steps", "cfg",
                                                                                "negative_prompt",
-                                                                               "reference_asset_ids", "loras")})
+                                                                               "reference_asset_ids")})
         return "txt2img", {**req.model_dump(), "studio_project": p["id"]}
     model_id = _known_model(s.get("model_id"), "video")
     entry = registry.get_entry(model_id) if model_id else None
@@ -1628,11 +1790,25 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
     # audio_asset_id: ein vorgegebener Ton, etwa ein schon abgenommener Satz, damit die Stimme gleich bleibt (Nutzer
     # 27.10.); die Länge kommt dann vom Ton. Referenzbilder und Beschleuniger für Modelle, die sie nennen (MiniMax
     # H3); was die Szene offen lässt, ergänzt der Server mit der Empfehlung des Modells (recommended).
-    extra = {k: v for k, v in params.items() if k in ("seed", "steps", "cfg", "negative_prompt", "loras",
+    extra = {k: v for k, v in params.items() if k in ("seed", "steps", "cfg", "negative_prompt",
                                                       "end_image_asset_id", "quality", "motion_speed",
                                                       "audio_asset_id", "loop", "temporal_upscale", "crf",
                                                       "reference_asset_ids", "sparse_attention", "int8_attention",
                                                       "recommended")}
+    # Figuren im Bild (seit 0.5.24): ihre LoRAs, die zum Modell passen, und ihre Trigger-Wörter
+    look, prompt = _character_look(p, s, model_id, params)
+    if look:
+        extra["loras"] = look
+    if params.get("audio_from"):
+        # Die Figur spricht ihren Satz aus der Sprecher-Szene (deren Take, in der Stimme der Figur); LTX-2.5 bewegt
+        # die Lippen dazu, die Länge kommt vom Ton
+        source = _find(p["scenes"], params["audio_from"], t("Szene", "scene"))
+        if source["lane"] != "voice":
+            raise StudioError(t("„Ton aus“ braucht eine Sprecher-Szene.", "“Sound from” needs a narrator scene."))
+        if not source.get("take"):
+            raise StudioError(t("Die Sprecher-Szene für den Ton hat noch keinen Take: sie zuerst erzeugen.",
+                                "The narrator scene for the sound has no take yet: generate it first."))
+        extra["audio_asset_id"] = source["take"]
     if entry and entry.get("family") == "ltx25" and "quality" not in extra:
         # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und weder Endbild
         # noch Schleife verlangt sind, die DFR nicht kann (gemessen 5 s 1080p: Details über die ganze Länge, 786 statt
@@ -1664,7 +1840,7 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
             frames = max(9, -(-int(round(secs * fps * 1000)) // (step * 1000)) * step + 1)
         else:
             image_id = _last_frame_asset(source["take"], source.get("title") or "", project_folder(p))
-    req = GenerateVideoRequest(prompt=s["prompt"], model_id=model_id, frames=frames, fps=fps,
+    req = GenerateVideoRequest(prompt=prompt, model_id=model_id, frames=frames, fps=fps,
                                image_asset_id=None if chain_id else image_id, chain_asset_id=chain_id,
                                **_video_size(model_id, p, params), **extra)
     return "txt2video", {**req.model_dump(), "studio_project": p["id"]}
@@ -1759,14 +1935,16 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
     # Reihenfolge in der GPU-Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann Videos nach Modell,
     # Anschluss-Szenen zuletzt. So folgt ein Anschluss direkt auf seine Vorlage, ohne dass das Videomodell
     # dazwischen für ein Bild- oder Tonmodell entladen wird.
-    wanted.sort(key=lambda s: (bool(_depends_on(s)), KIND_ORDER.get(_job_kind(s), 9), _model_of(s), s["start"]))
+    wanted.sort(key=lambda s: (bool(_dependencies(p, s)), KIND_ORDER.get(_job_kind(s), 9), _model_of(s), s["start"]))
     by_id = {s["id"]: s for s in p["scenes"]}
     submitted: dict[str, str] = {}
     waiting: dict[str, str] = {}
     errors: dict[str, str] = {}
     for s in wanted:
-        source = by_id.get(_depends_on(s) or "")
-        if source is not None and (source["id"] in submitted or source["id"] in waiting or _busy(source)):
+        # Auf die erste Vorlage warten, die gerade entsteht (Anschluss, Stimme, Satz für die Lippen)
+        source = next((by_id[d] for d in _dependencies(p, s) if d in by_id
+                       and (d in submitted or d in waiting or _busy(by_id[d]))), None)
+        if source is not None:
             waiting[s["id"]] = source["id"]
             continue
         try:
@@ -1820,7 +1998,8 @@ async def cancel(pid: str) -> dict[str, Any]:
 
 
 async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
-    """Wartet, bis die Vorlage einer Anschluss-Szene fertig ist, und schickt dann deren Auftrag ab. Endet still, wenn
+    """Wartet, bis die Vorlage einer Anschluss-Szene fertig ist, und schickt dann deren Auftrag ab. Hat die Szene zwei
+    Vorlagen (Anschluss und Satz für die Lippen, seit 0.5.24), wartet sie danach auf die zweite. Endet still, wenn
     Szene oder Projekt gelöscht oder umgestellt wurden."""
     try:
         while True:
@@ -1829,31 +2008,44 @@ async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
                 p = await asyncio.to_thread(refresh, pid)
             except NotFound:
                 return
+            _resolve_chain_markers(p)  # ein Anschluss aus einem Marker wird nicht gespeichert
             by_id = {s["id"]: s for s in p["scenes"]}
             s, source = by_id.get(scene_id), by_id.get(source_id)
             if s is None or s.get("waiting_for") != source_id:
                 return
             if source is not None and _busy(source):
                 continue
-            job_id, error = None, None
+            job_id, error, next_id = None, None, None
+            audio_source = (s.get("params") or {}).get("audio_from")
             if source is None or source.get("error") or not source.get("take"):
                 error = (t("Die Szene, deren Stimme diese übernimmt, ist fehlgeschlagen.",
                            "The scene whose voice this one takes over failed.") if s["lane"] == "voice" else
+                         t("Die Sprecher-Szene, deren Satz diese Szene spricht, ist fehlgeschlagen.",
+                           "The narrator scene whose line this scene speaks failed.") if source_id == audio_source else
                          t("Die Szene, an die diese anschließt, ist fehlgeschlagen.",
                            "The scene this one continues from failed."))
             else:
-                if s["lane"] == "video":
-                    s["chain_from"] = source_id  # auch wenn der Anschluss nur aus einem Marker kam
-                try:
-                    kind, params = await asyncio.to_thread(_job_request, p, s)
-                    job_id = (await jobs.submit(kind, params)).id
-                except Exception as exc:  # noqa: BLE001 - Fehler gehört an die Szene
-                    error = str(exc)
+                next_id = next((d for d in _dependencies(p, s) if d != source_id and d in by_id
+                                and _busy(by_id[d])), None)
+                if next_id is None:
+                    if s["lane"] == "video" and source_id != audio_source:
+                        s["chain_from"] = source_id  # auch wenn der Anschluss nur aus einem Marker kam
+                    try:
+                        kind, params = await asyncio.to_thread(_job_request, p, s)
+                        job_id = (await jobs.submit(kind, params)).id
+                    except Exception as exc:  # noqa: BLE001 - Fehler gehört an die Szene
+                        error = str(exc)
             with _lock:
                 p = load(pid)
                 s = next((x for x in p["scenes"] if x["id"] == scene_id), None)
                 if s is None:
                     return
+                if next_id is not None:
+                    # Die zweite Vorlage entsteht noch: auf sie weiterwarten
+                    s["waiting_for"] = source_id = next_id
+                    p["updated_at"] = time.time()
+                    _save(p)
+                    continue
                 s.pop("waiting_for", None)
                 if job_id:
                     s.setdefault("jobs", []).append(job_id)
@@ -2050,8 +2242,11 @@ def _used_assets(p: dict[str, Any]) -> list[str]:
     for s in p["scenes"]:
         ids.update(s.get("takes") or [])
         params = s.get("params") or {}
-        ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id") if params.get(k))
+        ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id")
+                   if params.get(k))
         ids.update(params.get("reference_asset_ids") or [])
+    # Stimmen der Figuren aus einer Aufnahme (seit 0.5.24); die LoRA-Dateien selbst sind Modelle, nicht im Paket
+    ids.update(c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id"))
     return sorted(ids)
 
 
@@ -2231,8 +2426,10 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
     out["edit_duration"] = edit_duration(p)
     out["composition_duration"] = composition_duration(p)
     out["history"] = history(p["id"])
-    # Adresse und Art aller verwendeten Assets: Vorschaubilder und Abspielen in der Oberfläche
-    used = {a for s in p["scenes"] for a in s["takes"]} | {c["asset_id"] for c in p["clips"]}
+    # Adresse und Art aller verwendeten Assets: Vorschaubilder und Abspielen in der Oberfläche; dazu die Aufnahmen, aus
+    # denen Figuren ihre Stimme nehmen (Auswahl „Aufnahme“ in den Figuren)
+    used = ({a for s in p["scenes"] for a in s["takes"]} | {c["asset_id"] for c in p["clips"]}
+            | {c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id")})
     assets = {}
     for asset_id in used:
         asset = db.get_asset(asset_id)
@@ -2258,7 +2455,11 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                     "duration_s": round(seconds(s["duration"]), 3), "title": s["title"], "prompt": s["prompt"],
                     "kind": s["kind"], "model_id": s.get("model_id"), "chain_from": s.get("chain_from"),
                     "status": scene_status(s), "waiting_for": s.get("waiting_for"), "take": s.get("take"),
-                    "takes": len(s["takes"]), "error": s.get("error")} for s in p["scenes"]],
+                    "takes": len(s["takes"]), "error": s.get("error"),
+                    # Figuren (seit 0.5.24): wer zu sehen ist, wer spricht, welcher Satz der Ton eines Videos ist
+                    **{k: (s.get("params") or {})[k] for k in ("characters", "character", "audio_from")
+                       if (s.get("params") or {}).get(k)}} for s in p["scenes"]],
+        "characters": p.get("characters") or [],
         "markers": [{"id": m["id"], "at_s": round(seconds(m["at"]), 3), "kind": m["kind"], "name": m["name"],
                      "comment": m["comment"], "params": m["params"], "done": m["done"]} for m in p["markers"]],
         "tracks": [{"id": tr["id"], "kind": tr["kind"], **{k: True for k in ("hidden", "muted") if tr.get(k)},

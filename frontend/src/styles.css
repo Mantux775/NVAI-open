@@ -856,6 +856,38 @@ kbd {
 .lora-intro summary { cursor: pointer; color: var(--accent); font-weight: 600; }
 .lora-intro p { margin: 8px 0 0; color: var(--text); line-height: 1.5; max-width: 900px; }
 
+/* Eigene LoRA-Datei hinzufuegen und zuordnen (components/LoraFile.tsx, seit 0.5.24) */
+.lora-upload { margin-bottom: 14px; }
+.lora-upload .drop-zone {
+  display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+  min-height: 56px; padding: 10px 14px; margin: 10px 0; max-width: 640px;
+  border: 1px dashed var(--line); border-radius: 8px; background: var(--panel-2);
+  color: var(--muted); cursor: pointer; text-align: center; font-size: 13px;
+}
+.lora-upload .drop-zone strong { color: var(--text); word-break: break-all; }
+.lora-upload .drop-zone:hover, .lora-upload .drop-zone.drag { border-color: var(--accent); color: var(--text); }
+.lora-upload .drop-zone.drag { background: rgba(118, 185, 0, 0.08); }
+.lora-upload .drop-zone.disabled { cursor: default; opacity: 0.6; }
+.lora-upload.compact { margin: 4px 0 6px; }
+/* In der Generieren-Spalte sind Hauptknöpfe sonst so breit wie „Generieren“ (.controls .btn.primary) */
+.controls .lora-upload .btn.primary, .controls .lora-assign .btn.primary { width: auto; margin-top: 0; }
+.lora-upload.compact .drop-zone { min-height: 40px; margin: 6px 0; }
+.lora-fields { display: grid; gap: 6px; margin: 8px 0 10px; max-width: 640px; }
+.lora-field { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; }
+.lora-field > span { color: var(--muted); }
+.lora-models { margin: -2px 0 2px 138px; line-height: 1.45; }
+.lora-models .not-installed { opacity: 0.55; }
+.lora-progress { flex: 1 1 160px; max-width: 320px; }
+.lora-assign {
+  margin: 4px 0 2px; padding: 4px 12px 10px; max-width: 680px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
+}
+.lora-own { margin: 6px 0 2px; }
+@media (max-width: 640px) {
+  .lora-field { grid-template-columns: 1fr; gap: 2px; }
+  .lora-models { margin-left: 0; }
+}
+
 /* Empfohlene Einstellungen je Reiter (components/Recommendations.tsx), zugeklappt unter der Reiterwahl */
 .recommend {
   background: var(--panel-2);
@@ -1013,6 +1045,19 @@ kbd {
 /* Prompt-Felder etwas größer und mit der Spalte nach unten ziehbar */
 .st-field textarea.st-prompt { min-height: 9.5em; max-height: 70vh; }
 .st-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
+/* Figuren im Studio (seit 0.5.24): Editor in den Projekteinstellungen, Auswahl an den Szenen */
+.st-character { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; display: flex; flex-direction: column; gap: 6px; }
+.st-character[open] { padding-bottom: 8px; }
+.st-character > summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.st-character > summary .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.st-character[open] > summary { margin-bottom: 4px; }
+.st-character > *:not(summary) + * { margin-top: 6px; }
+.st-lora-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px auto; gap: 6px; align-items: center; color: var(--text); }
+.st-lora-name { display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; line-height: 1.3; }
+.st-lora-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-field input.st-strength { width: 52px; padding: 3px 5px; text-align: right; }
+.st-check { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 12.5px; cursor: pointer; }
+.st-check input { margin: 0; }
 .st-check { font-size: 12px; display: flex; gap: 6px; align-items: center; justify-content: flex-start; cursor: pointer; }
 .st-check input { width: auto; flex: 0 0 auto; margin: 0; }
 .st-actions { display: flex; gap: 6px; flex-wrap: wrap; }

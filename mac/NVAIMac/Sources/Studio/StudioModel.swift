@@ -73,9 +73,11 @@ struct StudioProject: Codable, Equatable, Sendable {
     var media: [String: StudioMedia] = [:]
     /// Projektordner im Material (Windows seit 0.5.15); die Mac-Fassung legt noch keine Ordner an.
     var folder: String?
+    /// Figuren (seit 0.5.5, Windows 0.5.24): Aussehen per LoRA und eine Stimme; Szenen nennen sie in ihren params.
+    var characters: [StudioCharacter] = []
 
     enum CodingKeys: String, CodingKey {
-        case version, id, name, settings, scenes, markers, tracks, clips, media, folder
+        case version, id, name, settings, scenes, markers, tracks, clips, media, folder, characters
         case createdAt = "created_at", updatedAt = "updated_at"
     }
 
@@ -101,6 +103,7 @@ struct StudioProject: Codable, Equatable, Sendable {
         clips = try c.decodeIfPresent([StudioClip].self, forKey: .clips) ?? []
         media = try c.decodeIfPresent([String: StudioMedia].self, forKey: .media) ?? [:]
         folder = try c.decodeIfPresent(String.self, forKey: .folder)
+        characters = try c.decodeIfPresent([StudioCharacter].self, forKey: .characters) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -117,6 +120,14 @@ struct StudioProject: Codable, Equatable, Sendable {
         try c.encode(clips, forKey: .clips)
         try c.encode(media, forKey: .media)
         try c.encode(folder, forKey: .folder)  // null wie unter Windows
+        try c.encode(characters, forKey: .characters)  // neue Projekte unter Windows haben die Liste immer, auch leer
+    }
+
+    func characterIndex(_ id: String) throws -> Int {
+        guard let i = characters.firstIndex(where: { $0.id == id }) else {
+            throw StudioError(t("Unbekannte Figur: \(id)", "Unknown character: \(id)"), notFound: true)
+        }
+        return i
     }
 
     /// Länge eines Bildes in Ticks.
@@ -429,6 +440,71 @@ struct StudioClip: Codable, Equatable, Sendable, Identifiable {
             return a.value + (b.value - a.value) * f
         }
         return last.value
+    }
+}
+
+/// Eine Figur des Projekts (seit 0.5.5, wie Windows 0.5.24, Nutzer 12.11.2026: „lora charachter muss auch im studio
+/// zuweisbar sein. inklusive stimme.“): Name, LoRAs für ihr Aussehen (je Szene gelten die, die zum Modell passen; ihre
+/// Trigger-Wörter kommen vorn in den Prompt) und eine Stimme wie bei Sprecher-Szenen (beschreiben, wie der Take einer
+/// Sprecher-Szene, aus einer Aufnahme). Bild- und Videoszenen nennen in params.characters, wer zu sehen ist,
+/// Sprecher-Szenen in params.character, wer spricht.
+struct StudioCharacter: Codable, Equatable, Sendable, Identifiable {
+    var id: String
+    var name = ""
+    var loras: [StudioCharacterLoRA] = []
+    var voice = ""
+    var voiceFrom: String?
+    var voiceAssetID: String?
+    var voiceText = ""
+    var language = "auto"
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, loras, voice, language
+        case voiceFrom = "voice_from", voiceAssetID = "voice_asset_id", voiceText = "voice_text"
+    }
+
+    init(id: String) { self.id = id }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        loras = try c.decodeIfPresent([StudioCharacterLoRA].self, forKey: .loras) ?? []
+        voice = try c.decodeIfPresent(String.self, forKey: .voice) ?? ""
+        voiceFrom = try c.decodeIfPresent(String.self, forKey: .voiceFrom)
+        voiceAssetID = try c.decodeIfPresent(String.self, forKey: .voiceAssetID)
+        voiceText = try c.decodeIfPresent(String.self, forKey: .voiceText) ?? ""
+        language = try c.decodeIfPresent(String.self, forKey: .language) ?? "auto"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(loras, forKey: .loras)
+        try c.encode(voice, forKey: .voice)
+        try c.encode(voiceFrom, forKey: .voiceFrom)  // null wie unter Windows
+        try c.encode(voiceAssetID, forKey: .voiceAssetID)
+        try c.encode(voiceText, forKey: .voiceText)
+        try c.encode(language, forKey: .language)
+    }
+
+    /// Die Stimme als Angaben wie in den params einer Sprecher-Szene (voice, voice_from, voice_asset_id, voice_text,
+    /// language).
+    var voiceParams: [String: JSONValue] {
+        ["voice": .string(voice), "voice_from": voiceFrom.map(JSONValue.string) ?? .null,
+         "voice_asset_id": voiceAssetID.map(JSONValue.string) ?? .null, "voice_text": .string(voiceText),
+         "language": .string(language)]
+    }
+}
+
+struct StudioCharacterLoRA: Codable, Equatable, Sendable {
+    var modelID: String
+    var strength: Double
+
+    enum CodingKeys: String, CodingKey {
+        case strength
+        case modelID = "model_id"
     }
 }
 

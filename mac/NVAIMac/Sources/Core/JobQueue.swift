@@ -553,7 +553,9 @@ actor JobQueue {
             case .flux(let m):
                 await CoreMLEngine.shared.unload()
                 await self.freeHelpers()  // lädt nach dem Download gleich in den Speicher: vorher Platz machen
-                try await Flux2Engine.shared.load(m, progress: report)
+                // Text-Encoder zuerst: das Paket lädt ihn sonst nicht mit, und das Modell bliebe „teilweise geladen“
+                try await ModelCatalog.downloadEncoder(m) { fraction, message in report(fraction * 0.25, message) }
+                try await Flux2Engine.shared.load(m) { fraction, message in report(0.25 + fraction * 0.75, message) }
             case .coreml(let m):
                 try await CoreMLInstaller.install(m, progress: report)
             case .zimage(let m):
@@ -734,6 +736,11 @@ actor JobQueue {
             if !req.referenceAssetIDs.isEmpty { meta["reference_asset_ids"] = .array(req.referenceAssetIDs.map { .string($0) }) }
             if !req.loras.isEmpty {
                 meta["loras"] = .array(req.loras.map { .object(["model_id": .string($0.id), "strength": .double($0.strength)]) })
+                // Ob die LoRAs wirklich wirkten (seit 0.5.5, eigene Dateien): veränderte Schichten, unpassende Paare
+                if let merge = await Flux2Engine.shared.loraMergeResult() {
+                    meta["lora_layers"] = .int(merge.layers)
+                    if merge.skipped > 0 { meta["lora_skipped"] = .int(merge.skipped) }
+                }
             }
 
             // Abgebrochen, während das Bild noch dekodiert wurde: nicht mehr in den Verlauf (wie beim Ton)

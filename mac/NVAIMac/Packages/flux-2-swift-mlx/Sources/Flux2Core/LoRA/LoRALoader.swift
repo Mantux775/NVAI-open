@@ -163,6 +163,12 @@ public class LoRALoader {
                 Flux2Debug.log("[LoRA] Warning: Missing pair for \(rawPath)")
                 continue
             }
+            // NVAI-open: LoRA files can come from anywhere; a pair that is not two matrices would crash the QKV split
+            // below (and the merge), so it is skipped.
+            guard loraA.ndim == 2, loraB.ndim == 2 else {
+                Flux2Debug.log("[LoRA] Warning: \(rawPath) is not a pair of matrices, skipped")
+                continue
+            }
 
             // Get rank from first pair
             if rank == 0 {

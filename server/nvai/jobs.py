@@ -455,8 +455,9 @@ def _resolve_loras(p: dict[str, Any], entry: dict[str, Any]) -> list[dict[str, A
                 f"LoRA '{lora['name']}' is for {loras.BASES.get(lora['family'], lora['family'])} "
                 f"and does not fit {_name(entry)}."))
         name = workflows.file_name(lora["files"][0])
+        # Wan 2.2 A14B: Zuordnung des Nutzers (high, low, both), sonst der Dateiname
         out.append({"model_id": lora["id"], "file": name, "strength": float(ref.get("strength", 1.0)),
-                    "expert": loras.expert_of(name)})
+                    "expert": loras.expert_for(lora, name)})
     return out
 
 

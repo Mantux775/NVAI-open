@@ -11,16 +11,18 @@ enum StudioPackage {
         name.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$", options: .regularExpression) != nil
     }
 
-    /// Alle Assets, die das Projekt braucht: Clips, Takes und Bildvorgaben der Szenen.
+    /// Alle Assets, die das Projekt braucht: Clips, Takes, Bild- und Tonvorgaben der Szenen, Stimmaufnahmen von
+    /// Sprecher-Szenen und (seit 0.5.5) Figuren. Die LoRA-Dateien der Figuren sind Modelle und kommen nicht ins Paket.
     static func usedAssets(_ p: StudioProject) -> [String] {
         var ids = Set(p.clips.map(\.assetID))
         for s in p.scenes {
             ids.formUnion(s.takes)
-            for key in ["image_asset_id", "end_image_asset_id", "audio_asset_id"] {
+            for key in ["image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id"] {
                 if let v = s.params[key]?.stringValue, !v.isEmpty { ids.insert(v) }
             }
             ids.formUnion((s.params["reference_asset_ids"]?.arrayValue ?? []).compactMap(\.stringValue))
         }
+        ids.formUnion(p.characters.compactMap { $0.voiceAssetID.flatMap { $0.isEmpty ? nil : $0 } })
         return ids.sorted()
     }
 

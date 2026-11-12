@@ -567,6 +567,39 @@ class ModelInfo(BaseModel):
     # ob der hinterlegte Token Zugriff hat: "granted" | "missing" | "no_token" | "unknown".
     gated_repos: list[str] = []
     gated_access: dict[str, str] = {}
+    # Seit 0.5.24: Eintrag des Nutzer-Katalogs (Suche, Civitai, vom Rechner hinzugefuegt); bei LoRAs laesst sich
+    # die Zuordnung mit PUT /api/loras/{id} aendern. uploaded: die Datei kam vom Rechner (kein Download moeglich).
+    custom: bool = False
+    uploaded: bool = False
+    # LoRAs fuer Wan 14B: an welchen Experten sie gehen ("high", "low", "both"); bei anderen Basen leer
+    expert: str = ""
+
+
+class LoraCheck(BaseModel):
+    """Pruefung einer LoRA-Datei vor dem Hochladen (POST /api/loras/inspect), aus ihrem safetensors-Kopf."""
+    ok: bool = Field(description="LoRA mit erkannter Basis, fuer die es ein Modell im Katalog gibt")
+    lora: bool = Field(description="ueberhaupt eine LoRA")
+    family: str | None = Field(None, description="am Kopf erkannte LoRA-Basis; None = nicht erkannt")
+    suggested: str | None = Field(None, description="erkannte Basis oder Vorschlag aus den Metadaten der Datei")
+    catalog: list[str] = Field([], description="Katalogmodelle, die LoRAs dieser Basis nehmen")
+    verdict: str = ""
+    trigger: str = Field("", description="Trigger-Woerter aus den Metadaten der Datei")
+    expert: str | None = Field(None, description='Wan 2.2 A14B: "high"/"low" laut Dateiname')
+    name: str = Field("", description="Vorschlag fuer den Anzeigenamen (der Dateiname ohne Endung)")
+
+
+class LoraUpdate(BaseModel):
+    """Zuordnung einer LoRA aus dem Nutzer-Katalog aendern (PUT /api/loras/{id}); None laesst ein Feld, wie es ist."""
+    family: str | None = Field(None, description="LoRA-Basis (welche Modelle sie nehmen), siehe lora_bases der Modelle")
+    trigger: str | None = None
+    name: str | None = None
+    expert: str | None = Field(None, description='Wan 2.2 A14B: "high", "low", "both"; "" = nach dem Dateinamen')
+
+
+class LoraUploadResult(BaseModel):
+    model: ModelInfo
+    existing: bool = Field(False, description="dieselbe Datei war schon da; sie bekam nur die neuen Angaben")
+    warning: str = Field("", description="Zuordnung weicht vom Dateikopf ab")
 
 
 class DownloadRequest(BaseModel):

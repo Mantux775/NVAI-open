@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.23",
+  "version": "0.5.24",
   "x-api-version": 1
  },
  "paths": {
@@ -818,6 +818,177 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/DeleteResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/loras/inspect": {
+   "post": {
+    "summary": "Lora Inspect",
+    "description": "Prueft eine LoRA-Datei vor dem Hochladen: Basis, passende Modelle, Trigger-Woerter. Der Koerper ist nur der\nAnfang der Datei, 8 Byte Kopflaenge und der safetensors-Kopf; die Weboberflaeche schneidet ihn aus der Datei.",
+    "operationId": "lora_inspect_api_loras_inspect_post",
+    "parameters": [
+     {
+      "name": "file_name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "File Name"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoraCheck"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/loras/upload": {
+   "post": {
+    "summary": "Lora Upload",
+    "description": "Eigene LoRA-Datei (etwa selbst trainiert) nach models/loras/ legen und in den Katalog aufnehmen.\n\nDer Koerper ist die Datei selbst (application/octet-stream), die Angaben stehen in der Adresse: family =\nLoRA-Basis, also unter welchen Modellen sie erscheint (leer = wie am Dateikopf erkannt), name, trigger, bei\nWan 2.2 A14B expert (high, low, both; leer = nach dem Dateinamen). Nur vollstaendige .safetensors-LoRAs; die\ngleiche Datei ein zweites Mal legt keine Kopie an, sie bekommt nur die neuen Angaben.",
+    "operationId": "lora_upload_api_loras_upload_post",
+    "parameters": [
+     {
+      "name": "file_name",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "File Name"
+      }
+     },
+     {
+      "name": "family",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Family"
+      }
+     },
+     {
+      "name": "name",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Name"
+      }
+     },
+     {
+      "name": "trigger",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Trigger"
+      }
+     },
+     {
+      "name": "expert",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "",
+       "title": "Expert"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LoraUploadResult"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/loras/{model_id}": {
+   "put": {
+    "summary": "Lora Update",
+    "description": "Zuordnung einer LoRA aus dem Nutzer-Katalog aendern (hochgeladen, Hugging Face, Civitai): family = unter\nwelchen Modellen sie erscheint, dazu trigger, name und bei Wan 2.2 A14B expert.",
+    "operationId": "lora_update_api_loras__model_id__put",
+    "parameters": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Model Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LoraUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ModelInfo"
         }
        }
       }
@@ -4540,6 +4711,89 @@
     ],
     "title": "Job"
    },
+   "LoraCheck": {
+    "properties": {
+     "ok": {
+      "type": "boolean",
+      "title": "Ok",
+      "description": "LoRA mit erkannter Basis, fuer die es ein Modell im Katalog gibt"
+     },
+     "lora": {
+      "type": "boolean",
+      "title": "Lora",
+      "description": "ueberhaupt eine LoRA"
+     },
+     "family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Family",
+      "description": "am Kopf erkannte LoRA-Basis; None = nicht erkannt"
+     },
+     "suggested": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Suggested",
+      "description": "erkannte Basis oder Vorschlag aus den Metadaten der Datei"
+     },
+     "catalog": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Catalog",
+      "description": "Katalogmodelle, die LoRAs dieser Basis nehmen",
+      "default": []
+     },
+     "verdict": {
+      "type": "string",
+      "title": "Verdict",
+      "default": ""
+     },
+     "trigger": {
+      "type": "string",
+      "title": "Trigger",
+      "description": "Trigger-Woerter aus den Metadaten der Datei",
+      "default": ""
+     },
+     "expert": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expert",
+      "description": "Wan 2.2 A14B: \"high\"/\"low\" laut Dateiname"
+     },
+     "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "Vorschlag fuer den Anzeigenamen (der Dateiname ohne Endung)",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "ok",
+     "lora"
+    ],
+    "title": "LoraCheck",
+    "description": "Pruefung einer LoRA-Datei vor dem Hochladen (POST /api/loras/inspect), aus ihrem safetensors-Kopf."
+   },
    "LoraRef": {
     "properties": {
      "model_id": {
@@ -4561,6 +4815,83 @@
      "model_id"
     ],
     "title": "LoraRef"
+   },
+   "LoraUpdate": {
+    "properties": {
+     "family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Family",
+      "description": "LoRA-Basis (welche Modelle sie nehmen), siehe lora_bases der Modelle"
+     },
+     "trigger": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Trigger"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "expert": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expert",
+      "description": "Wan 2.2 A14B: \"high\", \"low\", \"both\"; \"\" = nach dem Dateinamen"
+     }
+    },
+    "type": "object",
+    "title": "LoraUpdate",
+    "description": "Zuordnung einer LoRA aus dem Nutzer-Katalog aendern (PUT /api/loras/{id}); None laesst ein Feld, wie es ist."
+   },
+   "LoraUploadResult": {
+    "properties": {
+     "model": {
+      "$ref": "#/components/schemas/ModelInfo"
+     },
+     "existing": {
+      "type": "boolean",
+      "title": "Existing",
+      "description": "dieselbe Datei war schon da; sie bekam nur die neuen Angaben",
+      "default": false
+     },
+     "warning": {
+      "type": "string",
+      "title": "Warning",
+      "description": "Zuordnung weicht vom Dateikopf ab",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "model"
+    ],
+    "title": "LoraUploadResult"
    },
    "ModelFile": {
     "properties": {
@@ -4835,6 +5166,21 @@
       "type": "object",
       "title": "Gated Access",
       "default": {}
+     },
+     "custom": {
+      "type": "boolean",
+      "title": "Custom",
+      "default": false
+     },
+     "uploaded": {
+      "type": "boolean",
+      "title": "Uploaded",
+      "default": false
+     },
+     "expert": {
+      "type": "string",
+      "title": "Expert",
+      "default": ""
      }
     },
     "type": "object",

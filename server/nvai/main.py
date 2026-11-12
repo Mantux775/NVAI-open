@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import hmac
 import ipaddress
 import re
@@ -20,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
+from starlette.requests import ClientDisconnect
 
 import httpx
 
@@ -34,6 +36,9 @@ from .schemas import (
     ProblemReport,
     ProblemReportRequest,
     ExpandPromptResult,
+    LoraCheck,
+    LoraUpdate,
+    LoraUploadResult,
     Generate3DRequest,
     GenerateAudioRequest,
     GenerateImageRequest,
@@ -122,6 +127,11 @@ API_FEATURES = [
                        # voice mit params voice, voice_from, voice_asset_id, voice_text, language (seit 0.5.21)
     "video_upscale",   # POST /api/video/upscale: Video verdoppeln mit RelayVSR (Modellart "video_upscale",
                        # seit 0.5.23, braucht ComfyUI ab 0.45)
+    "lora_upload",     # eigene LoRA-Dateien: POST /api/loras/inspect (nur der Kopf) und /api/loras/upload (die Datei),
+                       # PUT /api/loras/{id} (Zuordnung: family, trigger, name, expert); custom/uploaded/expert an
+                       # Modellen, Ereignis models.changed (seit 0.5.24)
+    "studio_characters",  # Studio-Figuren: Befehle character.add/update/delete (LoRAs + Stimme), Szenen-params
+                          # characters, character, audio_from; Übernehmen-Plan mit spoken_in_video (seit 0.5.24)
 ]
 
 
@@ -609,6 +619,12 @@ async def download_model(req: DownloadRequest) -> Job:
         )
     else:
         raise HTTPException(400, t("model_id oder repo+file erforderlich", "model_id or repo+file required"))
+    if entry.get("uploaded"):
+        raise HTTPException(400, t(
+            "Diese LoRA kam vom Rechner und lässt sich nicht herunterladen. Fehlt die Datei, sie bitte erneut "
+            "hinzufügen („LoRA-Datei hinzufügen“ unter „Modelle“).",
+            "This LoRA came from this computer and cannot be downloaded. If the file is missing, please add it "
+            "again (“Add LoRA file” under “Models”)."))
     return await jobs.submit(
         "download", {"entry": entry, "name": entry["name"], "clean": req.clean}
     )
@@ -628,9 +644,140 @@ async def delete_model(model_id: str, forget: bool = False) -> DeleteResult:
 
     # Dateien, die ein laufender Download gerade braucht, bleiben unangetastet.
     result = registry.delete(entry, protect_ids=jobs.models_downloading())
-    if forget and entry.get("custom"):
+    # Eine LoRA vom Rechner laesst sich nicht neu laden: ist ihre Datei weg, geht auch der Eintrag.
+    if entry.get("custom") and (forget or (entry.get("uploaded") and not result["failed"])):
         registry.remove_custom(model_id)
+    if entry.get("kind") == "lora":
+        jobs.publish({"type": "models.changed"})
     return DeleteResult(model_id=model_id, **result)
+
+
+# ------------------------------------------------------- eigene LoRA-Dateien (seit 0.5.24)
+#
+# Reddit-Frage 12.11.2026: „Is there any way to use the Loras you trained locally“. Ablauf der Weboberflaeche:
+# erst nur den Dateikopf pruefen (inspect), der Nutzer bestaetigt oder waehlt die Zuordnung, dann die Datei hochladen.
+
+_UPLOAD_BLOCK = 8 * 1024 * 1024   # so viel sammeln, bevor im Thread geschrieben wird
+
+
+async def _limited_body(request: Request, limit: int) -> bytes:
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > limit:
+            raise HTTPException(413, t("Zu groß für einen Dateikopf.", "Too large for a file header."))
+    return bytes(data)
+
+
+@app.post("/api/loras/inspect", response_model=LoraCheck)
+async def lora_inspect(request: Request, file_name: str = "") -> LoraCheck:
+    """Prueft eine LoRA-Datei vor dem Hochladen: Basis, passende Modelle, Trigger-Woerter. Der Koerper ist nur der
+    Anfang der Datei, 8 Byte Kopflaenge und der safetensors-Kopf; die Weboberflaeche schneidet ihn aus der Datei."""
+    try:
+        if file_name:
+            loras.file_name(file_name)
+        header = loras.header_from_bytes(await _limited_body(request, loras.HEADER_LIMIT + 8))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return LoraCheck(**await asyncio.to_thread(registry.inspect_lora, header, file_name))
+
+
+def _write_block(fh: Any, digest: Any, block: bytes) -> None:
+    fh.write(block)
+    digest.update(block)
+
+
+@app.post("/api/loras/upload", response_model=LoraUploadResult)
+async def lora_upload(request: Request, file_name: str, family: str = "", name: str = "", trigger: str = "",
+                      expert: str = "") -> LoraUploadResult:
+    """Eigene LoRA-Datei (etwa selbst trainiert) nach models/loras/ legen und in den Katalog aufnehmen.
+
+    Der Koerper ist die Datei selbst (application/octet-stream), die Angaben stehen in der Adresse: family =
+    LoRA-Basis, also unter welchen Modellen sie erscheint (leer = wie am Dateikopf erkannt), name, trigger, bei
+    Wan 2.2 A14B expert (high, low, both; leer = nach dem Dateinamen). Nur vollstaendige .safetensors-LoRAs; die
+    gleiche Datei ein zweites Mal legt keine Kopie an, sie bekommt nur die neuen Angaben."""
+    try:
+        target = loras.file_name(file_name)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    if family and family not in loras.BASES:
+        raise HTTPException(400, t(f"Unbekannte LoRA-Basis: {family}", f"Unknown LoRA base: {family}"))
+    if expert and expert not in loras.EXPERTS:
+        raise HTTPException(400, t(f"Unbekannter Experte: {expert} (high, low oder both)",
+                                   f"Unknown expert: {expert} (high, low or both)"))
+    folder = registry.lora_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    length = int(request.headers.get("content-length") or 0)
+    free = shutil.disk_usage(folder).free
+    if length and length > free - 256 * 1024**2:
+        raise HTTPException(507, t(f"Zu wenig Platz in {folder}: {free / 1e9:.1f} GB frei, die Datei hat "
+                                   f"{length / 1e9:.2f} GB.",
+                                   f"Not enough space in {folder}: {free / 1e9:.1f} GB free, the file has "
+                                   f"{length / 1e9:.2f} GB."))
+    part = folder / f".{db.new_id('upl')}.part"
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        fh = open(part, "wb")
+        try:
+            block = bytearray()
+            async for chunk in request.stream():
+                block += chunk
+                if len(block) >= _UPLOAD_BLOCK:
+                    await asyncio.to_thread(_write_block, fh, digest, bytes(block))
+                    size += len(block)
+                    block.clear()
+            if block:
+                await asyncio.to_thread(_write_block, fh, digest, bytes(block))
+                size += len(block)
+        except ClientDisconnect:   # abgebrochen (Knopf oder Seite zu): Teildatei weg, keine Fehlerspur im Log
+            raise HTTPException(400, t("Hochladen abgebrochen.", "Upload cancelled.")) from None
+        finally:
+            fh.close()
+        try:
+            header = await asyncio.to_thread(loras.verify_file, part)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        check = await asyncio.to_thread(registry.inspect_lora, header, target)
+        if not check["lora"]:
+            raise HTTPException(400, check["verdict"])
+        chosen = family or check["family"]
+        if not chosen:
+            raise HTTPException(400, t(
+                f"{check['verdict']} Zuordnung mit family angeben: {', '.join(loras.BASES)}.",
+                f"{check['verdict']} Give the assignment as family: {', '.join(loras.BASES)}."))
+        if not registry.lora_models(chosen):
+            raise HTTPException(400, registry.no_model_for(chosen))
+        entry, existing = await asyncio.to_thread(
+            registry.add_upload, part, target, chosen, name or check["name"], trigger or check["trigger"],
+            expert, size, digest.hexdigest())
+    finally:
+        part.unlink(missing_ok=True)
+    warning = ""
+    if check["family"] and check["family"] != chosen:
+        detected, given = (loras.BASES.get(b, b) for b in (check["family"], chosen))
+        warning = t(f"Der Dateikopf passt zu {detected}, zugeordnet ist {given}. Passt eine LoRA nicht zum Modell, "
+                    "wirkt sie meist gar nicht.",
+                    f"The file header fits {detected}, it is assigned to {given}. A LoRA that does not fit the "
+                    "model usually has no effect at all.")
+    jobs.publish({"type": "models.changed"})
+    return LoraUploadResult(model=await asyncio.to_thread(registry.to_info, entry), existing=existing,
+                            warning=warning)
+
+
+@app.put("/api/loras/{model_id}", response_model=ModelInfo)
+async def lora_update(model_id: str, req: LoraUpdate) -> ModelInfo:
+    """Zuordnung einer LoRA aus dem Nutzer-Katalog aendern (hochgeladen, Hugging Face, Civitai): family = unter
+    welchen Modellen sie erscheint, dazu trigger, name und bei Wan 2.2 A14B expert."""
+    try:
+        entry = await asyncio.to_thread(registry.update_lora, model_id, req.family, req.trigger, req.name,
+                                        req.expert)
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    jobs.publish({"type": "models.changed"})
+    return await asyncio.to_thread(registry.to_info, entry)
 
 
 @app.post("/api/downloads/cancel")

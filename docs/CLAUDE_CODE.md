@@ -32,6 +32,7 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | `health` | Always first: backend, active models, queues |
 | `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros, cons and `features` |
 | `download_model` / `delete_model` / `set_active_model` | Model management |
+| `add_lora` / `update_lora` | Add a LoRA file from this computer (e.g. one the user trained) and assign it to its models; change the assignment (since 0.5.24) |
 | `generate_image` | Image → file paths |
 | `expand_prompt` | A few words → a full prompt; `target` = `image`, `video`, `video_sound`, `video_start`, `video_multishot`, `sfx`, `music_sa3` or `3d` (needs FLUX 3 downloaded) |
 | `generate_audio` | Sound effect or music → file paths |
@@ -46,7 +47,14 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | `studio_*` | Studio projects: scenes, generating, conforming, cutting, export ([Studio](#studio-whole-videos-from-scenes)) |
 
 `list_models(kind="lora")` lists downloaded LoRAs with family and trigger words; pass them as
-`loras=[{"model_id": "…", "strength": 0.8}]` (a model's `lora_bases` says which fit).
+`loras=[{"model_id": "…", "strength": 0.8}]` (a model's `lora_bases` says which fit). A LoRA file from this computer
+(for example one the user trained) is added with `add_lora(path)`: its header shows the family, the file is copied
+into the model folder, the same file twice makes no second copy; when the header is not recognised, ask the user what
+it was trained for and pass `base=`. A family that no model here takes (FLUX.2 Klein on Windows) is refused. `update_lora` changes the assignment (base, trigger words, name, for Wan 2.2 A14B
+the expert `high`/`low`/`both`) of every LoRA added by hand or from the search. REST: `POST /api/loras/inspect` (only
+the header), `POST /api/loras/upload` (the file as the body, details in the query), `PUT /api/loras/{id}`; feature
+`lora_upload`. Put the trigger words into the prompt: without them a pixel-art LoRA left the image almost unchanged.
+Which families each model takes and the tested LoRAs with their settings: [LORAS.md](LORAS.md).
 
 All `generate_*` tools **block until done** and return absolute file paths. Limits: 65 minutes of render time for a
 video, 30 for everything else, plus up to an hour in the queue. A call that runs past its limit does not fail: it
@@ -492,6 +500,18 @@ takes over the voice of another voice scene (its chosen take and text; the scene
 with `params.voice_text` takes it from a recording, `params.language` sets the language. A voice scene takes the length
 of its take, so plan gaps between lines and move scenes after generating.
 
+**Characters** (since 0.5.24, feature `studio_characters`): `character.add` with `name`, `loras` ([{model_id, strength}],
+the look, for example a LoRA the user trained and added with `add_lora`) and a voice with the same fields as a voice
+scene (`voice`, `voice_from`, `voice_asset_id` + `voice_text`, `language`); `character.update` / `character.delete`.
+Assign them per scene: image and video scenes list who is seen in `params.characters` (each character's downloaded
+LoRAs that fit the scene's model are added, their trigger words go in front of the prompt unless it has them, the
+scene's own `params.loras` win); voice scenes speak with `params.character` (the character's voice replaces the scene's
+own fields); a video scene with `params.audio_from` = a voice scene id takes that line's take as its sound, so LTX-2.5
+moves the lips to the character's voice and the clip takes the line's length (the video waits for the line;
+`edit.conform` does not lay that line a second time, the plan counts it in `spoken_in_video`). A described voice
+differs per seed: once a line is approved, set it as the character's `voice_from`. A character may hold several LoRAs
+(say Qwen-Image for stills and LTX-2 for clips); a scene whose model none of them fits runs without them.
+
 To stop a run, `POST /api/studio/projects/{id}/cancel` (feature `studio_cancel`) cancels every queued and running job of
 the project's scenes and releases waiting chained scenes; finished takes stay. Never cancel a run the user started
 without asking.
@@ -529,7 +549,8 @@ and restored photos made for a project outside its scenes go straight into its f
   `params` pass on seed, size, LoRAs, start and end image and `audio_asset_id`.
 - **Still image:** about 1 MP in the project's aspect ratio (a title card with Qwen: `params` 1664 × 928).
 - **Music and sound:** the scene's length, up to 300 s.
-- **Voice:** no text-to-speech yet; add a recorded audio file as a take (`scene.take` with `asset_id`).
+- **Voice:** Qwen3-TTS speaks the scene's text in the voice from its params or its character (see above); a recorded
+  audio file can also be added as a take (`scene.take` with `asset_id`).
 - **Chain:** a video scene with `chain_from`, or starting at a `chain` marker, continues the earlier scene: with LTX-2.5
   it takes over the last 25 frames, and `edit.conform` lays the take exactly over them with a dissolve, so the edit
   keeps the length of the scenes. Otherwise the last frame becomes the start image. If the source is generated in the

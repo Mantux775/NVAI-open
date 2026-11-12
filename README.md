@@ -6,23 +6,25 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.23.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.23/NVAI-open-Setup-0.5.23.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-0.5.4.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.24.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.24/NVAI-open-Setup-0.5.24.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.24/NVAI-open-0.5.5.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.23 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.23)); the Mac app stays at 0.5.4
+November 2026: NVAI-open 0.5.24 for Windows and 0.5.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.24))
 
-- **Upscale a video ×2:** "Upscale ×2" under a video in the History doubles its width and height with RelayVSR (Apache-2.0): 5 seconds from 1080p to 4K in under two minutes, about four times as sharp as plain enlarging. Good for 4K exports and smaller clips. Under the hood ComfyUI 0.45; MOSS-Image expands its prompts about a fifth faster. [Details](docs/MODELS.md#upscaling-a-video-relayvsr-since-0523)
-- **A track for the narrator** (0.5.22): "Conform" puts the voice lines of the Studio on their own audio track, "Voice". Later lines land there too, and the track can be removed like any other. Voice scenes now offer Qwen3-TTS in their model list. [Details](docs/STUDIO.md#narrator-voice)
+- **Your own LoRAs:** "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
+- **Characters in the Studio:** a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
+- **Upscale a video ×2** (0.5.23): "Upscale ×2" under a video in the History doubles its width and height with RelayVSR (Apache-2.0): 5 seconds from 1080p to 4K in under two minutes. [Details](docs/MODELS.md#upscaling-a-video-relayvsr-since-0523)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.23 (Mac bleibt 0.5.4):
+Neu in 0.5.24 (Mac 0.5.5):
 
-- **Video verdoppeln:** „Hochskalieren ×2“ unter einem Video im Verlauf verdoppelt Breite und Höhe mit RelayVSR (Apache-2.0): 5 Sekunden von 1080p auf 4K in unter zwei Minuten, rund viermal so scharf wie einfaches Vergrößern. Gut für 4K-Exporte und kleinere Clips. Darunter läuft jetzt ComfyUI 0.45; MOSS-Image baut seine Prompts rund ein Fünftel schneller aus. [Einzelheiten](docs/de/MODELLE.md#video-hochskalieren-relayvsr-seit-0523)
-- **Eine Spur für den Sprecher** (0.5.22): „Übernehmen“ legt die Sprecherzeilen des Studios auf eine eigene Tonspur „Stimme“. Weitere Zeilen landen dort auch, und die Spur lässt sich wie jede andere entfernen. Sprecher-Szenen bieten jetzt Qwen3-TTS in der Modellwahl an. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
+- **Eigene LoRAs:** „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
+- **Figuren im Studio:** Eine Figur bündelt Aussehen (eine oder mehrere LoRAs) und Stimme. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und unter Windows spricht eine Videoszene mit LTX-2.5 einen Satz mit den Lippen. [Einzelheiten](docs/de/STUDIO.md#figuren)
+- **Video verdoppeln** (0.5.23): „Hochskalieren ×2“ unter einem Video im Verlauf verdoppelt Breite und Höhe mit RelayVSR (Apache-2.0): 5 Sekunden von 1080p auf 4K in unter zwei Minuten. [Einzelheiten](docs/de/MODELLE.md#video-hochskalieren-relayvsr-seit-0523)
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
@@ -42,6 +44,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 - **Studio:** build a whole video from scenes, cut it and export it with your graphics card's encoder.
 - **Swap in a face:** a person from a photo (someone who agreed to it) in a new role, as a start image from FLUX 3 and a video with sound from LTX-2.5.
 - **Images:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image and many more. Edit with reference images, fill in or extend a picture.
+- **LoRAs:** from Hugging Face, Civitai or your own training; NVAI-open reads the file header and shows which models a LoRA fits.
 - **Video with sound:** LTX-2.5 makes picture and sound in one pass, speech included: clips of up to 20 seconds, in up to 1080p.
 - **Music and sounds:** instrumental music up to 5 minutes, sound effects.
 - **Speech:** a narrator voice you describe in one sentence or take over from a recording, in 10 languages. In the Studio one speaker keeps the same voice over many lines.
@@ -62,6 +65,7 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 - **Generating:** next to "Conform" you see which scene is being made and how far it is; "✕ Cancel" stops the run, finished takes stay.
 - **Seamless shots:** a chain marker makes a clip continue the one before it, so two shots join without a jump.
 - **Narrator voice:** voice scenes speak their text with Qwen3-TTS; "Same voice as" keeps one speaker over all lines, and each scene takes the length of its line.
+- **Characters:** a look from a LoRA (also one you trained yourself) and a voice in one. Picture scenes show them, voice scenes speak with their voice, and a video scene can speak a voice line with its lips.
 - **Media:** every project has its own folder for what it generates, exports and uploads. Whole projects can be packed into a ZIP file and opened on another computer.
 - **Quality:** video scenes run in the best LTX-2.5 quality and are also kept losslessly; only the export compresses (42.3 instead of 37.7 dB PSNR for a YouTube export).
 - **Export:** YouTube 1080p and 4K, Shorts, AV1, a lossless master (MKV) or ProRes 4444 for other editing software.
@@ -69,6 +73,12 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 - **Mac:** NVAI-open for Mac has the Studio too, with the same project format.
 
 Step by step: [docs/STUDIO.md](docs/STUDIO.md)
+
+<p align="center">
+  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="400" alt="YouTube Short: the NVAI Studio in action"></a>
+  <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="400" alt="YouTube: NVAI update, the Studio for Mac with new local AI models"></a>
+</p>
+<p align="center"><sub>The Studio in action (YouTube Short) and the update with the Studio for Mac and new local AI models (YouTube).</sub></p>
 
 ### From a portrait to a video
 
@@ -139,6 +149,8 @@ Editing with FLUX 3: "replace the rope handles with iron handles, keep everythin
 LoRAs teach a model a style, for example a more photographic look:
 
 ![Portrait without LoRA, with Boreal and with Lenovo UltraReal](docs/images/lora-realism.jpg)
+
+Which models take LoRAs, adding one you trained yourself and the LoRAs we tested: [docs/LORAS.md](docs/LORAS.md).
 
 The four models side by side, with prompts and times: [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md). More comparisons and prompt tips: [docs/MODELS.md](docs/MODELS.md). All images in this README were made with NVAI-open.
 
@@ -241,6 +253,22 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 NVAI-open und das PhotoCraft-Add-on in Aktion, ein kurzes Video auf YouTube.<br>
 <a href="https://www.youtube.com/shorts/e9jSTwgwnrI">youtube.com/shorts/e9jSTwgwnrI</a></p>
 
+<p align="center">
+  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="480" alt="YouTube Short: the NVAI Studio in action"></a>
+</p>
+
+<p align="center">The Studio in action, a short on YouTube.<br>
+Das Studio in Aktion, ein kurzes Video auf YouTube.<br>
+<a href="https://www.youtube.com/shorts/1RiL-IfDdgs">youtube.com/shorts/1RiL-IfDdgs</a></p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="480" alt="YouTube: NVAI update, the Studio for Mac with new local AI models"></a>
+</p>
+
+<p align="center">The update: the Studio for Mac and new local AI models, on YouTube.<br>
+Das Update: das Studio für den Mac und neue lokale KI-Modelle, auf YouTube.<br>
+<a href="https://www.youtube.com/watch?v=xseQ42CFneY">youtube.com/watch?v=xseQ42CFneY</a></p>
+
 ---
 
 ## Deutsch
@@ -256,6 +284,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 - **Studio:** ein ganzes Video aus Szenen bauen, schneiden und mit dem Encoder der Grafikkarte exportieren.
 - **Gesicht tauschen:** eine Person aus einem Foto (die damit einverstanden ist) in einer neuen Rolle, als Startbild von FLUX 3 und als Video mit Ton von LTX-2.5.
 - **Bilder:** FLUX 3, Qwen-Image-2512, Krea 2, MOSS-Image und viele weitere. Mit Referenzbildern bearbeiten, Bereiche füllen, Bilder erweitern.
+- **LoRAs:** von Hugging Face, Civitai oder aus eigenem Training; NVAI-open liest den Dateikopf und zeigt, zu welchen Modellen eine LoRA passt.
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache: Clips bis 20 Sekunden, bis 1080p.
 - **Musik und Sounds:** instrumentale Musik bis 5 Minuten, Soundeffekte.
 - **Sprache:** eine Sprecherstimme, die du in einem Satz beschreibst oder aus einer Aufnahme übernimmst, in 10 Sprachen. Im Studio behält ein Sprecher über viele Zeilen dieselbe Stimme.
@@ -276,6 +305,7 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 - **Erzeugen:** Neben „Übernehmen“ siehst du, welche Szene gerade entsteht und wie weit sie ist; „✕ Abbrechen“ beendet den Lauf, fertige Takes bleiben.
 - **Nahtlose Einstellungen:** Ein Anschluss-Marker lässt einen Clip den vorigen fortsetzen, so gehen zwei Einstellungen ohne Sprung ineinander über.
 - **Sprecherstimme:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen, und jede Szene wird so lang wie ihre Zeile.
+- **Figuren:** Aussehen aus einer LoRA (auch einer selbst trainierten) und Stimme in einem. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und eine Videoszene spricht einen Satz mit den Lippen.
 - **Material:** Jedes Projekt hat einen eigenen Ordner für das, was es erzeugt, exportiert und hochlädt. Ganze Projekte lassen sich als ZIP-Datei packen und auf einem anderen Rechner öffnen.
 - **Qualität:** Videoszenen laufen in der höchsten Qualität von LTX-2.5 und werden zusätzlich verlustfrei aufbewahrt; komprimiert wird erst beim Export (42,3 statt 37,7 dB PSNR bei einem YouTube-Export).
 - **Export:** YouTube 1080p und 4K, Shorts, AV1, ein verlustfreier Master (MKV) oder ProRes 4444 für andere Schnittprogramme.
@@ -283,6 +313,12 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 - **Mac:** NVAI-open für Mac hat das Studio auch, mit demselben Projektformat.
 
 Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
+
+<p align="center">
+  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="400" alt="YouTube Short: das NVAI-Studio in Aktion"></a>
+  <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="400" alt="YouTube: NVAI-Update, das Studio für den Mac mit neuen lokalen KI-Modellen"></a>
+</p>
+<p align="center"><sub>Das Studio in Aktion (YouTube Short) und das Update mit dem Studio für den Mac und neuen lokalen KI-Modellen (YouTube).</sub></p>
 
 ### Vom Porträt zum Video
 
@@ -353,6 +389,8 @@ Bearbeiten mit FLUX 3: „replace the rope handles with iron handles, keep every
 LoRAs bringen einem Modell einen Stil bei, zum Beispiel einen fotografischeren Look:
 
 ![Porträt ohne LoRA, mit Boreal und mit Lenovo UltraReal](docs/images/lora-realism.jpg)
+
+Welche Modelle LoRAs nehmen, eine selbst trainierte hinzufügen und die getesteten LoRAs: [docs/de/LORAS.md](docs/de/LORAS.md).
 
 Die vier Modelle nebeneinander, mit Prompts und Zeiten (englisch): [docs/MODEL_COMPARISON.md](docs/MODEL_COMPARISON.md). Weitere Vergleiche und Prompt-Tipps: [docs/de/MODELLE.md](docs/de/MODELLE.md). Alle Bilder in diesem README hat NVAI-open erzeugt.
 

@@ -10,11 +10,39 @@ enum APIRouter {
     /// einsetzen. „restore_auto“ nur, wenn Qwen3.5 4B geladen ist (wählt nach der Art der Schäden); ohne das
     /// Zusatzmodell rechnet „auto“ gründlich. „video“ (seit 0.4.8): POST /api/generate/video mit LTX-Video 2B, mit
     /// Startbild (`image_asset_id`), wenn dessen Encoder geladen ist (`features.image_to_video` des Modells).
+    /// „lora_upload“ (seit 0.5.5, wie Windows 0.5.24): eigene LoRA-Dateien, POST /api/loras/inspect (nur der Kopf),
+    /// POST /api/loras/upload (die Datei, gestreamt), PUT /api/loras/{id}, DELETE /api/models/{id} für LoRAs.
+    /// „studio_characters“: Figuren im Studio (character.add/update/delete, Szenen-params characters, character,
+    /// audio_from; Letzteres hält der Mac nur im Projekt, kein Mac-Videomodell nimmt einen vorgegebenen Ton).
     static var features: [String] {
         ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
          "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel",
-         "speech"]
+         "speech", "lora_upload", "studio_characters"]
             + (HelperModel.vision.installed ? ["restore_auto"] : [])
+    }
+
+    /// Körper von POST /api/loras/upload gleich beim Empfang in eine Teildatei im Ordner loras/ (HTTPServer), nie ganz
+    /// in den Speicher. Falsche Angaben, fremde Herkunft und fehlender Platz scheitern, bevor die Datei kommt.
+    static func bodyHandling(_ head: HTTPParser.Head) -> HTTPServer.BodyHandling {
+        guard head.method == "POST", head.path == "/api/loras/upload" else { return .buffer }
+        let lang = Lang.from(acceptLanguage: head.headers["accept-language"])
+        return Lang.$request.withValue(lang) {
+            let probe = head.request(body: Data())
+            guard isLocal(probe) else {
+                return .reject(.error(403, t("NVAI-open für Mac nimmt nur Anfragen von diesem Mac an.",
+                                             "NVAI-open for Mac only accepts requests from this Mac.")))
+            }
+            do {
+                _ = try LoRAUploads.checkRequest(fileName: head.query["file_name"] ?? "", family: head.query["family"] ?? "",
+                                                 expert: head.query["expert"] ?? "")
+                if head.contentLength > 0 { try LoRAUploads.checkSpace(Int64(head.contentLength), in: LoRAFiles.directory) }
+            } catch let error as APIError {
+                return .reject(.error(error.status, error.detail))
+            } catch {
+                return .reject(.error(400, error.localizedDescription))
+            }
+            return .stream(to: LoRAUploads.newPart())
+        }
     }
 
     static func handle(_ req: HTTPRequest) async -> HTTPResponse {
@@ -47,6 +75,10 @@ enum APIRouter {
             if route("GET", "/api/models/search") != nil { return try await search(req) }
             if route("GET", "/api/models/inspect") != nil { return try await inspect(req) }
             if route("POST", "/api/models/active") != nil { return try setActive(req) }
+            if let c = route("DELETE", "/api/models/:id") { return try deleteModel(c[0]) }
+            if route("POST", "/api/loras/inspect") != nil { return try loraInspect(req) }
+            if route("POST", "/api/loras/upload") != nil { return try loraUpload(req) }
+            if let c = route("PUT", "/api/loras/:id") { return try loraUpdate(c[0], req) }
             if route("POST", "/api/generate/image") != nil {
                 let request = try ImageJobRequest.parse(req.json)
                 return .json(await JobQueue.shared.submit(request).json)
@@ -222,7 +254,10 @@ enum APIRouter {
     static func download(_ req: HTTPRequest) async throws -> HTTPResponse {
         if let id = req.json?["model_id"]?.stringValue {
             if let helper = HelperModel.find(id) { return .json(await JobQueue.shared.submitDownload(helper).json) }
-            if let lora = LoRACatalog.find(id) { return .json(await JobQueue.shared.submitDownload(lora).json) }
+            if let lora = LoRACatalog.find(id) {
+                if lora.uploaded { throw LoRAUploads.notDownloadable() }
+                return .json(await JobQueue.shared.submitDownload(lora).json)
+            }
             if id == AudioCatalog.id { return .json(await JobQueue.shared.submitAudioDownload().json) }
             if SpeechCatalog.matches(id) { return .json(await JobQueue.shared.submitSpeechDownload().json) }
             if let video = VideoCatalog.model(id) {
@@ -315,6 +350,66 @@ enum APIRouter {
             throw APIError(404, t("In \(repo) gibt es kein ladbares Paket „\(file)“.", "\(repo) has no loadable package \"\(file)\"."))
         }
         return await HuggingFace.pruefe(offer, baum: tree)
+    }
+
+    // MARK: Eigene LoRA-Dateien (seit 0.5.5)
+
+    /// POST /api/loras/inspect?file_name=…: Körper ist nur der Anfang der Datei (8 Byte Kopflänge und der Kopf); Antwort
+    /// wie `LoraCheck` unter Windows.
+    static func loraInspect(_ req: HTTPRequest) throws -> HTTPResponse {
+        let name = req.query["file_name"] ?? ""
+        if !name.isEmpty { _ = try LoRAFiles.fileName(name) }
+        guard req.body.count <= LoRAFiles.headerLimit + 8 else {
+            throw APIError(413, t("Zu groß für einen Dateikopf.", "Too large for a file header."))
+        }
+        return .json(LoRAFiles.inspect(try LoRAFiles.header(from: req.body), fileName: name).json)
+    }
+
+    /// POST /api/loras/upload?file_name&family&name&trigger&expert: Körper ist die Datei (application/octet-stream),
+    /// die der Server schon beim Empfang in eine Teildatei geschrieben hat. Antwort wie `LoraUploadResult`.
+    static func loraUpload(_ req: HTTPRequest) throws -> HTTPResponse {
+        let q = req.query
+        let (target, family) = try LoRAUploads.checkRequest(fileName: q["file_name"] ?? "", family: q["family"] ?? "",
+                                                            expert: q["expert"] ?? "")
+        guard let file = req.bodyFile else { throw LoRAFiles.invalid() }
+        let result = try LoRAUploads.add(part: file.url, target: target, family: family, name: q["name"] ?? "",
+                                         trigger: q["trigger"] ?? "", expert: q["expert"] ?? "", size: file.size,
+                                         sha256: file.sha256)
+        Task { @MainActor in AppState.shared.refreshModels() }
+        return .json(result.json)
+    }
+
+    /// PUT /api/loras/{id}: Zuordnung einer eigenen LoRA (family, trigger, name, expert); fehlende Felder bleiben.
+    static func loraUpdate(_ id: String, _ req: HTTPRequest) throws -> HTTPResponse {
+        guard let body = req.json?.objectValue else {
+            throw APIError(422, t("Erwartet wird ein JSON-Objekt (LoraUpdate).", "Expected a JSON object (LoraUpdate)."))
+        }
+        func field(_ key: String) -> String? { body[key]?.stringValue }
+        let model = try LoRAUploads.update(id, family: field("family"), trigger: field("trigger"), name: field("name"),
+                                           expert: field("expert"))
+        Task { @MainActor in AppState.shared.refreshModels() }
+        return .json(model.info)
+    }
+
+    /// DELETE /api/models/{id}: auf dem Mac für LoRAs. Eine eigene LoRA verschwindet dabei ganz (neu laden lässt sie
+    /// sich nicht); die übrigen Modelle löscht man unter „Modelle“.
+    static func deleteModel(_ id: String) throws -> HTTPResponse {
+        guard let lora = LoRACatalog.find(id) else {
+            if Models.find(id) != nil || VideoCatalog.model(id) != nil || HelperModel.find(id) != nil
+                || id == AudioCatalog.id || SpeechCatalog.matches(id) {
+                throw APIError(422, t("Löschen per REST gibt es auf dem Mac nur für LoRAs; dieses Modell unter „Modelle“ löschen.",
+                                      "On the Mac, REST deletes only LoRAs; delete this model under \"Models\"."))
+            }
+            throw APIError(404, t("Unbekanntes Modell: \(id)", "Unknown model: \(id)"))
+        }
+        let size = ((try? FileManager.default.attributesOfItem(atPath: lora.localURL.path))?[.size] as? NSNumber)?.int64Value ?? 0
+        let existed = FileManager.default.fileExists(atPath: lora.localURL.path)
+        lora.delete()
+        let gone = !FileManager.default.fileExists(atPath: lora.localURL.path)
+        Task { @MainActor in AppState.shared.refreshModels() }
+        return .json(["model_id": id, "removed": existed && gone ? [lora.file] : [String](),
+                      "freed_gb": existed && gone ? (Double(size) / 1e7).rounded() / 100 : 0,
+                      "failed": existed && !gone ? [lora.file] : [String]()] as [String: Any])
     }
 
     static func setActive(_ req: HTTPRequest) throws -> HTTPResponse {

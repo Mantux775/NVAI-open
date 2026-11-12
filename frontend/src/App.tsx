@@ -42,6 +42,8 @@ export function App() {
   const [studioEvent, setStudioEvent] = useState<StudioChangedEvent | null>(null)
   // Material gelöscht oder hochgeladen: zählt hoch, das Studio lädt seine Medienleiste neu
   const [assetsVersion, setAssetsVersion] = useState(0)
+  // LoRA hinzugefügt, zugeordnet oder gelöscht (auch per MCP): Generieren und Modelle laden ihre Liste neu
+  const [modelsVersion, setModelsVersion] = useState(0)
   const [starting, setStarting] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -70,6 +72,7 @@ export function App() {
     return connectEvents((e) => {
       if (e.type === 'studio.changed') setStudioEvent(e)
       else if (e.type === 'assets.changed') setAssetsVersion((v) => v + 1)
+      else if (e.type === 'models.changed') setModelsVersion((v) => v + 1)
       else if (e.type !== 'ping') setEvents(e)
     })
   }, [])
@@ -296,7 +299,8 @@ export function App() {
             Fortschritt und „Abbrechen“, Prompt und Einstellungen bleiben (vorher war beim Zurückkommen alles weg) */}
         {(tab === 'generate' || kept.generate) && (
           <div hidden={tab !== 'generate'}>
-            <GeneratePanel health={health} event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+            <GeneratePanel health={health} event={events} downloads={downloads} modelsVersion={modelsVersion}
+              onShowModels={() => setTab('models')} />
           </div>
         )}
         {(tab === 'vhs' || kept.vhs) && (
@@ -305,8 +309,12 @@ export function App() {
           </div>
         )}
         {tab === 'history' && <HistoryPanel event={events} />}
-        {tab === 'models' && <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} />}
-        {tab === 'studio' && <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} />}
+        {tab === 'models' && (
+          <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} modelsVersion={modelsVersion} />
+        )}
+        {tab === 'studio' && (
+          <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} modelsVersion={modelsVersion} />
+        )}
       </main>
     </div>
   )

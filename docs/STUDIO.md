@@ -90,6 +90,32 @@ A voice scene takes the length of its take, so conforming never cuts off the end
 on their own audio track "Voice" (on the Mac since 0.5.4), which it adds the first time; remove it like any other track, and the next conform
 brings it back. The export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
 
+## Characters
+
+A character bundles a look and a voice, for example a person you trained as a LoRA. Click an empty spot to see the
+project settings; under "Characters", "+ Character" adds one:
+
+- **Look:** one or more LoRAs (add your own file under "Models" → "Add LoRA file", see [LORAS.md](LORAS.md)). Each
+  scene uses the ones that fit its model, so a character can have one LoRA for still images (Qwen-Image) and one for
+  clips (LTX-2); the trigger words go in front of the prompt by themselves.
+- **Voice:** as with a voice scene: describe it, take it over from the take of a voice scene, or from a recording.
+  Once a line sounds right, choose it as the reference, so every further line keeps that voice.
+
+![The Studio with a character: its look from two LoRAs and a described voice; a portrait, a voice line and the clip that speaks it](images/studio-characters.jpg)
+
+Then assign the character in the scenes:
+
+- **Picture scenes:** tick it under "Characters in the picture". If none of its LoRAs fits the scene's model, the
+  scene says so.
+- **Voice scenes:** under "Voice" choose "of a character …"; the line is spoken with the character's voice.
+- **Video scenes that speak (LTX-2.5):** "Sound from voice scene" takes that line as the clip's sound. The line is made
+  first, the video follows it with the lips and takes its length. Conform does not lay the line on the voice track a
+  second time.
+
+![A video scene that speaks: the character in the picture and the voice line as its sound](images/studio-character-scene.jpg)
+
+Claude Code does the same over MCP (`character.add`, `params.characters`, `params.character`, `params.audio_from`).
+
 ## Tools, right-click and tracks
 
 - **Selection (V):** drag to move and trim, drag a box to select several; Shift- or Ctrl-click adds or removes one.
@@ -247,6 +273,9 @@ What the Mac does differently:
   within 768 × 512 × 97 frames, for example 4 s at 768 × 512. Still images come from the active image model, music and
   sound from Stable Audio 3, voice scenes from Qwen3-TTS (since Mac 0.5.3; VoiceDesign 1.7B in 4-bit, Base 0.6B in 8-bit).
 - **Chain:** starts from the last frame; carrying the last second over needs LTX-2.5 and stays on Windows.
+- **Characters** (since Mac 0.5.5): the same as on Windows, with LoRAs for FLUX.2 Klein 4B. "Sound from voice scene"
+  stays in the project but has no effect: no video model on the Mac takes a given sound, so Conform lays the line on
+  the voice track as usual.
 - **Export** with the Mac's own encoder: YouTube 1080p and 4K, Shorts, project format and ProRes 4444. There is no
   lossless copy, no AV1 and no MKV master.
 - **REST:** the same `/api/studio/*` as on Windows, at `http://127.0.0.1:8100`.

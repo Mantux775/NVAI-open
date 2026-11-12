@@ -90,10 +90,12 @@ function megabytes(bytes: number): string {
   return bytes >= 1e9 ? `${decimal((bytes / 1e9).toFixed(1))} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`
 }
 
-export function StudioPanel({ event, studioEvent, assetsVersion }: {
+export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion = 0 }: {
   event: ServerEvent | null
   studioEvent: StudioChangedEvent | null
   assetsVersion: number
+  /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde: Modellliste (Figuren) neu laden */
+  modelsVersion?: number
 }) {
   const [projects, setProjects] = useState<StudioProjectInfo[]>([])
   const [project, setProject] = useState<StudioProject | null>(null)
@@ -160,13 +162,17 @@ export function StudioPanel({ event, studioEvent, assetsVersion }: {
       const pick = list.find((x) => x.id === last) ?? list[0]
       if (pick) open(pick.id)
     })
-    // Sprachmodelle gehören dazu (Sprecher-Bahn), sonst bot die Auswahl dort nur „aktives Modell“ (bis 0.5.21)
-    Promise.all([api.models('image'), api.models('video'), api.models('audio'), api.models('speech')])
-      .then((lists) => setModels(lists.flat()))
-      .catch(() => {})
     api.health().then((h) => setActive(h.active_models)).catch(() => {})
     api.studioPresets().then(setPresets).catch(() => {})
   }, [open])
+
+  // Sprachmodelle gehören dazu (Sprecher-Bahn), sonst bot die Auswahl dort nur „aktives Modell“ (bis 0.5.21); LoRAs für
+  // die Figuren (seit 0.5.24), neu geladen, wenn eine hinzukommt oder sich ihre Zuordnung ändert
+  useEffect(() => {
+    Promise.all([api.models('image'), api.models('video'), api.models('audio'), api.models('speech'), api.models('lora')])
+      .then((lists) => setModels(lists.flat()))
+      .catch(() => {})
+  }, [modelsVersion])
 
   // Eine Antwort nur übernehmen, wenn sie nicht älter ist als der Stand, den die Ansicht schon hat: GET und Befehle laufen
   // im Server nebeneinander, ein spätes GET setzte sonst einen überholten Stand (etwa ein eben Rückgängig-gemachtes)

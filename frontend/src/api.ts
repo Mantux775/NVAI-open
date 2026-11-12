@@ -122,6 +122,51 @@ export interface ModelInfo {
   /** Gesperrte Hugging-Face-Repos des Modells und je Repo, ob der hinterlegte Token Zugriff hat. */
   gated_repos?: string[]
   gated_access?: Record<string, 'granted' | 'missing' | 'no_token' | 'unknown'>
+  /** Seit 0.5.24: aus dem Nutzer-Katalog (Suche, Civitai, vom Rechner); bei LoRAs ist die Zuordnung änderbar. */
+  custom?: boolean
+  /** LoRA vom Rechner hinzugefügt: lässt sich nicht herunterladen, nur neu hinzufügen. */
+  uploaded?: boolean
+  /** LoRAs für Wan 14B: an welchen Experten sie gehen ('high' | 'low' | 'both'); sonst leer. */
+  expert?: string
+}
+
+/** Prüfung einer LoRA-Datei vor dem Hochladen (POST /api/loras/inspect), aus ihrem safetensors-Kopf. */
+export interface LoraCheck {
+  /** LoRA mit erkannter Basis, für die es ein Modell im Katalog gibt */
+  ok: boolean
+  /** überhaupt eine LoRA */
+  lora: boolean
+  /** am Dateikopf erkannte Basis (LORA_BASE_LABEL); null = nicht erkannt */
+  family: string | null
+  /** erkannte Basis oder Vorschlag aus den Metadaten der Datei */
+  suggested: string | null
+  /** Katalogmodelle, die LoRAs dieser Basis nehmen */
+  catalog: string[]
+  verdict: string
+  /** Trigger-Wörter aus den Metadaten der Datei */
+  trigger: string
+  /** Wan 2.2 A14B: Experte laut Dateiname */
+  expert: 'high' | 'low' | null
+  /** Vorschlag für den Namen: der Dateiname ohne Endung */
+  name: string
+}
+
+export type LoraExpert = 'high' | 'low' | 'both'
+
+/** Zuordnung einer LoRA: Basis (bei welchen Modellen sie erscheint), Name, Trigger, bei Wan 14B der Experte. */
+export interface LoraAssignment {
+  family: string
+  name: string
+  trigger: string
+  expert?: LoraExpert | ''
+}
+
+export interface LoraUploadResult {
+  model: ModelInfo
+  /** dieselbe Datei war schon da; sie bekam nur die neuen Angaben */
+  existing: boolean
+  /** Zuordnung weicht vom Dateikopf ab */
+  warning: string
 }
 
 /** Ein Treffer der Hugging-Face-Suche (GET /api/models/search). */
@@ -691,6 +736,46 @@ export const api = {
     }),
   deleteModel: (model_id: string) =>
     req<DeleteResult>(`/api/models/${model_id}`, { method: 'DELETE' }),
+  /** Prüft eine LoRA-Datei vor dem Hochladen. An den Server geht nur ihr Anfang: 8 Byte Kopflänge und der
+   * safetensors-Kopf (meist wenige KB), nicht die ganze Datei. */
+  inspectLora: async (file: File) => {
+    const first = new DataView(await file.slice(0, 8).arrayBuffer())
+    let end = Math.min(8, file.size)
+    if (first.byteLength === 8) {
+      // Kopflänge als 64-Bit-Zahl (little endian). Was nicht passt, schickt nur die 8 Byte; der Server meldet es.
+      const n = first.getUint32(0, true) + first.getUint32(4, true) * 2 ** 32
+      if (n > 0 && n <= 64 * 1024 * 1024 && 8 + n <= file.size) end = 8 + n
+    }
+    return req<LoraCheck>(`/api/loras/inspect?file_name=${encodeURIComponent(file.name)}`, {
+      method: 'POST', body: file.slice(0, end), headers: { 'Content-Type': 'application/octet-stream' },
+    })
+  },
+  /** Lädt eine LoRA-Datei hoch und ordnet sie zu. XHR statt fetch: nur so gibt es den Fortschritt beim Senden. */
+  uploadLora: (file: File, a: LoraAssignment, onProgress?: (fraction: number) => void, signal?: AbortSignal) =>
+    new Promise<LoraUploadResult>((resolve, reject) => {
+      const q = new URLSearchParams({
+        file_name: file.name, family: a.family, name: a.name, trigger: a.trigger, expert: a.expert ?? '',
+      })
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `/api/loras/upload?${q}`)
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      xhr.setRequestHeader('Accept-Language', getLang())
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress?.(e.loaded / e.total)
+      }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText) as LoraUploadResult)
+        else reject(new Error(errorText(xhr.responseText)))
+      }
+      xhr.onerror = () =>
+        reject(new Error(t('Verbindung zum Server unterbrochen.', 'The connection to the server was interrupted.')))
+      xhr.onabort = () => reject(new DOMException('aborted', 'AbortError'))
+      signal?.addEventListener('abort', () => xhr.abort())
+      xhr.send(file)
+    }),
+  /** Zuordnung einer LoRA aus dem Nutzer-Katalog ändern; fehlende Felder bleiben, wie sie sind. */
+  updateLora: (id: string, a: Partial<LoraAssignment>) =>
+    req<ModelInfo>(`/api/loras/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(a) }),
   /** Einen Job abbrechen: wartend sofort, Generierung sofort, Download nach dem aktuellen Datenblock. */
   cancelJob: (id: string) =>
     req<{ ok: boolean; job_id?: string; reason?: string; pending?: boolean; stopped?: string[] }>(
@@ -822,7 +907,7 @@ export const api = {
     req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
   studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),
   studioConformPlan: (id: string) =>
-    req<{ items: StudioConformItem[]; without_take: number; transition_markers: number }>(`/api/studio/projects/${id}/conform`),
+    req<{ items: StudioConformItem[]; without_take: number; transition_markers: number; spoken_in_video?: number }>(`/api/studio/projects/${id}/conform`),
   studioPackageInfo: (id: string) =>
     req<{ name: string; files: number; bytes: number; master_bytes: number }>(`/api/studio/projects/${id}/package/info`),
   /** Download-Adresse des Pakets (ZIP); der Browser lädt es über einen Link */
@@ -860,6 +945,8 @@ export type ServerEvent =
   | { type: 'job.cancelled'; job_id: string }
   | StudioChangedEvent
   | { type: 'assets.changed' }
+  /** LoRA hinzugefügt, zugeordnet oder gelöscht (auch per MCP): Modelllisten neu laden */
+  | { type: 'models.changed' }
 
 /** Ein Studio-Projekt wurde gespeichert (Befehl, Claude per MCP, fertiger Auftrag, startender Anschluss). */
 export type StudioChangedEvent = { type: 'studio.changed'; project_id: string; updated_at: number | null }
@@ -915,6 +1002,8 @@ export const LORA_BASE_LABEL: Record<string, string> = {
   'wan-14b': 'Wan 14B (2.1, 2.2 A14B)',
   ltx2: 'LTX-2 / 2.3',
   ltxv: 'LTX-Video 0.9',
+  minimax_h3_fl2va: 'MiniMax H3 FL2VA',
+  minimax_h3_ref2va: 'MiniMax H3 Ref2VA',
 }
 
 // ------------------------------------------------------------------------------------------- Studio
@@ -1044,7 +1133,26 @@ export interface StudioProject {
   history: { undo: number; redo: number }
   /** eigener Ordner im Material (Studio/<Name>, seit 0.5.15) */
   folder?: string
+  /** Figuren (seit 0.5.24): Aussehen über LoRAs, Stimme wie bei Sprecher-Szenen */
+  characters?: StudioCharacter[]
   updated_at: number
+}
+
+/** Eine Figur im Studio-Projekt (seit 0.5.24). Bild- und Videoszenen nennen sie in params.characters (ihre LoRAs, die
+ * zum Modell passen, und deren Trigger), Sprecher-Szenen in params.character (ihre Stimme); eine Videoszene mit
+ * params.audio_from spricht den Satz einer Sprecher-Szene, LTX-2.5 bewegt die Lippen dazu. */
+export interface StudioCharacter {
+  id: string
+  name: string
+  loras: { model_id: string; strength: number }[]
+  /** Beschreibung der Stimme */
+  voice: string
+  /** Sprecher-Szene, deren Take die Stimme vorgibt */
+  voice_from: string | null
+  /** Aufnahme als Vorlage, mit voice_text wortgenau */
+  voice_asset_id: string | null
+  voice_text: string
+  language: string
 }
 
 export interface StudioProjectInfo {

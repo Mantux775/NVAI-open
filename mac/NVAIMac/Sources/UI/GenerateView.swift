@@ -35,6 +35,9 @@ struct GenerateView: View {
     @State private var notes = ""
     /// LoRAs für FLUX.2 Klein (seit 0.4.7): gewählte mit Stärke.
     @State private var loraChoices: [String: Double] = [:]
+    /// Eigene LoRA-Datei direkt in der Auswahl hinzufügen (seit 0.5.5); passt sie, gleich anhaken
+    @State private var loraFile: LoRAFileChoice?
+    @State private var loraNote: String?
     /// Große Vorschau eines Ergebnisses (Klick auf ein Bild).
     @State private var preview: AssetRecord?
 
@@ -242,9 +245,34 @@ struct GenerateView: View {
                 Text(t("Eine andere Auswahl lädt FLUX.2 Klein neu, die LoRAs werden dabei eingerechnet.",
                        "A different selection reloads FLUX.2 Klein with the LoRAs merged in."))
                     .font(.caption).foregroundStyle(.secondary)
+                Button(t("+ Eigene LoRA-Datei hinzufügen", "+ Add your own LoRA file")) {
+                    loraNote = nil
+                    if let url = Panels.chooseLoRAFile() { loraFile = LoRAFileChoice(url: url) }
+                }
+                .buttonStyle(.link).font(.caption)
+                if let loraNote { Text(loraNote).font(.caption).foregroundStyle(.green).textSelection(.enabled) }
             }
             .padding(.top, 4)
         }
+        .sheet(item: $loraFile) { choice in
+            LoRAAddSheet(url: choice.url, preferBase: LoRAModel.family) { loraAdded($0) }.environmentObject(state)
+        }
+    }
+
+    /// Nach dem Hinzufügen: passt die LoRA zum gewählten Modell (FLUX.2 Klein), ist sie gleich angehakt.
+    private func loraAdded(_ r: LoRAUploads.Result) {
+        let m = r.model
+        let fits = isFlux && m.base == LoRAModel.family
+        if fits && loraChoices[m.id] == nil { loraChoices[m.id] = m.strength }
+        let trigger = m.trigger.isEmpty ? "" : t(" Trigger-Wörter: \(m.trigger)", " Trigger words: \(m.trigger)")
+        loraNote = (r.existing ? t("Diese Datei war schon da („\(m.name)“), ihre Angaben sind aktualisiert. ",
+                                   "This file was already there (“\(m.name)”); its details were updated. ") : "")
+            + (fits ? (r.existing ? t("„\(m.name)“ ist angehakt.", "“\(m.name)” is ticked.")
+                                  : t("„\(m.name)“ ist hinzugefügt und angehakt.", "“\(m.name)” was added and ticked.")) + trigger
+                    : (r.existing ? "" : t("„\(m.name)“ ist hinzugefügt. ", "“\(m.name)” was added. "))
+                        + t("Sie gehört zu \(m.baseLabel) und erscheint bei den Modellen dafür.",
+                            "It belongs to \(m.baseLabel) and shows up with the models for it."))
+            + (r.warning.isEmpty ? "" : " " + r.warning)
     }
 
     // MARK: Musik und Klänge

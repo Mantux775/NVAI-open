@@ -171,9 +171,19 @@ server = MCPServer(
         "on V1/V2/A1/A2. Add one scene per shot, studio_generate(wait=True), check the takes, edit.conform, then "
         "studio_export. Voice scenes: the prompt is the spoken text, params voice (description), voice_from (a "
         "scene id: same voice as its take; that scene is generated first), voice_asset_id/voice_text, language; "
-        "a voice scene takes the length of its take. Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
+        "a voice scene takes the length of its take. Characters (studio_command character.add): a LoRA for the look "
+        "(e.g. one the user trained, added with add_lora) plus a voice; image/video scenes list them in "
+        "params.characters, voice scenes speak with params.character, and a video scene with params.audio_from "
+        "(a voice scene) speaks that line with the character's voice while LTX-2.5 moves the lips. "
+        "Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
         "done. Ten minutes made only of LTX-2.5 clips take about 3 hours at 720p on an RTX 5060 Ti; still images "
         "(about 20 s each) are much cheaper for narrated explainer videos.\n\n"
+        "OWN LORAS: for a LoRA file the user trained or got elsewhere, add_lora(path) checks the .safetensors header "
+        "(which model family it was trained on), copies the file into the model folder and assigns it, so it shows "
+        "up for every model whose lora_bases contain its family; then pass it as loras=[{\"model_id\": ..., "
+        "\"strength\": 0.8}] and put its trigger words into the prompt. If the header is not recognised, ask the "
+        "user which model it was trained for and pass base=. update_lora changes the assignment (base, trigger, "
+        "name, for Wan 2.2 A14B the expert).\n\n"
         "Always: choose the size to match the silhouette (standing figure portrait, vehicle "
         "landscape), use batch_size=4 when a choice is wanted, look at results at full "
         "resolution and check that every part is sensibly attached before passing them on."
@@ -385,7 +395,8 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
     Args:
         kind: 'image', 'audio', 'video', '3d', 'lora', 'upscale' (SeedVR2 for restore_image) or
             'video_upscale' (RelayVSR for upscale_video);
-            None = all. LoRAs carry their family (which models they fit) and 'trigger' words for the prompt.
+            None = all. LoRAs carry their family (which models they fit) and 'trigger' words for the prompt;
+            LoRA files added from this computer (add_lora) carry uploaded=true.
         detailed: Also return the description, pros and cons.
     """
     async with await _client() as c:
@@ -413,6 +424,10 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
         if m["kind"] == "lora":
             row |= {"family": m["family"], "trigger": m.get("trigger", ""),
                     "source_url": m.get("source_url", "")}
+            if m.get("uploaded"):   # vom Rechner hinzugefuegt (add_lora)
+                row["uploaded"] = True
+            if m.get("expert"):     # Wan 14B: high, low oder both
+                row["expert"] = m["expert"]
         if detailed:
             row |= {"description": m["description"], "pros": m["pros"], "cons": m["cons"],
                     "features": m.get("features", {})}
@@ -454,6 +469,118 @@ async def download_model(model_id: str, ctx: Context) -> dict[str, Any]:
     if result["status"] != "done":
         return {"ok": False, "error": result.get("error") or result["status"]}
     return {"ok": True, "model_id": model_id}
+
+
+def _lora_row(m: dict[str, Any]) -> dict[str, Any]:
+    row = {k: m.get(k) for k in ("id", "name", "family", "trigger", "best_for", "installed", "uploaded")}
+    if m.get("expert"):
+        row["expert"] = m["expert"]
+    return row
+
+
+@server.tool()
+async def add_lora(
+    path: str,
+    base: str | None = None,
+    name: str = "",
+    trigger: str = "",
+    expert: str | None = None,
+) -> dict[str, Any]:
+    """Adds a LoRA file from this computer (e.g. one the user trained) and assigns it to its models.
+
+    The file's header is checked first (only .safetensors; the header shows which model family it was trained
+    on), then the file is copied into the model folder. Afterwards it is listed in list_models(kind='lora') and
+    works with every image or video model whose lora_bases contain its family:
+    generate_image(..., loras=[{"model_id": <id>, "strength": 0.8}]) with the trigger words in the prompt.
+    Adding the same file again makes no second copy; it only gets the new details.
+
+    Args:
+        path: The local .safetensors file.
+        base: LoRA family = which models take it: sdxl, sd15, qwenimage, zimage, flux1, wan-1.3b, wan-5b, wan-14b,
+            ltx2, ltxv. None = as detected from the header. Needed when the header is not recognised (the
+            answer then carries 'check' with a suggestion); ask the user what the LoRA was trained for. A family
+            that no model here takes (e.g. FLUX.2 Klein on Windows) is refused.
+        name: Display name; empty = the file name.
+        trigger: Trigger words for the prompt; empty = from the file's metadata, if it has any.
+        expert: Wan 2.2 A14B only: 'high', 'low' or 'both' (which expert gets it); None = from the file name.
+
+    Returns:
+        ok, model (id, name, family, trigger), existing (the same file was already there), check (what the
+        header showed, models it runs with), warning (base differs from the header).
+    """
+    import struct
+
+    p = Path(path)
+    if not p.is_file():
+        return {"ok": False, "error": f"file not found: {path}"}
+    if p.suffix.lower() != ".safetensors":
+        return {"ok": False, "error": "only .safetensors files can be added as a LoRA"}
+    # Erst nur den Kopf pruefen lassen (wie die Weboberflaeche): eine falsche Datei wird gar nicht erst kopiert.
+    with p.open("rb") as fh:
+        first = fh.read(8)
+        n = struct.unpack("<Q", first)[0] if len(first) == 8 else 0
+        head = first + (fh.read(n) if 0 < n <= 64 * 1024 * 1024 else b"")
+    async with await _client() as c:
+        r = await c.post("/api/loras/inspect", params={"file_name": p.name}, content=head,
+                         headers={"Content-Type": "application/octet-stream"})
+        if r.status_code >= 400:
+            return {"ok": False, "error": _detail(r)}
+        check = r.json()
+        if not check["lora"]:
+            return {"ok": False, "error": check["verdict"], "check": check}
+        if not base and not check["family"]:
+            return {"ok": False, "check": check, "error": (
+                f"{check['verdict']} Ask the user which model the LoRA was trained for and pass base= "
+                f"(suggestion from the file's metadata: {check['suggested'] or 'none'}).")}
+        if not base and not check["ok"]:
+            # Erkannt, aber kein Modell nimmt diese Basis: gar nicht erst hochladen
+            return {"ok": False, "check": check, "error": check["verdict"]}
+
+        async def chunks():
+            with p.open("rb") as fh:
+                while block := await asyncio.to_thread(fh.read, 8 * 1024 * 1024):
+                    yield block
+
+        params = {"file_name": p.name, "family": base or "", "name": name, "trigger": trigger,
+                  "expert": expert or ""}
+        r = await c.post("/api/loras/upload", params=params, content=chunks(), timeout=None,
+                         headers={"Content-Type": "application/octet-stream",
+                                  "Content-Length": str(p.stat().st_size)})
+    if r.status_code >= 400:
+        return {"ok": False, "error": _detail(r), "check": check}
+    data = r.json()
+    out = {"ok": True, "model": _lora_row(data["model"]), "existing": data["existing"],
+           "check": {k: check[k] for k in ("family", "verdict", "catalog")}}
+    if data.get("warning"):
+        out["warning"] = data["warning"]
+    return out
+
+
+@server.tool()
+async def update_lora(
+    model_id: str,
+    base: str | None = None,
+    trigger: str | None = None,
+    name: str | None = None,
+    expert: str | None = None,
+) -> dict[str, Any]:
+    """Changes the assignment of a LoRA that was added by hand (add_lora) or from the search.
+
+    The fixed catalog LoRAs keep their tested assignment. None leaves a field as it is.
+
+    Args:
+        model_id: The LoRA's id from list_models(kind='lora').
+        base: LoRA family = which models take it (see add_lora).
+        trigger: Trigger words for the prompt.
+        name: Display name.
+        expert: Wan 2.2 A14B only: 'high', 'low', 'both', or '' = from the file name.
+    """
+    body = {"family": base, "trigger": trigger, "name": name, "expert": expert}
+    async with await _client() as c:
+        r = await c.put(f"/api/loras/{model_id}", json=body)
+    if r.status_code >= 400:
+        return {"ok": False, "error": _detail(r)}
+    return {"ok": True, "model": _lora_row(r.json())}
 
 
 @server.tool()
@@ -1433,6 +1560,17 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
       track.update  id, hidden (video picture off), muted (sound off) -- both also apply to the export
       batch         commands=[{command, params}] as one undo step
       project.update name, width, height, fps
+      character.add name, loras [{model_id, strength}] (the character's look; per scene the LoRAs that fit the
+                    scene's model are used and their trigger words go in front of the prompt), and a voice like a
+                    voice scene: voice (description), voice_from (a voice scene whose take is the reference),
+                    voice_asset_id + voice_text (a recording), language. Returns its id.
+                    character.update id + any of these (loras replaces the list); character.delete id
+                    Assign it: image/video scenes params.characters=[ids] (who is in the picture), voice scenes
+                    params.character=id (who speaks, with the character's voice), video scenes
+                    params.audio_from=<voice scene id>: that line becomes the clip's sound and LTX-2.5 moves the
+                    lips to it, so the character speaks with its own voice (the voice scene is generated first,
+                    and edit.conform does not lay the line a second time). A described voice differs per seed:
+                    give the character voice_from or a recording once one line is approved.
 
     Args:
         project_id: From studio_projects or studio_create.

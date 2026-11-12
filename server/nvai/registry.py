@@ -303,6 +303,23 @@ def _custom_texts(entry: dict[str, Any]) -> dict[str, Any]:
             "cons": [t("Nicht von NVAI-open getestet; die Lizenz steht nur an der Quelle",
                        "Not tested by NVAI-open; the license is only stated at the source")],
         })
+        if entry.get("uploaded"):
+            # Vom Rechner hinzugefuegt (seit 0.5.24), meist selbst trainiert: kein Repo, keine Quelle
+            name = entry["files"][0]["file"]
+            texts.update({
+                "best_for": t(f"Eigene LoRA für {base}", f"Own LoRA for {base}"),
+                "description": t(
+                    f"Vom Rechner hinzugefügt: {name}. Für Ergebnisse gilt die Lizenz des Grundmodells; stammt "
+                    "die Datei aus dem Netz, auch die Lizenz von dort.",
+                    f"Added from this computer: {name}. Results fall under the license of the base model; if "
+                    "the file comes from the web, also under its license there."),
+                "cons": [t("Nicht von NVAI-open getestet", "Not tested by NVAI-open")],
+                "license": t("eigene Datei", "own file"),
+            })
+        expert = lora_expert(entry)
+        if expert in ("high", "low"):
+            texts["best_for"] += t(f", nur {expert.capitalize()}-Noise-Experte",
+                                   f", {expert} noise expert only")
     if entry.get("license") == "siehe Repo":
         texts["license"] = t("siehe Repo", "see repo")
     if entry.get("family") == "sd15":
@@ -418,6 +435,9 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
         lora_bases=list(loras.bases_for(entry)),
         trigger=entry.get("trigger", ""),
         source_url=entry.get("source_url", ""),
+        custom=bool(entry.get("custom")) and entry["id"] not in _CATALOG_IDS,
+        uploaded=bool(entry.get("uploaded")),
+        expert=lora_expert(entry),
         **gpu_advice(entry),
         **content.lookup(entry["id"]),
         **gated_info(entry, installed),
@@ -1056,6 +1076,198 @@ def remove_custom(model_id: str) -> bool:
         return False
     _save_user_catalog(rest)
     return True
+
+
+# ------------------------------------------------------- eigene LoRA-Dateien (seit 0.5.24)
+#
+# Reddit-Frage 12.11.2026: „Is there any way to use the Loras you trained locally“. Eine Datei vom Rechner wird wie
+# eine geladene LoRA behandelt: Eintrag im Nutzer-Katalog, Datei in loras/, die Basis (family) entscheidet, unter
+# welchen Modellen sie erscheint. Die Zuordnung laesst sich spaeter aendern, auch fuer LoRAs aus der Suche.
+
+UPLOAD_REPO = "upload"   # steht in files[].repo: die Datei kam vom Rechner, nicht aus einem Repo
+
+
+def lora_dir() -> Path:
+    return config.COMFY_MODEL_DIR / "loras"
+
+
+def lora_expert(entry: dict[str, Any]) -> str:
+    """Wan 14B: an welchen Experten die LoRA geht ("high", "low", "both"); bei anderen Basen leer."""
+    if entry.get("kind") != "lora" or entry.get("family") != "wan-14b" or not entry.get("files"):
+        return ""
+    return loras.expert_for(entry, workflows.file_name(entry["files"][0])) or "both"
+
+
+def _sentence(text: str) -> str:
+    return text.rstrip(". ") + "."
+
+
+def lora_models(base: str | None) -> list[str]:
+    """Namen der Bild- und Videomodelle, die LoRAs dieser Basis nehmen, auch selbst hinzugefügte (etwa ein SD-1.5-Checkpoint
+    aus der Suche). Gibt es keins, erschiene eine LoRA dieser Basis nirgends."""
+    if not base:
+        return []
+    return [display_name(e) for e in all_entries()
+            if e.get("kind") in ("image", "video") and base in loras.bases_for(e)]
+
+
+def inspect_lora(header: dict[str, Any], file_name: str = "") -> dict[str, Any]:
+    """Was eine Datei ist und wozu sie passt, aus ihrem safetensors-Kopf (vor dem Hochladen).
+
+    family: am Kopf erkannte LoRA-Basis (None = nicht erkannt); suggested: sonst ein Vorschlag aus den Metadaten,
+    den der Nutzer bestaetigt; catalog: Namen der Katalogmodelle, die sie nehmen; expert: High/Low laut Dateiname.
+    """
+    from .hfsearch import classify   # spaet: hfsearch importiert registry
+
+    keys = [k for k in header if k != "__metadata__"]
+    stem = Path(file_name.replace("\\", "/")).name
+    if stem.lower().endswith(loras.SUFFIX):
+        stem = stem[:-len(loras.SUFFIX)]
+    out: dict[str, Any] = {"ok": False, "lora": False, "family": None, "suggested": None, "catalog": [],
+                           "verdict": "", "trigger": "", "expert": None, "name": stem}
+    if not loras.is_lora(keys):
+        _, what = classify(keys)
+        return out | {"verdict": t(f"Keine LoRA. Die Datei ist: {what}", f"Not a LoRA. The file is: {what}")}
+    base, why = loras.detect(header)
+    targets = lora_models(base)
+    hint = None if base else loras.metadata_base_hint(header)
+    if base and targets:
+        verdict = t(f"{_sentence(why)} Läuft mit: {', '.join(targets)}.",
+                    f"{_sentence(why)} Runs with: {', '.join(targets)}.")
+    elif base:
+        verdict = t(f"{_sentence(why)} Im Katalog gibt es dafür kein Modell.",
+                    f"{_sentence(why)} There is no model for it in the catalog.")
+    elif hint:
+        label = loras.BASES.get(hint, hint)
+        verdict = t(f"{_sentence(why)} Laut den Metadaten der Datei vermutlich {label}: bitte bestätigen.",
+                    f"{_sentence(why)} According to the file's metadata probably {label}: please confirm.")
+    else:
+        verdict = t(f"{_sentence(why)} Bitte von Hand zuordnen.", f"{_sentence(why)} Please assign it by hand.")
+    # Name: der Dateiname. Titel aus den Metadaten waren an echten Dateien oft nichtssagend ("lora", "Qwen Image
+    # LoRA", gemessen 12.11.2026 an 28 LoRAs).
+    return out | {"ok": bool(base and targets), "lora": True, "family": base, "suggested": base or hint,
+                  "catalog": targets, "verdict": verdict, "trigger": loras.trigger_from_metadata(header),
+                  "expert": loras.expert_of(stem)}
+
+
+def no_model_for(family: str) -> str:
+    """Meldung, wenn kein Modell LoRAs dieser Basis nimmt: Hinzufügen und Zuordnen werden dann abgelehnt (die
+    Oberfläche bietet solche Basen gar nicht an, die NVAI-open-App für den Mac lehnt sie ebenso ab)."""
+    label = loras.BASES.get(family, family)
+    return t(f"Für {label} gibt es hier kein Modell; die LoRA würde nirgends erscheinen. Gehört sie zu einem anderen "
+             "Modell, die Zuordnung angeben.",
+             f"There is no model for {label} here; the LoRA would show up nowhere. If it belongs to another model, "
+             "give that assignment.")
+
+
+def _clean_name(name: str) -> str:
+    """Anzeigename ohne Schraegstriche (die LoRA-Auswahl kuerzt Namen sonst auf den Teil nach dem letzten "/")."""
+    return re.sub(r"\s*[\\/]+\s*", " - ", name or "").strip(" -")[:120]
+
+
+def _taken_lora_names() -> set[str]:
+    """Belegte Dateinamen in loras/ (kleingeschrieben, Windows unterscheidet nicht): vorhandene Dateien und die
+    Dateien aller Katalogeintraege, auch noch nicht geladener (sonst hielte eine spaetere empfohlene LoRA die
+    hochgeladene Datei fuer schon geladen)."""
+    names = {workflows.file_name(f).lower() for e in all_entries() for f in e["files"]
+             if f.get("target") == "loras" and not f.get("snapshot")}
+    folder = lora_dir()
+    if folder.is_dir():
+        names |= {p.name.lower() for p in folder.iterdir()}
+    return names
+
+
+def _free_lora_name(name: str) -> str:
+    taken = _taken_lora_names()
+    stem = name[:-len(loras.SUFFIX)]
+    candidate, i = name, 2
+    while candidate.lower() in taken:
+        candidate, i = f"{stem}-{i}{loras.SUFFIX}", i + 1
+    return candidate
+
+
+def add_upload(part: Path, file_name: str, family: str, name: str, trigger: str = "", expert: str = "",
+               size_bytes: int = 0, sha256: str = "") -> tuple[dict[str, Any], bool]:
+    """Legt eine fertig hochgeladene, gepruefte Datei (part, liegt schon in loras/) unter einem freien Namen ab und
+    nimmt sie in den Nutzer-Katalog auf. Ist dieselbe Datei (gleiche SHA-256) schon da, bleibt es bei der einen
+    Kopie, sie bekommt nur die neuen Angaben. Gibt (Eintrag, schon_vorhanden) zurueck."""
+    if family not in loras.BASES:
+        raise ValueError(t(f"Unbekannte LoRA-Basis: {family}", f"Unknown LoRA base: {family}"))
+    with _state_lock:
+        same = next((e for e in _load_user_catalog() if e.get("uploaded") and sha256
+                     and e.get("sha256") == sha256 and is_installed(e)), None)
+        if same is not None:
+            part.unlink(missing_ok=True)
+            return update_lora(same["id"], family=family, trigger=trigger or None, name=name or None,
+                               expert=expert or None), True
+        final = _free_lora_name(file_name)
+        os.replace(part, lora_dir() / final)
+        entries = _load_user_catalog()
+        taken = _CATALOG_IDS | {e["id"] for e in entries}
+        base_id = f"lora-upload-{_slug(final[:-len(loras.SUFFIX)])}"
+        model_id, i = base_id, 2
+        while model_id in taken:
+            model_id, i = f"{base_id}-{i}", i + 1
+        entry: dict[str, Any] = {
+            "id": model_id,
+            "name": _clean_name(name) or final[:-len(loras.SUFFIX)],
+            "kind": "lora",
+            "family": family,
+            "workflow": None,
+            "files": [{"repo": UPLOAD_REPO, "file": final, "target": "loras"}],
+            "size_gb": round(size_bytes / 1024**3, 2),
+            "vram_gb": 0,
+            # Selbst trainiert gehoert die LoRA dem Nutzer; was fuer Ergebnisse gilt, sagt die Beschreibung
+            # (_custom_texts): die Lizenz des Grundmodells und gegebenenfalls die der Quelle.
+            "license": "eigene Datei",
+            "commercial_ok": True,
+            "best_for": "", "description": "", "pros": [], "cons": [],
+            "trigger": (trigger or "").strip()[:300],
+            "source_url": "",
+            "custom": True,
+            "uploaded": True,
+            "sha256": sha256,
+            "added": time.strftime("%Y-%m-%d"),
+        }
+        if expert in loras.EXPERTS:
+            entry["expert"] = expert
+        entries.append(entry)
+        _save_user_catalog(entries)
+    return entry, False
+
+
+def update_lora(model_id: str, family: str | None = None, trigger: str | None = None, name: str | None = None,
+                expert: str | None = None) -> dict[str, Any]:
+    """Zuordnung einer LoRA aus dem Nutzer-Katalog aendern (hochgeladen oder aus der Suche): Basis = unter welchen
+    Modellen sie erscheint, Trigger-Woerter, Anzeigename, bei Wan 14B der Experte ("" = nach Dateiname).
+    None laesst ein Feld, wie es ist. Die festen Katalog-LoRAs sind gemessen zugeordnet und bleiben so."""
+    if family is not None and family not in loras.BASES:
+        raise ValueError(t(f"Unbekannte LoRA-Basis: {family}", f"Unknown LoRA base: {family}"))
+    if family is not None and not lora_models(family):
+        raise ValueError(no_model_for(family))
+    if expert is not None and expert not in ("", *loras.EXPERTS):
+        raise ValueError(t(f"Unbekannter Experte: {expert} (high, low oder both)",
+                           f"Unknown expert: {expert} (high, low or both)"))
+    with _state_lock:
+        if model_id in _CATALOG_IDS:
+            raise ValueError(t("Diese LoRA gehört zum festen Katalog; ihre Zuordnung ist geprüft und bleibt fest.",
+                               "This LoRA belongs to the fixed catalog; its assignment is tested and stays fixed."))
+        entries = _load_user_catalog()
+        entry = next((e for e in entries if e["id"] == model_id and e.get("kind") == "lora"), None)
+        if entry is None:
+            raise LookupError(t(f"Unbekannte LoRA: {model_id}", f"Unknown LoRA: {model_id}"))
+        if family is not None:
+            entry["family"] = family
+        if trigger is not None:
+            entry["trigger"] = trigger.strip()[:300]
+        if name is not None and _clean_name(name):
+            entry["name"] = _clean_name(name)
+        if expert == "":
+            entry.pop("expert", None)
+        elif expert is not None:
+            entry["expert"] = expert
+        _save_user_catalog(entries)
+    return entry
 
 
 # ------------------------------------------------------- aktives Modell

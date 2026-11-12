@@ -97,6 +97,7 @@ final class AppState: ObservableObject {
         // Der Server zuerst: Clients warten auf /api/version, alles andere kann nachkommen.
         ensureServer()
         Flux2Engine.configureModelsDirectory(modelsDirectory)
+        LoRAUploads.removeStaleParts()  // Reste eines Uploads, während dessen die App beendet wurde
         await AssetStore.shared.load()
         let notify: @Sendable () -> Void = { Task { @MainActor in AppState.shared.scheduleRefresh() } }
         await AssetStore.shared.setOnChange(notify)
@@ -114,6 +115,7 @@ final class AppState: ObservableObject {
 
     func startServer() {
         let server = self.server ?? HTTPServer { request in await APIRouter.handle(request) }
+        server.streamTarget = { head in APIRouter.bodyHandling(head) }  // eigene LoRA-Dateien: in eine Teildatei
         server.onStateChange = { state in Task { @MainActor in AppState.shared.serverState = state } }
         self.server = server
         server.start(port: port)

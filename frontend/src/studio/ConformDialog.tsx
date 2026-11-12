@@ -13,6 +13,8 @@ export interface ConformPlan {
   items: StudioConformItem[]
   without_take: number
   transition_markers: number
+  /** Sprecherzeilen, die eine Videoszene als Ton nimmt (seit 0.5.24): sie klingen schon im Video */
+  spoken_in_video?: number
 }
 
 const num = (x: number | undefined) => decimal((x ?? 0).toFixed(2))
@@ -93,7 +95,10 @@ export function ConformDialog({ plan, onRun, onClose }: {
         <p className="muted small">
           {same > 0 && t(`${same} Clip(s) sind schon auf dem Stand ihrer Szene. `, `${same} clip(s) already match their scene. `)}
           {plan.without_take > 0 && t(`${plan.without_take} Szene(n) ohne Take bleiben außen vor. `, `${plan.without_take} scene(s) without a take are left out. `)}
-          {plan.transition_markers > 0 && t(`${plan.transition_markers} Übergang-Marker werden angewendet.`, `${plan.transition_markers} transition marker(s) are applied.`)}
+          {plan.transition_markers > 0 && t(`${plan.transition_markers} Übergang-Marker werden angewendet. `, `${plan.transition_markers} transition marker(s) are applied. `)}
+          {(plan.spoken_in_video ?? 0) > 0 && t(
+            `${plan.spoken_in_video} Sprecherzeile(n) klingen schon im Video, das sie als Ton nimmt, und kommen nicht extra in den Schnitt.`,
+            `${plan.spoken_in_video} voice line(s) already sound in the video that uses them as its sound and are not added separately.`)}
         </p>
         <div className="st-actions st-dialog-actions">
           <button className="btn small ghost" onClick={onClose}>{t('Abbrechen', 'Cancel')}</button>

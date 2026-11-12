@@ -116,6 +116,17 @@ enum ModelCatalog {
                       vae: ModelRegistry.isDownloaded(.vae(.smallDecoder)))
     }
 
+    /// Lädt den Text-Encoder (Qwen3-4B) eines Modells, wenn er fehlt. `Flux2Pipeline.loadModels` lässt ihn aus („handled
+    /// separately“) und holt ihn erst beim ersten Bild; `status` verlangt ihn aber, und Generieren lehnt ohne ihn ab. Bis
+    /// 0.5.4 blieb FLUX.2 Klein nach „Herunterladen“ deshalb „teilweise geladen“ (gefunden 12.11.2026 am Mac mini).
+    static func downloadEncoder(_ m: CatalogModel, progress: @escaping @Sendable (Double, String) -> Void) async throws {
+        guard !status(m).encoder else { return }
+        _ = try await TextEncoderModelDownloader(hfToken: Settings.hfToken)
+            .downloadQwen3(variant: m.encoder == .mlx8bit ? .qwen3_4B_8bit : .qwen3_4B_4bit) { fraction, message in
+                progress(fraction, message)
+            }
+    }
+
     static func fits(_ m: CatalogModel) -> String {
         let ram = SystemInfo.memoryGB
         if ram >= m.recommendedRAMGB { return "ja" }

@@ -37,7 +37,17 @@ enum StudioMediaProbe {
         asset: { id in
             guard let r = AssetSnapshot.shared.get(id) else { return nil }
             return StudioAssetInfo(kind: r.kind, filename: r.filename, prompt: r.prompt, meta: r.meta)
-        })
+        },
+        // Figuren (seit 0.5.5): LoRAs des Katalogs samt eigenen Dateien; LoRAs nimmt auf dem Mac nur FLUX.2 Klein
+        lora: { id in
+            LoRACatalog.find(id).map { StudioLoRAInfo(installed: $0.installed, family: $0.base, trigger: $0.trigger) }
+        },
+        loraBases: { id in
+            if let m = Models.find(id) { return m.engine == "mlx" ? LoRAFiles.macBases : [] }
+            return VideoCatalog.model(id) != nil ? [] : nil
+        },
+        // Kein Videomodell der Mac-Fassung nimmt einen vorgegebenen Ton (LTX-Video ohne Ton, LTX-2 ohne Toneingang)
+        takesAudio: { _ in false })
 
     /// Medieninfo der genannten Assets lesen, soweit noch nicht bekannt. Unbekannte oder unlesbare bleiben weg; der
     /// Befehl meldet sie dann selbst.
@@ -76,13 +86,14 @@ enum StudioMediaProbe {
         return m
     }
 
-    /// Asset-IDs, deren Medieninfo ein Befehl brauchen kann: asset_id und takes in den Parametern (auch in batch),
-    /// dazu Takes der Szenen und Clips des Projekts (Übernehmen, Tempo, Trimmen).
+    /// Asset-IDs, deren Medieninfo ein Befehl brauchen kann: asset_id, voice_asset_id (Stimme einer Figur aus einer
+    /// Aufnahme, seit 0.5.5) und takes in den Parametern (auch in batch), dazu Takes der Szenen und Clips des Projekts
+    /// (Übernehmen, Tempo, Trimmen).
     static func referencedAssets(_ params: StudioParams, _ p: StudioProject) -> [String] {
         var ids: [String] = []
         func walk(_ v: JSONValue, key: String?) {
             switch v {
-            case .string(let s) where key == "asset_id": ids.append(s)
+            case .string(let s) where key == "asset_id" || key == "voice_asset_id": ids.append(s)
             case .array(let a): a.forEach { walk($0, key: key == "takes" ? "asset_id" : key) }
             case .object(let o): o.forEach { walk($0.value, key: $0.key) }
             default: break

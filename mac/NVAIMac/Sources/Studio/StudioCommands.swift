@@ -10,6 +10,21 @@ struct StudioEnvironment: Sendable {
     var probe: @Sendable (String) throws -> StudioMedia
     /// Prompt, Dateiname und Meta eines Assets (Bezeichnungen, Latent-Kette), nil, wenn es das Asset nicht gibt.
     var asset: @Sendable (String) -> StudioAssetInfo?
+    /// Figuren (seit 0.5.5): eine LoRA dieses Rechners (geladen?, Basis, Trigger-Wörter); nil, wenn es sie nicht gibt.
+    var lora: @Sendable (String) -> StudioLoRAInfo? = { _ in nil }
+    /// LoRA-Basen, die ein Modell nimmt (leer: keine LoRAs); nil, wenn es das Modell nicht gibt.
+    var loraBases: @Sendable (String) -> [String]? = { _ in nil }
+    /// Nimmt das Videomodell einer Szene (ihre model_id, nil = das aktive) einen vorgegebenen Ton (audio_asset_id)?
+    /// Unter Windows LTX-2.5; auf dem Mac keins. Dann bleibt params.audio_from im Projekt, wirkt aber weder beim Erzeugen
+    /// noch beim Übernehmen (die Zeile kommt normal auf die Spur „Stimme“).
+    var takesAudio: @Sendable (String?) -> Bool = { _ in false }
+}
+
+/// Was die Figuren von einer LoRA wissen müssen.
+struct StudioLoRAInfo: Sendable {
+    var installed: Bool
+    var family: String
+    var trigger: String
 }
 
 struct StudioAssetInfo: Sendable {
@@ -25,11 +40,14 @@ enum StudioCommands {
     static let names = ["project.update", "batch", "scene.add", "scene.update", "scene.delete", "scene.take",
                         "marker.add", "marker.update", "marker.delete", "track.add", "track.delete", "track.update",
                         "clip.add", "clip.move", "clip.trim", "clip.razor", "clip.delete", "clip.update", "clip.key",
-                        "edit.conform"]
+                        "edit.conform", "character.add", "character.update", "character.delete"]
 
     static func command(_ name: String) -> Command? {
         switch name {
         case "project.update": return projectUpdate
+        case "character.add": return characterAdd
+        case "character.update": return characterUpdate
+        case "character.delete": return characterDelete
         case "batch": return batch
         case "scene.add": return sceneAdd
         case "scene.update": return sceneUpdate
@@ -88,6 +106,169 @@ enum StudioCommands {
             p.settings.videoQuality = q
         }
         return .null
+    }
+
+    // MARK: Figuren (seit 0.5.5, wie studio.py unter Windows seit 0.5.24)
+
+    static let voiceKeys = ["voice", "voice_from", "voice_asset_id", "voice_text", "language"]
+
+    /// LoRAs einer Figur: jede muss es als LoRA geben, Stärke 0 bis 2 (Vorgabe 0,8), jede nur einmal.
+    static func characterLoRAs(_ value: JSONValue?, _ env: StudioEnvironment) throws -> [StudioCharacterLoRA] {
+        guard let value, !value.isNull else { return [] }
+        guard let list = value.arrayValue else {
+            throw StudioError(t("loras ist eine Liste [{model_id, strength}].", "loras is a list [{model_id, strength}]."))
+        }
+        var out: [StudioCharacterLoRA] = []
+        for item in list {
+            guard item.isNull || item.objectValue != nil else {
+                throw StudioError(t("loras ist eine Liste [{model_id, strength}].", "loras is a list [{model_id, strength}]."))
+            }
+            let o = item.objectValue ?? [:]
+            let modelID = o.truthy("model_id") ? (o.string("model_id") ?? "") : ""
+            guard env.lora(modelID) != nil else {
+                throw StudioError(t("Unbekannte LoRA: \(modelID)", "Unknown LoRA: \(modelID)"))
+            }
+            var strength = 0.8
+            if let v = o["strength"] {
+                guard let d = v.doubleValue ?? v.stringValue.flatMap({ Double($0.trimmingCharacters(in: .whitespaces)) }) else {
+                    throw StudioError(t("LoRA-Stärke 0 bis 2.", "LoRA strength 0 to 2."))
+                }
+                strength = d
+            }
+            guard (0.0...2.0).contains(strength) else { throw StudioError(t("LoRA-Stärke 0 bis 2.", "LoRA strength 0 to 2.")) }
+            if !out.contains(where: { $0.modelID == modelID }) {
+                out.append(StudioCharacterLoRA(modelID: modelID, strength: (strength * 1000).rounded(.toNearestOrEven) / 1000))
+            }
+        }
+        return out
+    }
+
+    /// Felder einer Figur übernehmen, in der Reihenfolge von _character_fields unter Windows.
+    static func characterFields(_ p: inout StudioProject, _ c: inout StudioCharacter, _ a: StudioParams,
+                                _ env: StudioEnvironment) throws {
+        if a.has("name") {
+            let name = (a.truthy("name") ? (a.string("name") ?? "") : "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { throw StudioError(t("Die Figur braucht einen Namen.", "The character needs a name.")) }
+            c.name = String(name.prefix(80))
+        }
+        if a.has("loras") { c.loras = try characterLoRAs(a["loras"], env) }
+        if a.has("voice") { c.voice = a.truthy("voice") ? (a.string("voice") ?? "") : "" }
+        if a.has("voice_text") { c.voiceText = a.truthy("voice_text") ? (a.string("voice_text") ?? "") : "" }
+        if a.has("language") { c.language = a.truthy("language") ? (a.string("language") ?? "auto") : "auto" }
+        if a.has("voice_from") {
+            let source = a.truthy("voice_from") ? a.string("voice_from") : nil
+            if let source {
+                guard p.scenes[try p.sceneIndex(source)].lane == "voice" else {
+                    throw StudioError(t("Die Vorlage der Stimme muss eine Sprecher-Szene sein.",
+                                        "The voice reference must be a narrator scene."))
+                }
+            }
+            c.voiceFrom = source
+        }
+        if a.has("voice_asset_id") {
+            let assetID = a.truthy("voice_asset_id") ? a.string("voice_asset_id") : nil
+            if let assetID { _ = try media(&p, assetID, env) }  // gibt es die Aufnahme?
+            c.voiceAssetID = assetID
+        }
+    }
+
+    /// Figur anlegen: name, loras [{model_id, strength}], Stimme wie bei Sprecher-Szenen (voice, voice_from,
+    /// voice_asset_id, voice_text, language).
+    static func characterAdd(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
+        var c = StudioCharacter(id: Studio.newID("chr"))  // wie unter Windows vor der Prüfung vergeben
+        var fields = a
+        fields["name"] = a.truthy("name") ? a["name"]!
+            : .string(t("Figur \(p.characters.count + 1)", "Character \(p.characters.count + 1)"))
+        try characterFields(&p, &c, fields, env)
+        p.characters.append(c)
+        return .object(["id": .string(c.id)])
+    }
+
+    /// Figur ändern: id + name, loras (ersetzt die Liste), voice, voice_from, voice_asset_id, voice_text, language.
+    static func characterUpdate(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
+        let i = try p.characterIndex(a.string("id") ?? "")
+        var c = p.characters[i]
+        try characterFields(&p, &c, a, env)
+        p.characters[i] = c
+        return .null
+    }
+
+    /// Figur löschen; die Szenen verlieren nur die Zuordnung.
+    static func characterDelete(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
+        let i = try p.characterIndex(a.string("id") ?? "")
+        let id = p.characters.remove(at: i).id
+        for s in p.scenes.indices {
+            if p.scenes[s].params["character"]?.stringValue == id { p.scenes[s].params["character"] = .null }
+            if let list = p.scenes[s].params["characters"]?.arrayValue, list.contains(.string(id)) {
+                p.scenes[s].params["characters"] = .array(list.filter { $0 != .string(id) })
+            }
+        }
+        return .null
+    }
+
+    /// Stimme einer Sprecher-Szene: die ihrer Figur (params.character), sonst ihre eigenen Angaben. Ist die Szene
+    /// selbst die Vorlage der Figur (voice_from), spricht sie nach deren übrigen Angaben.
+    static func voiceSettings(_ p: StudioProject, _ s: StudioScene) -> [String: JSONValue] {
+        let cid = s.params["character"]?.stringValue ?? ""
+        guard let c = p.characters.first(where: { $0.id == cid }) else {
+            return Dictionary(uniqueKeysWithValues: voiceKeys.map { ($0, s.params[$0] ?? .null) })
+        }
+        var out = c.voiceParams
+        if c.voiceFrom == s.id { out["voice_from"] = .null }
+        return out
+    }
+
+    /// LoRAs und Prompt einer Bild- oder Videoszene samt ihren Figuren (params.characters): je Figur die geladenen
+    /// LoRAs, die zum Modell passen, und deren Trigger-Wörter vorn in den Prompt, wenn er sie noch nicht enthält.
+    /// Eigene LoRAs der Szene (params.loras) bleiben und gehen vor. `modelID`: das Modell, mit dem die Szene rechnet.
+    static func characterLook(_ p: StudioProject, _ s: StudioScene, modelID: String?,
+                              _ env: StudioEnvironment) -> (loras: [JSONValue], prompt: String) {
+        var out = s.params["loras"]?.arrayValue ?? []
+        var prompt = s.prompt
+        guard let modelID, !modelID.isEmpty, let bases = env.loraBases(modelID) else { return (out, prompt) }
+        var triggers: [String] = []
+        for value in s.params["characters"]?.arrayValue ?? [] {
+            guard let cid = value.stringValue, let c = p.characters.first(where: { $0.id == cid }) else { continue }
+            for ref in c.loras {
+                guard let lora = env.lora(ref.modelID), lora.installed, bases.contains(lora.family),
+                      !out.contains(where: { $0["model_id"]?.stringValue == ref.modelID }) else { continue }
+                out.append(.object(["model_id": .string(ref.modelID), "strength": .double(ref.strength)]))
+                let trigger = lora.trigger.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trigger.isEmpty, !s.prompt.lowercased().contains(trigger.lowercased()), !triggers.contains(trigger) {
+                    triggers.append(trigger)
+                }
+            }
+        }
+        if !triggers.isEmpty { prompt = triggers.joined(separator: ", ") + ", " + prompt }
+        return (out, prompt)
+    }
+
+    /// Sprecher-Szenen, deren Take eine Videoszene als Ton nimmt (params.audio_from): Der Satz klingt dann schon im
+    /// Video; Übernehmen legt ihn nicht noch einmal auf die Spur „Stimme“. Nur, wenn das Videomodell der Szene einen
+    /// Ton nehmen kann (`StudioEnvironment.takesAudio`), auf dem Mac also nie.
+    static func spokenInVideo(_ p: StudioProject, _ env: StudioEnvironment) -> Set<String> {
+        let voice = Set(p.scenes.filter { $0.lane == "voice" }.map(\.id))
+        return Set(p.scenes.compactMap { s -> String? in
+            guard s.lane == "video", s.kind == "video", let src = s.params["audio_from"]?.stringValue, voice.contains(src),
+                  env.takesAudio(s.modelID) else { return nil }
+            return src
+        })
+    }
+
+    /// Szenen, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video), die Szene, deren Stimme eine
+    /// Sprecher-Szene übernimmt (voice_from, auch über ihre Figur) und die Sprecher-Szene, deren Satz eine Videoszene
+    /// spricht (audio_from, nur wenn das Videomodell Ton nehmen kann).
+    static func dependencies(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) -> [String] {
+        if s.lane == "voice" {
+            guard let source = voiceSettings(p, s)["voice_from"]?.stringValue, !source.isEmpty else { return [] }
+            return [source]
+        }
+        var deps: [String] = s.chainFrom.flatMap { $0.isEmpty ? nil : [$0] } ?? []
+        if s.lane == "video", s.kind == "video", let audio = s.params["audio_from"]?.stringValue, !audio.isEmpty,
+           !deps.contains(audio), env.takesAudio(s.modelID) {
+            deps.append(audio)
+        }
+        return deps
     }
 
     /// Mehrere Befehle als ein Schritt (ein Rückgängig); scheitert einer, bleibt alles beim Alten (StudioStore
@@ -173,7 +354,10 @@ enum StudioCommands {
         for o in p.scenes.indices {
             if p.scenes[o].chainFrom == id { p.scenes[o].chainFrom = nil }
             if p.scenes[o].waitingFor == id { p.scenes[o].waitingFor = nil }  // der wartende Auftrag sieht das und endet
+            if p.scenes[o].params["audio_from"]?.stringValue == id { p.scenes[o].params["audio_from"] = .null }
         }
+        // Figuren behalten ihre übrigen Angaben zur Stimme
+        for c in p.characters.indices where p.characters[c].voiceFrom == id { p.characters[c].voiceFrom = nil }
         return .null
     }
 

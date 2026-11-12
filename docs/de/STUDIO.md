@@ -94,6 +94,31 @@ auf eine eigene Tonspur „Stimme“ (auf dem Mac ab 0.5.4), die es beim ersten 
 Übernehmen legt sie wieder an. Der Export bringt die Mischung auf −14 LUFS. Im Test brauchten drei Zeilen samt Laden
 des Modells 30 s.
 
+## Figuren
+
+Eine Figur bündelt Aussehen und Stimme, etwa eine Person, die du als LoRA trainiert hast. Ein Klick ins Leere zeigt die
+Projekteinstellungen; unter „Figuren“ legt „+ Figur“ eine an:
+
+- **Aussehen:** eine oder mehrere LoRAs (eigene Dateien unter „Modelle“ → „LoRA-Datei hinzufügen“, siehe
+  [LORAS.md](LORAS.md)). Jede Szene nimmt die, die zu ihrem Modell passen; eine Figur kann also eine LoRA für
+  Standbilder (Qwen-Image) und eine für Clips (LTX-2) haben. Die Trigger-Wörter kommen von selbst vorn in den Prompt.
+- **Stimme:** wie bei einer Sprecher-Szene: beschreiben, vom Take einer Sprecher-Szene übernehmen oder aus einer
+  Aufnahme. Klingt ein Satz richtig, ihn als Vorlage wählen, dann behalten alle weiteren Sätze diese Stimme.
+
+![Das Studio mit einer Figur: Aussehen aus zwei LoRAs und eine beschriebene Stimme; ein Porträt, ein Satz und der Clip, der ihn spricht](../images/studio-characters-de.jpg)
+
+Danach die Figur in den Szenen zuordnen:
+
+- **Bildszenen:** unter „Figuren im Bild“ anhaken. Passt keine ihrer LoRAs zum Modell der Szene, steht das dabei.
+- **Sprecher-Szenen:** unter „Stimme“ „einer Figur …“ wählen; der Satz wird mit der Stimme der Figur gesprochen.
+- **Videoszenen, die sprechen (LTX-2.5):** „Ton aus Sprecher-Szene“ nimmt deren Satz als Ton des Clips. Der Satz
+  entsteht zuerst, das Video folgt ihm mit den Lippen und wird so lang wie er. Übernehmen legt den Satz nicht noch
+  einmal auf die Spur „Stimme“.
+
+![Eine Videoszene, die spricht: die Figur im Bild und der Satz als Ton](../images/studio-character-scene-de.jpg)
+
+Claude Code macht dasselbe per MCP (`character.add`, `params.characters`, `params.character`, `params.audio_from`).
+
 ## Werkzeuge, Rechtsklick und Spuren
 
 - **Auswahl (V):** Ziehen verschiebt und trimmt, ein Rahmen wählt mehrere; Umschalt- oder Strg-Klick nimmt einzelne
@@ -260,6 +285,9 @@ Was der Mac anders macht:
   0.6B in 8 Bit).
 - **Anschluss:** beginnt mit dem letzten Bild; die letzte Sekunde zu übernehmen braucht LTX-2.5 und bleibt Windows
   vorbehalten.
+- **Figuren** (seit Mac 0.5.5): wie unter Windows, mit LoRAs für FLUX.2 Klein 4B. „Ton aus Sprecher-Szene“ bleibt im
+  Projekt, wirkt aber nicht: Kein Videomodell auf dem Mac nimmt einen vorgegebenen Ton, Übernehmen legt den Satz deshalb
+  wie gewohnt auf die Spur „Stimme“.
 - **Export** mit dem Encoder des Macs: YouTube 1080p und 4K, Shorts, Projektformat und ProRes 4444. Eine verlustfreie
   Kopie, AV1 und den MKV-Master gibt es nicht.
 - **REST:** dieselben `/api/studio/*` wie unter Windows, unter `http://127.0.0.1:8100`.

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, KIND_LABEL, type ModelInfo, type ModelKind, type ServerEvent } from '../api'
+import {
+  api, KIND_LABEL, LORA_BASE_LABEL, type LoraUploadResult, type ModelInfo, type ModelKind, type ServerEvent,
+} from '../api'
 import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 import { GpuSettings } from '../components/GpuSettings'
@@ -10,11 +12,14 @@ import { HfSearch } from './HfSearch'
 import { CivitaiSearch } from './CivitaiSearch'
 import { HfToken } from './HfToken'
 import { GatedNotice } from '../components/GatedNotice'
+import { LoraAssign, LoraUpload } from '../components/LoraFile'
 
 interface Props {
   event: ServerEvent | null
   onChanged: () => void
   downloads: Downloads
+  /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde (auch per MCP) */
+  modelsVersion?: number
 }
 
 type Filter = ModelKind | 'all' | 'fav' | 'rec'
@@ -48,12 +53,15 @@ function extrasLabel(m: ModelInfo): string {
   return [...names].map((n) => EXTRAS[n] ?? n).join(', ')
 }
 
-export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props) {
+export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVersion = 0 }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [active, setActive] = useState<Record<string, string | null>>({})
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [hfOpen, setHfOpen] = useState(false)
+  // Eigene LoRA-Datei hinzufügen (seit 0.5.24) und die LoRA, deren Zuordnung gerade offen ist
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [assigning, setAssigning] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmCleanup, setConfirmCleanup] = useState(false)
@@ -112,6 +120,36 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
   useEffect(() => {
     load()
   }, [load])
+
+  // LoRA von außen hinzugekommen oder geändert (MCP add_lora, Generieren-Seite): Liste neu lesen
+  useEffect(() => {
+    if (modelsVersion) load()
+  }, [modelsVersion, load])
+
+  const showModel = (id: string) => {
+    setExpanded((s) => new Set(s).add(id))
+    setTimeout(() => document.getElementById(`model-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 80)
+  }
+
+  const loraAdded = async (r: LoraUploadResult) => {
+    const base = LORA_BASE_LABEL[r.model.family] ?? r.model.family
+    setError(null)
+    setMessage(
+      (r.existing
+        ? t(`Diese Datei ist schon da als „${r.model.name}“; ihre Zuordnung ist jetzt ${base}.`,
+          `This file is already there as “${r.model.name}”; its assignment is now ${base}.`)
+        : t(`„${r.model.name}“ ist hinzugefügt (${base}). Beim Generieren erscheint sie unter „LoRAs“, sobald ein `
+            + 'passendes Modell gewählt ist.',
+          `“${r.model.name}” was added (${base}). When generating, it shows up under “LoRAs” as soon as a matching `
+            + 'model is selected.'))
+      + (r.warning ? ` ${r.warning}` : ''),
+    )
+    setUploadOpen(false)
+    setFilter('lora')
+    setQuery('')
+    await load()
+    showModel(r.model.id)
+  }
 
   // Ein Download ist fertig geworden (egal auf welcher Seite gestartet): Liste neu lesen.
   useEffect(() => {
@@ -284,6 +322,14 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
               ? t('Suche schließen', 'Close search')
               : t('Modelle und LoRAs suchen', 'Search models and LoRAs')}
           </button>
+          <button
+            className={uploadOpen ? 'btn small' : 'btn small ghost'}
+            title={t('Eine LoRA-Datei von diesem Rechner, etwa selbst trainiert, einem Modell zuordnen',
+              'Assign a LoRA file from this computer, for example one you trained, to a model')}
+            onClick={() => setUploadOpen((o) => !o)}
+          >
+            {uploadOpen ? t('Hinzufügen schließen', 'Close adding') : t('LoRA-Datei hinzufügen', 'Add LoRA file')}
+          </button>
           {busyDownloads > 0 && (
             <button className="btn small ghost danger-text" onClick={cancelDownloads}>
               {t(
@@ -353,7 +399,19 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
               + 'may be sold is shown under license for each LoRA.',
           )}
         </p>
+        <p>
+          {t(
+            'Eigene LoRAs (selbst trainiert oder von anderswo): „LoRA-Datei hinzufügen“. NVAI-open erkennt am '
+              + 'Dateikopf, zu welchem Modell sie gehört; unter „Zuordnung“ an der LoRA lässt sich das ändern, auch '
+              + 'Name, Trigger-Wörter und bei Wan 2.2 der Experte (High- oder Low-Noise).',
+            'Your own LoRAs (trained yourself or from elsewhere): “Add LoRA file”. NVAI-open detects from the file '
+              + 'header which model it belongs to; “Assignment” on the LoRA changes that, as well as the name, the '
+              + 'trigger words and, for Wan 2.2, the expert (high or low noise).',
+          )}
+        </p>
       </details>
+
+      {uploadOpen && <LoraUpload catalog={models} onDone={loraAdded} />}
 
       <HfToken />
 
@@ -492,12 +550,14 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                 {m.gpu_note && <p className="warn-text small">{m.gpu_note}</p>}
                 <GatedNotice model={m} onRecheck={load} />
                 <p className="muted small">
-                  {t(
-                    `${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · ${m.files.length} Datei`
-                      + (m.files.length > 1 ? 'en' : ''),
-                    `${m.size_gb} GB download · ~${m.vram_gb} GB VRAM · ${m.files.length} `
-                      + (m.files.length === 1 ? 'file' : 'files'),
-                  )} ·{' '}
+                  {m.uploaded
+                    ? t(`${m.disk_gb} GB · vom Rechner hinzugefügt`, `${m.disk_gb} GB · added from this computer`)
+                    : t(
+                      `${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · ${m.files.length} Datei`
+                        + (m.files.length > 1 ? 'en' : ''),
+                      `${m.size_gb} GB download · ~${m.vram_gb} GB VRAM · ${m.files.length} `
+                        + (m.files.length === 1 ? 'file' : 'files'),
+                    )} ·{' '}
                   <span className={m.commercial_ok ? 'ok-text' : 'warn-text'}>
                     {m.license}
                     {m.commercial_ok ? '' : t(' · nicht kommerziell', ' · non-commercial')}
@@ -530,6 +590,17 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                     {!isActive && m.runnable && (
                       <button className="btn small" onClick={() => activate(m)}>
                         {t('Aktivieren', 'Activate')}
+                      </button>
+                    )}
+                    {/* Eigene LoRAs (vom Rechner, aus der Suche): zu welchem Modell sie gehören, ist änderbar */}
+                    {m.kind === 'lora' && m.custom && (
+                      <button
+                        className={assigning === m.id ? 'btn small' : 'btn small ghost'}
+                        title={t('Zu welchem Modell die LoRA gehört, Name, Trigger-Wörter',
+                          'Which model the LoRA belongs to, name, trigger words')}
+                        onClick={() => setAssigning((a) => (a === m.id ? null : m.id))}
+                      >
+                        {t('Zuordnung', 'Assignment')}
                       </button>
                     )}
                     {/* Optionale Dateien (DFR, Stil-Referenz …) fehlen: nur diese nachladen (seit 0.5.10) */}
@@ -569,6 +640,14 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                       </button>
                     )}
                   </>
+                ) : m.uploaded ? (
+                  // Vom Rechner hinzugefügt, die Datei ist aber weg: neu hinzufügen statt herunterladen
+                  <>
+                    <span className="warn-text small">{t('Datei fehlt', 'File missing')}</span>
+                    <button className="btn small ghost danger-text" onClick={() => remove(m)} disabled={busyDelete === m.id}>
+                      {t('Entfernen', 'Remove')}
+                    </button>
+                  </>
                 ) : m.partially_installed ? (
                   <>
                     {/* Fortsetzen lädt nur, was fehlt; fertige Dateien bleiben (vorher löschte der einzige Knopf sie) */}
@@ -600,6 +679,21 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                 </button>
               </div>
             </div>
+
+            {assigning === m.id && (
+              <LoraAssign
+                model={m}
+                catalog={models}
+                onCancel={() => setAssigning(null)}
+                onSaved={(x) => {
+                  setModels((list) => list.map((y) => (y.id === x.id ? x : y)))
+                  setAssigning(null)
+                  setError(null)
+                  setMessage(t(`„${x.name}“ gehört jetzt zu ${LORA_BASE_LABEL[x.family] ?? x.family}.`,
+                    `“${x.name}” now belongs to ${LORA_BASE_LABEL[x.family] ?? x.family}.`))
+                }}
+              />
+            )}
 
             {open && (
               <div className="model-detail">
@@ -633,7 +727,8 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls }: Props)
                         <span className={f.installed ? 'ok-text' : 'muted'}>
                           {f.installed ? '✓' : '○'}
                         </span>{' '}
-                        <code>{f.repo}</code> → {f.target}/{f.file.split('/').pop()}
+                        {m.uploaded ? t('vom Rechner', 'from this computer') : <code>{f.repo}</code>} →{' '}
+                        {f.target}/{f.file.split('/').pop()}
                         {f.size_gb ? ` (${f.size_gb} GB)` : ''}
                       </li>
                     ))}

@@ -9,6 +9,9 @@ struct ModelsView: View {
     /// Kennung oder Beschreibung.
     @AppStorage("models.filter") private var filter = "all"
     @State private var query = ""
+    /// Eigene LoRA-Datei (seit 0.5.5): gewählte Datei für das Blatt und die Meldung danach
+    @State private var loraFile: LoRAFileChoice?
+    @State private var loraMessage: String?
 
     private static let filters: [(id: String, de: String, en: String)] = [
         ("all", "Alle", "All"), ("rec", "Für diesen Mac", "For this Mac"), ("video", "Video", "Video"),
@@ -51,7 +54,8 @@ struct ModelsView: View {
     }
     private var loraRows: [AppState.LoRARow] {
         guard shows("lora") else { return [] }
-        return state.loras.filter { matches([$0.model.name, $0.model.id, $0.model.description]) }
+        let rows = state.loras.filter { matches([$0.model.name, $0.model.id, $0.model.description]) }
+        return rows.filter(\.model.uploaded) + rows.filter { !$0.model.uploaded }  // eigene Dateien zuerst
     }
     private var showAudio: Bool {
         shows("audio") && visible(AudioCatalog.id, installed: state.audioInstalled)
@@ -135,13 +139,30 @@ struct ModelsView: View {
 
                 let loras = loraRows
                 if !loras.isEmpty {
-                    Text(t("LoRAs (FLUX.2 Klein)", "LoRAs (FLUX.2 Klein)")).font(.title2.bold()).padding(.top, 10)
-                    Text(t("Kleine Zusatzgewichte für einen Stil oder eine Aufgabe, alle Apache-2.0. Beim Generieren unter "
-                           + "„LoRAs“ anhaken; das Auslösewort gehört in den Prompt.",
-                           "Small add-on weights for a style or a task, all Apache-2.0. Tick them under \"LoRAs\" when "
-                           + "generating; the trigger word goes into the prompt."))
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(t("LoRAs (FLUX.2 Klein)", "LoRAs (FLUX.2 Klein)")).font(.title2.bold())
+                        Spacer()
+                        Button(t("LoRA-Datei hinzufügen", "Add LoRA file")) {
+                            if let url = Panels.chooseLoRAFile() { loraFile = LoRAFileChoice(url: url) }
+                        }
+                        .help(t("Eine LoRA-Datei von diesem Rechner, etwa selbst trainiert, einem Modell zuordnen",
+                                "Assign a LoRA file from this computer, for example one you trained, to a model"))
+                    }
+                    .padding(.top, 10)
+                    Text(t("Kleine Zusatzgewichte für einen Stil, eine Aufgabe oder eine Figur. Beim Generieren unter "
+                           + "„LoRAs“ anhaken; das Auslösewort gehört in den Prompt. Eigene LoRAs (selbst trainiert oder von "
+                           + "anderswo): „LoRA-Datei hinzufügen“. NVAI-open erkennt am Dateikopf, zu welchem Modell sie gehört; "
+                           + "unter „Zuordnung“ an der LoRA lassen sich das, Name und Trigger-Wörter ändern.",
+                           "Small add-on weights for a style, a task or a character. Tick them under \"LoRAs\" when "
+                           + "generating; the trigger word goes into the prompt. Your own LoRAs (trained yourself or from "
+                           + "elsewhere): \"Add LoRA file\". NVAI-open detects from the file header which model it belongs to; "
+                           + "\"Assignment\" on the LoRA changes that, as well as the name and the trigger words."))
                         .font(.caption).foregroundStyle(.secondary)
-                    ForEach(loras) { row in LoRACard(row: row) }
+                    if let loraMessage {
+                        Text(loraMessage).font(.callout).foregroundStyle(.green).textSelection(.enabled)
+                            .onTapGesture { self.loraMessage = nil }
+                    }
+                    ForEach(loras) { row in LoRACard(row: row) { loraMessage = $0 } }
                 }
 
                 if showAudio {
@@ -178,6 +199,9 @@ struct ModelsView: View {
         }
         .sheet(isPresented: $state.showSearch) {
             ModelSearchView().environmentObject(state).frame(minWidth: 760, minHeight: 560)
+        }
+        .sheet(item: $loraFile) { choice in
+            LoRAAddSheet(url: choice.url) { loraMessage = $0.message }.environmentObject(state)
         }
     }
 
@@ -405,10 +429,13 @@ struct HelperCard: View {
     }
 }
 
-/// Eine LoRA: laden, Fortschritt, löschen.
+/// Eine LoRA: laden, Fortschritt, löschen; eigene Dateien (seit 0.5.5) mit „Zuordnung“ statt Download.
 struct LoRACard: View {
     @EnvironmentObject var state: AppState
     let row: AppState.LoRARow
+    /// Meldung für die Zeile über den LoRAs (Zuordnung gespeichert)
+    var onMessage: (String) -> Void = { _ in }
+    @State private var assigning = false
 
     private var download: JobRecord? {
         state.jobs.first { $0.downloadModelID == row.model.id && !$0.isFinished }
@@ -422,20 +449,47 @@ struct LoRACard: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(row.model.name).font(.headline)
+                    if row.model.uploaded {
+                        Text(t("eigene Datei", "own file")).font(.caption)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .overlay(Capsule().stroke(.secondary.opacity(0.5))).foregroundStyle(.secondary)
+                    }
                     Spacer()
-                    Text(row.installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
-                        .foregroundStyle(row.installed ? .green : .secondary)
+                    if row.model.uploaded {
+                        Text(row.installed ? t("vorhanden", "present") : t("Datei fehlt", "File missing"))
+                            .foregroundStyle(row.installed ? .green : .orange)
+                    } else {
+                        Text(row.installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
+                            .foregroundStyle(row.installed ? .green : .secondary)
+                    }
                 }
                 Text(row.model.description).font(.callout)
-                Text(String(format: "%.0f MB · %@ · %@", row.model.sizeMB, row.model.license, row.model.repo))
-                    .font(.caption).foregroundStyle(.secondary)
+                if row.model.uploaded {
+                    Text(ByteCountFormatter.string(fromByteCount: row.model.bytes, countStyle: .file) + " · "
+                         + t("vom Rechner hinzugefügt", "added from this computer")
+                         + " · " + row.model.baseLabel + (row.model.trigger.isEmpty ? "" : " · " + t("Trigger: ", "Trigger: ") + row.model.trigger))
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    Text(String(format: "%.0f MB · %@ · %@", row.model.sizeMB, row.model.license, row.model.repo))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let download {
                     DownloadProgressRow(download: download)
                 } else if let lastError {
                     Text(lastError).font(.caption).foregroundStyle(.red)
                 }
                 HStack {
-                    if !row.installed {
+                    if row.model.uploaded {
+                        if row.installed {
+                            Button(t("Zuordnung", "Assignment")) { assigning.toggle() }
+                                .help(t("Zu welchem Modell die LoRA gehört, Name, Trigger-Wörter", "Which model the LoRA belongs to, name, trigger words"))
+                        }
+                        // Vom Rechner hinzugefügt: Löschen nimmt den Eintrag mit (neu laden lässt sie sich nicht)
+                        Button(row.installed ? t("Löschen", "Delete") : t("Entfernen", "Remove"), role: .destructive) {
+                            row.model.delete()
+                            state.refreshModels()
+                        }
+                    } else if !row.installed {
                         Button(t("Herunterladen", "Download")) {
                             let model = row.model
                             Task { _ = await JobQueue.shared.submitDownload(model) }
@@ -446,6 +500,12 @@ struct LoRACard: View {
                             row.model.delete()
                             state.refreshModels()
                         }
+                    }
+                }
+                if assigning {
+                    LoRAAssignEditor(model: row.model) { message in
+                        assigning = false
+                        if let message { onMessage(message) }
                     }
                 }
             }

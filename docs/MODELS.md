@@ -222,6 +222,12 @@ delete what you don't want.
 
 ![Qwen-Image-2512 with "a medieval blacksmith" and with the expanded prompt](images/expand-prompt.jpg)
 
+### Your own LoRAs
+
+A LoRA you trained yourself (ai-toolkit, kohya_ss, OneTrainer, musubi-tuner …) or got elsewhere: "Models" → "Add LoRA
+file". NVAI-open reads the file header first, shows which models the LoRA fits and lets you change the assignment
+later. Which models take LoRAs, the steps, the tested LoRAs and the REST calls: [LORAS.md](LORAS.md).
+
 ### NVFP4 or INT8
 
 Only RTX 50 computes NVFP4 in hardware; RTX 20, 30 and 40 compute INT8. NVAI-open marks the right version as
@@ -516,6 +522,10 @@ NVAI-open for Mac runs its own native models on Apple Silicon (MLX). Measured on
 
 FLUX.2 Klein removes less damage from old photos than FLUX 3 on Windows, and SeedVR2 3B smooths faces slightly more
 than the 7B. Upscaling a video with RelayVSR is only in the Windows version.
+
+Your own LoRA files (since Mac 0.5.5): "Models" → "Add LoRA file" works as on Windows, for LoRAs made for FLUX.2 Klein
+4B, the only Mac model that loads LoRAs. LoRAs for the 9B model and the kohya format are refused with a message,
+because they would not take effect ([LORAS.md](LORAS.md#on-the-mac)).
 
 ![The same face sharpened to twice the size: original, SeedVR2 7B on Windows, SeedVR2 3B on the Mac](images/mac-sharpen-seedvr2.jpg)
 

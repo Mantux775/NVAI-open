@@ -226,6 +226,13 @@ den Text lesen und streichen, was nicht passt.
 
 ![Qwen-Image-2512 mit „a medieval blacksmith“ und mit ausgebautem Prompt](../images/expand-prompt.jpg)
 
+### Eigene LoRAs
+
+Eine selbst trainierte LoRA (ai-toolkit, kohya_ss, OneTrainer, musubi-tuner …) oder eine von anderswo: „Modelle“ →
+„LoRA-Datei hinzufügen“. NVAI-open liest zuerst den Dateikopf, zeigt, zu welchen Modellen die LoRA passt, und lässt die
+Zuordnung später ändern. Welche Modelle LoRAs nehmen, die Schritte, die getesteten LoRAs und die REST-Aufrufe:
+[LORAS.md](LORAS.md).
+
 ### NVFP4 oder INT8
 
 Nur RTX 50 rechnet NVFP4 in Hardware; RTX 20, 30 und 40 rechnen INT8. NVAI-open markiert die passende Fassung als
@@ -525,6 +532,10 @@ NVAI-open für Mac rechnet mit eigenen, nativen Modellen auf Apple Silicon (MLX)
 
 FLUX.2 Klein entfernt bei alten Fotos weniger Schäden als FLUX 3 unter Windows, und SeedVR2 3B glättet Gesichter etwas
 mehr als der 7B. Video hochskalieren mit RelayVSR gibt es nur in der Windows-Fassung.
+
+Eigene LoRA-Dateien (seit Mac 0.5.5): „Modelle“ → „LoRA-Datei hinzufügen“ geht wie unter Windows, für LoRAs, die für
+FLUX.2 Klein 4B gemacht sind, das einzige Mac-Modell, das LoRAs lädt. LoRAs für das 9B-Modell und das kohya-Format
+lehnt die Prüfung mit einem Hinweis ab, weil sie nicht wirken würden ([LORAS.md](LORAS.md#auf-dem-mac)).
 
 ![Dasselbe Gesicht auf doppelte Größe geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
 

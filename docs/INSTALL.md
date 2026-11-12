@@ -111,21 +111,12 @@ image and video model is labeled *uncensored*, *partly censored* or *censored*, 
 ### LoRAs (Hugging Face and Civitai)
 
 "Models" → "Search models and LoRAs" also finds LoRAs, on Hugging Face and on Civitai. Before downloading, NVAI-open
-reads the file header and tells which model a LoRA fits (SDXL, Pony, Illustrious, SD 1.5, Qwen-Image, Z-Image,
-FLUX.1/Chroma, Wan, LTX). Civitai needs your own API key for most downloads (civitai.com → Settings → API Keys).
+reads the file header and tells which model a LoRA fits. Civitai needs your own API key for most downloads
+(civitai.com → Settings → API Keys). A LoRA file you trained yourself goes in with "Models" → "Add LoRA file".
 
 On the Generate page each matching LoRA appears under the selected model: tick it, set the strength (0.6–1.0 is usual)
 and add its trigger words with "+ trigger". Wan 2.2 A14B LoRAs usually come as a high-noise and a low-noise file:
-download both. REST and MCP: `loras=[{"model_id": "…", "strength": 0.8}]`.
-
-What we tested:
-
-- **Qwen-Image-2512:** Boreal and Lenovo UltraReal make photos look more natural (strength 0.9). Wuli Turbo is not a
-  style but a shortcut: steps 4, cfg 1, 18 instead of 100 s at almost the same quality.
-- **Wan 2.2 I2V A14B:** Wan2.2-Lightning (steps 4, cfg 1) took 90 instead of 585 s.
-- **LTX-2.5:** "Recommended LoRAs" under the video model downloads and switches them on. Fantasy Anime and Fantasy
-  Painterly change the look clearly, Paper Cut-Out only at strength 1.5, Claymation and Transition hardly. Cinemagraph
-  works only together with "Loop", Slow Motion gives real slow motion.
+download both. Which models take LoRAs, the tested ones and the REST calls: [LORAS.md](LORAS.md).
 
 Licenses and content of LoRAs are stated only on their pages; check them there before you publish anything.
 

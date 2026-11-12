@@ -118,41 +118,44 @@ actor StudioGenerator {
         s.lane == "voice" ? "speech" : s.lane != "video" ? "audio" : (s.kind == "image" ? "image" : "video")
     }
 
-    /// Szene, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video) oder die Szene, deren Stimme eine
-    /// Sprecher-Szene übernimmt (params.voice_from, seit 0.5.3).
-    private static func dependsOn(_ s: StudioScene) -> String? {
-        if s.lane == "voice" { return s.params["voice_from"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
-        return s.chainFrom
-    }
-
     private static func busy(_ s: StudioScene) -> Bool { !s.jobs.isEmpty || s.waitingFor != nil }
 
-    /// Aufträge für die Szenen abschicken (alle ohne Take, wenn keine genannt sind). Fehler je Szene, kein Abbruch.
-    /// Eine Anschluss-Szene, deren Vorlage gerade erst entsteht, wartet darauf und wird danach abgeschickt.
-    func generate(_ store: StudioStore, _ pid: String, sceneIDs: [String]? = nil) async throws -> JSONValue {
-        var p = try await refresh(store, pid)
+    /// Das Projekt mit den Anschlüssen aus Markern (nur abgeleitet, nicht gespeichert).
+    private static func resolvingChains(_ p: StudioProject) -> StudioProject {
+        var p = p
         for (id, chain) in StudioCommands.resolvedChains(p) {
             if let i = p.scenes.firstIndex(where: { $0.id == id }) { p.scenes[i].chainFrom = chain.from }
         }
+        return p
+    }
+
+    /// Aufträge für die Szenen abschicken (alle ohne Take, wenn keine genannt sind). Fehler je Szene, kein Abbruch.
+    /// Eine Szene, deren Vorlage gerade erst entsteht (Anschluss, Stimme einer anderen Sprecher-Szene, auch über ihre
+    /// Figur), wartet darauf und wird danach abgeschickt.
+    func generate(_ store: StudioStore, _ pid: String, sceneIDs: [String]? = nil) async throws -> JSONValue {
+        let env = store.env
+        let p = Self.resolvingChains(try await refresh(store, pid))
         var wanted = p.scenes.filter { s in
             s.waitingFor == nil && (sceneIDs.map { $0.contains(s.id) } ?? (s.take == nil && s.jobs.isEmpty))
         }
         // Reihenfolge in der Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann die Videos, Anschluss-
         // Szenen zuletzt: so folgt ein Anschluss direkt auf seine Vorlage, ohne dass LTX-Video entladen wird.
+        func waits(_ s: StudioScene) -> Int { StudioCommands.dependencies(p, s, env).isEmpty ? 0 : 1 }
         wanted.sort { a, b in
-            (Self.dependsOn(a) != nil ? 1 : 0, Self.kindOrder[Self.jobKind(a)] ?? 9, a.start)
-                < (Self.dependsOn(b) != nil ? 1 : 0, Self.kindOrder[Self.jobKind(b)] ?? 9, b.start)
+            (waits(a), Self.kindOrder[Self.jobKind(a)] ?? 9, a.start) < (waits(b), Self.kindOrder[Self.jobKind(b)] ?? 9, b.start)
         }
         let byID = Dictionary(p.scenes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         var submitted: [String: String] = [:], waiting: [String: String] = [:], errors: [String: String] = [:]
         for s in wanted {
-            if let from = Self.dependsOn(s), let source = byID[from],
-               submitted[source.id] != nil || waiting[source.id] != nil || Self.busy(source) {
+            // Auf die erste Vorlage warten, die gerade entsteht
+            if let source = StudioCommands.dependencies(p, s, env).compactMap({ byID[$0] }).first(where: { d in
+                submitted[d.id] != nil || waiting[d.id] != nil || Self.busy(d)
+            }) {
                 waiting[s.id] = source.id
                 continue
             }
             do {
-                submitted[s.id] = try await Self.submit(p, s).id
+                submitted[s.id] = try await Self.submit(p, s, env).id
             } catch {
                 errors[s.id] = error.localizedDescription
             }
@@ -222,28 +225,49 @@ actor StudioGenerator {
         return .object(["cancelled": .array(cancelled.map(JSONValue.string))])
     }
 
-    /// Wartet, bis die Vorlage einer Anschluss-Szene fertig ist, und schickt dann deren Auftrag ab. Endet still,
-    /// wenn Szene oder Projekt gelöscht oder umgestellt wurden.
+    /// Wartet, bis die Vorlage einer Szene fertig ist, und schickt dann deren Auftrag ab. Hat die Szene zwei Vorlagen
+    /// (Anschluss und Satz für die Lippen, wie unter Windows seit 0.5.24), wartet sie danach auf die zweite. Endet
+    /// still, wenn Szene oder Projekt gelöscht oder umgestellt wurden.
     private func chainLater(_ store: StudioStore, _ pid: String, sceneID: String, sourceID: String) async {
         defer { chainTasks[sceneID] = nil }
+        let env = store.env
+        var sourceID = sourceID
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: Self.pollNanoseconds)
-            guard var p = try? await refresh(store, pid),
-                  let i = p.scenes.firstIndex(where: { $0.id == sceneID }), p.scenes[i].waitingFor == sourceID else { return }
-            let source = p.scenes.first { $0.id == sourceID }
+            guard let fresh = try? await refresh(store, pid) else { return }
+            var p = Self.resolvingChains(fresh)
+            guard let i = p.scenes.firstIndex(where: { $0.id == sceneID }), p.scenes[i].waitingFor == sourceID else { return }
+            let byID = Dictionary(p.scenes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let source = byID[sourceID]
             if let source, Self.busy(source) { continue }
+            let audioSource = p.scenes[i].params["audio_from"]?.stringValue
             var jobID: String?
             var failure: String?
+            var nextID: String?
             if let source, source.error == nil, source.take != nil {
-                if p.scenes[i].lane == "video" { p.scenes[i].chainFrom = sourceID }  // auch wenn er nur aus einem Marker kam
-                do { jobID = try await Self.submit(p, p.scenes[i]).id } catch { failure = error.localizedDescription }
+                nextID = StudioCommands.dependencies(p, p.scenes[i], env).first { d in
+                    d != sourceID && byID[d].map(Self.busy) == true
+                }
+                if nextID == nil {
+                    // auch wenn der Anschluss nur aus einem Marker kam; nicht für den Satz, dessen Ton das Video nimmt
+                    if p.scenes[i].lane == "video" && sourceID != audioSource { p.scenes[i].chainFrom = sourceID }
+                    do { jobID = try await Self.submit(p, p.scenes[i], env).id } catch { failure = error.localizedDescription }
+                }
             } else {
                 failure = p.scenes[i].lane == "voice"
                     ? t("Die Szene, deren Stimme diese übernimmt, ist fehlgeschlagen.", "The scene whose voice this one takes over failed.")
+                    : sourceID == audioSource
+                    ? t("Die Sprecher-Szene, deren Satz diese Szene spricht, ist fehlgeschlagen.",
+                        "The narrator scene whose line this scene speaks failed.")
                     : t("Die Szene, an die diese anschließt, ist fehlgeschlagen.", "The scene this one continues from failed.")
             }
+            let next = nextID
             _ = try? await store.update(pid) { q in
                 guard let k = q.scenes.firstIndex(where: { $0.id == sceneID }) else { return false }
+                if let next {
+                    q.scenes[k].waitingFor = next  // die zweite Vorlage entsteht noch: auf sie weiterwarten
+                    return true
+                }
                 q.scenes[k].waitingFor = nil
                 if let jobID {
                     q.scenes[k].jobs.append(jobID)
@@ -253,6 +277,10 @@ actor StudioGenerator {
                 }
                 return true
             }
+            if let next {
+                sourceID = next
+                continue
+            }
             return
         }
     }
@@ -260,16 +288,21 @@ actor StudioGenerator {
     // MARK: Szene → Auftrag
 
     /// Die Anfrage, wie sie auch `/api/generate/*` bekäme (dieselbe Prüfung), und gleich abgeschickt.
-    static func submit(_ p: StudioProject, _ s: StudioScene) async throws -> JobRecord {
+    static func submit(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) async throws -> JobRecord {
         let prompt = s.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { throw StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet.")) }
         let secs = Studio.seconds(s.duration)
         if s.lane == "voice" {
             // Sprecher-Szene (seit 0.5.3): Der Prompt ist der Text; die Stimme aus params.voice, params.voice_from (der
-            // gewählte Take einer anderen Sprecher-Szene mit seinem Text) oder params.voice_asset_id (+ voice_text)
+            // gewählte Take einer anderen Sprecher-Szene mit seinem Text) oder params.voice_asset_id (+ voice_text).
+            // Mit params.character (seit 0.5.5) die Stimme der Figur statt der eigenen Angaben.
+            let voice = StudioCommands.voiceSettings(p, s)
             var body: [String: JSONValue] = ["text": .string(prompt), "model_id": .string(SpeechCatalog.id)]
-            for key in ["voice", "voice_asset_id", "voice_text", "language", "seed"] { if let v = s.params[key] { body[key] = v } }
-            if let from = s.params["voice_from"]?.stringValue, !from.isEmpty {
+            for key in ["voice", "voice_asset_id", "voice_text", "language"] {
+                if let v = voice[key], !v.isNull, v.stringValue != "" { body[key] = v }
+            }
+            if let seed = s.params["seed"] { body["seed"] = seed }
+            if let from = voice["voice_from"]?.stringValue, !from.isEmpty {
                 guard let source = p.scenes.first(where: { $0.id == from }), source.lane == "voice", source.id != s.id else {
                     throw StudioError(t("„Gleiche Stimme wie“ braucht eine andere Sprecher-Szene.",
                                         "“Same voice as” needs another narrator scene."))
@@ -295,13 +328,18 @@ actor StudioGenerator {
         }
         if s.kind == "image" {
             let model = Models.find(s.modelID) != nil ? s.modelID! : Models.active.id
-            var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(model)]
+            // Figuren im Bild (seit 0.5.5): ihre geladenen LoRAs, die zum Modell passen (auf dem Mac nur FLUX.2 Klein),
+            // und ihre Trigger-Wörter vorn im Prompt; eigene LoRAs der Szene gehen vor
+            let look = StudioCommands.characterLook(p, s, modelID: model, env)
+            var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+                                             "model_id": .string(model)]
             let size = imageSize(p, s.params)
             body["width"] = .int(size.width)
             body["height"] = .int(size.height)
-            for key in ["seed", "steps", "cfg", "negative_prompt", "reference_asset_ids", "loras"] {
+            for key in ["seed", "steps", "cfg", "negative_prompt", "reference_asset_ids"] {
                 if let v = s.params[key] { body[key] = v }
             }
+            if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
             return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
         }
         // Video: das Modell der Szene, wenn geladen, sonst das aktive (2B oder 13B), 24 fps, Bilder 8n+1 aus der Länge;
@@ -313,13 +351,32 @@ actor StudioGenerator {
             throw StudioError(t("Die Szene ist für diesen Mac zu lang (\(frames) Bilder). Kürzer machen oder in zwei Szenen teilen.",
                                 "The scene is too long for this Mac (\(frames) frames). Shorten it or split it into two scenes."))
         }
-        var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(video.id),
+        // Figuren im Bild: LoRAs nur, wenn sie zum Videomodell passen (LTX-Video auf dem Mac nimmt keine), sonst bleibt
+        // der Prompt, wie er ist
+        let look = StudioCommands.characterLook(p, s, modelID: video.id, env)
+        var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+                                         "model_id": .string(video.id),
                                          "width": .int(size.width), "height": .int(size.height),
                                          "frames": .int(frames), "fps": .int(fps)]
         // Was nur LTX-2.5 unter Windows kann (Endbild, Schleife …), lässt parse mit einer Meldung scheitern; die
-        // Qualitätsstufe setzt das Windows-Studio selbst, hier gibt es nur eine
-        for (key, v) in s.params where !["quality", "width", "height", "frames", "fps", "model_id"].contains(key) {
+        // Qualitätsstufe setzt das Windows-Studio selbst, hier gibt es nur eine. Figuren und „Ton aus“ sind Angaben
+        // der Szene, keine des Auftrags.
+        let own = ["quality", "width", "height", "frames", "fps", "model_id", "loras", "characters", "character", "audio_from"]
+        for (key, v) in s.params where !own.contains(key) {
             body[key] = v
+        }
+        if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
+        // „Ton aus Sprecher-Szene“: nur ein Videomodell, das einen Ton nimmt (unter Windows LTX-2.5), spricht den Satz
+        // mit den Lippen. Auf dem Mac kann das keins; die Angabe bleibt im Projekt, und Übernehmen legt den Satz normal.
+        if env.takesAudio(s.modelID), let from = s.params["audio_from"]?.stringValue, !from.isEmpty {
+            guard let source = p.scenes.first(where: { $0.id == from }), source.lane == "voice" else {
+                throw StudioError(t("„Ton aus“ braucht eine Sprecher-Szene.", "“Sound from” needs a narrator scene."))
+            }
+            guard let take = source.take else {
+                throw StudioError(t("Die Sprecher-Szene für den Ton hat noch keinen Take: sie zuerst erzeugen.",
+                                    "The narrator scene for the sound has no take yet: generate it first."))
+            }
+            body["audio_asset_id"] = .string(take)
         }
         if let from = s.chainFrom, let source = p.scenes.first(where: { $0.id == from }) {
             guard let take = source.take else {

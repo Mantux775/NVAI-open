@@ -6,10 +6,12 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   fileUrl,
+  LORA_BASE_LABEL,
   SPEECH_LANGUAGES,
   TPS,
   type Asset,
   type ModelInfo,
+  type StudioCharacter,
   type StudioClip,
   type StudioLane,
   type StudioMarker,
@@ -161,7 +163,7 @@ function Seconds({ label, value, onCommit, min = 0, p }: {
 
 export function Inspector({ project, selection, models, active, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead }: Props) {
   const p = project
-  if (!selection) return <ProjectProps p={p} onCommand={onCommand} />
+  if (!selection) return <ProjectProps p={p} models={models} onCommand={onCommand} />
   if (selection.type === 'asset') {
     return asset ? <AssetProps key={asset.id} p={p} a={asset} model={models.find((m) => m.id === asset.model_id)} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
   }
@@ -335,6 +337,7 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
       })()}
       {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
+      {s.lane === 'video' && <SceneCharacters p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'video' && s.kind === 'video' && (
         <label className="st-field">
           <span>{t('Anschluss an', 'Chain to')}</span>
@@ -378,11 +381,13 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
  * seinem Text als Vorlage) oder aus einer Aufnahme im Projekt. params.voice / voice_from / voice_asset_id. */
 function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update: (fields: Record<string, unknown>) => void }) {
   const params = s.params || {}
-  const source = params.voice_from ? 'scene' : params.voice_asset_id ? 'asset' : 'describe'
+  const chars = p.characters ?? []
+  const character = chars.find((c) => c.id === params.character)
+  const source = character ? 'character' : params.voice_from ? 'scene' : params.voice_asset_id ? 'asset' : 'describe'
   const others = p.scenes.filter((x) => x.lane === 'voice' && x.id !== s.id)
-  const recordings = Object.entries(p.assets).filter(([, a]) => a.kind === 'audio' || a.kind === 'video'
-    || (a.kind === 'upload' && /\.(wav|mp3|flac|ogg|m4a|aac|opus|mp4|mov|mkv|webm)$/i.test(a.url)))
+  const recordings = recordingsOf(p)
   const setSource = (v: string) => update({ params: {
+    character: v === 'character' ? (chars[0]?.id ?? null) : null,
     voice_from: v === 'scene' ? (others[0]?.id ?? null) : null,
     voice_asset_id: v === 'asset' ? (recordings[0]?.[0] ?? null) : null,
   } })
@@ -392,10 +397,20 @@ function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update
         <span>{t('Stimme', 'Voice')}</span>
         <select value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="describe">{t('beschreiben', 'describe')}</option>
+          <option value="character" disabled={chars.length === 0}>{t('einer Figur …', 'of a character …')}</option>
           <option value="scene" disabled={others.length === 0}>{t('gleich wie Szene …', 'same as scene …')}</option>
           <option value="asset" disabled={recordings.length === 0}>{t('aus einer Aufnahme', 'from a recording')}</option>
         </select>
       </label>
+      {character && (
+        <label className="st-field">
+          <span>{t('Figur', 'Character')}</span>
+          <select value={character.id} onChange={(e) => update({ params: { character: e.target.value } })}>
+            {chars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <span className="small">{voiceSummary(p, character, s.id)}</span>
+        </label>
+      )}
       {source === 'describe' && (
         <Field
           label={t('Beschreibung der Stimme', 'Description of the voice')}
@@ -442,17 +457,248 @@ function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update
             'The first 20 s count. Only recordings whose speakers agreed.')}</p>
         </>
       )}
-      <label className="st-field">
-        <span>{t('Sprache', 'Language')}</span>
-        <select value={params.language ?? 'auto'} onChange={(e) => update({ params: { language: e.target.value } })}>
-          {SPEECH_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-      </label>
+      {!character && (
+        <label className="st-field">
+          <span>{t('Sprache', 'Language')}</span>
+          <select value={params.language ?? 'auto'} onChange={(e) => update({ params: { language: e.target.value } })}>
+            {SPEECH_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </label>
+      )}
     </>
   )
 }
 
-function ProjectProps({ p, onCommand }: { p: StudioProject; onCommand: Props['onCommand'] }) {
+/** Aufnahmen im Projekt, die als Stimmvorlage taugen (Ton, Video, hochgeladene Ton- und Videodateien) */
+function recordingsOf(p: StudioProject) {
+  return Object.entries(p.assets).filter(([, a]) => a.kind === 'audio' || a.kind === 'video'
+    || (a.kind === 'upload' && /\.(wav|mp3|flac|ogg|m4a|aac|opus|mp4|mov|mkv|webm)$/i.test(a.url)))
+}
+
+/** Woher die Stimme einer Figur kommt, in einem Satz */
+function voiceSummary(p: StudioProject, c: StudioCharacter, sceneId?: string): string {
+  if (c.voice_from && c.voice_from !== sceneId) {
+    return t(`Stimme wie der Take von „${sceneName(p, c.voice_from)}“.`, `Voice like the take of "${sceneName(p, c.voice_from)}".`)
+  }
+  if (c.voice_asset_id) {
+    const a = p.assets[c.voice_asset_id]
+    return t(`Stimme aus der Aufnahme „${(a?.prompt || c.voice_asset_id).slice(0, 40)}“.`,
+      `Voice from the recording "${(a?.prompt || c.voice_asset_id).slice(0, 40)}".`)
+  }
+  return c.voice
+    ? t(`Stimme: ${c.voice}`, `Voice: ${c.voice}`)
+    : t('Ohne Beschreibung: das Modell wählt eine Stimme.', 'No description: the model picks a voice.')
+}
+
+/** Figuren im Bild (seit 0.5.24): ihre LoRAs, die zum Modell der Szene passen, und deren Trigger-Wörter kommen in den
+ * Auftrag. Videoszenen mit LTX-2.5 können dazu den Satz einer Sprecher-Szene als Ton nehmen: Er wird zuerst in der
+ * Stimme seiner Figur gesprochen, das Video folgt ihm mit den Lippen. */
+function SceneCharacters({ p, s, models, active, update }: {
+  p: StudioProject
+  s: StudioScene
+  models: ModelInfo[]
+  active: Props['active']
+  update: (fields: Record<string, unknown>) => void
+}) {
+  const chars = p.characters ?? []
+  const params = s.params || {}
+  const chosen: string[] = params.characters ?? []
+  const model = models.find((m) => m.id === (s.model_id || active?.[s.kind === 'image' ? 'image' : 'video']))
+  const bases = model?.lora_bases ?? []
+  const fits = (c: StudioCharacter) => c.loras.some((l) => {
+    const m = models.find((x) => x.id === l.model_id)
+    return !!m && m.installed && bases.includes(m.family)
+  })
+  const voices = p.scenes.filter((x) => x.lane === 'voice')
+  const speaks = s.kind === 'video' && !!model?.features?.audio_input
+  const nameOf = (id?: string) => chars.find((c) => c.id === id)?.name
+  if (chars.length === 0 && !(speaks && params.audio_from)) {
+    return (
+      <p className="muted small">
+        {t('Figuren (Aussehen per LoRA, eigene Stimme) legst du in den Projekteinstellungen an: dafür im Leeren klicken.',
+          'Characters (look via LoRA, their own voice) are set up in the project settings: click an empty spot.')}
+      </p>
+    )
+  }
+  return (
+    <>
+      {chars.length > 0 && (
+        <div className="st-field">
+          <span>{t('Figuren im Bild', 'Characters in the picture')}</span>
+          {chars.map((c) => (
+            <label key={c.id} className="st-check">
+              <input type="checkbox" checked={chosen.includes(c.id)}
+                onChange={(e) => update({ params: { characters: e.target.checked ? [...chosen, c.id] : chosen.filter((x) => x !== c.id) } })} />
+              <span>{c.name}</span>
+              {chosen.includes(c.id) && !fits(c) && (
+                <span className="warn-text small">{t(model ? `keine LoRA für ${model.name}` : 'keine passende LoRA',
+                  model ? `no LoRA for ${model.name}` : 'no matching LoRA')}</span>
+              )}
+            </label>
+          ))}
+        </div>
+      )}
+      {speaks && (
+        <label className="st-field">
+          <span>{t('Ton aus Sprecher-Szene', 'Sound from voice scene')}</span>
+          <select value={params.audio_from ?? ''} onChange={(e) => update({ params: { audio_from: e.target.value || null } })}>
+            <option value="">{t('keiner, LTX macht den Ton', 'none, LTX makes the sound')}</option>
+            {voices.map((x) => (
+              <option key={x.id} value={x.id}>
+                {(x.title || x.prompt.slice(0, 40) || x.id) + (nameOf(x.params?.character) ? ` (${nameOf(x.params?.character)})` : '')}
+              </option>
+            ))}
+          </select>
+          <span className="small">
+            {t('Der Satz wird zuerst gesprochen, in der Stimme seiner Figur; das Video folgt ihm mit den Lippen und wird so lang wie er. Beim Übernehmen kommt er nicht noch einmal in den Schnitt.',
+              'The line is spoken first, in its character\'s voice; the video follows it with the lips and takes its length. Conform does not add it to the edit a second time.')}
+          </span>
+        </label>
+      )}
+    </>
+  )
+}
+
+/** Stärke einer LoRA: gilt beim Verlassen des Feldes oder mit Enter (jede Änderung ist ein Befehl mit Rückgängig) */
+function StrengthInput({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(decimal(String(value)))
+  useEffect(() => setText(decimal(String(value))), [value])
+  const commit = () => {
+    const v = Number(text.replace(',', '.'))
+    if (Number.isFinite(v) && v >= 0 && v <= 2 && v !== value) onCommit(Math.round(v * 100) / 100)
+    else setText(decimal(String(value)))
+  }
+  return (
+    <input className="st-strength" value={text} inputMode="decimal" title={t('Stärke 0 bis 2, meist 0,6 bis 1', 'Strength 0 to 2, usually 0.6 to 1')}
+      onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />
+  )
+}
+
+/** Eine Figur in den Projekteinstellungen: Name, Aussehen (LoRAs), Stimme */
+function CharacterEditor({ p, c, models, onCommand }: {
+  p: StudioProject
+  c: StudioCharacter
+  models: ModelInfo[]
+  onCommand: Props['onCommand']
+}) {
+  const update = (fields: Record<string, unknown>) => onCommand('character.update', { id: c.id, ...fields })
+  const loraModels = models.filter((m) => m.kind === 'lora' && m.installed)
+  const voiceScenes = p.scenes.filter((x) => x.lane === 'voice')
+  const recordings = recordingsOf(p)
+  const source = c.voice_from ? 'scene' : c.voice_asset_id ? 'asset' : 'describe'
+  const setSource = (v: string) => update({
+    voice_from: v === 'scene' ? (voiceScenes.find((x) => x.params?.character === c.id)?.id ?? voiceScenes[0]?.id ?? null) : null,
+    voice_asset_id: v === 'asset' ? (recordings[0]?.[0] ?? null) : null,
+  })
+  const label = (id: string) => {
+    const m = models.find((x) => x.id === id)
+    return m ? m.name.replace(/^.*\//, '').replace(/\.safetensors$/, '') : id
+  }
+  return (
+    <details className="st-character">
+      <summary>
+        <strong>{c.name}</strong>
+        <span className="muted small">
+          {c.loras.length ? c.loras.map((l) => label(l.model_id)).join(', ') : t('ohne LoRA', 'no LoRA')}
+        </span>
+      </summary>
+      <Field label={t('Name', 'Name')} value={c.name} onCommit={(v) => v.trim() && update({ name: v.trim() })} />
+      <div className="st-field">
+        <span>{t('Aussehen (LoRAs; je Szene gilt, was zum Modell passt)', 'Look (LoRAs; each scene uses those that fit its model)')}</span>
+        {c.loras.map((l) => {
+          const m = models.find((x) => x.id === l.model_id)
+          return (
+            <div key={l.model_id} className="st-lora-row">
+              <span className="st-lora-name" title={m?.trigger ? t(`Trigger: ${m.trigger}`, `Trigger: ${m.trigger}`) : ''}>
+                <span>{label(l.model_id)}</span>
+                <span className={m?.installed ? 'muted small' : 'warn-text small'}>
+                  {m ? (m.installed ? (LORA_BASE_LABEL[m.family] ?? m.family) : t('nicht geladen', 'not downloaded')) : t('fehlt', 'missing')}
+                </span>
+              </span>
+              <StrengthInput value={l.strength}
+                onCommit={(v) => update({ loras: c.loras.map((x) => (x.model_id === l.model_id ? { ...x, strength: v } : x)) })} />
+              <button className="btn small ghost" title={t('LoRA entfernen', 'Remove LoRA')}
+                onClick={() => update({ loras: c.loras.filter((x) => x.model_id !== l.model_id) })}>✕</button>
+            </div>
+          )
+        })}
+        <select value="" onChange={(e) => e.target.value && update({ loras: [...c.loras, { model_id: e.target.value, strength: 0.8 }] })}>
+          <option value="">{t('+ LoRA hinzufügen …', '+ Add LoRA …')}</option>
+          {loraModels.filter((m) => !c.loras.some((l) => l.model_id === m.id)).map((m) => (
+            <option key={m.id} value={m.id}>{label(m.id)} ({LORA_BASE_LABEL[m.family] ?? m.family})</option>
+          ))}
+        </select>
+        {loraModels.length === 0 && (
+          <span className="small">{t('Noch keine LoRA geladen: unter „Modelle“ suchen oder eine eigene LoRA-Datei hinzufügen.',
+            'No LoRA downloaded yet: search under "Models" or add your own LoRA file.')}</span>
+        )}
+      </div>
+      <label className="st-field">
+        <span>{t('Stimme', 'Voice')}</span>
+        <select value={source} onChange={(e) => setSource(e.target.value)}>
+          <option value="describe">{t('beschreiben', 'describe')}</option>
+          <option value="scene" disabled={voiceScenes.length === 0}>{t('wie der Take einer Sprecher-Szene …', 'like the take of a voice scene …')}</option>
+          <option value="asset" disabled={recordings.length === 0}>{t('aus einer Aufnahme', 'from a recording')}</option>
+        </select>
+      </label>
+      {source === 'describe' && (
+        <Field
+          label={t('Beschreibung der Stimme', 'Description of the voice')}
+          value={c.voice}
+          area
+          rows={3}
+          placeholder={t('z. B. eine tiefe, raue Männerstimme, etwa sechzig. Dieselbe Beschreibung klingt je Satz etwas anders: ist ein Satz gut, ihn als Vorlage wählen.',
+            'e.g. a deep, rough male voice, about sixty. The same description sounds a little different per line: once a line is good, choose it as the reference.')}
+          onCommit={(v) => update({ voice: v })}
+        />
+      )}
+      {source === 'scene' && (
+        <label className="st-field">
+          <span>{t('Vorlage', 'Reference')}</span>
+          <select value={c.voice_from ?? ''} onChange={(e) => update({ voice_from: e.target.value || null })}>
+            {voiceScenes.map((x) => <option key={x.id} value={x.id}>{x.title || x.prompt.slice(0, 40) || x.id}</option>)}
+          </select>
+          <span className="small">{t('Deren gewählter Take gibt die Stimme für alle Sätze der Figur vor; ohne Take wird sie zuerst erzeugt (nach der Beschreibung).',
+            'Its chosen take sets the voice for all of the character\'s lines; without a take it is generated first (from the description).')}</span>
+        </label>
+      )}
+      {source === 'asset' && (
+        <>
+          <label className="st-field">
+            <span>{t('Aufnahme', 'Recording')}</span>
+            <select value={c.voice_asset_id ?? ''} onChange={(e) => update({ voice_asset_id: e.target.value || null })}>
+              {recordings.map(([id, a]) => (
+                <option key={id} value={id}>{a.kind === 'video' ? '▶ ' : '♪ '}{(a.prompt || id).slice(0, 50)}</option>
+              ))}
+            </select>
+          </label>
+          <Field
+            label={t('Was darin gesagt wird (optional)', 'What is said in it (optional)')}
+            value={c.voice_text}
+            area
+            rows={2}
+            placeholder={t('wortgenau; dann auch Sprechweise und Betonung, sonst nur der Stimmklang',
+              'word for word; then also the way of speaking, otherwise only the sound of the voice')}
+            onCommit={(v) => update({ voice_text: v })}
+          />
+        </>
+      )}
+      <label className="st-field">
+        <span>{t('Sprache', 'Language')}</span>
+        <select value={c.language || 'auto'} onChange={(e) => update({ language: e.target.value })}>
+          {SPEECH_LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+      </label>
+      <div className="st-actions">
+        <button className="btn small ghost danger-text" onClick={() => onCommand('character.delete', { id: c.id })}>
+          {t('Figur löschen', 'Delete character')}
+        </button>
+      </div>
+    </details>
+  )
+}
+
+function ProjectProps({ p, models, onCommand }: { p: StudioProject; models: ModelInfo[]; onCommand: Props['onCommand'] }) {
   const s = p.settings
   const fps = s.fps[0] / s.fps[1]
   const format = FORMATS.findIndex((f) => f.w === s.width && f.h === s.height)
@@ -499,6 +745,15 @@ function ProjectProps({ p, onCommand }: { p: StudioProject; onCommand: Props['on
         {t('LTX-2.5 rechnet mit 24 fps, 1080p als 1920 × 1088; den Rand schneidet der Export ab. Gemessen 5 s 1080p: DFR 786 s, Standard 241 s. DFR braucht das Detail-IC-LoRA (unter „Modelle“), sonst gilt Standard.',
           'LTX-2.5 renders at 24 fps, 1080p as 1920 × 1088; the export crops the edge. Measured 5 s at 1080p: DFR 786 s, standard 241 s. DFR needs the detail IC-LoRA (under "Models"), otherwise standard applies.')}
       </p>
+      <h4>{t('Figuren', 'Characters')}</h4>
+      <p className="muted small">
+        {t('Eine Figur bündelt Aussehen (LoRA, etwa selbst trainiert) und Stimme. Bild- und Videoszenen wählen unter „Figuren im Bild“, wer zu sehen ist, Sprecher-Szenen unter „Stimme“, wer spricht. Eine Videoszene mit „Ton aus Sprecher-Szene“ spricht deren Satz mit den Lippen.',
+          'A character bundles a look (LoRA, e.g. one you trained) and a voice. Picture scenes choose under "Characters in the picture" who is seen, voice scenes under "Voice" who speaks. A video scene with "Sound from voice scene" speaks that line with its lips.')}
+      </p>
+      {(p.characters ?? []).map((c) => <CharacterEditor key={c.id} p={p} c={c} models={models} onCommand={onCommand} />)}
+      <div className="st-actions">
+        <button className="btn small" onClick={() => onCommand('character.add', {})}>{t('+ Figur', '+ Character')}</button>
+      </div>
       <h4>{t('So geht es', 'How it works')}</h4>
       <p className="muted small">
         {t('Eine Szene, einen Clip, einen Marker oder links Material anklicken; Rechtsklick zeigt überall, was geht. Werkzeuge links oben: Auswahl (V), Schneiden (C), Magnet (S, ohne Magnet andocken mit Umschalt). Mehrere Objekte: Rahmen im Leeren aufziehen oder Umschalt-Klick. Leertaste spielt ab, Strg+K schneidet am Abspielkopf, Strg+C/X/V kopiert, schneidet aus, fügt am Abspielkopf ein, Strg+D setzt eine Überblendung, Entf löscht, Esc zeigt wieder den Schnitt. Spuren: Rechtsklick auf V1, A1 … fügt hinzu oder entfernt, Auge und Lautsprecher schalten Bild und Ton (auch im Export).',

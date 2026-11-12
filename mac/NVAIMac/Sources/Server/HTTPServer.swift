@@ -8,8 +8,19 @@ struct HTTPRequest: Sendable {
     /// Schlüssel klein geschrieben.
     let headers: [String: String]
     let body: Data
+    /// Großer Körper, beim Empfang blockweise in eine Datei geschrieben (Routen, für die `HTTPServer.streamTarget`
+    /// eine Teildatei nennt, etwa POST /api/loras/upload). Die Datei gehört dem Handler; was danach noch liegt, löscht
+    /// der Server.
+    var bodyFile: HTTPBodyFile? = nil
 
     var json: JSONValue? { JSON.parse(body) }
+}
+
+/// Ein gestreamter Anfragekörper: Datei, Länge und SHA-256 (beim Schreiben gerechnet).
+struct HTTPBodyFile: Sendable {
+    let url: URL
+    let size: Int64
+    let sha256: String
 }
 
 struct HTTPResponse: Sendable {
@@ -56,6 +67,7 @@ struct HTTPResponse: Sendable {
         case 413: return "Payload Too Large"
         case 422: return "Unprocessable Entity"
         case 500: return "Internal Server Error"
+        case 507: return "Insufficient Storage"
         default: return "Status"
         }
     }
@@ -66,8 +78,22 @@ struct HTTPResponse: Sendable {
 /// Eine Verbindung, eine Anfrage, dann `Connection: close` – das reicht für die NVAI-open-Clients
 /// (URLSession, httpx) und hält den Parser einfach. Bodys kommen mit Content-Length;
 /// chunked lehnt der Server mit 411 ab.
+///
+/// Große Uploads (seit 0.5.5 eigene LoRA-Dateien, oft 100 MB bis 1 GB): Nennt `streamTarget` für eine Anfrage eine
+/// Teildatei, schreibt der Server den Körper beim Empfang blockweise (höchstens 1 MB im Speicher) dorthin und rechnet
+/// dabei SHA-256. Sonst läge jeder Körper ganz im Puffer und würde für die Anfrage noch einmal kopiert, bei 300 MB auf
+/// einem 8-GB-Mac also 600 MB.
 final class HTTPServer: @unchecked Sendable {
     typealias Handler = @Sendable (HTTPRequest) async -> HTTPResponse
+
+    /// Was mit dem Körper einer Anfrage geschieht, sobald ihr Kopf da ist.
+    enum BodyHandling {
+        case buffer
+        /// in diese neue Teildatei schreiben
+        case stream(to: URL)
+        /// gleich antworten (falsche Angaben, kein Platz), ohne den Körper zu lesen
+        case reject(HTTPResponse)
+    }
 
     enum State: Equatable {
         case stopped
@@ -82,8 +108,13 @@ final class HTTPServer: @unchecked Sendable {
     private var port: UInt16 = 0
     private var attempts = 0
     private var retry: DispatchWorkItem?
-    private let maxBody = 64 * 1024 * 1024
+    /// Gepufferte Körper: 64 MB (Bilder, Studio-Pakete per Formular) plus Platz für einen safetensors-Kopf samt Länge.
+    private let maxBody = 64 * 1024 * 1024 + 64 * 1024
+    /// Größte Datei, die eine gestreamte Anfrage schreiben darf (Platz prüft die Route vorher selbst).
+    private let maxStream: Int64 = 64 * 1024 * 1024 * 1024
     var onStateChange: (@Sendable (State) -> Void)?
+    /// Entscheidet je Anfrage (nach dem Kopf), ob der Körper gepuffert oder in eine Datei geschrieben wird.
+    var streamTarget: (@Sendable (HTTPParser.Head) -> BodyHandling)?
 
     init(handler: @escaping Handler) {
         self.handler = handler
@@ -178,6 +209,19 @@ final class HTTPServer: @unchecked Sendable {
             guard let self else { connection.cancel(); return }
             var buffer = buffer
             if let data { buffer.append(data) }
+            // Kopf da: soll der Körper in eine Datei? Dann ab hier blockweise, ohne Puffer
+            if let decide = self.streamTarget, case .head(let head) = HTTPParser.head(buffer) {
+                switch decide(head) {
+                case .reject(let response):
+                    self.send(response, on: connection)
+                    return
+                case .stream(let url):
+                    self.startStreaming(connection, head, url: url, initial: buffer.subdata(in: head.bodyStart..<buffer.endIndex))
+                    return
+                case .buffer:
+                    break
+                }
+            }
             switch HTTPParser.parse(buffer, maxBody: self.maxBody) {
             case .complete(let request):
                 let handler = self.handler
@@ -202,6 +246,65 @@ final class HTTPServer: @unchecked Sendable {
             connection.cancel()
         })
     }
+
+    private func startStreaming(_ connection: NWConnection, _ head: HTTPParser.Head, url: URL, initial: Data) {
+        guard head.contentLength >= 0, Int64(head.contentLength) <= maxStream else {
+            send(.error(head.contentLength < 0 ? 411 : 413,
+                        head.contentLength < 0 ? t("Content-Length fehlt.", "Content-Length is missing.") : t("Anfrage zu groß.", "Request too large.")),
+                 on: connection)
+            return
+        }
+        let writer: HashingFileWriter
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            writer = try HashingFileWriter(url: url)
+        } catch {
+            send(.error(500, error.localizedDescription), on: connection)
+            return
+        }
+        // curl fragt bei großen Körpern erst nach („Expect: 100-continue“) und wartet sonst eine Sekunde
+        if head.headers["expect"]?.lowercased() == "100-continue", initial.isEmpty {
+            connection.send(content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8), completion: .contentProcessed { _ in })
+        }
+        streamBody(connection, head, writer, chunk: initial)
+    }
+
+    /// Schreibt einen Block und holt den nächsten, bis Content-Length erreicht ist; dann der Handler mit der Datei.
+    private func streamBody(_ connection: NWConnection, _ head: HTTPParser.Head, _ writer: HashingFileWriter, chunk: Data) {
+        let wanted = Int64(head.contentLength)
+        do {
+            let rest = wanted - writer.size
+            try writer.write(Int64(chunk.count) > rest ? chunk.prefix(Int(rest)) : chunk)
+        } catch {
+            writer.discard()
+            send(.error(507, t("Datei nicht schreibbar: ", "Cannot write the file: ") + error.localizedDescription), on: connection)
+            return
+        }
+        if writer.size >= wanted {
+            let file = HTTPBodyFile(url: writer.url, size: writer.size, sha256: writer.finish())
+            var request = head.request(body: Data())
+            request.bodyFile = file
+            let handler = self.handler
+            Task {
+                let response = await handler(request)
+                try? FileManager.default.removeItem(at: file.url)  // nicht übernommen: weg damit
+                self.send(response, on: connection)
+            }
+            return
+        }
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { [weak self] data, _, isComplete, error in
+            guard let self else { writer.discard(); connection.cancel(); return }
+            if let data, !data.isEmpty {
+                self.streamBody(connection, head, writer, chunk: data)
+            } else if isComplete || error != nil {
+                writer.discard()  // abgebrochen (Knopf, Seite zu, Netz): Teildatei weg, wie unter Windows
+                AppLog.info("Upload \(head.path) cancelled after \(writer.size) of \(wanted) bytes")
+                connection.cancel()
+            } else {
+                self.streamBody(connection, head, writer, chunk: Data())
+            }
+        }
+    }
 }
 
 enum HTTPParser {
@@ -211,9 +314,64 @@ enum HTTPParser {
         case invalid(Int, String)
     }
 
+    /// Kopf einer Anfrage, sobald er ganz da ist: für die Entscheidung, ob der Körper in eine Datei geht.
+    struct Head: Sendable {
+        let method: String
+        let path: String
+        let query: [String: String]
+        let headers: [String: String]
+        /// -1, wenn Content-Length fehlt oder unlesbar ist
+        let contentLength: Int
+        /// Index im Empfangspuffer, an dem der Körper beginnt
+        let bodyStart: Int
+
+        func request(body: Data) -> HTTPRequest {
+            HTTPRequest(method: method, path: path, query: query, headers: headers, body: body)
+        }
+    }
+
+    enum HeadResult {
+        case head(Head)
+        case incomplete
+        case invalid(Int, String)
+    }
+
     private static let headerEnd = Data([13, 10, 13, 10])
 
     static func parse(_ buffer: Data, maxBody: Int) -> Result {
+        let h: Head
+        switch head(buffer) {
+        case .incomplete: return .incomplete
+        case .invalid(let status, let detail): return .invalid(status, detail)
+        case .head(let found): h = found
+        }
+        // ohne (lesbare) Content-Length: kein Körper, wie bisher
+        let length = max(0, h.contentLength)
+        guard length <= maxBody else { return .invalid(413, t("Anfrage zu groß.", "Request too large.")) }
+        let available = buffer.endIndex - h.bodyStart
+        if available < length { return .incomplete }
+        return .complete(h.request(body: buffer.subdata(in: h.bodyStart..<(h.bodyStart + length))))
+    }
+
+    /// Abfrage wie ein Formular (application/x-www-form-urlencoded, so liest sie auch Starlette unter Windows): „+“
+    /// ist ein Leerzeichen, %2B ein Plus. URLComponents ließe das „+“ stehen; ein Name „Meine LoRA“ aus Python
+    /// (requests) oder einem Browser (URLSearchParams) kam dann als „Meine+LoRA“ an.
+    static func query(of target: String) -> [String: String] {
+        guard let mark = target.firstIndex(of: "?") else { return [:] }
+        var query: [String: String] = [:]
+        let rest = target[target.index(after: mark)...].split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+        for pair in rest.split(separator: "&", omittingEmptySubsequences: true) {
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            func decode(_ s: Substring) -> String {
+                let spaced = s.replacingOccurrences(of: "+", with: " ")
+                return spaced.removingPercentEncoding ?? spaced
+            }
+            query[decode(kv[0])] = kv.count > 1 ? decode(kv[1]) : ""
+        }
+        return query
+    }
+
+    static func head(_ buffer: Data) -> HeadResult {
         guard let end = buffer.range(of: headerEnd) else {
             return buffer.count > 64 * 1024 ? .invalid(400, t("Kopfzeilen zu lang.", "Headers too long.")) : .incomplete
         }
@@ -236,17 +394,10 @@ enum HTTPParser {
         if headers["transfer-encoding"]?.lowercased().contains("chunked") == true {
             return .invalid(411, t("Bitte mit Content-Length senden (chunked wird nicht unterstützt).", "Please send Content-Length (chunked is not supported)."))
         }
-        let length = Int(headers["content-length"] ?? "0") ?? 0
-        guard length >= 0, length <= maxBody else { return .invalid(413, t("Anfrage zu groß.", "Request too large.")) }
-        let bodyStart = end.upperBound
-        let available = buffer.count - (bodyStart - buffer.startIndex)
-        if available < length { return .incomplete }
-        let body = buffer.subdata(in: bodyStart..<(bodyStart + length))
-
+        let length = Int(headers["content-length"] ?? "") ?? -1
         let components = URLComponents(string: target)
         let path = components?.percentEncodedPath.removingPercentEncoding ?? target
-        var query: [String: String] = [:]
-        for item in components?.queryItems ?? [] { query[item.name] = item.value ?? "" }
-        return .complete(HTTPRequest(method: method, path: path, query: query, headers: headers, body: body))
+        return .head(Head(method: method, path: path, query: query(of: target), headers: headers, contentLength: length,
+                          bodyStart: end.upperBound))
     }
 }

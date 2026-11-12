@@ -101,6 +101,7 @@ extension StudioCommands {
         // Takes mit übernommenem Anfang (Latent-Kette) zuletzt und nach Zeit: Ihre Vorlage liegt dann schon im
         // Schnitt, und eine später gelegte Vorlage überdeckt ihren Anfang nicht
         let chained = Set(p.scenes.filter { s in s.take.map { carryTicks($0, env) > 0 } ?? false }.map(\.id))
+        let spoken = spokenInVideo(p, env)
         let order = p.scenes.enumerated().sorted { x, y in
             let kx = (chained.contains(x.element.id) ? 1 : 0, chained.contains(x.element.id) ? targets[x.element.id]!.start : 0, x.offset)
             let ky = (chained.contains(y.element.id) ? 1 : 0, chained.contains(y.element.id) ? targets[y.element.id]!.start : 0, y.offset)
@@ -112,6 +113,8 @@ extension StudioCommands {
             let (start, target) = targets[s.id]!
             var track = target
             let linked = p.clips.indices.filter { p.clips[$0].sceneID == s.id }
+            // der Satz klingt schon im Video, das ihn als Ton nimmt (params.audio_from; auf dem Mac nie)
+            if spoken.contains(s.id) && linked.isEmpty { continue }
             if !linked.isEmpty {
                 for i in linked where p.clips[i].assetID != take {
                     let m = try media(&p, take, env)
@@ -166,7 +169,10 @@ extension StudioCommands {
         let inEdit = Set(q.clips.map(\.assetID))
         var items: [JSONValue] = []
         var without = 0
+        let spoken = spokenInVideo(q, env)
+        let linkedScenes = Set(q.clips.compactMap(\.sceneID))
         for s in q.scenes {
+            if spoken.contains(s.id) && !linkedScenes.contains(s.id) { continue }  // klingt schon im Video
             guard let take = s.take else {
                 without += 1
                 continue
@@ -222,7 +228,8 @@ extension StudioCommands {
             items.append(.object(base))
         }
         let markers = q.markers.filter { $0.kind == "transition" }.count
-        return .object(["items": .array(items), "without_take": .int(without), "transition_markers": .int(markers)])
+        return .object(["items": .array(items), "without_take": .int(without), "transition_markers": .int(markers),
+                        "spoken_in_video": .int(spoken.subtracting(linkedScenes).count)])
     }
 
     private static func round3(_ x: Double) -> Double { (x * 1000).rounded(.toNearestOrEven) / 1000 }

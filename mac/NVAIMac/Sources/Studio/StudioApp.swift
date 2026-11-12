@@ -51,7 +51,8 @@ enum StudioJSON {
         out["composition_duration"] = .int(p.compositionDuration)
         out["history"] = .object(["undo": .int(history.undo), "redo": .int(history.redo)])
         var assets: [String: JSONValue] = [:]
-        let used = Set(p.scenes.flatMap(\.takes) + p.clips.map(\.assetID))
+        // dazu die Aufnahmen, aus denen Figuren ihre Stimme nehmen (Auswahl „Aufnahme“ bei den Figuren)
+        let used = Set(p.scenes.flatMap(\.takes) + p.clips.map(\.assetID) + p.characters.compactMap(\.voiceAssetID))
         for id in used {
             guard let r = AssetSnapshot.shared.get(id) else { continue }
             var a: [String: JSONValue] = ["url": .string(r.url), "kind": .string(p.media[id]?.kind ?? r.kind),
@@ -74,14 +75,18 @@ enum StudioJSON {
     static func summary(_ p: StudioProject) -> JSONValue {
         let chains = StudioCommands.resolvedChains(p)
         let scenes: [JSONValue] = p.scenes.map { s in
-            .object(["id": .string(s.id), "lane": .string(s.lane), "start_s": round3(Studio.seconds(s.start)),
-                     "duration_s": round3(Studio.seconds(s.duration)), "title": .string(s.title),
-                     "prompt": .string(s.prompt), "kind": .string(s.kind),
-                     "model_id": s.modelID.map(JSONValue.string) ?? .null,
-                     "chain_from": (s.chainFrom ?? chains[s.id]?.from).map(JSONValue.string) ?? .null,
-                     "status": .string(status(s)), "waiting_for": s.waitingFor.map(JSONValue.string) ?? .null,
-                     "take": s.take.map(JSONValue.string) ?? .null, "takes": .int(s.takes.count),
-                     "error": s.error.map(JSONValue.string) ?? .null])
+            var o: [String: JSONValue] = [
+                "id": .string(s.id), "lane": .string(s.lane), "start_s": round3(Studio.seconds(s.start)),
+                "duration_s": round3(Studio.seconds(s.duration)), "title": .string(s.title),
+                "prompt": .string(s.prompt), "kind": .string(s.kind),
+                "model_id": s.modelID.map(JSONValue.string) ?? .null,
+                "chain_from": (s.chainFrom ?? chains[s.id]?.from).map(JSONValue.string) ?? .null,
+                "status": .string(status(s)), "waiting_for": s.waitingFor.map(JSONValue.string) ?? .null,
+                "take": s.take.map(JSONValue.string) ?? .null, "takes": .int(s.takes.count),
+                "error": s.error.map(JSONValue.string) ?? .null]
+            // Figuren (seit 0.5.5): wer zu sehen ist, wer spricht, welcher Satz der Ton eines Videos ist
+            for key in ["characters", "character", "audio_from"] where s.params.truthy(key) { o[key] = s.params[key] }
+            return .object(o)
         }
         let markers: [JSONValue] = p.markers.map { m in
             .object(["id": .string(m.id), "at_s": round3(Studio.seconds(m.at)), "kind": .string(m.kind),
@@ -113,9 +118,10 @@ enum StudioJSON {
             } ?? .null
             return .object(o)
         }
+        let characters = JSON.parse((try? JSONEncoder().encode(p.characters)) ?? Data()) ?? .array([])
         return .object(["id": .string(p.id), "name": .string(p.name),
                         "settings": (JSON.parse((try? JSONEncoder().encode(p.settings)) ?? Data()) ?? .null),
-                        "folder": .null, "scenes": .array(scenes), "markers": .array(markers),
+                        "folder": .null, "scenes": .array(scenes), "characters": characters, "markers": .array(markers),
                         "tracks": .array(tracks), "clips": .array(clips),
                         "duration_s": round3(Studio.seconds(p.editDuration))])
     }

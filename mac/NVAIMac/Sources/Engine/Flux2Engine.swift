@@ -46,6 +46,13 @@ actor Flux2Engine {
     private var loadedModelID: String?
     /// LoRAs, die im geladenen Transformer stecken (das Paket verrechnet sie beim Laden fest).
     private var loadedLoRAs: [LoRAChoice] = []
+    /// Wie viele Schichten die LoRAs verändert haben und wie viele LoRA-Paare nicht passten (seit 0.5.5: eigene Dateien;
+    /// eine LoRA für eine andere Modellgröße wirkt dann nicht, statt die App zu beenden). Das Paket verrechnet die LoRAs
+    /// erst, wenn es beim ersten Bild den Transformer lädt (`loadModels` lädt nur herunter); gelesen wird deshalb nach
+    /// dem Bild (gemessen 12.11.2026: direkt nach `loadModels` stand der Zähler noch auf 0).
+    private(set) var loraMerge: (layers: Int, skipped: Int)?
+
+    func loraMergeResult() -> (layers: Int, skipped: Int)? { loraMerge }
 
     /// Beide Register zeigen auf denselben Ordner, wie in der CLI des Pakets.
     nonisolated static func configureModelsDirectory(_ url: URL) {
@@ -75,10 +82,22 @@ actor Flux2Engine {
             guard let lora = LoRACatalog.find(choice.id), lora.installed else { continue }
             try p.loadLoRA(LoRAConfig(filePath: lora.localURL.path, scale: Float(choice.strength)))
         }
+        Flux2WeightLoader.lastMergeCount = 0
+        Flux2WeightLoader.lastMergeSkipped = 0
         try await p.loadModels(progressCallback: progress)
         pipeline = p
         loadedModelID = model.id
         loadedLoRAs = loras
+        loraMerge = nil
+    }
+
+    /// Nach einem Bild: Ergebnis des Verrechnens festhalten (einmal je Laden, dann im Protokoll).
+    private func noteMerge() {
+        guard !loadedLoRAs.isEmpty else { return }
+        let now = (layers: Flux2WeightLoader.lastMergeCount, skipped: Flux2WeightLoader.lastMergeSkipped)
+        guard loraMerge == nil || (loraMerge!.layers == 0 && now.layers > 0) else { return }
+        loraMerge = now
+        AppLog.info("FLUX.2 LoRAs \(loadedLoRAs.map(\.id).joined(separator: ", ")): \(now.layers) layers merged, \(now.skipped) pairs skipped")
     }
 
     func unload() async {
@@ -88,6 +107,7 @@ actor Flux2Engine {
         pipeline = nil
         loadedModelID = nil
         loadedLoRAs = []
+        loraMerge = nil
     }
 
     /// „Prompt ausbauen“: Qwen3-4B, der Text-Encoder von FLUX.2 Klein, schreibt aus ein paar Worten
@@ -113,6 +133,12 @@ actor Flux2Engine {
     }
 
     func generate(_ job: EngineJob, onProgress: @escaping @Sendable (Int, Int) -> Void) async throws -> CGImage {
+        let image = try await render(job, onProgress: onProgress)
+        noteMerge()  // erst jetzt hat das Paket den Transformer geladen und die LoRAs verrechnet
+        return image
+    }
+
+    private func render(_ job: EngineJob, onProgress: @escaping @Sendable (Int, Int) -> Void) async throws -> CGImage {
         guard let p = pipeline else { throw APIError(500, t("Kein Modell geladen.", "No model loaded.")) }
         // FLUX.2 rechnet in Vielfachen von 32 (VAE 8 × Patch 2, gepackt). Das Ergebnis bringt
         // die Warteschlange danach auf die bestellte Größe.

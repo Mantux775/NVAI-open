@@ -369,9 +369,12 @@ struct ConformSheet: View {
                     }
                     let without = model.conformSummary["without_take"]?.intValue ?? 0
                     let markers = model.conformSummary["transition_markers"]?.intValue ?? 0
+                    let spoken = model.conformSummary["spoken_in_video"]?.intValue ?? 0
                     Text([same > 0 ? t("\(same) Clip(s) passen schon.", "\(same) clip(s) already match.") : nil,
                           without > 0 ? t("\(without) Szene(n) ohne Take bleiben weg.", "\(without) scene(s) without a take are left out.") : nil,
-                          markers > 0 ? t("\(markers) Übergang-Marker werden angewendet.", "\(markers) transition marker(s) are applied.") : nil]
+                          markers > 0 ? t("\(markers) Übergang-Marker werden angewendet.", "\(markers) transition marker(s) are applied.") : nil,
+                          spoken > 0 ? t("\(spoken) Sprecherzeile(n) klingen schon im Video, das sie als Ton nimmt, und kommen nicht extra in den Schnitt.",
+                                         "\(spoken) voice line(s) already sound in the video that uses them as its sound and are not added separately.") : nil]
                         .compactMap { $0 }.joined(separator: " "))
                         .font(.caption).foregroundStyle(.secondary)
                 }
