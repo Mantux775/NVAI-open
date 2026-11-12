@@ -373,6 +373,23 @@ Tested and not included: **Kandinsky 6** (Pro took 928–966 s per 5 s clip agai
 parts of it are non-commercial or not licensed in the EU) and the **LTX-2.5 IC-LoRAs Restore and Ingredients** (neither
 kept a real person recognizable).
 
+### Upscaling a video: RelayVSR (since 0.5.23)
+
+| Model | Use for | Measured | License |
+|---|---|---|---|
+| RelayVSR ×2 (`relayvsr-x2-int8`, 5.3 GB) | doubling a finished video: 1080p to 4K, smaller clips to 1080p and beyond | 5 s: 1024 × 576 → 2048 × 1152 in 38 s, 1920 × 1088 → 4K in 104 s (up to 14.5 GB); about four times as sharp as plain enlarging, faces unchanged | Apache-2.0 |
+
+A Wan 2.2 model computes every 15th frame in one step, a small decoder fills in the frames in between; sound and frame
+rate stay. Generated directly at 1080p, LTX-2.5 was still a little finer, and still surfaces twitch slightly every 15
+frames. Input at most 1920 × 1088, per run at most 4K × 121 frames (1080p: 5 s). In the web interface: **Upscale ×2**
+under a video in the History; the result lands next to the original. Needs ComfyUI 0.45 (NVAI-open 0.5.23 brings
+it). The ×2 version comes from LightX2V, whose model page states no license of its own; the RelayVSR project and
+Comfy-Org's package are Apache-2.0.
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/video/upscale -H "Content-Type: application/json" -d '{"asset_id": "ast_…"}'
+```
+
 ---
 
 ## Sound
@@ -498,7 +515,7 @@ NVAI-open for Mac runs its own native models on Apple Silicon (MLX). Measured on
 | Qwen3.5 4B, SeedVR2 3B | "Automatic" when restoring; sharpening | Automatic about 20 s; 1024 × 738 → 2× in 9 min |
 
 FLUX.2 Klein removes less damage from old photos than FLUX 3 on Windows, and SeedVR2 3B smooths faces slightly more
-than the 7B.
+than the 7B. Upscaling a video with RelayVSR is only in the Windows version.
 
 ![The same face sharpened to twice the size: original, SeedVR2 7B on Windows, SeedVR2 3B on the Mac](images/mac-sharpen-seedvr2.jpg)
 

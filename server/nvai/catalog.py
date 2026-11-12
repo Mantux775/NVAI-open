@@ -2730,9 +2730,54 @@ INTERPOLATE_MODELS: list[dict[str, Any]] = [
 ]
 
 
+# Video hochskalieren (seit 0.5.23, ComfyUI ab 0.45): RelayVSR (kopperx/RelayVSR, Apache-2.0) rechnet ein Wan-2.2-5B in
+# einem Schritt auf jedem 15. Bild, ein kleiner Decoder („Flash“) füllt die Bilder dazwischen aus diesen Schlüsselbildern
+# und dem Original. Knoten RelayVSRConditioning und VSRDecode, Vorlage utility_relayvsr_video_x2_upscale.json. Eigene Art,
+# damit es nie beim Restaurieren oder im VHS-Bereich als Ersatz für SeedVR2 gewählt wird.
+VIDEO_UPSCALE_MODELS: list[dict[str, Any]] = [
+    {
+        "id": "relayvsr-x2-int8",
+        "name": "RelayVSR ×2 (INT8, Video hochskalieren)",
+        "kind": "video_upscale",
+        "family": "relayvsr",
+        "workflow": "relayvsr",
+        "files": [
+            {"repo": "Comfy-Org/RelayVSR", "file": "diffusion_models/relayvsr_x2_lightx2v_int8_convrot.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "Comfy-Org/RelayVSR", "file": "vae/relayvsr_flash_vae_x2_fp32.safetensors", "target": "vae"},
+        ],
+        "size_gb": 5.3,
+        "model_gb": 5.16,
+        "vram_gb": 9,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Fertige Videos verdoppeln: 1080p zu 4K für den Export, kleinere Clips zu 1080p und mehr",
+        "features": {"scale": 2, "max_input_pixels": 1920 * 1088, "max_output_pixel_frames": 3840 * 2176 * 121},
+        "description": (
+            "RelayVSR verdoppelt Breite und Höhe eines fertigen Videos und zeichnet dabei Feindetail nach, statt nur "
+            "zu vergrößern. Ein Wan-2.2-Modell mit 5 Mrd. Parametern rechnet in einem Schritt jedes 15. Bild, ein "
+            "kleiner Decoder füllt die Bilder dazwischen aus diesen Schlüsselbildern und dem Original. Ton und "
+            "Bildrate bleiben.\n\n"
+            "Gemessen auf einer RTX 5060 Ti (16 GB), je 5 s mit 24 Bildern/s: 1024 × 576 auf 2048 × 1152 in 38 s, "
+            "1920 × 1088 auf 3840 × 2176 (4K) in 104 s bei höchstens 14,5 GB Grafikspeicher. Gegenüber einfachem "
+            "Vergrößern war das Bild rund viermal so scharf (Mütze, Bart, Holz, Schrift), das Gesicht blieb dasselbe. "
+            "Direkt in 1080p erzeugt war das Bild noch etwas feiner.\n\n"
+            "Lizenz: Apache-2.0 (Projekt und Comfy-Org-Paket); die ×2-Fassung stammt von LightX2V, deren Modellseite "
+            "selbst keine Lizenz nennt."
+        ),
+        "pros": ["Apache-2.0, kommerziell frei", "5 s Video von 1080p auf 4K in unter 2 Minuten",
+                 "Behält Ton, Bildrate und Gesichter"],
+        "cons": ["An ruhigen Flächen ein leichtes Zucken alle 15 Bilder (gemessen an einem Holzpfahl)",
+                 "Erfindet Feindetail; starke Kompression oder Unschärfe im Original bleibt sichtbar",
+                 "Eingang höchstens 1920 × 1088, die Länge je Durchgang hängt von der Größe ab (1080p: 5 s)",
+                 "Auf AMD ungetestet"],
+    },
+]
+
+
 ALL_MODELS: list[dict[str, Any]] = (
     IMAGE_MODELS + AUDIO_MODELS + SPEECH_MODELS + VIDEO_MODELS + MODEL_3D + CONTROLNET_MODELS + LORA_MODELS
-    + UPSCALE_MODELS + INTERPOLATE_MODELS
+    + UPSCALE_MODELS + INTERPOLATE_MODELS + VIDEO_UPSCALE_MODELS
 )
 # MiniMax H3 (minimax.py, seit 0.5.18): Startbild-, Referenz- und FastH3-Fassung samt Turbo-LoRAs, mit roten
 # Lizenzmarken (in EU, UK, Südkorea und USA ohne eigene Lizenz verboten).
@@ -2771,7 +2816,8 @@ for _m in ALL_MODELS:
         _m["features"] = {**(_m.get("features") or {}), "recommended": RECOMMENDED[_m["id"]]}
 
 KIND_LABELS = {"image": "Bild", "audio": "Audio", "speech": "Sprache", "video": "Video", "3d": "3D",
-               "controlnet": "ControlNet", "upscale": "Hochskalieren", "interpolate": "Zwischenbilder"}
+               "controlnet": "ControlNet", "upscale": "Hochskalieren", "interpolate": "Zwischenbilder",
+               "video_upscale": "Video hochskalieren"}
 
 
 # Empfehlung nach Grafikkarte (registry.gpu_advice). RTX 50 rechnet NVFP4 in Hardware;

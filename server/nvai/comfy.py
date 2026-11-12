@@ -168,7 +168,12 @@ class Backend:
         log = self.log_path.open("a", encoding="utf-8", errors="replace")
         log.write(f"\n{'=' * 60}\nStart {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         args = [str(py), "main.py", "--port", str(self.port), "--listen", "127.0.0.1",
-                "--disable-auto-launch"]
+                "--disable-auto-launch",
+                # Seit ComfyUI 0.45.0 standardmaessig an: Cloud-Anmeldung und Partner-Token auf ComfyUIs eigener
+                # Webseite. NVAI-open zeigt die nie und nutzt keine Partner-Knoten; aus, damit alles lokal bleibt.
+                # --feature-flag kennt ComfyUI seit 0.42; aeltere Fassungen ohne diese Schluessel reichen sie wirkungslos
+                # an ihre Webseite durch.
+                "--feature-flag", "local_web_sso=false", "--feature-flag", "partner_node_token=false"]
         if config.MODEL_DIR_OVERRIDE:
             args += ["--models-directory", str(config.COMFY_MODEL_DIR)]
         if gpu.multi_gpu():

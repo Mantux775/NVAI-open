@@ -379,6 +379,23 @@ Getestet und nicht aufgenommen: **Kandinsky 6** (Pro brauchte 928–966 s je 5-s
 zerfiel, Teile davon sind nicht kommerziell oder in der EU nicht lizenziert) und die **IC-LoRAs Restore und Ingredients
 für LTX-2.5** (keines hielt eine echte Person erkennbar).
 
+### Video hochskalieren: RelayVSR (seit 0.5.23)
+
+| Modell | Wofür | Gemessen | Lizenz |
+|---|---|---|---|
+| RelayVSR ×2 (`relayvsr-x2-int8`, 5,3 GB) | fertige Videos verdoppeln: 1080p zu 4K, kleinere Clips zu 1080p und mehr | 5 s: 1024 × 576 → 2048 × 1152 in 38 s, 1920 × 1088 → 4K in 104 s (bis 14,5 GB); rund viermal so scharf wie einfaches Vergrößern, Gesichter unverändert | Apache-2.0 |
+
+Ein Wan-2.2-Modell rechnet in einem Schritt jedes 15. Bild, ein kleiner Decoder füllt die Bilder dazwischen; Ton und
+Bildrate bleiben. Direkt in 1080p erzeugt war LTX-2.5 noch etwas feiner, und ruhige Flächen zucken leicht alle 15
+Bilder. Eingang höchstens 1920 × 1088, je Durchgang höchstens 4K × 121 Bilder (1080p: 5 s). In der Weboberfläche:
+**Hochskalieren ×2** unter einem Video im Verlauf; das Ergebnis liegt neben dem Original. Braucht ComfyUI 0.45
+(NVAI-open 0.5.23 bringt es mit). Die ×2-Fassung stammt von LightX2V, deren Modellseite selbst keine Lizenz nennt;
+das RelayVSR-Projekt und Comfy-Orgs Paket stehen unter Apache-2.0.
+
+```bash
+curl -X POST http://127.0.0.1:8100/api/video/upscale -H "Content-Type: application/json" -d '{"asset_id": "ast_…"}'
+```
+
 ---
 
 ## Ton
@@ -507,7 +524,7 @@ NVAI-open für Mac rechnet mit eigenen, nativen Modellen auf Apple Silicon (MLX)
 | Qwen3.5 4B, SeedVR2 3B | „Automatisch“ beim Restaurieren; Schärfen | Automatisch rund 20 s; 1024 × 738 → 2× in 9 min |
 
 FLUX.2 Klein entfernt bei alten Fotos weniger Schäden als FLUX 3 unter Windows, und SeedVR2 3B glättet Gesichter etwas
-mehr als der 7B.
+mehr als der 7B. Video hochskalieren mit RelayVSR gibt es nur in der Windows-Fassung.
 
 ![Dasselbe Gesicht auf doppelte Größe geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
 

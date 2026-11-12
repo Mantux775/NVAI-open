@@ -40,7 +40,7 @@ TARGETS = ["gfx1201", "gfx1200", "gfx1100", "gfx1101", "gfx1102", "gfx1151", "gf
            "gfx1030", "gfx1031", "gfx1032"]
 BASE_PACKAGES = {"rocm", "rocm-bootstrap", "rocm-sdk-core", "rocm-sdk-libraries", "torch", "torchvision",
                  "torchaudio"}
-# comfy-kitchen fuer AMD abweichend von comfyui.lock; None = wie dort (ComfyUIs Pin, 0.42.1: ==0.2.39). Nicht ueber
+# comfy-kitchen fuer AMD abweichend von comfyui.lock; None = wie dort (ComfyUIs Pin, 0.45.0: ==0.2.41). Nicht ueber
 # den Pin heben: 0.2.40 ("deltanet for tree MTP", #266) lehnt ComfyUI 0.42.1s Qwen3.5-Ausbau ab
 # ("gated_delta_decode_deferred launch rejected" bei MOSS-Image) und der FLUX-3-Upsampler fand kein Textende mehr
 # (3584 statt 185 Token), gemessen 26.10.2026 auf der RTX 5060 Ti. 0.2.39 hat die HIP-Kernel fuer gfx1200/1201 schon.

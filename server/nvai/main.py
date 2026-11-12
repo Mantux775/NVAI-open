@@ -42,6 +42,7 @@ from .schemas import (
     Job,
     ModelInfo,
     RestoreImageRequest,
+    UpscaleVideoRequest,
     VersionInfo,
     VhsAnalyzeRequest,
     VhsRequest,
@@ -119,6 +120,8 @@ API_FEATURES = [
     "studio_cancel",   # POST /api/studio/projects/{pid}/cancel: Erzeugen abbrechen (seit 0.5.19)
     "speech",          # POST /api/generate/speech: Sprecherstimme mit Qwen3-TTS (Modellart "speech"); Studio-Spur
                        # voice mit params voice, voice_from, voice_asset_id, voice_text, language (seit 0.5.21)
+    "video_upscale",   # POST /api/video/upscale: Video verdoppeln mit RelayVSR (Modellart "video_upscale",
+                       # seit 0.5.23, braucht ComfyUI ab 0.45)
 ]
 
 
@@ -747,6 +750,22 @@ async def restore_image(req: RestoreImageRequest) -> Job:
                                    "Schärfen.", "Please choose at least one step: remove damage, colorize or "
                                    "sharpen."))
     return await jobs.submit("restore", _job_params(req))
+
+
+@app.post("/api/video/upscale", response_model=Job)
+async def upscale_video(req: UpscaleVideoRequest) -> Job:
+    """Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe, Ton und Bildrate bleiben
+    (jobs._video_upscale)."""
+    asset = db.get_asset(req.asset_id)
+    if asset is None or asset.kind != "video":
+        raise HTTPException(404, t(f"Video nicht gefunden: {req.asset_id}", f"Video not found: {req.asset_id}"))
+    model_id = req.model_id or registry.get_active_model("video_upscale")
+    entry = registry.get_entry(model_id) if model_id else None
+    if entry is None or entry.get("kind") != "video_upscale" or not registry.is_installed(entry):
+        raise HTTPException(409, t("Zum Hochskalieren fehlt RelayVSR: unter „Modelle“ laden (5,3 GB).",
+                                   "Upscaling needs RelayVSR: download it under “Models” (5.3 GB)."))
+    # Der Prompt des Quellvideos, damit der Verlauf den Auftrag auch ohne Ergebnis (Fehler) zuordnen kann.
+    return await jobs.submit("video_upscale", {**_job_params(req), "prompt": asset.prompt or ""})
 
 
 @app.post("/api/vhs/analyze")

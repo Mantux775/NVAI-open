@@ -1821,6 +1821,38 @@ def seedvr2_video_graph(entry: dict[str, Any], video: str, width: int, height: i
     }
 
 
+def relayvsr_graph(entry: dict[str, Any], video: str, detail: float = 1.0, seed: int = 42,
+                   crf: float | None = None) -> Graph:
+    """RelayVSR (seit 0.5.23, ComfyUI ab 0.45): ein Video in Breite und Hoehe verdoppeln, Ton und Bildrate bleiben.
+
+    Nachgebaut nach ComfyUIs Vorlage utility_relayvsr_video_x2_upscale.json: RelayVSRConditioning nimmt die Bilder in
+    ihrer Groesse (das Modell bestimmt den Faktor) und legt das leere Latent fuer jedes 15. Bild an, ein Schritt
+    euler/simple mit cfg 1 (positiv = negativ, wie in der Vorlage), VSRDecode fuellt mit dem Flash-Decoder alle Bilder
+    aus Schluesselbildern und Original. Ausgabe wie bei LTX: H.264 mit VIDEO_CRF und verlustfreier Master (add_master).
+    Gemessen 11.11.2026 (RTX 5060 Ti): 121 Bilder 1024 x 576 -> 2048 x 1152 in 38 s, 1920 x 1088 -> 4K in 104 s,
+    hoechstens 14,5 GB Grafikspeicher."""
+    graph: Graph = {
+        "1": {"class_type": "LoadVideo", "inputs": {"file": video}},
+        "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+        "3": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "4": {"class_type": "RelayVSRConditioning", "inputs": {"model": ["3", 0], "images": ["2", 0]}},
+        "5": {"class_type": "KSampler", "inputs": {
+            "seed": int(seed), "steps": 1, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple",
+            "denoise": 1.0, "model": ["3", 0], "positive": ["4", 0], "negative": ["4", 0],
+            "latent_image": ["4", 1]}},
+        "6": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "7": {"class_type": "VSRDecode", "inputs": {
+            "vae": ["6", 0], "samples": ["5", 0], "images": ["2", 0], "detail": float(detail)}},
+        "8": {"class_type": "CreateVideo", "inputs": {"images": ["7", 0], "fps": ["2", 2], "audio": ["2", 1]}},
+        "9": {"class_type": "SaveVideo", "inputs": {
+            "video": ["8", 0], "filename_prefix": "nvai_upscaled", "format": "mp4", "format.codec": "h264",
+            "format.codec.encoding": "re-encode",
+            "format.codec.encoding.crf": float(VIDEO_CRF if crf is None else crf)}},
+    }
+    return add_master(graph)
+
+
 def add_interpolation(graph: Graph, model_file: str) -> Graph:
     """Zwischenbilder vor die verlustfreie Ausgabe haengen (VHS „Takt glaetten“, seit 0.5.16): FrameInterpolate aus
     dem ComfyUI-Kern (RIFE 4.26) mit multiplier 2 rechnet die Mitte zwischen allen Nachbarbildern; welche davon bleiben,
@@ -1863,6 +1895,8 @@ VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
 EXTERNAL_WORKFLOWS = {"triposg", "trellis2"}
 # Schaerfen beim Restaurieren: Graph aus seedvr2_graph, aufgerufen von jobs._restore.
 UPSCALE_WORKFLOWS = {"seedvr2"}
+# Video hochskalieren (seit 0.5.23): Graph aus relayvsr_graph, aufgerufen von jobs._video_upscale.
+VIDEO_UPSCALE_WORKFLOWS = {"relayvsr"}
 # Builder ausserhalb dieser Datei: MiniMax H3 (minimax.py, siehe Dateiende).
 MODULE_BUILDERS: dict[str, Any] = {}
 

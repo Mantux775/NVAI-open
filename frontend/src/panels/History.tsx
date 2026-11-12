@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, type Asset, type AssetFolder, type Job, type ServerEvent } from '../api'
+import { api, type Asset, type AssetFolder, type Job, type ModelInfo, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import { FolderIcon } from '../components/FolderIcon'
 import { OutputBadge, useOutputBadges } from '../components/LicenseBadge'
@@ -118,6 +118,31 @@ export function HistoryPanel({ event }: Props) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Höhe; nur mit geladenem Modell und bis
+  // 1920 × 1088 (daraus wird 4K). Das Ergebnis legt der Server neben das Original (Projektordner bleibt).
+  const [upscaler, setUpscaler] = useState<ModelInfo | null>(null)
+  useEffect(() => {
+    api.models('video_upscale').then((ms) => setUpscaler(ms.find((m) => m.runnable) ?? null)).catch(() => undefined)
+  }, [])
+  const canUpscale = (a: Asset) => {
+    const w = Number(a.meta?.width) || 0
+    const h = Number(a.meta?.height) || 0
+    return a.kind === 'video' && !!upscaler && !(w && h && w * h > 1920 * 1088)
+  }
+  const upscale = async (asset: Asset) => {
+    setError(null)
+    try {
+      await api.upscaleVideo({ asset_id: asset.id })
+      setMessage(t('Hochskalieren läuft: Das Ergebnis erscheint gleich oben im Verlauf, im selben Ordner wie das '
+          + 'Original (5 s in 1080p brauchen rund 2 Minuten).',
+        'Upscaling is running: the result shows up at the top of the History, in the same folder as the original '
+          + '(5 s at 1080p take about 2 minutes).'))
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -243,10 +268,12 @@ export function HistoryPanel({ event }: Props) {
         const list = assets[job.id] ?? []
         const inFolder = list.find((a) => a.folder)?.folder
         // Bild→3D-Jobs haben keinen eigenen Prompt; sie erben den des Quellbilds.
-        const prompt =
+        // Hochskalieren (seit 0.5.23) hat keinen eigenen Prompt: Kennung davor, dann der Prompt des Quellvideos.
+        const upscaled = job.kind === 'video_upscale' ? t('Hochskaliert ×2: ', 'Upscaled ×2: ') : ''
+        const prompt = upscaled + (
           String(job.params.prompt ?? '') ||
           list.find((a) => a.prompt && !a.prompt.startsWith('Freistellung'))?.prompt ||
-          (job.kind === 'img23d' ? t('Bild → 3D', 'Image → 3D') : '')
+          (job.kind === 'img23d' ? t('Bild → 3D', 'Image → 3D') : ''))
         return (
           <article key={job.id} className="panel run">
             <header className="run-head">
@@ -332,6 +359,20 @@ export function HistoryPanel({ event }: Props) {
                           <a href={a.url} download>
                             Download
                           </a>
+                          {canUpscale(a) && (
+                            <>
+                              {' · '}
+                              <button
+                                className="link-btn"
+                                onClick={() => upscale(a)}
+                                disabled={busy}
+                                title={t('Mit RelayVSR auf doppelte Breite und Höhe bringen; Ton und Bildrate bleiben',
+                                  'Double the width and height with RelayVSR; sound and frame rate stay')}
+                              >
+                                {t('Hochskalieren ×2', 'Upscale ×2')}
+                              </button>
+                            </>
+                          )}
                         </span>
                         <button
                           className="icon-btn"

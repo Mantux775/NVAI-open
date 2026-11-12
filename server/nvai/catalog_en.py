@@ -1513,6 +1513,28 @@ EN: dict[str, dict[str, Any]] = {
         "pros": ["FP8 runs in hardware on Radeon RX 9000", "Apache-2.0"],
         "cons": ["Not tested on AMD yet"],
     },
+    "relayvsr-x2-int8": {
+        "name": "RelayVSR ×2 (INT8, upscale video)",
+        "best_for": "Doubling finished videos: 1080p to 4K for the export, smaller clips to 1080p and beyond",
+        "description": (
+            "RelayVSR doubles the width and height of a finished video and redraws fine detail instead of just "
+            "enlarging it. A Wan 2.2 model with 5 billion parameters computes every 15th frame in one step, a small "
+            "decoder fills in the frames in between from these key frames and the original. Sound and frame rate "
+            "stay.\n\n"
+            "Measured on an RTX 5060 Ti (16 GB), 5 s each at 24 fps: 1024 × 576 to 2048 × 1152 in 38 s, "
+            "1920 × 1088 to 3840 × 2176 (4K) in 104 s with at most 14.5 GB of video memory. Compared with plain "
+            "enlarging the picture was about four times as sharp (cap, beard, wood, lettering), the face stayed the "
+            "same. Generated directly at 1080p the picture was still a little finer.\n\n"
+            "License: Apache-2.0 (project and Comfy-Org package); the ×2 version comes from LightX2V, whose model "
+            "page states no license of its own."
+        ),
+        "pros": ["Apache-2.0, free for commercial use", "5 s of video from 1080p to 4K in under 2 minutes",
+                 "Keeps sound, frame rate and faces"],
+        "cons": ["A slight twitch every 15 frames on still surfaces (measured on a wooden post)",
+                 "Invents fine detail; heavy compression or blur in the original stays visible",
+                 "Input at most 1920 × 1088, the length per run depends on the size (1080p: 5 s)",
+                 "Not tested on AMD yet"],
+    },
 }
 
 # Every size label used anywhere in catalog.py (German label -> English label),

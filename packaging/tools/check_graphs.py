@@ -4,9 +4,11 @@ Findet fehlende Pflichteingänge, unbekannte Knoten und ungültige Auswahlwerte 
 an der ACE-Step 1.5 mit ComfyUI 0.41.3 scheiterte.
     server\\.venv\\Scripts\\python.exe packaging\\tools\\check_graphs.py
 
-Braucht ein laufendes ComfyUI auf 127.0.0.1:8188. Nach jedem ComfyUI-Update ausfuehren.
+Braucht ein laufendes ComfyUI auf 127.0.0.1:8188 (oder unter NVAI_COMFY_URL, etwa eine Testkopie).
+Nach jedem ComfyUI-Update ausfuehren.
 """
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -14,7 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
 from nvai import registry, schemas, workflows  # noqa: E402
 
-with urllib.request.urlopen("http://127.0.0.1:8188/object_info", timeout=60) as r:
+COMFY_URL = os.environ.get("NVAI_COMFY_URL", "http://127.0.0.1:8188").rstrip("/")
+with urllib.request.urlopen(f"{COMFY_URL}/object_info", timeout=60) as r:
     INFO = json.load(r)
 
 REQUESTS = {

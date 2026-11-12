@@ -154,6 +154,12 @@ server = MCPServer(
         "meta.repair.auto says what auto chose. "
         "Colorizing takes only the color from FLUX 3 and keeps the photo's brightness and detail; known "
         "colors in `notes` cut the measured color error by 40 %.\n\n"
+        "UPSCALE VIDEO: upscale_video(asset_id) doubles width and height of a finished video with RelayVSR "
+        "(Apache-2.0, list_models(kind='video_upscale'), 5.3 GB, ComfyUI 0.45+); sound and frame rate stay. "
+        "Measured: 5 s 1920x1088 -> 4K in 104 s, 1024x576 -> 2048x1152 in 38 s, four times as sharp as plain "
+        "enlarging, faces unchanged; native 1080p from LTX-2.5 is still a little finer. Input at most 1920x1088, "
+        "1080p clips at most 5 s per run (cut longer ones). Use it for 4K exports (upscale the clips, export "
+        "youtube-2160p) or old 720p clips.\n\n"
         "NARRATOR VOICE: generate_speech(text, voice=...) speaks a text with Qwen3-TTS (Apache-2.0, 10 languages "
         "incl. German and English). Describe the voice in one sentence (gender, age, pitch, pace, mood) or take it "
         "over from a recording (voice_asset_id, with voice_text = what is said in it, word for word). A described "
@@ -377,7 +383,8 @@ async def list_models(kind: str | None = None, detailed: bool = False) -> list[d
     """All known models with installation status, size, VRAM requirement and license.
 
     Args:
-        kind: 'image', 'audio', 'video', '3d', 'lora' or 'upscale' (SeedVR2 for restore_image);
+        kind: 'image', 'audio', 'video', '3d', 'lora', 'upscale' (SeedVR2 for restore_image) or
+            'video_upscale' (RelayVSR for upscale_video);
             None = all. LoRAs carry their family (which models they fit) and 'trigger' words for the prompt.
         detailed: Also return the description, pros and cons.
     """
@@ -680,6 +687,56 @@ async def restore_image(
         "project_id": project_id,
     }
     return await _generate("/api/image/restore", payload, ctx)
+
+
+@server.tool()
+async def upscale_video(
+    ctx: Context,
+    asset_id: str | None = None,
+    video_path: str | None = None,
+    detail: float = 1.0,
+    model_id: str | None = None,
+    seed: int | None = None,
+    project_id: str | None = None,
+    wait: bool = True,
+) -> dict[str, Any]:
+    """Doubles the width and height of a finished video with RelayVSR (Apache-2.0); sound and frame rate stay.
+
+    Needs relayvsr-x2-int8 (list_models(kind='video_upscale'), 5.3 GB, ask before downloading) and ComfyUI 0.45 or
+    later. Reads the lossless copy of a generated video when there is one. Measured on an RTX 5060 Ti, 5 s at 24 fps:
+    1024x576 -> 2048x1152 in 38 s, 1920x1088 -> 3840x2176 (4K) in 104 s at up to 14.5 GB of video memory. About four
+    times as sharp as plain enlarging, faces stayed the same; LTX-2.5 generated directly at 1080p was still a little
+    finer. Still surfaces can twitch slightly every 15 frames (the model computes every 15th frame).
+    Good for: a 4K export of a 1080p edit (upscale the clips, then export youtube-2160p), or old clips in 720p.
+    Limits per run: input at most 1920x1088; output pixels x frames at most 4K x 121 (1080p: 5 s, 1024x576: 17 s);
+    longer videos must be cut first (in the Studio: split the clip).
+
+    Args:
+        asset_id: The video as an asset (list_assets, a generate_video result, a Studio take).
+        video_path: Or a local video file; it is uploaded first.
+        detail: 1 (default, measured) keeps all the redrawn detail, lower values blend towards plain enlarging.
+        model_id: None = the active model of kind 'video_upscale'.
+        seed: For reproducible results (default 42).
+        project_id: A Studio project: the result goes into its folder. Without it the result lands next to the
+            source video (same folder).
+        wait: False returns the job_id at once; then job_status(job_id, wait_s=600).
+
+    Returns:
+        files (MP4, H.264 CRF 12), asset_ids; meta.master is the lossless copy (FFV1) the Studio export reads.
+    """
+    if not asset_id and not video_path:
+        return {"ok": False, "error": "asset_id or video_path is required"}
+    if video_path and not asset_id:
+        path = Path(video_path)
+        if not path.is_file():
+            return {"ok": False, "error": f"file not found: {video_path}"}
+        async with await _client() as c:
+            r = await c.post("/api/upload", files={"file": (path.name, path.read_bytes())}, timeout=600.0)
+            if r.status_code >= 400:
+                return {"ok": False, "error": r.text[:500]}
+            asset_id = r.json()["id"]
+    payload = {"asset_id": asset_id, "detail": detail, "model_id": model_id, "seed": seed, "project_id": project_id}
+    return await _generate("/api/video/upscale", payload, ctx, wait=wait)
 
 
 @server.tool()

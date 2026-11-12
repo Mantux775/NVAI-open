@@ -1804,6 +1804,84 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     return [combined.id, *ids]
 
 
+@register("video_upscale")
+async def _video_upscale(job: Job, ctx: JobContext) -> list[str]:
+    """Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe (workflows.relayvsr_graph), Ton und
+    Bildrate bleiben. Gelesen wird die verlustfreie Kopie, wenn das Video eine hat, sonst die Datei selbst. Das
+    Ergebnis liegt im Ordner des Quellvideos, mit project_id im Projektordner (studio._place_job_assets).
+
+    Grenzen aus der Messung vom 11.11.2026 (RTX 5060 Ti, 16 GB): 121 Bilder 1920 x 1088 -> 3840 x 2176 brauchten
+    hoechstens 14,5 GB Grafikspeicher, die Bilder liegen als Float32 im Arbeitsspeicher (4K, 5 s: 12 GB). Daraus
+    features.max_input_pixels (Eingang) und features.max_output_pixel_frames (Ausgabepixel mal Bilder je Durchgang)."""
+    p = job.params
+    entry = _resolve_model(p, "video_upscale")
+    if entry.get("workflow") not in workflows.VIDEO_UPSCALE_WORKFLOWS:
+        raise RuntimeError(t(f"'{_name(entry)}' ist kein Modell zum Hochskalieren von Videos.",
+                             f"'{_name(entry)}' is not a model for upscaling videos."))
+    source = db.get_asset(p["asset_id"])
+    path = config.ASSET_DIR / source.filename if source else None
+    if source is None or path is None or not path.exists() or comfy.kind_for(path) != "video":
+        raise RuntimeError(t("Video nicht gefunden oder keine Videodatei.", "Video not found or not a video file."))
+    src = master_path(source) or path
+    info = await _video_tool("info", src)
+    feats = registry.features_for(entry)
+    scale = int(feats.get("scale") or 2)
+    w, h, fps = int(info["width"]), int(info["height"]), float(info.get("fps") or 24.0)
+    frames = int(info.get("frames") or 0) or round(float(info.get("seconds") or 0) * fps)
+    if w * h > int(feats.get("max_input_pixels") or 1920 * 1088):
+        raise RuntimeError(t(
+            f"Das Video ist schon {w} × {h} groß; {_name(entry)} nimmt höchstens 1920 × 1088 (daraus wird 4K).",
+            f"The video is already {w} × {h}; {_name(entry)} takes at most 1920 × 1088 (which becomes 4K)."))
+    limit = int(feats.get("max_output_pixel_frames") or 3840 * 2176 * 121) // (w * h * scale * scale)
+    if frames > limit:
+        raise RuntimeError(t(
+            f"Zu lang für einen Durchgang: bei {w} × {h} höchstens {limit} Bilder (rund {limit / fps:.0f} s), das "
+            f"Video hat {frames}. Bitte vorher kürzen, im Studio etwa den Clip teilen und die Teile einzeln "
+            "hochskalieren.",
+            f"Too long for one run: at {w} × {h} at most {limit} frames (about {limit / fps:.0f} s), the video has "
+            f"{frames}. Please shorten it first, in the Studio for example split the clip and upscale the parts "
+            "one by one."))
+    await _ensure_backend(ctx)
+    if not await comfy.has_node("RelayVSRConditioning"):
+        raise RuntimeError(t("Video hochskalieren braucht ComfyUI ab 0.45: bitte NVAI-open aktualisieren.",
+                             "Upscaling video needs ComfyUI 0.45 or later: please update NVAI-open."))
+    seed = int(p["seed"]) if p.get("seed") is not None else 42
+    detail = float(p.get("detail", 1.0))
+    graph = workflows.relayvsr_graph(entry, comfy.stage_input(src), detail=detail, seed=seed)
+    if not await comfy.has_node(workflows.MASTER_NODE):
+        # ComfyUI lief schon, bevor der Knoten dazukam: diesmal nur das MP4
+        graph = {k: v for k, v in graph.items() if v.get("class_type") != workflows.MASTER_NODE}
+    comfy.set_loaded_model(_name(entry))
+    ctx.progress(0.02, t("skaliert hoch", "upscaling"))
+
+    def on_progress(frac: float, stage: str) -> None:
+        ctx.progress(0.02 + frac * 0.96, stage)
+
+    masters: list[Path] = []
+    t0 = time.time()
+    paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=3600.0, masters=masters)
+    if not paths:
+        raise RuntimeError(t("ComfyUI lieferte kein Video zurück.", "ComfyUI returned no video."))
+    ctx.progress(0.99, t("speichert", "saving"))
+    meta: dict[str, Any] = {
+        "model_name": _name(entry), "source_asset_id": source.id, "seed": seed,
+        "upscale": {"scale": scale, "detail": detail, "from": [w, h], "source": "master" if src != path else "file",
+                    "seconds": round(time.time() - t0, 1)},
+        "width": w * scale, "height": h * scale, "frames": frames, "fps": fps,
+        "duration_s": info.get("seconds"), "audio": info.get("audio"),
+    }
+    if masters:
+        meta["master"] = masters[0].name
+    asset = db.create_asset(kind="video", filename=paths[0].name, job_id=job.id, prompt=source.prompt or "",
+                            model_id=entry["id"], meta=meta)
+    if not p.get("studio_project") and source.folder:
+        try:
+            db.move_asset(asset.id, source.folder)  # neben das Quellvideo, etwa in seinen Projektordner
+        except (OSError, ValueError):
+            traceback.print_exc()  # bleibt im Verlauf
+    return [asset.id]
+
+
 @register("tts")
 async def _tts(job: Job, ctx: JobContext) -> list[str]:
     """Sprecherstimme (seit 0.5.21): Text zu Sprache im Qwen3-TTS-Worker, einem eigenen Prozess wie die Mesh-Worker.

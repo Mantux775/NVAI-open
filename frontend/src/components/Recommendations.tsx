@@ -322,6 +322,17 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Fertiges Video verdoppeln', 'Doubling a finished video'),
+      text: t(
+        'Im Verlauf „Hochskalieren ×2“ (RelayVSR, 5,3 GB): 5 s von 1080p auf 4K in 104 s, rund viermal so scharf wie '
+          + 'einfaches Vergrößern, das Gesicht bleibt. Direkt in 1080p erzeugt ist es noch etwas feiner; gut für '
+          + '4K-Exporte und kleinere Clips.',
+        'In the History “Upscale ×2” (RelayVSR, 5.3 GB): 5 s from 1080p to 4K in 104 s, about four times as sharp '
+          + 'as plain enlarging, the face stays. Generated directly at 1080p it is still a little finer; good for 4K '
+          + 'exports and smaller clips.',
+      ),
+    },
+    {
       head: t('Verlustfreie Kopie anlassen', 'Keep the lossless copy on'),
       text: t(
         'Der YouTube-Export im Studio hatte daraus 42,3 statt 37,7 dB PSNR (aus dem MP4), Anschluss-Startbilder '

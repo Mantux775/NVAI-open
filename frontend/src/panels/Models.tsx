@@ -32,6 +32,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'lora', label: 'LoRA' },
   { id: 'upscale', label: t('Hochskalieren', 'Upscale') },
   { id: 'interpolate', label: t('Zwischenbilder', 'Frame interpolation') },
+  { id: 'video_upscale', label: t('Video hochskalieren', 'Upscale video') },
 ]
 
 // Namen der Zusatzfunktionen hinter optionalen Dateien (catalog: "optional")

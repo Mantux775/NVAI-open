@@ -5,8 +5,9 @@ import { getLang, t } from './i18n'
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 export type AssetKind = 'image' | 'audio' | 'video' | 'mesh' | 'upload'
 /** 'controlnet' erzeugt nichts eigenstaendig — es ist ein Zusatz zum Bild-Modus. Ebenso 'upscale'
- * (SeedVR2): es schärft beim Restaurieren. */
+ * (SeedVR2): es schärft beim Restaurieren; 'video_upscale' (RelayVSR, seit 0.5.23) verdoppelt fertige Videos. */
 export type ModelKind = 'image' | 'audio' | 'speech' | 'video' | '3d' | 'controlnet' | 'lora' | 'upscale' | 'interpolate'
+  | 'video_upscale'
 
 /** Eine LoRA beim Generieren: Katalog-ID (kind 'lora') und Stärke. */
 export interface LoraRef {
@@ -754,6 +755,9 @@ export const api = {
   /** Foto restaurieren (seit 0.5.11): Schäden entfernen, einfärben, schärfen. */
   restoreImage: (p: RestoreParams) =>
     req<Job>('/api/image/restore', { method: 'POST', body: JSON.stringify(p) }),
+  /** Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Höhe, Ton und Bildrate bleiben. */
+  upscaleVideo: (p: { asset_id: string; detail?: number; model_id?: string | null; project_id?: string | null }) =>
+    req<Job>('/api/video/upscale', { method: 'POST', body: JSON.stringify(p) }),
   vhsAnalyze: (asset_id: string) =>
     req<VhsAnalysis>('/api/vhs/analyze', { method: 'POST', body: JSON.stringify({ asset_id }) }),
   vhsProcess: (p: VhsParams) => req<Job>('/api/vhs/process', { method: 'POST', body: JSON.stringify(p) }),
@@ -895,6 +899,7 @@ export const KIND_LABEL: Record<ModelKind, string> = {
   lora: 'LoRA',
   upscale: t('Hochskalieren', 'Upscale'),
   interpolate: t('Zwischenbilder', 'Frame interpolation'),
+  video_upscale: t('Video hochskalieren', 'Upscale video'),
 }
 
 /** Anzeigenamen der LoRA-Basen (server: loras.BASES). */

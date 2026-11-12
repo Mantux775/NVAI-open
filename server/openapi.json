@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.22",
+  "version": "0.5.23",
   "x-api-version": 1
  },
  "paths": {
@@ -1114,6 +1114,45 @@
       "application/json": {
        "schema": {
         "$ref": "#/components/schemas/RestoreImageRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/video/upscale": {
+   "post": {
+    "summary": "Upscale Video",
+    "description": "Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe, Ton und Bildrate bleiben\n(jobs._video_upscale).",
+    "operationId": "upscale_video_api_video_upscale_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UpscaleVideoRequest"
        }
       }
      },
@@ -3226,7 +3265,8 @@
        "controlnet",
        "lora",
        "upscale",
-       "interpolate"
+       "interpolate",
+       "video_upscale"
       ],
       "title": "Kind",
       "default": "image"
@@ -4413,7 +4453,8 @@
        "studio_export",
        "vhs",
        "vhs_clean",
-       "tts"
+       "tts",
+       "video_upscale"
       ],
       "title": "Kind"
      },
@@ -4603,7 +4644,8 @@
        "controlnet",
        "lora",
        "upscale",
-       "interpolate"
+       "interpolate",
+       "video_upscale"
       ],
       "title": "Kind"
      },
@@ -5043,6 +5085,64 @@
     ],
     "title": "RestoreImageRequest",
     "description": "Foto restaurieren und einfaerben (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen --\nin dieser Reihenfolge, jeder Schritt einzeln schaltbar (jobs._restore)."
+   },
+   "UpscaleVideoRequest": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id",
+      "description": "Das Video: ein Video-Asset oder ein hochgeladenes Video (POST /api/upload)"
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Modell der Art 'video_upscale'; None = das aktive (RelayVSR x2)"
+     },
+     "detail": {
+      "type": "number",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Detail",
+      "description": "Wie viel des nachgezeichneten Feindetails bleibt: 1 = alles (Vorgabe, gemessen), 0 = nur weich vergroessert",
+      "default": 1.0
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id",
+      "description": "Studio-Projekt: Das Ergebnis kommt in seinen Ordner. Ohne Angabe liegt es im Ordner des Quellvideos"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "UpscaleVideoRequest",
+    "description": "Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe eines fertigen Videos, Ton und\nBildrate bleiben (jobs._video_upscale). Gelesen wird die verlustfreie Kopie, wenn das Video eine hat."
    },
    "ValidationError": {
     "properties": {

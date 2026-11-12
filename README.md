@@ -6,23 +6,23 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.22.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-Setup-0.5.22.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.23.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.23/NVAI-open-Setup-0.5.23.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.4.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.22/NVAI-open-0.5.4.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.22 for Windows and 0.5.4 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.22))
+November 2026: NVAI-open 0.5.23 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.23)); the Mac app stays at 0.5.4
 
-- **A track for the narrator:** "Conform" puts the voice lines of the Studio on their own audio track, "Voice". Later lines land there too, and the track can be removed like any other. Voice scenes now offer Qwen3-TTS in their model list. [Details](docs/STUDIO.md#narrator-voice)
-- **Narrator voice in the Studio** (0.5.21): voice scenes speak their text with Qwen3-TTS (Apache-2.0, 10 languages). Describe a voice in one sentence or take it over from a recording; "Same voice as" keeps one speaker over all lines. Also in the new Speech tab and for Claude Code.
+- **Upscale a video ×2:** "Upscale ×2" under a video in the History doubles its width and height with RelayVSR (Apache-2.0): 5 seconds from 1080p to 4K in under two minutes, about four times as sharp as plain enlarging. Good for 4K exports and smaller clips. Under the hood ComfyUI 0.45; MOSS-Image expands its prompts about a fifth faster. [Details](docs/MODELS.md#upscaling-a-video-relayvsr-since-0523)
+- **A track for the narrator** (0.5.22): "Conform" puts the voice lines of the Studio on their own audio track, "Voice". Later lines land there too, and the track can be removed like any other. Voice scenes now offer Qwen3-TTS in their model list. [Details](docs/STUDIO.md#narrator-voice)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.22 (Mac 0.5.4):
+Neu in 0.5.23 (Mac bleibt 0.5.4):
 
-- **Eine Spur für den Sprecher:** „Übernehmen“ legt die Sprecherzeilen des Studios auf eine eigene Tonspur „Stimme“. Weitere Zeilen landen dort auch, und die Spur lässt sich wie jede andere entfernen. Sprecher-Szenen bieten jetzt Qwen3-TTS in der Modellwahl an. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
-- **Sprecherstimme im Studio** (0.5.21): Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS (Apache-2.0, 10 Sprachen). Eine Stimme in einem Satz beschreiben oder aus einer Aufnahme übernehmen; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen. Auch im neuen Reiter Sprache und für Claude Code.
+- **Video verdoppeln:** „Hochskalieren ×2“ unter einem Video im Verlauf verdoppelt Breite und Höhe mit RelayVSR (Apache-2.0): 5 Sekunden von 1080p auf 4K in unter zwei Minuten, rund viermal so scharf wie einfaches Vergrößern. Gut für 4K-Exporte und kleinere Clips. Darunter läuft jetzt ComfyUI 0.45; MOSS-Image baut seine Prompts rund ein Fünftel schneller aus. [Einzelheiten](docs/de/MODELLE.md#video-hochskalieren-relayvsr-seit-0523)
+- **Eine Spur für den Sprecher** (0.5.22): „Übernehmen“ legt die Sprecherzeilen des Studios auf eine eigene Tonspur „Stimme“. Weitere Zeilen landen dort auch, und die Spur lässt sich wie jede andere entfernen. Sprecher-Szenen bieten jetzt Qwen3-TTS in der Modellwahl an. [Einzelheiten](docs/de/STUDIO.md#sprecherstimme)
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)
@@ -94,6 +94,10 @@ LTX-2.5 by Lightricks makes picture and sound together: speech, footsteps, wind,
 Under the video model, "Recommended LoRAs" adds styles with one click, such as painted fantasy or anime:
 
 ![The same fox without a LoRA and with three style LoRAs](docs/images/ltx25-loras.jpg)
+
+A finished clip can be doubled afterwards: "Upscale ×2" under a video in the History (RelayVSR, 5 s from 1080p to 4K in under two minutes):
+
+![The same 4K detail: 1080p enlarged on the left, upscaled with RelayVSR ×2 on the right](docs/images/video-upscale.jpg)
 
 All ways and measured times: [docs/MODELS.md](docs/MODELS.md#ltx-25)
 
@@ -169,6 +173,7 @@ Every tab has a **Recommended settings** box with what we measured. The most imp
 - **Video:** keep the prompt short (4–8 sentences) and name loud sounds explicitly; sounds described as soft come out almost inaudible.
 - **Faces in video:** keep the face large, make the start image with FLUX 3 from a frontal photo and tick "Loop" or give an end image. Let people speak only with their face in the shot, about 2 words per second, and make a few variants to pick by ear.
 - **Two clips without a seam:** use the chain marker in the Studio or "Extend"; the second clip takes over the last second of the first.
+- **Upscaling:** "Upscale ×2" in the History doubles a finished video (5 s from 1080p to 4K in 104 s). Generated directly at 1080p it is still a little finer, so use it for 4K exports and smaller clips.
 - **MiniMax H3:** only with a separate license from MiniMax in the EU, the UK, South Korea and the USA, and never publish what it makes. It tends to slow motion, so describe the pace of every movement.
 - **Narrator voice:** describe gender, age, pitch, pace and mood in one sentence. The same description sounds different with every seed, so pick the best take and use it as the recording for all further lines.
 - **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
@@ -304,6 +309,10 @@ Unter dem Videomodell fügt „Empfohlene LoRAs“ Stile mit einem Klick hinzu, 
 
 ![Derselbe Fuchs ohne LoRA und mit drei Stil-LoRAs](docs/images/ltx25-loras-de.jpg)
 
+Ein fertiger Clip lässt sich danach verdoppeln: „Hochskalieren ×2“ unter einem Video im Verlauf (RelayVSR, 5 s von 1080p auf 4K in unter zwei Minuten):
+
+![Derselbe 4K-Ausschnitt: links 1080p vergrößert, rechts mit RelayVSR ×2 hochskaliert](docs/images/video-upscale-de.jpg)
+
 Alle Wege und gemessenen Zeiten: [docs/de/MODELLE.md](docs/de/MODELLE.md#ltx-25)
 
 ### 3D: vom Bild zum Modell
@@ -378,6 +387,7 @@ In jedem Reiter steht unter **Empfohlene Einstellungen**, was wir gemessen haben
 - **Video:** den Prompt kurz halten (4–8 Sätze) und laute Geräusche ausdrücklich nennen; leise beschriebene kommen fast unhörbar.
 - **Gesichter im Video:** das Gesicht groß halten, das Startbild mit FLUX 3 aus einem frontalen Foto machen und „Schleife“ anhaken oder ein Endbild mitgeben. Personen nur mit Gesicht im Bild sprechen lassen, rund 2 Wörter je Sekunde, und ein paar Varianten nach Gehör wählen.
 - **Zwei Clips ohne Naht:** den Anschluss-Marker im Studio oder „Verlängern“ nehmen; der zweite Clip übernimmt die letzte Sekunde des ersten.
+- **Hochskalieren:** „Hochskalieren ×2“ im Verlauf verdoppelt ein fertiges Video (5 s von 1080p auf 4K in 104 s). Direkt in 1080p erzeugt ist es noch etwas feiner; gut für 4K-Exporte und kleinere Clips.
 - **MiniMax H3:** in der EU, in Großbritannien, Südkorea und den USA nur mit eigener Lizenz von MiniMax, und nichts damit Erzeugtes veröffentlichen. Es neigt zu Zeitlupe, also jede Bewegung mit Tempo beschreiben.
 - **Sprecherstimme:** Geschlecht, Alter, Tonlage, Tempo und Stimmung in einem Satz beschreiben. Dieselbe Beschreibung klingt mit jedem Seed anders, also die beste Probe wählen und sie als Aufnahme für alle weiteren Zeilen nehmen.
 - **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.

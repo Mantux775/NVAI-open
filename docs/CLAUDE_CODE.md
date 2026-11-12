@@ -40,6 +40,7 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | `job_status` | State of a job; `wait_s` up to 600 waits for it; once done, the same result as the `generate_*` call |
 | `image_to_3d` / `text_to_3d` | Image (or text → image) → GLB mesh |
 | `restore_image` | Old photo → repaired, colorized and/or sharpened |
+| `upscale_video` | Finished video → twice the width and height with RelayVSR (since 0.5.23) |
 | `list_assets` / `delete_asset` / `clear_history` | History |
 | `copy_asset` | Copy an asset into a project, e.g. `Assets/Generated/` |
 | `studio_*` | Studio projects: scenes, generating, conforming, cutting, export ([Studio](#studio-whole-videos-from-scenes)) |
@@ -95,6 +96,7 @@ both in step when a new finding comes in.
 | Narrator voice, one speaker over many lines | `generate_speech` with `voice` (one sentence: gender, age, pitch, pace, mood) for the first line, then that line as `voice_asset_id` with its exact text as `voice_text`; Studio: `voice_from` | lines taken over stayed at 0.99 similarity to the reference, another seed of the same description 0.97–0.98; the same "deep male voice" description gave 102–175 Hz depending on the seed |
 | 3D source image | one object, plain background, no floor, no cast shadow; `project_front=True` for lettering | floor and shadow become a plate; lettering became a distorted relief |
 | Old photo | `restore_image` with `repair_mode="auto"` (default), `batch_size=2`, known colors in `notes` | auto chose right on 20 of 21 test photos; color hints cut the color error by 40 % |
+| 4K from a 1080p clip, or a larger old clip | `upscale_video(asset_id)` (RelayVSR ×2, 5.3 GB model; in the History the **Upscale ×2** button) | 5 s from 1080p to 4K in 104 s, about four times as sharp as plain enlarging, faces unchanged; native 1080p from LTX-2.5 stays a little finer |
 
 ## Run times
 
@@ -118,6 +120,7 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 | Mesh from an image | TripoSG | ~60 s warm, ~180 s cold |
 | Restore a photo, 2 variants at 2 MP / with colorizing | FLUX 3 Klein NVFP4 | ~150 s / ~200 s |
 | Sharpen 1024² → 2048² | SeedVR2 7B NVFP4 | ~6 s |
+| Upscale a video ×2, 5 s: 1024 × 576 → 2048 × 1152 / 1080p → 4K | RelayVSR ×2 INT8 | ~38 s / ~104 s |
 | Studio export, 5 s 1080p from the lossless copy | NVENC 24 Mbit/s | ~4 s |
 
 ## Images
@@ -434,6 +437,23 @@ Measured with one character over many comedy clips and an explainer video:
 - Tested and not built in: **Kandinsky 6** (Pro 928–966 s per 5 s against 114 s with LTX-2.5, Lite fell apart, its
   sound parts are non-commercial and its video VAE is not licensed in the EU), the **Restore** IC-LoRA (did not bring a
   changed face back and added artifacts) and **Ingredients** (see above). HunyuanVideo 1.5 is not an option in the EU.
+
+### Upscaling a finished video (since 0.5.23)
+
+`upscale_video(asset_id)` (REST `POST /api/video/upscale`; in the web interface the **Upscale ×2** button under a video
+in the History) doubles the width and height with **RelayVSR ×2** (`relayvsr-x2-int8`, Apache-2.0, 5.3 GB, needs
+ComfyUI 0.45): a Wan 2.2 model computes every 15th frame in one step, a small decoder fills in the frames in between.
+Sound and frame rate stay, a generated video is read from its lossless copy, and the result lands next to the source
+(a Studio take stays in its project folder) with a lossless copy of its own.
+
+- Measured on the RTX 5060 Ti, 5 s at 24 fps: 1024 × 576 → 2048 × 1152 in 38 s, 1920 × 1088 → 3840 × 2176 in 104 s
+  at up to 14.5 GB of video memory. About four times as sharp as plain enlarging (variance of the Laplacian 88 against
+  22), the face stayed the same; LTX-2.5 generated directly at 1080p was still a little finer.
+- Still surfaces twitch slightly every 15 frames (on a wooden post +0.9/255 at each key frame).
+- Limits per run: input at most 1920 × 1088, output pixels × frames at most 4K × 121 (1080p: 5 s, 1024 × 576: about
+  17 s). Cut longer clips first, in the Studio by splitting the clip.
+- For a 4K export of a 1080p edit, use the upscaled clips in the edit: the export fits every clip from its own
+  resolution, so a 4K clip stays sharp in `youtube-2160p`.
 
 ## Studio: whole videos from scenes
 

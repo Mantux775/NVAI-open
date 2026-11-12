@@ -7,12 +7,13 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts"]
+                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts", "video_upscale"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
 # (SeedVR2): es schaerft beim Restaurieren, erzeugt aber selbst nichts.
-ModelKind = Literal["image", "audio", "speech", "video", "3d", "controlnet", "lora", "upscale", "interpolate"]
+ModelKind = Literal["image", "audio", "speech", "video", "3d", "controlnet", "lora", "upscale", "interpolate",
+                    "video_upscale"]
 
 
 class LoraRef(BaseModel):
@@ -305,6 +306,20 @@ class RestoreImageRequest(BaseModel):
     project_id: str | None = Field(
         None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
                           "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
+
+
+class UpscaleVideoRequest(BaseModel):
+    """Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe eines fertigen Videos, Ton und
+    Bildrate bleiben (jobs._video_upscale). Gelesen wird die verlustfreie Kopie, wenn das Video eine hat."""
+    asset_id: str = Field(..., description="Das Video: ein Video-Asset oder ein hochgeladenes Video (POST /api/upload)")
+    model_id: str | None = Field(None, description="Modell der Art 'video_upscale'; None = das aktive (RelayVSR x2)")
+    detail: float = Field(1.0, ge=0.0, le=1.0,
+                          description="Wie viel des nachgezeichneten Feindetails bleibt: 1 = alles (Vorgabe, gemessen), "
+                                      "0 = nur weich vergroessert")
+    seed: int | None = None
+    project_id: str | None = Field(
+        None, description="Studio-Projekt: Das Ergebnis kommt in seinen Ordner. Ohne Angabe liegt es im Ordner des "
+                          "Quellvideos")
 
 
 class VhsAnalyzeRequest(BaseModel):
