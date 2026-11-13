@@ -132,6 +132,8 @@ API_FEATURES = [
                        # Modellen, Ereignis models.changed (seit 0.5.24)
     "studio_characters",  # Studio-Figuren: Befehle character.add/update/delete (LoRAs + Stimme), Szenen-params
                           # characters, character, audio_from; Übernehmen-Plan mit spoken_in_video (seit 0.5.24)
+    "audio_prompt",    # GenerateVideoRequest.audio_prompt: eigene Tonbeschreibung fuer Modelle mit
+                       # features.audio_prompt (Kandinsky 6, seit 0.5.25); andere lehnen sie mit Hinweis ab
 ]
 
 

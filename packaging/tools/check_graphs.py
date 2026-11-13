@@ -47,6 +47,9 @@ MM = {"fps": 24, "frames": 124, "width": 864, "height": 480}
 BASE = {"minimax_h3": MM, "minimax_h3_fast": MM,
         "minimax_h3_ref2va": {**MM, "start_image": None, "reference_images": ["dummy.png", "dummy2.png"]}}
 MM_REC = {"sparse_attention": "sol-attn", "int8_attention": True}
+# Kandinsky 6 (seit 0.5.25, kandinsky6.py): 864 x 480, 121 Bilder bei 24 fps, mit Tonbeschreibung; Text und Startbild
+BASE["kandinsky6"] = {"fps": 24, "frames": 121, "width": 864, "height": 480, "audio_prompt": "loud hammer blows"}
+VARIANTS["kandinsky6"] = [("Text", {"start_image": None})]
 VARIANTS |= {
     "minimax_h3": [("Vorwahl", {**MM_REC, "loras": [{"model_id": "minimax-h3-turbo-fl2v-8step-v1.1-768p"}]})]
     + ([("Veda", {"sparse_attention": "veda"})] if "VedaSparseAttention" in INFO else []),

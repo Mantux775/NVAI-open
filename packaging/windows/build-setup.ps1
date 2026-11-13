@@ -90,6 +90,26 @@ if (Test-Path "$repo\external\triposg\.git") {
     Remove-Item -Recurse -Force $tmp
 }
 
+# Kandinsky 6 (since 0.5.25): the node package Comfyui-Kandinsky-T8 (T8mars, MIT) in ComfyUI's custom_nodes, pinned
+# to the tested commit (0.1.4). Without test evidence, tests and sample pictures (7 MB); example_inputs stays as an
+# empty folder, otherwise the package warns at every start. Its only extra Python package (librosa) is in comfyui.lock.
+$k6Commit = "0209499c3bd350c109238af5be31a8ab8e1eb7ef"
+$k6zip = Join-Path $build "kandinsky-t8-$($k6Commit.Substring(0, 12)).zip"
+if (-not (Test-Path $k6zip)) {
+    Invoke-WebRequest "https://github.com/T8mars/Comfyui-Kandinsky-T8/archive/$k6Commit.zip" -OutFile $k6zip
+}
+$k6tmp = Join-Path $build "kandinsky-t8-extract"
+if (Test-Path $k6tmp) { Remove-Item -Recurse -Force $k6tmp }
+Expand-Archive $k6zip $k6tmp
+$k6src = (Get-ChildItem $k6tmp -Directory | Select-Object -First 1).FullName
+$k6dest = Join-Path $comfyDest "custom_nodes\Comfyui-Kandinsky-T8"
+New-Item -ItemType Directory -Force (Join-Path $k6dest "example_inputs") | Out-Null
+foreach ($item in @("__init__.py", "example_inputs.py", "model_downloads.py", "kandinsky6", "example_workflows", "web",
+                    "vendor", "LICENSE", "README.md", "pyproject.toml", "requirements.txt", "MODEL_SOURCES.json")) {
+    Copy-Item -Recurse (Join-Path $k6src $item) $k6dest
+}
+Remove-Item -Recurse -Force $k6tmp
+
 # uv, package lists, scripts, texts, licenses
 New-Item -ItemType Directory -Force "$app\tools", "$app\locks", "$app\licenses" | Out-Null
 Copy-Item $uvExe "$app\tools\uv.exe"

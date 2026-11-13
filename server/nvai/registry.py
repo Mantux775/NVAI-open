@@ -587,6 +587,10 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
         return {"recommended": False, "gpu_note": t(
             "3D braucht derzeit eine NVIDIA-Karte: TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen.",
             "3D currently needs an NVIDIA card: TripoSG and TRELLIS.2 use CUDA extensions.")}
+    if entry.get("family") == "kandinsky6":
+        return {"recommended": False, "gpu_note": t(
+            "Kandinsky 6 braucht derzeit eine NVIDIA-Karte: Das Knotenpaket rechnet INT8 mit CUDA-Tensor-Cores.",
+            "Kandinsky 6 currently needs an NVIDIA card: its node package computes INT8 with CUDA tensor cores.")}
     generation = gpu.rdna(info.get("arch"))
     rdna4_large = generation == 4 and (info.get("vram_total_gb") or 0) >= 15
     picks = catalog.RECOMMENDED_AMD_RDNA4 if rdna4_large else catalog.RECOMMENDED_OLDER

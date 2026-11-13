@@ -374,10 +374,17 @@ switch there.
 | LTX-2.3 (`ltx23-nvfp4`) | the base most community LTX LoRAs are made for | 4 s at 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | text to video with smooth motion | 49 frames at 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | small video model, 5 s | 768 × 512 in about 300 s (distilled) | MIT, VAE under Tencent's license |
+| Kandinsky 6 Pro / Lite, distilled (since 0.5.25) | picture and sound in one pass, 5 s at 864 × 480, from text or a start image; Pro when LTX-2.5 misses the action | Pro about 17 min, Lite about 5 min for 5 s | MIT; sound non-commercial, video VAE not licensed in the EU |
 
-Tested and not included: **Kandinsky 6** (Pro took 928–966 s per 5 s clip against 114 s for LTX-2.5, Lite fell apart,
-parts of it are non-commercial or not licensed in the EU) and the **LTX-2.5 IC-LoRAs Restore and Ingredients** (neither
-kept a real person recognizable).
+**Kandinsky 6** (NVIDIA only) runs through the ComfyUI nodes Kandinsky T8, which the setup brings along. Describe the
+picture in the prompt with spoken words as `<S>…<E>`, and what can be heard in the separate "Sound" field
+(`audio_prompt`), loud sources named explicitly. Steps are fixed at 10 with CFG 1, so the negative prompt has no effect.
+Without a start image Pro put black bars at the top and bottom (2 of 2 clips), with a start image in the video format
+it did not. Pro kept action and face in the test, Lite let objects fall apart (a
+blacksmith held the glowing iron with his bare hand). The sound may not be used commercially (audio VAE CC BY-NC), and
+the video VAE (Tencent) is not licensed in the EU, the UK and South Korea.
+
+Tested and not included: the **LTX-2.5 IC-LoRAs Restore and Ingredients** (neither kept a real person recognizable).
 
 ### Upscaling a video: RelayVSR (since 0.5.23)
 

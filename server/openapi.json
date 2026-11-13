@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.24",
+  "version": "0.5.25",
   "x-api-version": 1
  },
  "paths": {
@@ -4465,6 +4465,13 @@
       "maxItems": 8,
       "title": "Loras",
       "description": "LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke"
+     },
+     "audio_prompt": {
+      "type": "string",
+      "maxLength": 2000,
+      "title": "Audio Prompt",
+      "description": "Nur Modelle mit features.audio_prompt (Kandinsky 6, seit 0.5.25): was zu hoeren ist (Klang, Geraeusche, Musik, Art der Stimme); gesprochene Saetze stehen als <S>…<E> im Prompt. Leer = der Prompt allein",
+      "default": ""
      },
      "end_image_asset_id": {
       "anyOf": [

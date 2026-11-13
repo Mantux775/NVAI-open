@@ -510,7 +510,8 @@ kbd {
 
 /* --------------------------------------------------------- Modelle */
 
-.models { display: flex; flex-direction: column; gap: 12px; max-width: 980px; }
+/* mittig und 20 % breiter als früher (980 px); die Filter passen ab dieser Breite in eine Zeile (DE 1126 px, EN 1075) */
+.models { display: flex; flex-direction: column; gap: 12px; max-width: 1176px; width: 100%; margin: 0 auto; }
 
 .model-toolbar {
   display: flex;
@@ -520,15 +521,18 @@ kbd {
   margin-bottom: 4px;
   flex-wrap: wrap;
 }
-.filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.filters { display: flex; gap: 2px; flex-wrap: wrap; }
 .toolbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.filters .tab { display: flex; align-items: center; gap: 6px; }
+.filters .tab { display: flex; align-items: center; gap: 4px; padding: 4px 6px; font-size: 12.5px; }
 .count {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 0 6px;
-  font-size: 11px;
+  padding: 0 3px;
+  min-width: 14px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 14px;
   color: var(--muted);
 }
 
@@ -826,6 +830,18 @@ kbd {
 .lora-row label input[type="checkbox"] { width: auto; }
 .lora-row .lora-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lora-row input[type="range"] { flex: 1 1 100px; max-width: 160px; }
+/* LoRA-Bereich beim Generieren: immer sichtbar, aktive Zeilen hervorgehoben, Hinweis, wenn das Modell keine nimmt */
+.lora-section h3 { display: flex; align-items: baseline; gap: 8px; }
+.h3-note { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--muted); }
+.h3-note.on { color: var(--accent); }
+.lora-box { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); padding: 6px 8px; }
+.lora-box.lora-none { background: none; border-style: dashed; margin: 0; padding: 8px 10px; line-height: 1.5; }
+.lora-box > .hint { margin: 2px 2px 4px; line-height: 1.5; }
+.lora-list { max-height: 270px; overflow-y: auto; }
+.lora-box .lora-row { margin: 2px 0; padding: 3px 6px; border-radius: 6px; }
+.lora-row.on { background: rgba(118, 185, 0, 0.12); }
+.lora-row.on .lora-name { font-weight: 600; }
+.lora-box .lora-own { border-top: 1px solid var(--line); margin: 6px 0 0; padding: 6px 2px 0; }
 /* Empfohlene LoRAs (LTX-2.5): je Eintrag Name, Zweck, Laden oder Aktivieren */
 .rec-lora { border-top: 1px solid var(--line); padding: 8px 0; }
 .rec-lora .lora-name { font-weight: 600; }

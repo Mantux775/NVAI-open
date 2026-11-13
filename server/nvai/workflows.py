@@ -1965,3 +1965,7 @@ def build(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
 from . import minimax as _minimax  # noqa: E402
 FRAME_GRID.update(_minimax.FRAME_GRID)
 MODULE_BUILDERS.update(_minimax.BUILDERS)
+# Kandinsky 6 (kandinsky6.py): 4n+1 Bilder, Builder fuer Lite und Pro (Knotenpaket Comfyui-Kandinsky-T8)
+from . import kandinsky6 as _kandinsky6  # noqa: E402
+FRAME_GRID.update(_kandinsky6.FRAME_GRID)
+MODULE_BUILDERS.update(_kandinsky6.BUILDERS)

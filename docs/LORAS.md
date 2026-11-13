@@ -61,7 +61,8 @@ Deleting a LoRA you added removes the file and its entry.
 
 ## Using LoRAs
 
-On the Generate page every matching LoRA appears under the selected model:
+On the Generate page every matching LoRA appears under the selected model (if the model takes none, the LoRA section
+says so and names your models that do):
 
 - **Tick it** and set the strength, usually 0.6 to 1.0.
 - **Put its trigger words into the prompt**, "+ trigger" does that. Without them a pixel-art LoRA for Qwen-Image-2512

@@ -17,8 +17,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from . import (comfy, config, db, flux3_prompt, gpu, i18n, imagesize, loras, mesh_workers, minimax, prompt_targets,
-               registry, workflows)
+from . import (comfy, config, db, flux3_prompt, gpu, i18n, imagesize, kandinsky6, loras, mesh_workers, minimax,
+               prompt_targets, registry, workflows)
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -1527,6 +1527,11 @@ def _check_video_options(p: dict[str, Any], entry: dict[str, Any]) -> None:
         raise RuntimeError(t(
             f"{_name(entry)} kann das nicht ({', '.join(asked)}) — das geht mit LTX-2.5.",
             f"{_name(entry)} cannot do that ({', '.join(asked)}) — LTX-2.5 can."))
+    # Eigene Tonbeschreibung (seit 0.5.25) nur, wo das Modell sie getrennt nimmt (Kandinsky 6)
+    if (p.get("audio_prompt") or "").strip() and not feats.get("audio_prompt"):
+        raise RuntimeError(t(
+            f"{_name(entry)} nimmt keine eigene Tonbeschreibung (audio_prompt); den Klang dort im Prompt beschreiben.",
+            f"{_name(entry)} takes no separate sound description (audio_prompt); describe the sound in the prompt."))
     missing = feats.get("missing") or {}
     texts = {
         "dfr": t("Für „Höchste Qualität (DFR)“ fehlt das Detail-IC-LoRA",
@@ -1696,6 +1701,8 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     entry = _resolve_model(p, "video")
     wf = entry["workflow"]
     _check_video_options(p, entry)
+    if wf in kandinsky6.BUILDERS:
+        kandinsky6.prepare(p)  # fest 24 fps, 49 bis 121 Bilder, 10 Schritte
     extension = await _prepare_extension(job, p, entry) if p.get("extend_asset_id") else None
     if p.get("chain_asset_id") and extension is None:
         await _prepare_chain(job, p, entry)

@@ -289,6 +289,9 @@ export interface ModelFeatures {
   max_frames: number
   frame_step: number
   frame_rule: string
+  /** Kandinsky 6 (seit 0.5.25): eigene Tonbeschreibung (audio_prompt) mit Beispieltext */
+  audio_prompt?: boolean
+  audio_placeholder?: string
   missing: Record<string, string>
   // Krea 2 (seit 0.5.10): Referenzbilder geben nur den Stil vor, freigeschaltet durch die optionale
   // Stil-LoRA (style_reference); ohne sie steht die Quelle unter missing.style_reference.
@@ -483,6 +486,8 @@ export interface VideoParams {
   auto_duration?: boolean
   audio_asset_id?: string | null
   motion_speed?: number
+  /** Nur Modelle mit features.audio_prompt (Kandinsky 6): was zu hören ist, getrennt vom Bild */
+  audio_prompt?: string
   /** verlustfreie Kopie (FFV1/MKV) neben dem MP4, Vorgabe an */
   master?: boolean
   /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */

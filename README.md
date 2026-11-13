@@ -6,25 +6,27 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.24.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.24/NVAI-open-Setup-0.5.24.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.25.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.25/NVAI-open-Setup-0.5.25.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.24/NVAI-open-0.5.5.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.24 for Windows and 0.5.5 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.24))
+November 2026: NVAI-open 0.5.25 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.25)); the Mac app stays at 0.5.5
 
-- **Your own LoRAs:** "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
-- **Characters in the Studio:** a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
-- **Upscale a video ×2** (0.5.23): "Upscale ×2" under a video in the History doubles its width and height with RelayVSR (Apache-2.0): 5 seconds from 1080p to 4K in under two minutes. [Details](docs/MODELS.md#upscaling-a-video-relayvsr-since-0523)
+- **Kandinsky 6 Pro and Lite, with sound:** two more video models that make picture and sound in one pass, 5 s at 864 × 480, from text or a start image (NVIDIA only). What can be heard goes into its own "Sound" field. In the test Pro kept the action and the face, but it takes about 17 minutes for 5 s. **The sound may not be used commercially, and its video VAE is not licensed in the EU.** [Details](docs/MODELS.md#other-video-models)
+- **Tidier pages:** the Models page is centered and 20 % wider with all filters in one row; when generating, the LoRA section is always visible and says when a model takes no LoRAs.
+- **Your own LoRAs** (0.5.24): "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
+- **Characters in the Studio** (0.5.24): a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.24 (Mac 0.5.5):
+Neu in 0.5.25 (Mac bleibt 0.5.5):
 
-- **Eigene LoRAs:** „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
-- **Figuren im Studio:** Eine Figur bündelt Aussehen (eine oder mehrere LoRAs) und Stimme. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und unter Windows spricht eine Videoszene mit LTX-2.5 einen Satz mit den Lippen. [Einzelheiten](docs/de/STUDIO.md#figuren)
-- **Video verdoppeln** (0.5.23): „Hochskalieren ×2“ unter einem Video im Verlauf verdoppelt Breite und Höhe mit RelayVSR (Apache-2.0): 5 Sekunden von 1080p auf 4K in unter zwei Minuten. [Einzelheiten](docs/de/MODELLE.md#video-hochskalieren-relayvsr-seit-0523)
+- **Kandinsky 6 Pro und Lite, mit Ton:** zwei weitere Videomodelle, die Bild und Ton in einem Durchgang machen, 5 s in 864 × 480, aus Text oder einem Startbild (nur NVIDIA). Was zu hören ist, kommt in ein eigenes Feld „Ton“. Pro hielt im Test Handlung und Gesicht, braucht aber rund 17 Minuten für 5 s. **Der Ton ist nicht kommerziell nutzbar, und die Video-VAE ist in der EU nicht lizenziert.** [Einzelheiten](docs/de/MODELLE.md#weitere-videomodelle)
+- **Aufgeräumter:** Die Seite „Modelle“ steht mittig, ist 20 % breiter, und alle Filter passen in eine Zeile; beim Generieren ist der LoRA-Bereich immer zu sehen und sagt, wenn ein Modell keine LoRAs nimmt.
+- **Eigene LoRAs** (0.5.24): „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
+- **Figuren im Studio** (0.5.24): Eine Figur bündelt Aussehen (eine oder mehrere LoRAs) und Stimme. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und unter Windows spricht eine Videoszene mit LTX-2.5 einen Satz mit den Lippen. [Einzelheiten](docs/de/STUDIO.md#figuren)
 - **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 [English](#english) · [Video](#video) · [Deutsch](#deutsch)

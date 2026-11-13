@@ -219,6 +219,11 @@ class GenerateVideoRequest(BaseModel):
         default_factory=list, max_length=8,
         description="LoRAs (kind 'lora' in list_models), die zum Modell passen; je mit Staerke",
     )
+    audio_prompt: str = Field(
+        "", max_length=2000,
+        description="Nur Modelle mit features.audio_prompt (Kandinsky 6, seit 0.5.25): was zu hoeren ist (Klang, "
+                    "Geraeusche, Musik, Art der Stimme); gesprochene Saetze stehen als <S>…<E> im Prompt. Leer = der "
+                    "Prompt allein")
 
     # LTX-2.5 (features des Modells: end_image, loop, dfr, temporal_upscale, auto_duration,
     # audio_input, motion_speed). Andere Modelle lehnen die Felder mit einer Meldung ab.

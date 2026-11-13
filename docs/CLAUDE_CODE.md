@@ -100,6 +100,7 @@ both in step when a new finding comes in.
 | Zoom on a clip | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and the end (e.g. 1.5) | the focus point stayed within 0.5 px in the export |
 | Quality through editing | leave `master` on (default); YouTube 1080p at 24 Mbit/s | export from the lossless copy 42.3 dB instead of 37.7 from the MP4 |
 | MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | the preselection: turbo LoRA 8 steps v1.1 + `sparse_attention="sol-attn"` + `int8_attention=True`; describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; it moves about half as much as LTX-2.5 |
+| Kandinsky 6 (NVIDIA; sound non-commercial, video VAE not licensed in the EU) | Pro when LTX-2.5 misses the action; picture in the prompt with spoken words as `<S>…<E>`, the sound in `audio_prompt` with loud sources named; a start image in the video format | Pro kept action and face, about 17 min for 5 s at 864 × 480, black bars without a start image; Lite about 5 min, objects fell apart |
 | Sound effects / music | Stable Audio Open / Stable Audio 3 Medium | describe the sound for effects; music as one sentence with BPM, up to 5 minutes, no vocals |
 | Narrator voice, one speaker over many lines | `generate_speech` with `voice` (one sentence: gender, age, pitch, pace, mood) for the first line, then that line as `voice_asset_id` with its exact text as `voice_text`; Studio: `voice_from` | lines taken over stayed at 0.99 similarity to the reference, another seed of the same description 0.97–0.98; the same "deep male voice" description gave 102–175 Hz depending on the seed |
 | 3D source image | one object, plain background, no floor, no cast shadow; `project_front=True` for lettering | floor and shadow become a plate; lettering became a distorted relief |
@@ -442,9 +443,16 @@ Measured with one character over many comedy clips and an explainer video:
   and both came out in slow motion; for people in a scene LTX-2.5 stays the better choice.
 - Text-to-video models take no start image; an image-to-video model without `image_asset_id` fails with a clear
   message.
-- Tested and not built in: **Kandinsky 6** (Pro 928–966 s per 5 s against 114 s with LTX-2.5, Lite fell apart, its
-  sound parts are non-commercial and its video VAE is not licensed in the EU), the **Restore** IC-LoRA (did not bring a
-  changed face back and added artifacts) and **Ingredients** (see above). HunyuanVideo 1.5 is not an option in the EU.
+- **Kandinsky 6** (since 0.5.25, `kandinsky6-pro-distill-int8` / `kandinsky6-lite-distill-int8`, NVIDIA only):
+  picture and sound in one pass, 5 s at 864 × 480 and 24 fps, frames 49–121 (4n+1), text or start image, fixed
+  10 steps with CFG 1 (no negative prompt). The prompt describes the picture with spoken words as `<S>…<E>`;
+  `audio_prompt` describes what can be heard, loud sources named explicitly. Pro about 17 min for 5 s, kept action
+  and face in the tests; Lite about 5 min, objects fell apart. Use it when LTX-2.5 misses the action, and tell the user
+  the license: the sound is non-commercial (audio VAE CC BY-NC), the video VAE is not licensed in the EU, UK and South
+  Korea. Without a start image Pro put black bars at the top and bottom (2 of 2 clips, with and without
+  "cinematic"); give it a start image in the video format.
+- Tested and not built in: the **Restore** IC-LoRA (did not bring a changed face back and added artifacts) and
+  **Ingredients** (see above). HunyuanVideo 1.5 is not an option in the EU.
 
 ### Upscaling a finished video (since 0.5.23)
 

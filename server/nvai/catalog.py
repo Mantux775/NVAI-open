@@ -2783,6 +2783,10 @@ ALL_MODELS: list[dict[str, Any]] = (
 # Lizenzmarken (in EU, UK, Südkorea und USA ohne eigene Lizenz verboten).
 from .minimax import MODELS as _MINIMAX_MODELS  # noqa: E402
 ALL_MODELS = ALL_MODELS + _MINIMAX_MODELS
+# Kandinsky 6 Lite und Pro, destilliert (kandinsky6.py, seit 0.5.25): Video mit Ton über das Knotenpaket
+# Comfyui-Kandinsky-T8, das das Setup mitbringt.
+from .kandinsky6 import MODELS as _KANDINSKY6_MODELS  # noqa: E402
+ALL_MODELS = ALL_MODELS + _KANDINSKY6_MODELS
 
 # Vorwahl für das bestmögliche Ergebnis (features.recommended, seit 0.5.18; Nutzer 31.10.2026: „es soll sofort
 # bestmögliches Ergebniss rauskommen“): nur Gemessenes oder die Angabe des Herstellers. Schritte und CFG sind ohnehin

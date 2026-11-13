@@ -381,10 +381,17 @@ bietet NVAI-open dort keinen der beiden Schalter an.
 | LTX-2.3 (`ltx23-nvfp4`) | die Basis, für die die meisten Community-LoRAs für LTX gemacht sind | 4 s in 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | Text zu Video mit weicher Bewegung | 49 Bilder in 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | kleines Videomodell, 5 s | 768 × 512 in rund 300 s (destilliert) | MIT, VAE unter Tencents Lizenz |
+| Kandinsky 6 Pro / Lite, destilliert (seit 0.5.25) | Bild und Ton in einem Durchgang, 5 s in 864 × 480, aus Text oder Startbild; Pro, wenn LTX-2.5 die Handlung nicht trifft | Pro rund 17 min, Lite rund 5 min für 5 s | MIT; Ton nicht kommerziell, Video-VAE in der EU nicht lizenziert |
 
-Getestet und nicht aufgenommen: **Kandinsky 6** (Pro brauchte 928–966 s je 5-s-Clip gegen 114 s bei LTX-2.5, Lite
-zerfiel, Teile davon sind nicht kommerziell oder in der EU nicht lizenziert) und die **IC-LoRAs Restore und Ingredients
-für LTX-2.5** (keines hielt eine echte Person erkennbar).
+**Kandinsky 6** (nur NVIDIA) läuft über die ComfyUI-Knoten Kandinsky T8, die das Setup mitbringt. Im Prompt das Bild
+beschreiben, Gesprochenes als `<S>…<E>`, und was zu hören ist, im eigenen Feld „Ton“ (`audio_prompt`), laute Quellen
+ausdrücklich. Die Schritte stehen fest auf 10 mit CFG 1, der Negativprompt wirkt also nicht. Ohne Startbild setzte
+Pro schwarze Balken oben und unten (2 von 2 Clips), mit Startbild im Videoformat nicht. Pro hielt im Test Handlung und Gesicht, bei Lite zerfielen Gegenstände (ein Schmied hielt das
+glühende Eisen mit bloßer Hand). Der Ton ist nicht kommerziell nutzbar (Ton-VAE CC BY-NC), die Video-VAE (Tencent) gilt
+nicht in der EU, in Großbritannien und Südkorea.
+
+Getestet und nicht aufgenommen: die **IC-LoRAs Restore und Ingredients für LTX-2.5** (keines hielt eine echte Person
+erkennbar).
 
 ### Video hochskalieren: RelayVSR (seit 0.5.23)
 

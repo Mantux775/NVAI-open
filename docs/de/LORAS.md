@@ -64,7 +64,8 @@ sie sind. Löschen entfernt bei einer selbst hinzugefügten LoRA die Datei und d
 
 ## LoRAs verwenden
 
-Auf der Seite „Generieren“ steht jede passende LoRA unter dem gewählten Modell:
+Auf der Seite „Generieren“ steht jede passende LoRA unter dem gewählten Modell (nimmt das Modell keine, sagt der
+LoRA-Bereich das und nennt deine Modelle, die welche nehmen):
 
 - **Anhaken** und die Stärke wählen, meist 0,6 bis 1,0.
 - **Die Trigger-Wörter in den Prompt**, das macht „+ Trigger“. Ohne sie ließ eine Pixel-Art-LoRA für Qwen-Image-2512

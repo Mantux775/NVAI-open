@@ -363,6 +363,20 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'prompt raised the explosion by 30–55 %; FastH3 moves almost like LTX.',
       ),
     },
+    {
+      head: t('Kandinsky 6: Ton getrennt, Lizenz', 'Kandinsky 6: separate sound, license'),
+      text: t(
+        'Pro hielt im Test Handlung und Gesicht, rund 17 min für 5 s in 864 × 480; Lite (rund 5 min) nur für Entwürfe. '
+          + 'Bild in den Prompt, Gesprochenes als <S>…<E>, den Klang ins Feld „Ton“ und laute Quellen ausdrücklich '
+          + 'nennen. Ohne Startbild setzte Pro schwarze Balken oben und unten, mit Startbild (im Videoformat) nicht. Der '
+          + 'Ton ist nicht kommerziell nutzbar (Ton-VAE CC BY-NC), die Video-VAE gilt nicht in der EU.',
+        'Pro kept action and face in the test, about 17 min for 5 s at 864 × 480; Lite (about 5 min) only for drafts. '
+          + 'The picture goes into the prompt, spoken words as <S>…<E>, the sound into the “Sound” field with loud '
+          + 'sources named explicitly. Without a start image Pro added black bars top and bottom, with one (in the video '
+          + 'format) it did not. The sound may not be used commercially (audio VAE CC BY-NC), the video VAE is not '
+          + 'licensed in the EU.',
+      ),
+    },
   ],
   '3d': [
     {
@@ -571,6 +585,17 @@ const TIP_BY_ID: Record<string, string> = {
   'qwen-image-2512-lightning': t(
     'Nur für Entwürfe (8 Schritte, rund 17 s). Endassets mit der vollen Fassung und 50 Schritten.',
     'For drafts only (8 steps, about 17 s). Final assets with the full version and 50 steps.'),
+  // Kandinsky 6 (seit 0.5.25): Zeiten der Messung 12.11.2026, RTX 5060 Ti, 864 × 480, 5 s mit Ton
+  'kandinsky6-pro-distill-int8': t(
+    'Für Szenen, bei denen LTX-2.5 die Handlung nicht trifft: rund 17 min für 5 s. Sätze als <S>…<E> in den Prompt, '
+      + 'den Klang ins Feld „Ton“. Mit Startbild (im Videoformat), sonst setzt Pro schwarze Balken oben und unten.',
+    'For scenes where LTX-2.5 misses the action: about 17 min for 5 s. Spoken lines as <S>…<E> in the prompt, the '
+      + 'sound in the “Sound” field. Use a start image (in the video format), otherwise Pro adds black bars top and '
+      + 'bottom.'),
+  'kandinsky6-lite-distill-int8': t(
+    'Nur für Entwürfe (rund 5 min für 5 s): Im Test hielt der Schmied das glühende Eisen mit bloßer Hand. Das Ergebnis mit Kandinsky 6 Pro rechnen.',
+    'For drafts only (about 5 min for 5 s): in the test the blacksmith held the glowing iron with his bare hand. '
+      + 'Render the result with Kandinsky 6 Pro.'),
 }
 const TIP_BY_FAMILY: Record<string, string> = {
   qwenimage: t(

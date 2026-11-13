@@ -1020,6 +1020,7 @@ async def generate_video(
     chain_asset_id: str | None = None,
     master: bool = True,
     project_id: str | None = None,
+    audio_prompt: str = "",
     wait: bool = True,
 ) -> dict[str, Any]:
     """Generates a short video locally on the GPU and returns the file paths.
@@ -1090,6 +1091,16 @@ async def generate_video(
     MINIMAX H3: see the instructions (license!). Leave width, height, frames and fps empty: they then come from
     the model (features.sizes[0], features.default_frames, 24 fps; frames on the 17k+5 grid, 124 = 5.2 s, up to
     362). recommended=True (the default) adds the measured fastest settings the call leaves open.
+
+    KANDINSKY 6 (kandinsky6-pro-distill-int8, kandinsky6-lite-distill-int8; NVIDIA only): picture and sound in one
+    pass, 5 s at 864x480 and 24 fps (frames 49-121 on the 4n+1 grid), from text or a start image, fixed 10 steps
+    with CFG 1 (the negative prompt has no effect). The prompt describes the picture; spoken words go into it as
+    <S>...<E> at the moment they are said; what can be heard goes into audio_prompt, loud sources named explicitly.
+    Pro took about 17 min for 5 s and kept action and face in the tests, Lite about 5 min with artifacts (the
+    blacksmith held the glowing iron with his bare hand). Without a start image Pro put black bars at the top and
+    bottom (2 of 2 clips, with and without "cinematic"); with a start image in the video format it did not.
+    License: the sound may not be used commercially (audio VAE CC BY-NC), the video VAE (Tencent) is not
+    licensed in the EU, UK and South Korea.
 
     Image-to-video: with `image_asset_id`, an existing image is brought to life instead
     of generating one from nothing. The models wan22-i2v-a14b, wan21-i2v-480p-14b and
@@ -1190,6 +1201,9 @@ async def generate_video(
             False saves the space when only the MP4 is needed (e.g. straight into Unity).
         project_id: A Studio project (studio_projects): the results go straight into its folder instead of the
             History, e.g. start images or a voice line made for that project. Unknown project: error.
+        audio_prompt: Only models with features.audio_prompt (Kandinsky 6): what can be heard (sounds, music,
+            the kind of voice), not the spoken words (those go into the prompt as <S>...<E>). Other models
+            refuse it; describe their sound in the prompt.
         wait: False = return right away with pending=true and the job_id; job_status(job_id) gives progress
             and, once done, the same result as a blocking call.
     """
@@ -1209,7 +1223,7 @@ async def generate_video(
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
         "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id,
         "chain_asset_id": chain_asset_id, "master": master,
-        "project_id": project_id,
+        "project_id": project_id, "audio_prompt": audio_prompt,
     }
     return await _generate("/api/generate/video", payload, ctx, wait=wait)
 

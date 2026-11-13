@@ -1588,3 +1588,7 @@ SIZE_LABELS: dict[str, str] = {
 from .minimax import EN as _MINIMAX_EN, SIZE_LABELS as _MINIMAX_SIZE_LABELS  # noqa: E402
 EN.update(_MINIMAX_EN)
 SIZE_LABELS.update(_MINIMAX_SIZE_LABELS)
+# Kandinsky 6 (kandinsky6.py, since 0.5.25)
+from .kandinsky6 import EN as _K6_EN, SIZE_LABELS as _K6_SIZE_LABELS  # noqa: E402
+EN.update(_K6_EN)
+SIZE_LABELS.update(_K6_SIZE_LABELS)

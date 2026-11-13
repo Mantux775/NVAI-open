@@ -13,6 +13,10 @@ import { locale, t } from '../i18n'
 const dec = (n: number, digits: number) =>
   n.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
+// Modellname ohne die Fassung: „Qwen-Image-2512 (NVFP4, volle 50 Schritte)“ → „Qwen-Image-2512“,
+// „Kandinsky 6 Pro, destilliert (INT8, mit Ton)“ → „Kandinsky 6 Pro“
+const shortName = (m: ModelInfo) => m.name.split(' (')[0].split(', ')[0]
+
 // "restore" (seit 0.5.11) erzeugt nichts Neues, sondern bessert ein Foto aus: eigener Reiter, eigener Endpunkt.
 type Mode = GenKind | 'restore'
 
@@ -133,6 +137,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
   const [prompt, setPrompt] = useState('')
   const [negative, setNegative] = useState('')
+  // Kandinsky 6 (seit 0.5.25): was zu hören ist, getrennt von der Bildbeschreibung (features.audio_prompt)
+  const [audioPrompt, setAudioPrompt] = useState('')
   const [seconds, setSeconds] = useState(10)
   const [imgSize, setImgSize] = useState(IMAGE_SIZES[0])
   const [vidSize, setVidSize] = useState(VIDEO_SIZES[0])
@@ -459,6 +465,29 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     [models, selected],
   )
   const activeLoras = loraPicks.filter((p) => loraChoices.some((l) => l.id === p.model_id))
+  // Nimmt das gewählte Modell keine LoRAs, nennt der LoRA-Bereich die eigenen Modelle dieser Art, die welche nehmen
+  // (je Familie einmal, mit der Zahl geladener LoRAs), sonst einen Vorschlag aus dem Katalog. Die Turbo-LoRAs von
+  // MiniMax H3 zählen dafür nicht: Sie beschleunigen nur, einen Stil bringen sie nicht (Nutzer 12.11.2026: „wenn für
+  // das gewählte model keine loras hat oder nicht kompaktibel ist da wo loras stehen dann lieber ein Hinweiss“).
+  const loraModels = useMemo(() => {
+    const openBases = (m: ModelInfo) => (m.lora_bases ?? []).filter((b) => !b.startsWith('minimax_'))
+    const seen = new Set<string>()
+    return available
+      .filter((m) => m.id !== selected?.id && openBases(m).length > 0)
+      .map((m) => ({
+        model: m,
+        count: models.filter((l) => l.kind === 'lora' && l.installed && openBases(m).includes(l.family)).length,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .filter((x) => !seen.has(shortName(x.model)) && seen.add(shortName(x.model)))
+      .slice(0, 3)
+  }, [available, models, selected])
+  const loraSuggestion = useMemo(() => {
+    if (loraModels.length > 0) return undefined
+    const takes = (m: ModelInfo) => m.kind === mode && !m.runnable
+      && (m.lora_bases ?? []).some((b) => !b.startsWith('minimax_'))
+    return models.find((m) => takes(m) && m.recommended) ?? models.find(takes)
+  }, [loraModels, models, mode])
   const toggleLora = (id: string, strength = 0.8) =>
     setLoraPicks((list) => (list.some((p) => p.model_id === id)
       ? list.filter((p) => p.model_id !== id)
@@ -609,7 +638,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   // Was das gewählte Bildmodell kann (registry.features_for). Fehlt ein Eintrag, gilt
   // das alte Verhalten: alles anbieten.
   const feat = mode === 'image' ? selected?.features : undefined
-  const negWorks = feat?.negative_prompt !== false
+  // Bildmodelle melden es über features.negative_prompt, destillierte Videomodelle (Kandinsky 6) ebenso
+  const negWorks = (feat ?? vfeat)?.negative_prompt !== false
   const canImg2img = feat?.img2img !== false
   const canHires = feat?.hires !== false
   // Erweitern geht über Masken (Qwen) oder über ein Referenzbild (FLUX 3 und andere
@@ -1158,6 +1188,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           // Alles steht ausdrücklich da (die Empfehlung ist oben vorgewählt), der Server ergänzt nichts
           recommended: false,
           master,
+          ...(vfeat?.audio_prompt ? { audio_prompt: audioPrompt } : {}),
           ...(isLtx25 ? {
             loop: loop && !!sourceId && quality !== 'dfr' && !extendId,
             end_image_asset_id: !loop && quality !== 'dfr' && endId ? endId : null,
@@ -1626,6 +1657,24 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             />
             {expandRow()}
 
+            {mode === 'video' && vfeat?.audio_prompt && (
+              <>
+                <h3>{t('Ton', 'Sound')}</h3>
+                <textarea
+                  value={audioPrompt}
+                  onChange={(e) => setAudioPrompt(e.target.value)}
+                  rows={2}
+                  placeholder={vfeat.audio_placeholder || t('Was zu hören ist', 'What can be heard')}
+                />
+                <p className="hint small">
+                  {t('Was zu hören ist: Geräusche, Musik, Art der Stimme; laute Quellen ausdrücklich nennen. '
+                      + 'Gesprochene Sätze stehen im Prompt als <S>…<E>.',
+                    'What can be heard: sounds, music, the kind of voice; name loud sources explicitly. '
+                      + 'Spoken lines go into the prompt as <S>…<E>.')}
+                </p>
+              </>
+            )}
+
             <h3>{t('Negativ', 'Negative')}</h3>
             <textarea
               value={negWorks ? negative : ''}
@@ -1695,65 +1744,115 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               ', 0.46 GB. To get it: “Download extras” for Krea 2 under “Models”.')}
           </p>
         )}
-        {(mode === 'image' || mode === 'video') && (selected?.lora_bases?.length ?? 0) > 0 && (
-          <details className="lora-picker">
-            <summary>
-              LoRAs{' '}
-              <span className="muted small">
-                {activeLoras.length > 0
-                  ? t(`${activeLoras.length} aktiv`, `${activeLoras.length} active`)
-                  : t(`${loraChoices.length} verfügbar`, `${loraChoices.length} available`)}
-              </span>
-            </summary>
-            {loraChoices.length === 0 ? (
-              <p className="hint small">
-                {t('Keine passende LoRA geladen. ', 'No matching LoRA downloaded. ')}
-                <button className="link-btn" onClick={onShowModels}>
-                  {t('Unter „Modelle“ suchen', 'Search under “Models”')}
-                </button>
-                {t(' oder unten eine eigene Datei hinzufügen.', ' or add your own file below.')}
+        {/* LoRA-Bereich: immer sichtbar wie „Modell“ und „Format“ (Nutzer 12.11.2026: „loras auswahl soll besser
+            zu sehen sein“); nimmt das Modell keine oder ist keine passende geladen, steht hier ein Hinweis */}
+        {(mode === 'image' || mode === 'video') && selected && (
+          <div className="lora-section">
+            <h3>
+              LoRAs
+              {loraChoices.length > 0 && (
+                <span className={activeLoras.length > 0 ? 'h3-note on' : 'h3-note'}>
+                  {activeLoras.length > 0
+                    ? t(`${activeLoras.length} von ${loraChoices.length} aktiv`,
+                      `${activeLoras.length} of ${loraChoices.length} active`)
+                    : t(`${loraChoices.length} verfügbar`, `${loraChoices.length} available`)}
+                </span>
+              )}
+            </h3>
+            {(selected.lora_bases?.length ?? 0) === 0 ? (
+              <p className="lora-box lora-none hint small">
+                {t(`${shortName(selected)} nimmt keine LoRAs.`, `${shortName(selected)} does not take LoRAs.`)}{' '}
+                {loraModels.length > 0 ? (
+                  <>
+                    {t('LoRAs gehen mit ', 'LoRAs work with ')}
+                    {loraModels.map((x, i) => (
+                      <span key={x.model.id}>
+                        {i > 0 && ', '}
+                        <button className="link-btn" title={x.model.name}
+                          onClick={() => setModelId({ ...modelId, [mode]: x.model.id })}>
+                          {shortName(x.model)}
+                        </button>
+                        {x.count > 0 && t(` (${x.count} geladen)`, ` (${x.count} downloaded)`)}
+                      </span>
+                    ))}
+                    .
+                  </>
+                ) : loraSuggestion ? (
+                  <>
+                    {t(`Von deinen Modellen nimmt keines LoRAs; ${shortName(loraSuggestion)} zum Beispiel schon: `,
+                      `None of your models takes LoRAs; ${shortName(loraSuggestion)} does, for example: `)}
+                    <button className="link-btn" onClick={onShowModels}>
+                      {t('unter „Modelle“ laden', 'download it under “Models”')}
+                    </button>
+                    .
+                  </>
+                ) : (
+                  t('Von deinen Modellen nimmt keines LoRAs.', 'None of your models takes LoRAs.')
+                )}
               </p>
             ) : (
-              loraChoices.map((l) => {
-                const pick = loraPicks.find((p) => p.model_id === l.id)
-                return (
-                  <div key={l.id} className="lora-row">
-                    <label title={l.source_url || l.name}>
-                      <input type="checkbox" checked={!!pick} onChange={() => pickLora(l)} />
-                      <span className="lora-name">{l.name.replace(/^.*\//, '').replace(/\.safetensors$/, '')}</span>
-                    </label>
-                    {pick && (
-                      <>
-                        <input type="range" min={0} max={1.5} step={0.05} value={pick.strength}
-                          onChange={(e) => setLoraStrength(l.id, Number(e.target.value))} />
-                        <span className="muted small">{pick.strength.toFixed(2)}</span>
-                        {l.trigger && !prompt.includes(l.trigger) && (
-                          <button className="btn small ghost" title={l.trigger}
-                            onClick={() => setPrompt((p) => (p.trim() ? `${l.trigger}, ${p}` : l.trigger!))}>
-                            {t('+ Trigger', '+ trigger')}
-                          </button>
-                        )}
-                      </>
-                    )}
+              <div className="lora-box">
+                {loraChoices.length === 0 ? (
+                  <p className="hint small">
+                    {t(`Für ${shortName(selected)} ist noch keine LoRA geladen`,
+                      `No LoRA for ${shortName(selected)} downloaded yet`)}
+                    {/* Familie nur nennen, wenn sie mehr sagt als der Modellname (LTX-2.5 nimmt LTX-2/2.3-LoRAs) */}
+                    {(() => {
+                      const fit = (selected.lora_bases ?? []).map((b) => LORA_BASE_LABEL[b] ?? b)
+                        .filter((l) => l !== shortName(selected))
+                      return fit.length > 0 ? t(` (passend: ${fit.join(', ')})`, ` (fitting: ${fit.join(', ')})`) : ''
+                    })()}
+                    {'. '}
+                    <button className="link-btn" onClick={onShowModels}>
+                      {t('Unter „Modelle“ suchen', 'Search under “Models”')}
+                    </button>
+                    {t(' oder unten eine eigene Datei hinzufügen.', ' or add your own file below.')}
+                  </p>
+                ) : (
+                  <div className="lora-list">
+                    {loraChoices.map((l) => {
+                      const pick = loraPicks.find((p) => p.model_id === l.id)
+                      return (
+                        <div key={l.id} className={pick ? 'lora-row on' : 'lora-row'}>
+                          <label title={l.source_url || l.name}>
+                            <input type="checkbox" checked={!!pick} onChange={() => pickLora(l)} />
+                            <span className="lora-name">{l.name.replace(/^.*\//, '').replace(/\.safetensors$/, '')}</span>
+                          </label>
+                          {pick && (
+                            <>
+                              <input type="range" min={0} max={1.5} step={0.05} value={pick.strength}
+                                onChange={(e) => setLoraStrength(l.id, Number(e.target.value))} />
+                              <span className="muted small">{pick.strength.toFixed(2)}</span>
+                              {l.trigger && !prompt.includes(l.trigger) && (
+                                <button className="btn small ghost" title={l.trigger}
+                                  onClick={() => setPrompt((p) => (p.trim() ? `${l.trigger}, ${p}` : l.trigger!))}>
+                                  {t('+ Trigger', '+ trigger')}
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })
+                )}
+                <div className="lora-own">
+                  <button className="link-btn" onClick={() => {
+                    setLoraUploadOpen((o) => !o)
+                    setLoraNote(null)
+                  }}>
+                    {loraUploadOpen
+                      ? t('Eigene LoRA-Datei: schließen', 'Own LoRA file: close')
+                      : t('+ Eigene LoRA-Datei hinzufügen', '+ Add your own LoRA file')}
+                  </button>
+                  {loraUploadOpen && (
+                    <LoraUpload compact catalog={models} preferBase={selected?.lora_bases} onDone={loraAdded} />
+                  )}
+                  {loraNote && <p className="ok-text small">{loraNote}</p>}
+                </div>
+              </div>
             )}
-            <div className="lora-own">
-              <button className="link-btn" onClick={() => {
-                setLoraUploadOpen((o) => !o)
-                setLoraNote(null)
-              }}>
-                {loraUploadOpen
-                  ? t('Eigene LoRA-Datei: schließen', 'Own LoRA file: close')
-                  : t('+ Eigene LoRA-Datei hinzufügen', '+ Add your own LoRA file')}
-              </button>
-              {loraUploadOpen && (
-                <LoraUpload compact catalog={models} preferBase={selected?.lora_bases} onDone={loraAdded} />
-              )}
-              {loraNote && <p className="ok-text small">{loraNote}</p>}
-            </div>
-          </details>
+          </div>
         )}
         {mode === 'video' && ((vfeat?.sparse_attention?.length ?? 0) > 0 || vfeat?.int8_attention) && (
           <div className="accel-row">
