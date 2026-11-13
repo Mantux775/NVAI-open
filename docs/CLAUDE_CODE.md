@@ -332,7 +332,8 @@ negated: "does not reach into the bucket" was ignored twice.
   times the time; needs the detail IC-LoRA (gated); not with an end image or a loop. `temporal_upscale=True` gives
   48 fps.
 - `auto_duration=True`: the model picks the length from the action. `audio_asset_id`: the picture follows a given sound
-  (at most 20 s), which stays unchanged in the MP4.
+  (at most 20 s), which stays unchanged in the MP4. The length is rounded up to the frame grid and the rest is
+  silence, so a spoken line is never cut; in the Studio a speaking clip fills its whole scene.
 - `motion_speed` below 1: real slow motion only with the Slow Motion LoRA (spray fell over 5 s instead of 1.5 s).
 - Several shots in one clip: write each cut out in prose ("A hard cut transitions to a close-up of …", 2–4 shots);
   `expand_prompt(target="video_multishot")` writes that form.

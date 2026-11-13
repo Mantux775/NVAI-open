@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.25",
+  "version": "0.5.26",
   "x-api-version": 1
  },
  "paths": {
@@ -4524,7 +4524,13 @@
        }
       ],
       "title": "Audio Asset Id",
-      "description": "LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, die Laenge auch (hoechstens 20 s)"
+      "description": "LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, die Laenge auch (hoechstens 20 s; auf das Bildraster aufgerundet, der Rest ist Stille)"
+     },
+     "audio_pad": {
+      "type": "boolean",
+      "title": "Audio Pad",
+      "description": "Mit audio_asset_id: Ist frames laenger als der Ton, das Video nicht auf den Ton kuerzen, sondern den Ton mit Stille auffuellen (das Studio gibt so die Laenge der Szene vor)",
+      "default": false
      },
      "motion_speed": {
       "type": "number",

@@ -109,8 +109,8 @@ Then assign the character in the scenes:
   scene says so.
 - **Voice scenes:** under "Voice" choose "of a character …"; the line is spoken with the character's voice.
 - **Video scenes that speak (LTX-2.5):** "Sound from voice scene" takes that line as the clip's sound. The line is made
-  first, the video follows it with the lips and takes its length. Conform does not lay the line on the voice track a
-  second time.
+  first, the video follows it with the lips and fills the scene (if the line is longer than the scene, the clip gets
+  the line's length). Conform does not lay the line on the voice track a second time.
 
 ![A video scene that speaks: the character in the picture and the voice line as its sound](images/studio-character-scene.jpg)
 

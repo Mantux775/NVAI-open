@@ -112,8 +112,8 @@ Danach die Figur in den Szenen zuordnen:
 - **Bildszenen:** unter „Figuren im Bild“ anhaken. Passt keine ihrer LoRAs zum Modell der Szene, steht das dabei.
 - **Sprecher-Szenen:** unter „Stimme“ „einer Figur …“ wählen; der Satz wird mit der Stimme der Figur gesprochen.
 - **Videoszenen, die sprechen (LTX-2.5):** „Ton aus Sprecher-Szene“ nimmt deren Satz als Ton des Clips. Der Satz
-  entsteht zuerst, das Video folgt ihm mit den Lippen und wird so lang wie er. Übernehmen legt den Satz nicht noch
-  einmal auf die Spur „Stimme“.
+  entsteht zuerst, das Video folgt ihm mit den Lippen und füllt die Szene (ist der Satz länger als die Szene, wird der
+  Clip so lang wie er). Übernehmen legt den Satz nicht noch einmal auf die Spur „Stimme“.
 
 ![Eine Videoszene, die spricht: die Figur im Bild und der Satz als Ton](../images/studio-character-scene-de.jpg)
 

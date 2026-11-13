@@ -1580,6 +1580,16 @@ def _stage_audio(asset_id: str) -> tuple[str, float | None]:
     return comfy.stage_input(src), float(seconds) if seconds else None
 
 
+async def _pad_staged_audio(name: str, seconds: float) -> str:
+    """Den nach ComfyUIs input/ gelegten Ton (Name aus _stage_audio) als WAV mit Stille auf `seconds` Sekunden
+    verlaengern, neben die Kopie (seit 0.5.26); liefert den Namen fuer LoadAudio. Das Aufraeumen in
+    comfy.stage_input erfasst die Datei wie jede andere Kopie (Praefix nvai_)."""
+    folder = config.COMFY_ROOT / "input"
+    out = f"nvai_{uuid.uuid4().hex[:8]}.wav"
+    await _video_tool("pad-audio", folder / name, folder / out, f"{seconds:.4f}")
+    return out
+
+
 async def _video_tool(*args: Any) -> dict[str, Any]:
     """video_tools.py im ComfyUI-venv (PyAV) aufrufen, wie _align_script; liefert dessen JSON-Zeile."""
     script = Path(__file__).with_name("video_tools.py")
@@ -1750,9 +1760,14 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     if p.get("audio_asset_id"):
         p["audio_input"], seconds = _stage_audio(p["audio_asset_id"])
         if seconds:
-            # Das Video ist hoechstens so lang wie der Ton (und hoechstens 20 s).
-            frames = workflows.ltx_frames_for_seconds(min(seconds, workflows.LTX25_MAX_SECONDS), fps,
-                                                      at_most=True)
+            # Das Video ist mindestens so lang wie der Ton (hoechstens 20 s), auf das 8n+1-Raster aufgerundet; bis zum
+            # Ende des Videos folgt Stille (seit 0.5.26: vorher abgerundet, dann fehlten bis zu 0,29 s vom Satzende,
+            # und im Studio blieb nach dem Clip eine schwarze Luecke). audio_pad: eine laengere angegebene Laenge
+            # behalten (das Studio gibt so die Laenge der Szene vor) und den Ton bis dahin mit Stille auffuellen.
+            need = workflows.ltx_frames_for_seconds(min(seconds, workflows.LTX25_MAX_SECONDS), fps, at_least=True)
+            frames = max(frames, need) if p.get("audio_pad") else need
+            if frames / fps > seconds + 0.001:
+                p["audio_input"] = await _pad_staged_audio(p["audio_input"], frames / fps)
         p["auto_duration"] = False
     p["frames"] = frames
 

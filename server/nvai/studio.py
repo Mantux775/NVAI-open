@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import math
 import os
 import re
 import subprocess
@@ -1781,7 +1782,9 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
     feats = registry.features_for(entry) if entry else {}
     fps = 24 if (model_id or "").startswith("ltx") else 16
     step = 8 if (model_id or "").startswith("ltx") else 4
-    frames = max(9, int(round(secs * fps / step)) * step + 1)
+    # Aufrunden, damit der Take die ganze Szene füllt (seit 0.5.26): Gerundet blieben bei Längen neben dem Raster bis
+    # zu 3 Bilder am Szenenende schwarz (5,5 s: 129 statt 132 Bilder); Längen auf dem Raster bleiben gleich (4 s: 97)
+    frames = min(workflows.LTX25_MAX_FRAMES, max(9, math.ceil(secs * fps / step - 1e-6) * step + 1))
     if feats.get("frame_rule"):
         # Eigenes Raster und feste Bildrate (MiniMax H3: 17k+5 bei 24 fps), Länge in den Grenzen des Modells
         fps = int(feats.get("fps") or fps)
@@ -1809,6 +1812,9 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
             raise StudioError(t("Die Sprecher-Szene für den Ton hat noch keinen Take: sie zuerst erzeugen.",
                                 "The narrator scene for the sound has no take yet: generate it first."))
         extra["audio_asset_id"] = source["take"]
+        # Seit 0.5.26: Ist die Szene länger als der Satz, füllt das Video die Szene (der Ton bekommt Stille dahinter);
+        # vorher endete es mit dem Ton, und im Schnitt blieb bis zur nächsten Szene eine schwarze Lücke
+        extra["audio_pad"] = True
     if entry and entry.get("family") == "ltx25" and "quality" not in extra:
         # HQ 1080p (Nutzer 26.10.2026): „Höchste Qualität (DFR)“, wenn das Detail-IC-LoRA da ist und weder Endbild
         # noch Schleife verlangt sind, die DFR nicht kann (gemessen 5 s 1080p: Details über die ganze Länge, 786 statt

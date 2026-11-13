@@ -1169,7 +1169,8 @@ async def generate_video(
             (1-20 s); `frames` is ignored. Write pauses ("a beat of silence") into the
             prompt if the clip should hold.
         audio_asset_id: LTX-2.5: a sound the picture follows (e.g. music from
-            generate_audio, or an uploaded WAV). The clip gets its length (at most 20 s), the
+            generate_audio, or an uploaded WAV). The clip gets its length (at most 20 s, rounded up to the
+            frame grid with silence after the sound, so a spoken line is never cut), the
             original sound ends up in the MP4. Keeps a voice identical across clips: cut a line the
             user already approved out of an earlier take, upload it as WAV and pass it here; the
             clip's sound then matched the given line exactly (correlation 1.000) and the lips moved

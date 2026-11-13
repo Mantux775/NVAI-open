@@ -5,6 +5,7 @@ geprueft. Ein Builder pro `workflow`-Schluessel aus catalog.py.
 """
 from __future__ import annotations
 
+import math
 import random
 import re
 from pathlib import Path
@@ -1092,14 +1093,15 @@ LTX25_MAX_FRAMES = 481
 LTX25_KEYFRAME_INTERVAL = 24
 
 
-def ltx_frames_for_seconds(seconds: float, fps: float, at_most: bool = False) -> int:
+def ltx_frames_for_seconds(seconds: float, fps: float, at_least: bool = False) -> int:
     """Frames fuer `seconds` Sekunden auf dem 8n+1-Raster von LTX, 9 bis LTX25_MAX_FRAMES.
 
-    Der naechste Wert (5 s bei 24 fps = 121 Frames, wie die Weboberflaeche); mit at_most hoechstens
-    so lang, fuer einen vorgegebenen Ton, ueber den das Video nicht hinauslaufen soll.
+    Der naechste Wert (5 s bei 24 fps = 121 Frames, wie die Weboberflaeche); mit at_least mindestens so lang
+    (frames / fps >= seconds), fuer einen vorgegebenen Ton, der ganz hineinpassen soll (seit 0.5.26; vorher
+    hoechstens so lang, dann fehlten bis zu 7 Bilder, also bis 0,29 s vom Satzende).
     """
     steps = (seconds * fps - 1) / 8
-    n = int(steps) if at_most else int(steps + 0.5)
+    n = math.ceil(steps - 1e-6) if at_least else int(steps + 0.5)
     return max(9, min(LTX25_MAX_FRAMES, 1 + n * 8))
 
 

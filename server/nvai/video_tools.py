@@ -12,6 +12,7 @@ Kein ffmpeg-Programm nötig; PyAV bringt ComfyUI für SaveVideo ohnehin mit. Aus
     python video_tools.py concat-xfade <erster> <zweiter> <ziel.mp4> <crf> <bilder>
     python video_tools.py concat-xfade-master <erster.mkv> <zweiter.mkv> <ziel.mkv> <bilder>
     python video_tools.py preview <video> <vorschau.mp4>   (H.264 für den Browser, höchstens 1920 breit)
+    python video_tools.py pad-audio <ton> <ziel.wav> <sekunden>   (mit Stille verlängern, seit 0.5.26)
 
 Beim Anhängen fällt der erste Frame des zweiten Clips weg (er ist der letzte des ersten, das Startbild), samt
 dem Ton dieser Bilddauer, damit Bild und Ton synchron bleiben. Kodiert wird wie SaveVideo: H.264, CRF, AAC;
@@ -387,6 +388,37 @@ def preview(src: str, out: str) -> dict[str, Any]:
     return {"frames": count, "width": width, "height": height}
 
 
+def pad_audio(src: str, out: str, seconds: float) -> dict[str, Any]:
+    """Ton auf `seconds` Sekunden mit Stille verlängern (seit 0.5.26), als WAV mit 16 bit, Rate und Kanälen der Quelle
+    (mono bleibt mono, alles darüber wird Stereo). Ein vorgegebener Ton (audio_asset_id) bestimmt die Länge eines
+    LTX-Videos; das 8n+1-Raster rundet jetzt auf, die Lücke bis zum Ende des Videos ist Stille. Ist der Ton schon so
+    lang, bleibt er unverändert (nur umgewandelt)."""
+    import wave
+    with av.open(src) as c:
+        if not c.streams.audio:
+            raise SystemExit(f"kein Ton in {src}")
+        cc = c.streams.audio[0].codec_context
+        rate = cc.sample_rate or 48000
+        layout = "mono" if len(cc.layout.channels) == 1 else "stereo"
+        resampler = av.AudioResampler(format="s16", layout=layout, rate=rate)
+        parts = []
+        for frame in c.decode(audio=0):
+            parts += [af.to_ndarray().reshape(-1) for af in resampler.resample(frame)]
+        parts += [af.to_ndarray().reshape(-1) for af in resampler.resample(None)]
+    channels = 1 if layout == "mono" else 2
+    data = np.concatenate(parts).astype("<i2") if parts else np.zeros(0, "<i2")  # s16 ist verschränkt: L R L R …
+    have = data.size // channels
+    want = max(have, int(round(seconds * rate)))
+    data = np.concatenate([data, np.zeros((want - have) * channels, "<i2")])
+    with wave.open(out, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(data.tobytes())
+    return {"seconds": round(want / rate, 4), "padded": round((want - have) / rate, 4), "rate": rate,
+            "channels": channels}
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else ""
     if cmd == "info" and len(argv) == 2:
@@ -407,6 +439,8 @@ def main(argv: list[str]) -> None:
         result = concat_xfade(argv[1], argv[2], argv[3], float(argv[4]), int(argv[5]))
     elif cmd == "concat-xfade-master" and len(argv) == 5:
         result = concat_xfade_master(argv[1], argv[2], argv[3], int(argv[4]))
+    elif cmd == "pad-audio" and len(argv) == 4:
+        result = pad_audio(argv[1], argv[2], float(argv[3]))
     else:
         raise SystemExit(__doc__)
     print(json.dumps(result))

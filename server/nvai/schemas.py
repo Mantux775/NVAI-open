@@ -240,7 +240,10 @@ class GenerateVideoRequest(BaseModel):
         False, description="LTX-2.5: Laenge aus dem Prompt vorhersagen; frames gilt dann nicht")
     audio_asset_id: str | None = Field(
         None, description="LTX-2.5: Ton vorgeben (Asset-ID einer Audiodatei). Das Bild folgt dem Ton, "
-                          "die Laenge auch (hoechstens 20 s)")
+                          "die Laenge auch (hoechstens 20 s; auf das Bildraster aufgerundet, der Rest ist Stille)")
+    audio_pad: bool = Field(
+        False, description="Mit audio_asset_id: Ist frames laenger als der Ton, das Video nicht auf den Ton kuerzen, "
+                           "sondern den Ton mit Stille auffuellen (das Studio gibt so die Laenge der Szene vor)")
     motion_speed: float = Field(
         1.0, gt=0.0, le=1.0, description="LTX-2.5: Zeitlupe, 1 = Echtzeit, 0.5 = 2x, 0.2 = 5x, 0.1 = 10x "
                                           "langsamer; verlaesslich mit der Slow-Motion-LoRA")
