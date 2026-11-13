@@ -76,11 +76,15 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 
 Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
+**The short film with the rabbit:** Suomi began as a quick hand sketch. FLUX 3 made a character of it and, as an edit, gave him a tired mood; each shot got a start image, Qwen3-TTS spoke his line, Stable Audio 3 made the music, and LTX-2.5 animated the shots in the Studio, the line with his lips. Claude Code operated the app over MCP, every decision was made by a person, and the 30 seconds took about 50 minutes on one graphics card. [Step by step with screenshots](docs/SHORT_FILM.md) · [The film on YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
+
+![The short film in the Studio: the shots on the Picture lane, the voice line below shot 4, the music across the whole film; below, the edit with the chosen takes](docs/images/short-film-studio.jpg)
+
 <p align="center">
-  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="400" alt="YouTube Short: the NVAI Studio in action"></a>
+  <a href="https://www.youtube.com/watch?v=UYrT4YY8gDo"><img src="https://i.ytimg.com/vi/UYrT4YY8gDo/maxresdefault.jpg" width="400" alt="YouTube: a tutorial made completely on a local GPU with the NVAI Studio"></a>
   <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="400" alt="YouTube: NVAI update, the Studio for Mac with new local AI models"></a>
 </p>
-<p align="center"><sub>The Studio in action (YouTube Short) and the update with the Studio for Mac and new local AI models (YouTube).</sub></p>
+<p align="center"><sub>A tutorial made completely on a local GPU with the Studio, and the update with the Studio for Mac and new local AI models (YouTube).</sub></p>
 
 ### From a portrait to a video
 
@@ -241,11 +245,20 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 - [docs/STUDIO.md](docs/STUDIO.md): the Studio, whole videos from scenes
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NVAI-open from Claude Code
 - [docs/MAKING_OF.md](docs/MAKING_OF.md): how Claude built a video in the Studio
+- [docs/SHORT_FILM.md](docs/SHORT_FILM.md): a short film from a hand sketch, step by step with screenshots
 - [photocraft-addon/](photocraft-addon/): source of the PhotoCraft add-on
 
 ---
 
 ## Video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="480" alt="YouTube: a short film with the rabbit Suomi, made in the NVAI Studio"></a>
+</p>
+
+<p align="center">A short film with the rabbit Suomi, from a hand sketch to the export in the Studio, on YouTube (<a href="docs/SHORT_FILM.md">how it was made</a>).<br>
+Ein Kurzfilm mit dem Hasen Suomi, von der Handskizze bis zum Export im Studio, auf YouTube (<a href="docs/de/KURZFILM.md">wie er entstand</a>).<br>
+<a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ">youtube.com/watch?v=cDhmiLMU6WQ</a></p>
 
 <p align="center">
   <a href="https://www.youtube.com/shorts/e9jSTwgwnrI"><img src="docs/images/video-short.jpg" width="320" alt="YouTube Short: NVAI-open and the PhotoCraft add-on"></a>
@@ -256,12 +269,12 @@ NVAI-open und das PhotoCraft-Add-on in Aktion, ein kurzes Video auf YouTube.<br>
 <a href="https://www.youtube.com/shorts/e9jSTwgwnrI">youtube.com/shorts/e9jSTwgwnrI</a></p>
 
 <p align="center">
-  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="480" alt="YouTube Short: the NVAI Studio in action"></a>
+  <a href="https://www.youtube.com/watch?v=UYrT4YY8gDo"><img src="https://i.ytimg.com/vi/UYrT4YY8gDo/maxresdefault.jpg" width="480" alt="YouTube: a tutorial made completely on a local GPU with the NVAI Studio"></a>
 </p>
 
-<p align="center">The Studio in action, a short on YouTube.<br>
-Das Studio in Aktion, ein kurzes Video auf YouTube.<br>
-<a href="https://www.youtube.com/shorts/1RiL-IfDdgs">youtube.com/shorts/1RiL-IfDdgs</a></p>
+<p align="center">The Studio in action: a tutorial made completely on a local GPU, on YouTube.<br>
+Das Studio in Aktion: ein Tutorial, komplett auf der eigenen Grafikkarte gemacht, auf YouTube.<br>
+<a href="https://www.youtube.com/watch?v=UYrT4YY8gDo">youtube.com/watch?v=UYrT4YY8gDo</a></p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="480" alt="YouTube: NVAI update, the Studio for Mac with new local AI models"></a>
@@ -316,11 +329,15 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 
 Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
+**Der Kurzfilm mit dem Hasen:** Suomi begann als schnelle Handskizze. FLUX 3 machte daraus eine Figur und gab ihr als Bearbeitung eine müde Stimmung; jede Einstellung bekam ein Startbild, Qwen3-TTS sprach seinen Satz, Stable Audio 3 machte die Musik, und LTX-2.5 bewegte die Einstellungen im Studio, den Satz mit seinen Lippen. Claude Code bediente die App über MCP, die Entscheidungen traf ein Mensch, und die 30 Sekunden brauchten rund 50 Minuten auf einer Grafikkarte. [Schritt für Schritt mit Bildern](docs/de/KURZFILM.md) · [Der Film auf YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
+
+![Der Kurzfilm im Studio: die Einstellungen in der Bahn Bild/Video, der Satz unter Einstellung 4, die Musik über den ganzen Film; darunter der Schnitt mit den gewählten Takes](docs/images/short-film-studio-de.jpg)
+
 <p align="center">
-  <a href="https://www.youtube.com/shorts/1RiL-IfDdgs"><img src="https://i.ytimg.com/vi/1RiL-IfDdgs/maxresdefault.jpg" width="400" alt="YouTube Short: das NVAI-Studio in Aktion"></a>
+  <a href="https://www.youtube.com/watch?v=UYrT4YY8gDo"><img src="https://i.ytimg.com/vi/UYrT4YY8gDo/maxresdefault.jpg" width="400" alt="YouTube: ein Tutorial, komplett auf der eigenen Grafikkarte mit dem NVAI-Studio gemacht"></a>
   <a href="https://www.youtube.com/watch?v=xseQ42CFneY"><img src="https://i.ytimg.com/vi/xseQ42CFneY/maxresdefault.jpg" width="400" alt="YouTube: NVAI-Update, das Studio für den Mac mit neuen lokalen KI-Modellen"></a>
 </p>
-<p align="center"><sub>Das Studio in Aktion (YouTube Short) und das Update mit dem Studio für den Mac und neuen lokalen KI-Modellen (YouTube).</sub></p>
+<p align="center"><sub>Ein Tutorial, komplett auf der eigenen Grafikkarte mit dem Studio gemacht, und das Update mit dem Studio für den Mac und neuen lokalen KI-Modellen (YouTube).</sub></p>
 
 ### Vom Porträt zum Video
 
@@ -481,4 +498,5 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 - [docs/de/STUDIO.md](docs/de/STUDIO.md): das Studio, ganze Videos aus Szenen
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NVAI-open aus Claude Code nutzen (englisch)
 - [docs/de/MAKING_OF.md](docs/de/MAKING_OF.md): wie Claude ein Video im Studio gebaut hat
+- [docs/de/KURZFILM.md](docs/de/KURZFILM.md): ein Kurzfilm von der Handskizze an, Schritt für Schritt mit Bildern
 - [photocraft-addon/](photocraft-addon/): Quelltext des PhotoCraft-Add-ons

@@ -291,3 +291,5 @@ other editing software.
 ## Making of
 
 How the Studio's own video was made, from the request in Claude Code to the export: [MAKING_OF.md](MAKING_OF.md).
+A short film with a drawn character, from the hand sketch to the export, step by step:
+[SHORT_FILM.md](SHORT_FILM.md).

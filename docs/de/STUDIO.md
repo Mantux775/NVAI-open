@@ -303,3 +303,5 @@ mit anderen Schnittprogrammen.
 ## Making of
 
 Wie das Video des Studios entstand, von der Anfrage in Claude Code bis zum Export: [MAKING_OF.md](MAKING_OF.md).
+Ein Kurzfilm mit einer gezeichneten Figur, von der Handskizze bis zum Export, Schritt für Schritt:
+[KURZFILM.md](KURZFILM.md).
