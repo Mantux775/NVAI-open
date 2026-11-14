@@ -6,24 +6,26 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.26.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.26/NVAI-open-Setup-0.5.26.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.27.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.27/NVAI-open-Setup-0.5.27.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.5.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.24/NVAI-open-0.5.5.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.26 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.26)); the Mac app stays at 0.5.5
+November 2026: NVAI-open 0.5.27 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.27)); the Mac app stays at 0.5.5
 
-- **Spoken lines no longer cut off:** a video that follows a given sound (`audio_asset_id`, or a character speaking in the Studio) is now rounded up to the next frame and the rest filled with silence; before, up to 0.29 s of the end could be missing. In the Studio a speaking clip fills its whole scene, and LTX-2.5 and Wan clips no longer leave black frames at the end of a scene whose length doesn't fit the frame grid.
+- **Start image in the Studio:** a video scene's properties now have a "Start image" field. Drag an image from the media list onto it or pick one from the project folder. The clip begins with it, so a character looks the same in every shot. Before, only Claude Code could set it over MCP. [Details](docs/STUDIO.md#step-by-step)
+- **Spoken lines no longer cut off** (0.5.26): a video that follows a given sound (`audio_asset_id`, or a character speaking in the Studio) is now rounded up to the next frame and the rest filled with silence; before, up to 0.29 s of the end could be missing. In the Studio a speaking clip fills its whole scene, and LTX-2.5 and Wan clips no longer leave black frames at the end of a scene whose length doesn't fit the frame grid.
 - **Kandinsky 6 Pro and Lite, with sound** (0.5.25): two more video models that make picture and sound in one pass, 5 s at 864 × 480, from text or a start image (NVIDIA only). What can be heard goes into its own "Sound" field. In the test Pro kept the action and the face, but it takes about 17 minutes for 5 s. **The sound may not be used commercially, and its video VAE is not licensed in the EU.** [Details](docs/MODELS.md#other-video-models)
 - **Your own LoRAs** (0.5.24): "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
 - **Characters in the Studio** (0.5.24): a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.26 (Mac bleibt 0.5.5):
+Neu in 0.5.27 (Mac bleibt 0.5.5):
 
-- **Kein abgeschnittenes Satzende mehr:** Ein Video, das einem vorgegebenen Ton folgt (`audio_asset_id` oder eine sprechende Figur im Studio), wird jetzt auf das nächste Bild aufgerundet und der Rest mit Stille gefüllt; vorher konnten bis zu 0,29 s vom Ende fehlen. Im Studio füllt ein sprechender Clip seine ganze Szene, und Clips mit LTX-2.5 und Wan lassen am Ende einer Szene, deren Länge nicht auf das Bildraster passt, keine schwarzen Bilder mehr.
+- **Startbild im Studio:** In den Eigenschaften einer Videoszene gibt es jetzt das Feld „Startbild“. Ein Bild aus dem Material darauf ziehen oder aus dem Projektordner wählen. Der Clip beginnt damit, so sieht eine Figur in jeder Einstellung gleich aus. Bisher ging das nur über Claude Code per MCP. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
+- **Kein abgeschnittenes Satzende mehr** (0.5.26): Ein Video, das einem vorgegebenen Ton folgt (`audio_asset_id` oder eine sprechende Figur im Studio), wird jetzt auf das nächste Bild aufgerundet und der Rest mit Stille gefüllt; vorher konnten bis zu 0,29 s vom Ende fehlen. Im Studio füllt ein sprechender Clip seine ganze Szene, und Clips mit LTX-2.5 und Wan lassen am Ende einer Szene, deren Länge nicht auf das Bildraster passt, keine schwarzen Bilder mehr.
 - **Kandinsky 6 Pro und Lite, mit Ton** (0.5.25): zwei weitere Videomodelle, die Bild und Ton in einem Durchgang machen, 5 s in 864 × 480, aus Text oder einem Startbild (nur NVIDIA). Was zu hören ist, kommt in ein eigenes Feld „Ton“. Pro hielt im Test Handlung und Gesicht, braucht aber rund 17 Minuten für 5 s. **Der Ton ist nicht kommerziell nutzbar, und die Video-VAE ist in der EU nicht lizenziert.** [Einzelheiten](docs/de/MODELLE.md#weitere-videomodelle)
 - **Eigene LoRAs** (0.5.24): „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
 - **Figuren im Studio** (0.5.24): Eine Figur bündelt Aussehen (eine oder mehrere LoRAs) und Stimme. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und unter Windows spricht eine Videoszene mit LTX-2.5 einen Satz mit den Lippen. [Einzelheiten](docs/de/STUDIO.md#figuren)

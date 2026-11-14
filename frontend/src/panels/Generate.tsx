@@ -8,6 +8,7 @@ import { LicenseBadge, OutputBadge, licenseBlocked } from '../components/License
 import { ModelTip, Recommendations } from '../components/Recommendations'
 import { Lightbox } from '../components/Lightbox'
 import { locale, t } from '../i18n'
+import { I2V_WORKFLOWS, OPTIONAL_START_WORKFLOWS } from '../videoStart'
 
 // Dezimalzahl im Format der gewählten Sprache (Deutsch mit Komma)
 const dec = (n: number, digits: number) =>
@@ -29,10 +30,6 @@ const MODES: { id: Mode; label: string; icon: string }[] = [
   { id: 'restore', label: t('Restaurieren', 'Restore'), icon: '✦' },
 ]
 
-// Video-Workflows, die ohne Startbild nicht laufen (siehe workflows.py).
-const I2V_WORKFLOWS = new Set(['wan_i2v', 'wan22_i2v', 'hunyuan15_i2v', 'kandinsky5_i2v'])
-// Diese nehmen ein Startbild, wenn eines gewählt ist, sonst Text zu Video (workflows.OPTIONAL_START_WORKFLOWS).
-const OPTIONAL_START_WORKFLOWS = new Set(['wan22_ti2v', 'ltx25', 'ltx23'])
 // Bildauswahl: so viele Bilder und Uploads zeigen und je Klick auf „Weitere laden“ dazunehmen.
 const SOURCE_PAGE = 50
 

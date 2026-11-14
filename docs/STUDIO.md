@@ -33,7 +33,10 @@ and the clip gets the new material while your cut stays.
    24 fps. Name, format and the quality of the video scenes are in the properties on the right; a click into empty
    space shows them.
 2. **Add scenes:** double-click a lane and write the prompt in the properties. Drag a scene to move it, drag its right
-   edge to change its length.
+   edge to change its length. A video scene can begin with a **start image** (since 0.5.27): drag an image from the
+   media list onto the field in the properties, or pick one with "Choose from the project folder …". That keeps a
+   character or a place the same across shots. A chain comes first: then the clip begins with the end of the scene
+   before. An image dropped onto the scene itself still becomes a take.
 3. **Set markers:** double-click the marker row, or press M for a note at the playhead.
 4. **Generate scenes:** makes every scene that has no take yet. Sound and still images come first, then the videos; a
    chained scene waits for the one before it, a voice scene for the voice it
@@ -273,6 +276,7 @@ What the Mac does differently:
   within 768 × 512 × 97 frames, for example 4 s at 768 × 512. Still images come from the active image model, music and
   sound from Stable Audio 3, voice scenes from Qwen3-TTS (since Mac 0.5.3; VoiceDesign 1.7B in 4-bit, Base 0.6B in 8-bit).
 - **Chain:** starts from the last frame; carrying the last second over needs LTX-2.5 and stays on Windows.
+- **Start image:** the field in a video scene's properties (Windows, since 0.5.27) is not in the Mac app yet.
 - **Characters** (since Mac 0.5.5): the same as on Windows, with LoRAs for FLUX.2 Klein 4B. "Sound from voice scene"
   stays in the project but has no effect: no video model on the Mac takes a given sound, so Conform lays the line on
   the voice track as usual.

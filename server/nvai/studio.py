@@ -2433,9 +2433,12 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
     out["composition_duration"] = composition_duration(p)
     out["history"] = history(p["id"])
     # Adresse und Art aller verwendeten Assets: Vorschaubilder und Abspielen in der Oberfläche; dazu die Aufnahmen, aus
-    # denen Figuren ihre Stimme nehmen (Auswahl „Aufnahme“ in den Figuren)
+    # denen Figuren ihre Stimme nehmen (Auswahl „Aufnahme“ in den Figuren), und die Start- und Endbilder der Szenen
+    # (Feld „Startbild“ in den Eigenschaften, seit 0.5.27)
     used = ({a for s in p["scenes"] for a in s["takes"]} | {c["asset_id"] for c in p["clips"]}
-            | {c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id")})
+            | {c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id")}
+            | {(s.get("params") or {})[k] for s in p["scenes"] for k in ("image_asset_id", "end_image_asset_id")
+               if (s.get("params") or {}).get(k)})
     assets = {}
     for asset_id in used:
         asset = db.get_asset(asset_id)

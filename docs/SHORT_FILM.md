@@ -153,13 +153,13 @@ onto a scene becomes its take.
 - **One video scene per shot** with LTX-2.5 and one paragraph of prompt: style, framing, the action with verbs, what
   stays still, the camera, the sound. Under **Characters in the picture**, Suomi is ticked; the orange note only
   says that he has no LoRA for this model.
-- **The start image:** Claude set it for each scene over MCP (`studio_command`, `scene.update` with
-  `params.image_asset_id`). The properties don't have a field for it yet. Without Claude: make the clip under
-  **Generate → Video** with LTX-2.5 and the **Start image**, save it to the project, and drag it onto the scene.
+- **The start image:** under **Start image** in the properties, drag the image from the media list onto the field
+  or pick it with **Choose from the project folder …**. For this film Claude set it over MCP (`studio_command`,
+  `scene.update` with `params.image_asset_id`); the field came with NVAI-open 0.5.27.
 - **The spoken line:** a scene on the **Voice** lane with the line and Suomi as speaker, placed under shot 4. In
   shot 4, **Sound from voice scene** points to it. The video follows the line with the lips and takes its length:
 
-<p align="center"><img src="images/short-film-scene.jpg" width="400" alt="Shot 4 in the properties: LTX-2.5, Suomi in the picture, the sound from the voice scene with the line"></p>
+<p align="center"><img src="images/short-film-scene.jpg" width="400" alt="Shot 4 in the properties: LTX-2.5, the start image, Suomi in the picture, the sound from the voice scene with the line"></p>
 
 - **The ending:** the last frame of shot 6 as a still image scene, held for 4.25 s in silence. The quiet end was part
   of the idea from the start.

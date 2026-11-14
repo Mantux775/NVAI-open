@@ -34,7 +34,10 @@ erzeugen, übernehmen, und der Clip bekommt das neue Material, dein Schnitt blei
    24 fps. Name, Format und die Qualität der Videoszenen stehen rechts in den Eigenschaften; ein Klick ins Leere zeigt
    sie.
 2. **Szenen anlegen:** Doppelklick auf eine Bahn und in den Eigenschaften den Prompt schreiben. Eine Szene verschiebst
-   du durch Ziehen, ihre Länge am rechten Rand.
+   du durch Ziehen, ihre Länge am rechten Rand. Eine Videoszene kann mit einem **Startbild** beginnen (seit 0.5.27): ein
+   Bild aus dem Material auf das Feld in den Eigenschaften ziehen oder mit „Aus dem Projektordner wählen …“ aussuchen.
+   So bleiben eine Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann beginnt der
+   Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
 3. **Marker setzen:** Doppelklick auf die Markerzeile oder M für eine Notiz am Abspielkopf.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine
    Anschluss-Szene wartet auf die Szene davor, eine Sprecher-Szene auf die Stimme, die sie übernimmt. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
@@ -285,6 +288,7 @@ Was der Mac anders macht:
   0.6B in 8 Bit).
 - **Anschluss:** beginnt mit dem letzten Bild; die letzte Sekunde zu übernehmen braucht LTX-2.5 und bleibt Windows
   vorbehalten.
+- **Startbild:** Das Feld in den Eigenschaften einer Videoszene (Windows, seit 0.5.27) hat die Mac-App noch nicht.
 - **Figuren** (seit Mac 0.5.5): wie unter Windows, mit LoRAs für FLUX.2 Klein 4B. „Ton aus Sprecher-Szene“ bleibt im
   Projekt, wirkt aber nicht: Kein Videomodell auf dem Mac nimmt einen vorgegebenen Ton, Übernehmen legt den Satz deshalb
   wie gewohnt auf die Spur „Stimme“.

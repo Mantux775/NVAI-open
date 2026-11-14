@@ -1083,6 +1083,13 @@ kbd {
 .st-take > span:first-child { display: grid; place-items: center; aspect-ratio: 16 / 9; }
 .st-take .small { position: absolute; left: 4px; bottom: 2px; color: #fff; text-shadow: 0 0 3px #000; }
 .st-take.st-sel { border-color: var(--accent); }
+/* Startbild einer Videoszene (seit 0.5.27): Ablagefläche mit dem Bild, Auswahl aus dem Projektordner */
+.st-start { display: grid; place-items: center; min-height: 58px; border: 1px dashed var(--line); border-radius: 6px; background: var(--panel-2); color: var(--muted); overflow: hidden; text-align: center; padding: 0; }
+.st-start > span { padding: 10px; }
+.st-start img { display: block; width: auto; height: auto; max-width: 100%; max-height: 150px; margin: 0 auto; pointer-events: none; }
+.st-start.st-over { border-color: var(--accent); border-style: solid; }
+.st-start-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.st-start-grid { max-height: 230px; overflow-y: auto; margin-top: 4px; }
 .st-source-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #111; background: #f2c94c; border-radius: 3px; padding: 1px 5px; }
 .st-source-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .st-source video, .st-source img { object-fit: contain; }

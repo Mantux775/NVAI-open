@@ -1,10 +1,11 @@
-// Eigenschaften der Auswahl: Szene (Prompt, Modell, Länge, Anschluss, Takes), Clip (In/Out, Geschwindigkeit,
+// Eigenschaften der Auswahl: Szene (Prompt, Modell, Startbild, Länge, Anschluss, Takes), Clip (In/Out, Geschwindigkeit,
 // Lautstärke, Übergang), Übergang (Art, Dauer), Marker (Art, Auftrag, Angaben je Art) oder Material (Angaben, Einfügen,
 // Löschen); mehrere Objekte zeigen, was für alle gilt; ohne Auswahl das Projekt (Format, Bildrate). Eingaben gelten
 // beim Verlassen des Feldes oder mit Enter; jede Änderung am Projekt ist ein Befehl und lässt sich rückgängig machen.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type DragEvent as RDragEvent } from 'react'
 import {
+  api,
   fileUrl,
   LORA_BASE_LABEL,
   SPEECH_LANGUAGES,
@@ -24,7 +25,8 @@ import { OutputBadge, licenseBlocked } from '../components/LicenseBadge'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
 import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, snapFrame, tracksOf, trackOrHighest } from './time'
-import { selIds, TRANSITION_LABEL, type Selection } from './Timelines'
+import { ASSET_MIME, selIds, TRANSITION_LABEL, type Selection } from './Timelines'
+import { startImageUse } from '../videoStart'
 
 interface Props {
   project: StudioProject
@@ -336,6 +338,7 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         const chosen = usable.find((m) => m.id === s.model_id)
         return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
       })()}
+      {s.lane === 'video' && s.kind === 'video' && <StartImage p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
       {s.lane === 'video' && <SceneCharacters p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'video' && s.kind === 'video' && (
@@ -466,6 +469,92 @@ function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update
         </label>
       )}
     </>
+  )
+}
+
+/** Startbild einer Videoszene (seit 0.5.27; Nutzer 14.11.2026: „Startbild in die Szenen-Eigenschaften einbauen“):
+ * params.image_asset_id, das erste Bild des Clips; so bleibt eine Figur in jeder Einstellung gleich. Ein Bild aus dem
+ * Material hierher ziehen oder aus dem Projektordner wählen. Vorher ging das nur per MCP/REST, und ein Bild auf der Szene
+ * wurde ein Take (das bleibt so). Ein Anschluss hat Vorrang: Dann beginnt der Clip mit dem Ende der Szene davor. */
+function StartImage({ p, s, models, active, update }: {
+  p: StudioProject
+  s: StudioScene
+  models: ModelInfo[]
+  active: Props['active']
+  update: (fields: Record<string, unknown>) => void
+}) {
+  const id: string | null = s.params?.image_asset_id || null
+  const model = models.find((m) => m.id === (s.model_id || active?.video))
+  const use = model ? startImageUse(model) : 'optional'
+  const [open, setOpen] = useState(false)
+  const [images, setImages] = useState<Asset[] | null>(null)
+  const [over, setOver] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    api.assetPage({ media: 'image', folder: p.folder ?? '', limit: 60, offset: 0 })
+      .then((list) => alive && setImages(list))
+      .catch(() => alive && setImages([]))
+    return () => { alive = false }
+  }, [open, p.folder])
+  const set = (v: string | null) => update({ params: { image_asset_id: v } })
+  const accept = (e: RDragEvent) => {
+    if (!e.dataTransfer.types.includes(ASSET_MIME)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setOver(true)
+  }
+  const drop = (e: RDragEvent) => {
+    setOver(false)
+    const raw = e.dataTransfer.getData(ASSET_MIME)
+    if (!raw) return
+    e.preventDefault()
+    const dropped = JSON.parse(raw) as { id: string; kind: string | null }
+    if (dropped.kind === 'image') set(dropped.id)
+  }
+  if (use === null && !id) {
+    return <p className="muted small">{t(`${model?.name ?? 'Dieses Modell'} nimmt kein Startbild.`, `${model?.name ?? 'This model'} takes no start image.`)}</p>
+  }
+  const a = id ? p.assets[id] : undefined
+  const chained = !!(s.chain_from || s.chain_marker)
+  return (
+    <div className="st-field">
+      <span>{t('Startbild', 'Start image')}{use === 'required' ? ` ${t('(nötig)', '(required)')}` : ''}</span>
+      <div className={`st-start${over ? ' st-over' : ''}`} onDragOver={accept} onDragEnter={accept}
+        onDragLeave={() => setOver(false)} onDrop={drop}>
+        {id
+          ? (a ? <img src={a.url} alt="" title={a.prompt} />
+            : <span className="warn-text small">{t('Das Bild fehlt (gelöscht?).', 'The image is missing (deleted?).')}</span>)
+          : <span className="small">{t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}</span>}
+      </div>
+      <div className="st-start-actions">
+        <button className="btn small ghost" onClick={() => setOpen((x) => !x)}>
+          {open ? t('Auswahl schließen', 'Close the selection') : t('Aus dem Projektordner wählen …', 'Choose from the project folder …')}
+        </button>
+        {id && <button className="btn small ghost" onClick={() => set(null)}>{t('Entfernen', 'Remove')}</button>}
+      </div>
+      {open && (images === null
+        ? <span className="small">{t('Lädt …', 'Loading …')}</span>
+        : images.length === 0
+          ? <span className="small">{t('Im Projektordner liegen noch keine Bilder.', 'There are no images in the project folder yet.')}</span>
+          : (
+            <div className="st-takes st-start-grid">
+              {images.map((x) => (
+                <button key={x.id} className={`st-take${x.id === id ? ' st-sel' : ''}`} title={assetLabel(x)}
+                  onClick={() => { set(x.id); setOpen(false) }}>
+                  <img src={x.thumb_url || x.url} alt="" loading="lazy" />
+                </button>
+              ))}
+            </div>
+          ))}
+      <span className="small">
+        {chained
+          ? t('Der Anschluss hat Vorrang: Der Clip beginnt mit dem Ende der Szene davor.', 'The chain comes first: the clip begins with the end of the scene before.')
+          : use === null
+            ? t('Dieses Modell nimmt kein Startbild; es bleibt hier unbenutzt.', 'This model takes no start image; it stays unused here.')
+            : t('Der Clip beginnt mit diesem Bild. So sieht eine Figur in jeder Einstellung gleich aus.', 'The clip begins with this image, so a character looks the same in every shot.')}
+      </span>
+    </div>
   )
 }
 

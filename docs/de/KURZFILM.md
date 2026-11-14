@@ -155,14 +155,14 @@ Szene gezogen, wird deren Take.
 - **Eine Videoszene je Einstellung** mit LTX-2.5 und einem Absatz Prompt: Stil, Bildausschnitt, die Handlung mit
   Verben, was still bleibt, die Kamera, der Ton. Unter **Figuren im Bild** ist Suomi angehakt; der orange Hinweis sagt
   nur, dass er für dieses Modell keine LoRA hat.
-- **Das Startbild:** Claude setzte es je Szene über MCP (`studio_command`, `scene.update` mit
-  `params.image_asset_id`). In den Eigenschaften gibt es dafür noch kein Feld. Ohne Claude: den Clip unter
-  **Generieren → Video** mit LTX-2.5 und dem **Startbild** machen, im Projekt ablegen und auf die Szene ziehen.
+- **Das Startbild:** in den Eigenschaften unter **Startbild** das Bild aus dem Material auf das Feld ziehen oder mit
+  **Aus dem Projektordner wählen …** aussuchen. Für diesen Film setzte Claude es über MCP (`studio_command`,
+  `scene.update` mit `params.image_asset_id`); das Feld kam mit NVAI-open 0.5.27.
 - **Der gesprochene Satz:** eine Szene in der Bahn **Sprecher** mit dem Satz und Suomi als Sprecher, unter
   Einstellung 4. In Einstellung 4 zeigt **Ton aus Sprecher-Szene** auf sie. Das Video folgt dem Satz mit den Lippen und
   wird so lang wie er:
 
-<p align="center"><img src="../images/short-film-scene-de.jpg" width="400" alt="Einstellung 4 in den Eigenschaften: LTX-2.5, Suomi im Bild, der Ton aus der Sprecher-Szene mit dem Satz"></p>
+<p align="center"><img src="../images/short-film-scene-de.jpg" width="400" alt="Einstellung 4 in den Eigenschaften: LTX-2.5, das Startbild, Suomi im Bild, der Ton aus der Sprecher-Szene mit dem Satz"></p>
 
 - **Das Ende:** das letzte Bild von Einstellung 6 als Standbild-Szene, 4,25 s in Stille gehalten. Das stille Ende
   gehörte von Anfang an zur Idee.
