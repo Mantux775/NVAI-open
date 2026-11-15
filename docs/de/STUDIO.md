@@ -59,7 +59,7 @@ fragt einmal beim Start und bei jedem neuen Projekt („Nicht mehr anzeigen“ s
 <td><img src="../images/studio-wizard-board-de.jpg" alt="Schritt 7: zwei Startbilder je Szene, die gewählten sind markiert"></td>
 </tr></table>
 
-Die Bilder dieser Anleitung stammen aus einem solchen Lauf: Suomi, der Hase aus dem [Kurzfilm](KURZFILM.md), legt auf,
+Die Bilder dieser Anleitung stammen aus einem solchen Lauf: Somi, der Hase aus dem [Kurzfilm](KURZFILM.md), legt auf,
 im Stil „Tusche“ wie im Film und in der Stimmung „Lässig“, mit seinem Bild als Vorlage, drei Szenen und einem Satz.
 
 Die Prompts baut der Assistent aus festen englischen Bausteinen und deinen Worten. Deine Beschreibungen werden vorher
@@ -150,7 +150,7 @@ Projekteinstellungen; unter „Figuren“ legt „+ Figur“ eine an:
 - **Stimme:** wie bei einer Sprecher-Szene: beschreiben, vom Take einer Sprecher-Szene übernehmen oder aus einer
   Aufnahme. Klingt ein Satz richtig, ihn als Vorlage wählen, dann behalten alle weiteren Sätze diese Stimme.
 
-![Das Studio mit einer Figur: Suomi mit einer beschriebenen Stimme; im Monitor die Nahaufnahme, in der er seinen Satz spricht](../images/studio-characters-de.jpg)
+![Das Studio mit einer Figur: Somi mit einer beschriebenen Stimme; im Monitor die Nahaufnahme, in der er seinen Satz spricht](../images/studio-characters-de.jpg)
 
 Danach die Figur in den Szenen zuordnen:
 
@@ -341,7 +341,7 @@ Was der Mac anders macht:
 - **REST:** dieselben `/api/studio/*` wie unter Windows, unter `http://127.0.0.1:8100`.
 
 Gemessen auf einem Mac mini M1 mit 8 GB: Drei Testszenen (ein 2-Sekunden-Video, ein Standbild, 6 s Musik) brauchten
-320 s, der Export von 9 Sekunden in 1080p 2 s. Der Lauf des Assistenten aus dieser Anleitung (Suomi, drei Szenen zu
+320 s, der Export von 9 Sekunden in 1080p 2 s. Der Lauf des Assistenten aus dieser Anleitung (Somi, drei Szenen zu
 4 s, ein Satz und Musik) brauchte auf demselben Mac 38 Minuten: vier Entwürfe 14 min, sechs Startbilder 15 min, drei
 Clips 8,5 min.
 

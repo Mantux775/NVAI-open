@@ -538,7 +538,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
   }
 
   /** Name aus dem ersten Satzteil der Idee (bis . ! ? : ;), lange Namen an einer Wortgrenze gekürzt; sonst
-   *  wurde aus „Suomi is in a really good mood today: the sun is …“ ein mitten im Satz abgeschnittener Name */
+   *  wurde aus „Somi is in a really good mood today: the sun is …“ ein mitten im Satz abgeschnittener Name */
   const projectName = () => {
     let name = idea.split(/[.!?:;\n]/)[0].trim() || charName.trim() || t('Mein Video', 'My video')
     if (name.length > 48) name = name.slice(0, 48).replace(/[\s,]+\S*$/, '')
@@ -943,7 +943,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                   <div className="wz-grid2">
                     <label className="wz-field">
                       <span>{t('Name', 'Name')}</span>
-                      <input value={charName} onChange={(e) => setCharName(e.target.value)} placeholder={t('z. B. Suomi', 'e.g. Suomi')} />
+                      <input value={charName} onChange={(e) => setCharName(e.target.value)} placeholder={t('z. B. Somi', 'e.g. Somi')} />
                     </label>
                     <div className="wz-field">
                       <span>{t('Eigene Vorlage (freiwillig)', 'Your own template (optional)')}</span>

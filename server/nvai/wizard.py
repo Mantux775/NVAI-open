@@ -23,7 +23,7 @@ from . import db, hardware, registry, workflows
 from .hardware import MODEL_REF, REF_VRAM_GB
 
 # Gemessen auf RTX 5060 Ti 16 GB (NVFP4-Fassungen), Sekunden; Quellen: Datenbank der Installation 13.11.2026
-# (Suomi-Kurzfilm), notizen/laufzeiten.md
+# (Kurzfilm mit Somi), notizen/laufzeiten.md
 REF = {
     "character": 22.0,        # FLUX 3 Klein: 2 Entwürfe in rund 1 MP aus Text (21,4–21,9 s je Auftrag)
     "character_ref": 48.0,    # dasselbe mit einer Vorlage als Referenzbild (47–49 s)

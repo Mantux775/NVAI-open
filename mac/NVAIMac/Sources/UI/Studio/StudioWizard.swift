@@ -782,7 +782,7 @@ struct StudioWizard: View {
             } else if characterOn {
                 HStack(alignment: .top, spacing: 12) {
                     field(t("Name", "Name")) {
-                        TextField(t("z. B. Suomi", "e.g. Suomi"), text: $charName).textFieldStyle(.roundedBorder)
+                        TextField(t("z. B. Somi", "e.g. Somi"), text: $charName).textFieldStyle(.roundedBorder)
                     }
                     field(t("Eigene Vorlage (freiwillig)", "Your own template (optional)")) {
                         HStack {

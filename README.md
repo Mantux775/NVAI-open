@@ -81,7 +81,7 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 
 Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
-**The short film with the rabbit:** Suomi began as a quick hand sketch. FLUX 3 made a character of it and, as an edit, gave him a tired mood; each shot got a start image, Qwen3-TTS spoke his line, Stable Audio 3 made the music, and LTX-2.5 animated the shots in the Studio, the line with his lips. Claude Code operated the app over MCP, every decision was made by a person, and the 30 seconds took about 50 minutes on one graphics card. [Step by step with screenshots](docs/SHORT_FILM.md) · [The film on YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
+**The short film with the rabbit:** Somi began as a quick hand sketch. FLUX 3 made a character of it and, as an edit, gave him a tired mood; each shot got a start image, Qwen3-TTS spoke his line, Stable Audio 3 made the music, and LTX-2.5 animated the shots in the Studio, the line with his lips. Claude Code operated the app over MCP, every decision was made by a person, and the 30 seconds took about 50 minutes on one graphics card. [Step by step with screenshots](docs/SHORT_FILM.md) · [The film on YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
 
 ![The short film in the Studio: the shots on the Picture lane, the voice line below shot 4, the music across the whole film; below, the edit with the chosen takes](docs/images/short-film-studio.jpg)
 
@@ -258,11 +258,11 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 ## Video
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="480" alt="YouTube: a short film with the rabbit Suomi, made in the NVAI Studio"></a>
+  <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="480" alt="YouTube: a short film with the rabbit Somi, made in the NVAI Studio"></a>
 </p>
 
-<p align="center">A short film with the rabbit Suomi, from a hand sketch to the export in the Studio, on YouTube (<a href="docs/SHORT_FILM.md">how it was made</a>).<br>
-Ein Kurzfilm mit dem Hasen Suomi, von der Handskizze bis zum Export im Studio, auf YouTube (<a href="docs/de/KURZFILM.md">wie er entstand</a>).<br>
+<p align="center">A short film with the rabbit Somi, from a hand sketch to the export in the Studio, on YouTube (<a href="docs/SHORT_FILM.md">how it was made</a>).<br>
+Ein Kurzfilm mit dem Hasen Somi, von der Handskizze bis zum Export im Studio, auf YouTube (<a href="docs/de/KURZFILM.md">wie er entstand</a>).<br>
 <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ">youtube.com/watch?v=cDhmiLMU6WQ</a></p>
 
 <p align="center">
@@ -335,7 +335,7 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 
 Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
-**Der Kurzfilm mit dem Hasen:** Suomi begann als schnelle Handskizze. FLUX 3 machte daraus eine Figur und gab ihr als Bearbeitung eine müde Stimmung; jede Einstellung bekam ein Startbild, Qwen3-TTS sprach seinen Satz, Stable Audio 3 machte die Musik, und LTX-2.5 bewegte die Einstellungen im Studio, den Satz mit seinen Lippen. Claude Code bediente die App über MCP, die Entscheidungen traf ein Mensch, und die 30 Sekunden brauchten rund 50 Minuten auf einer Grafikkarte. [Schritt für Schritt mit Bildern](docs/de/KURZFILM.md) · [Der Film auf YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
+**Der Kurzfilm mit dem Hasen:** Somi begann als schnelle Handskizze. FLUX 3 machte daraus eine Figur und gab ihr als Bearbeitung eine müde Stimmung; jede Einstellung bekam ein Startbild, Qwen3-TTS sprach seinen Satz, Stable Audio 3 machte die Musik, und LTX-2.5 bewegte die Einstellungen im Studio, den Satz mit seinen Lippen. Claude Code bediente die App über MCP, die Entscheidungen traf ein Mensch, und die 30 Sekunden brauchten rund 50 Minuten auf einer Grafikkarte. [Schritt für Schritt mit Bildern](docs/de/KURZFILM.md) · [Der Film auf YouTube](https://www.youtube.com/watch?v=cDhmiLMU6WQ)
 
 ![Der Kurzfilm im Studio: die Einstellungen in der Bahn Bild/Video, der Satz unter Einstellung 4, die Musik über den ganzen Film; darunter der Schnitt mit den gewählten Takes](docs/images/short-film-studio-de.jpg)
 

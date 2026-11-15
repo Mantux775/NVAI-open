@@ -3,11 +3,11 @@
 [English](../SHORT_FILM.md)
 
 Ein Kurzfilm von 30 Sekunden mit einer gezeichneten Figur, an einem Abend mit NVAI-open entstanden. Ein müder weißer
-Hase namens Suomi zieht eine alte Batterie an einem ausgefransten Kabel hinter sich her. Die Linie, auf der er geht,
+Hase namens Somi zieht eine alte Batterie an einem ausgefransten Kabel hinter sich her. Die Linie, auf der er geht,
 zerfällt. Er hebt den Kopf, sagt „Please... somebody plug in the artist.“, setzt sich, und die Batterie erlischt.
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="560" alt="YouTube: der Kurzfilm mit Suomi und der Batterie"></a>
+  <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="560" alt="YouTube: der Kurzfilm mit Somi und der Batterie"></a>
 </p>
 <p align="center"><sub>Der fertige Film auf YouTube</sub></p>
 
@@ -42,7 +42,7 @@ ausdrucksstark, auf diffusem schwarzem Grund.
   8 Bilder in 4 Haltungen, 22 s je zwei Bilder:
 
   > Hand-inked cartoon illustration with confident black brush outlines of varying thickness, flat white fill, a few
-  > loose grey hatching strokes for shading and a single accent color: Finnish flag blue. … The character is Suomi, an
+  > loose grey hatching strokes for shading and a single accent color: Finnish flag blue. … The character is Somi, an
   > original mischievous rabbit-like creature with white fur, two long ears with Finnish blue insides, the right ear
   > bent over halfway so that its tip hangs down, heavy angry slanted eyebrows, … a crooked grin full of sharp zigzag
   > shark teeth … He stands full body in a slightly turned three-quarter view, fists on his hips, grinning. Diffuse
@@ -53,7 +53,7 @@ jeder späteren Einstellung wiedererkennbar, und sie bleibt deine eigene Figur.
 
 ## 2. Eine neue Stimmung als Bearbeitung
 
-Für die Batterie-Geschichte musste Suomi müde sein, nicht böse. Ein neuer Prompt hätte einen anderen Hasen gezeichnet.
+Für die Batterie-Geschichte musste Somi müde sein, nicht böse. Ein neuer Prompt hätte einen anderen Hasen gezeichnet.
 Eine Bearbeitung des gewählten Entwurfs behält alles, was nicht erwähnt wird:
 
 ![Der Reiter Generieren mit FLUX 3 Image Klein: Der Prompt sagt, was sich ändert und was bleibt, der Entwurf ist Referenzbild 1, „Prompt ausbauen lassen“ ist aus](../images/short-film-flux-de.jpg)
@@ -63,7 +63,7 @@ Eine Bearbeitung des gewählten Entwurfs behält alles, was nicht erwähnt wird:
 3. Im Prompt sagen, was sich ändert und was gleich bleibt:
 
    > Change his mood to deeply depressed: both ears droop and hang down limply, his eyes are half closed and look down
-   > at the floor, … his shoulders slump forward and his arms hang loosely at his sides. Keep the same character Suomi
+   > at the floor, … his shoulders slump forward and his arms hang loosely at his sides. Keep the same character Somi
    > from the first image: the same white fur, the same long ears with Finnish blue insides, … the same body
    > proportions, the same hand-inked black brush outlines … Change only his facial expression and posture as
    > described.
@@ -72,7 +72,7 @@ Eine Bearbeitung des gewählten Entwurfs behält alles, was nicht erwähnt wird:
    unter **Ablegen in** das Studio-Projekt. Dann landet alles gleich im Material des Projekts.
 
 Zwei Bilder dauerten 47 s. In beiden ließ FLUX die Ohren aufrecht stehen, statt sie hängen zu lassen: Es hält sich eng
-an die Vorlage. Das mit den müden, halb geschlossenen Augen wurde der Suomi für diesen Film (rechts im Streifen oben).
+an die Vorlage. Das mit den müden, halb geschlossenen Augen wurde der Somi für diesen Film (rechts im Streifen oben).
 
 ## 3. Storyboard: ein Startbild je Einstellung
 
@@ -82,7 +82,7 @@ Ende:
 
 | Einstellung | Bildausschnitt | Was passiert |
 |---|---|---|
-| 1 | Totale | Suomi auf einer dünnen weißen Linie macht einen schweren Schritt und zieht die Batterie hinterher; ihre Anzeige steht fast auf leer |
+| 1 | Totale | Somi auf einer dünnen weißen Linie macht einen schweren Schritt und zieht die Batterie hinterher; ihre Anzeige steht fast auf leer |
 | 2 | Nah auf die Batterie | später gestrichen: Der Film wurde zu lang |
 | 3 | Von hinten, tief | er geht weg; vor ihm zerfällt die Linie in Striche |
 | 4 | Halbnah von vorn | er hebt den Kopf und sagt den Satz |
@@ -92,21 +92,21 @@ Ende:
 
 ![Die Startbilder der Einstellungen 1, 3, 4, 5 und 6 und das gehaltene letzte Bild](../images/short-film-storyboard.jpg)
 
-Jedes Startbild ist wieder eine Bearbeitung mit FLUX 3: der müde Suomi (oder die passende Ansicht von ihm, siehe
+Jedes Startbild ist wieder eine Bearbeitung mit FLUX 3: der müde Somi (oder die passende Ansicht von ihm, siehe
 unten) als Referenzbild, 1920 × 1088 (die Videogröße), zwei Bilder je Einstellung, 74–80 s. Die Prompts folgen einem
 Muster. Zuerst der Stil, dazu ein Satz gegen den typischen KI-Look, dann die Figur aus der Referenz, dann die
 Einstellung:
 
 > Hand-drawn 2D cartoon frame with imperfect, slightly wobbly black ink lines and a few loose grey hatching strokes,
 > flat and simple. The whole picture is desaturated, almost black and white in muted greys … No glossy highlights,
-> no glow effects, no lens flare, no blur, no extra details. The character is Suomi from the first image: … Wide shot
+> no glow effects, no lens flare, no blur, no extra details. The character is Somi from the first image: … Wide shot
 > from the side: … an old, worn-out cylindrical battery as tall as his chest, dented, with rust spots and a peeling
 > paper label without any text, a small round charge gauge on its side, old-fashioned like from the 1950s … Diffuse
 > black background, empty darkness all around.
 
 Was unterwegs auffiel:
 
-- **Ansichten von hinten:** Mit der Vorderansicht als einziger Referenz stand Suomi auch in den Einstellungen von
+- **Ansichten von hinten:** Mit der Vorderansicht als einziger Referenz stand Somi auch in den Einstellungen von
   hinten der Kamera zugewandt. Deshalb zeichnete FLUX ein Figurenblatt mit Vorder-, Seiten- und Rückansicht, und jede
   Ansicht wurde ausgeschnitten zur Referenz ihrer Einstellungen. Das erste Blatt zeigte einen kleinen Schwanz, der
   nicht gewollt war; das zweite entstand mit „He has no tail at all, in none of the views.“, und die Prompts von hinten
@@ -125,16 +125,16 @@ Was unterwegs auffiel:
 > An old man with a rough, gravelly, deep voice, speaking slowly, quietly and wearily with a lowered, resigned tone.
 
 Dieselbe Beschreibung klingt mit jedem Seed etwas anders. Also drei Versuche (je 7 s, sobald das Modell geladen ist),
-anhören, den besten behalten. Die gewählte Aufnahme wird Suomis Stimme:
+anhören, den besten behalten. Die gewählte Aufnahme wird Somis Stimme:
 
 1. Aus dem Material auf eine Szene in der Bahn **Sprecher** ziehen. Sie wird zum Take dieser Szene.
 2. Im Studio ins Leere klicken. Unter **Figuren** auf **+ Figur**, **Stimme: aus einer Aufnahme** wählen, die Aufnahme
    auswählen und wortgenau eintragen, was darin gesagt wird.
-3. In der Sprecher-Szene Suomi als Sprecher wählen. Neue Sätze für ihn kommen dann in derselben Stimme.
+3. In der Sprecher-Szene Somi als Sprecher wählen. Neue Sätze für ihn kommen dann in derselben Stimme.
 
-<p align="center"><img src="../images/short-film-character-de.jpg" width="400" alt="Die Figur Suomi in den Projekteinstellungen: Stimme aus einer Aufnahme, mit dem gesprochenen Text und der Sprache"></p>
+<p align="center"><img src="../images/short-film-character-de.jpg" width="400" alt="Die Figur Somi in den Projekteinstellungen: Stimme aus einer Aufnahme, mit dem gesprochenen Text und der Sprache"></p>
 
-Suomi hat hier keine LoRA, weil die Startbilder sein Aussehen tragen. Eine Figur kann ihr Aussehen auch als LoRA
+Somi hat hier keine LoRA, weil die Startbilder sein Aussehen tragen. Eine Figur kann ihr Aussehen auch als LoRA
 mitbringen, etwa eine selbst trainierte ([Figuren](STUDIO.md#figuren)).
 
 **Die Musik.** Stable Audio 3 Medium, ein Satz mit Gattung, Instrumenten, Stimmung und Tempo, 60 s, zwei Versuche mit
@@ -153,16 +153,16 @@ Szene gezogen, wird deren Take.
 - **Projekt:** 1920 × 1080 bei 24 fps. Videoszenen auf **Standard, schneller**: Der flache Zeichenstil war schon in
   Standardqualität scharf, und DFR dauert rund dreimal so lang.
 - **Eine Videoszene je Einstellung** mit LTX-2.5 und einem Absatz Prompt: Stil, Bildausschnitt, die Handlung mit
-  Verben, was still bleibt, die Kamera, der Ton. Unter **Figuren im Bild** ist Suomi angehakt; der orange Hinweis sagt
+  Verben, was still bleibt, die Kamera, der Ton. Unter **Figuren im Bild** ist Somi angehakt; der orange Hinweis sagt
   nur, dass er für dieses Modell keine LoRA hat.
 - **Das Startbild:** in den Eigenschaften unter **Startbild** das Bild aus dem Material auf das Feld ziehen oder mit
   **Aus dem Projektordner wählen …** aussuchen. Für diesen Film setzte Claude es über MCP (`studio_command`,
   `scene.update` mit `params.image_asset_id`); das Feld kam mit NVAI-open 0.5.27.
-- **Der gesprochene Satz:** eine Szene in der Bahn **Sprecher** mit dem Satz und Suomi als Sprecher, unter
+- **Der gesprochene Satz:** eine Szene in der Bahn **Sprecher** mit dem Satz und Somi als Sprecher, unter
   Einstellung 4. In Einstellung 4 zeigt **Ton aus Sprecher-Szene** auf sie. Das Video folgt dem Satz mit den Lippen und
   wird so lang wie er:
 
-<p align="center"><img src="../images/short-film-scene-de.jpg" width="400" alt="Einstellung 4 in den Eigenschaften: LTX-2.5, das Startbild, Suomi im Bild, der Ton aus der Sprecher-Szene mit dem Satz"></p>
+<p align="center"><img src="../images/short-film-scene-de.jpg" width="400" alt="Einstellung 4 in den Eigenschaften: LTX-2.5, das Startbild, Somi im Bild, der Ton aus der Sprecher-Szene mit dem Satz"></p>
 
 - **Das Ende:** das letzte Bild von Einstellung 6 als Standbild-Szene, 4,25 s in Stille gehalten. Das stille Ende
   gehörte von Anfang an zur Idee.

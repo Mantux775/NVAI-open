@@ -58,7 +58,7 @@ Studio asks once when it starts and for every new project ("Don't show again" sw
 <td><img src="images/studio-wizard-board.jpg" alt="Step 7: two start images per scene, the chosen ones are marked"></td>
 </tr></table>
 
-The pictures in this guide come from one such run: Suomi, the rabbit from the [short film](SHORT_FILM.md), on the
+The pictures in this guide come from one such run: Somi, the rabbit from the [short film](SHORT_FILM.md), on the
 decks, in the "Ink" style of the film and the "Cool" mood, with his picture as the template, three scenes and one
 line.
 
@@ -147,7 +147,7 @@ project settings; under "Characters", "+ Character" adds one:
 - **Voice:** as with a voice scene: describe it, take it over from the take of a voice scene, or from a recording.
   Once a line sounds right, choose it as the reference, so every further line keeps that voice.
 
-![The Studio with a character: Suomi with a described voice; in the monitor the close-up in which he speaks his line](images/studio-characters.jpg)
+![The Studio with a character: Somi with a described voice; in the monitor the close-up in which he speaks his line](images/studio-characters.jpg)
 
 Then assign the character in the scenes:
 
@@ -330,7 +330,7 @@ What the Mac does differently:
 - **REST:** the same `/api/studio/*` as on Windows, at `http://127.0.0.1:8100`.
 
 Measured on a Mac mini M1 with 8 GB: three test scenes (a 2-second video, a still image, 6 s of music) took 320 s,
-exporting 9 seconds at 1080p took 2 s. The assistant run from this guide (Suomi, three scenes of 4 s, a line and music)
+exporting 9 seconds at 1080p took 2 s. The assistant run from this guide (Somi, three scenes of 4 s, a line and music)
 took 38 minutes on the same Mac: four drafts 14 min, six start images 15 min, three clips 8.5 min.
 
 ![The assistant on the Mac: the times for this Mac from the hardware catalog](images/studio-mac-wizard.jpg)
