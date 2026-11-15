@@ -17,7 +17,7 @@ export interface LoraRef {
 /** Die vier Modi, die wirklich etwas erzeugen. */
 export type GenKind = 'image' | 'audio' | 'speech' | 'video' | '3d'
 // Wofür "Prompt ausbauen" schreibt (server/nvai/prompt_targets.py)
-export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_multishot' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d'
+export type ExpandTarget = 'image' | 'video' | 'video_sound' | 'video_multishot' | 'video_start' | 'sfx' | 'music' | 'music_sa3' | '3d' | 'translate'
 
 export interface Job {
   id: string
@@ -456,6 +456,71 @@ export const SPEECH_LANGUAGES: { id: SpeechLanguage; label: string }[] = [
   { id: 'es', label: 'Español' }, { id: 'it', label: 'Italiano' }, { id: 'pt', label: 'Português' },
   { id: 'ru', label: 'Русский' }, { id: 'zh', label: '中文' }, { id: 'ja', label: '日本語' }, { id: 'ko', label: '한국어' },
 ]
+
+/** Hardware-Katalog (seit 0.5.28): die rechnende Karte und typische Rechenzeit je Modell für sie */
+export interface HardwareDevice {
+  name: string | null
+  vendor: string | null
+  vram_gb: number | null
+  catalog_id: string | null
+  catalog_name?: string | null
+  arch?: string | null
+  laptop?: boolean | null
+  speed: number | null
+  path: string | null
+  uncertain?: boolean
+  reference?: string
+}
+
+export interface HardwareInfo {
+  device: HardwareDevice
+  /** je Modell-ID: Sekunden für einen typischen Auftrag (task) auf dieser Karte */
+  estimates: Record<string, { seconds: number; task: string; measured: boolean }>
+  catalog: { devices: number; generated: string | null }
+}
+
+/** Assistent im Studio (seit 0.5.28): ein Modell je Aufgabe, für diese Karte gewählt (beste Qualität zuerst) */
+export interface WizardModel {
+  id: string
+  name: string
+  family: string
+  installed: boolean
+  runnable: boolean
+  /** angefangener Download */
+  partial: boolean
+  recommended: boolean
+  size_gb: number
+  vram_gb: number
+  fits_vram: string
+  dfr: boolean
+  commercial_ok: boolean
+  license: string
+  /** Video: Ton aus dem Bild, Lippen zum vorgegebenen Satz, Schleife (Endbild = Startbild) */
+  sound: boolean
+  lipsync: boolean
+  loop: boolean
+  /** gesperrte Hugging-Face-Repos ohne Freigabe für den hinterlegten Token */
+  gated: string[]
+}
+
+export type WizardRole = 'image' | 'video' | 'speech' | 'music'
+
+/** Plan des Assistenten: erkannte Karte (Hardware-Katalog), Modelle, Bildgröße, Qualität, geschätzte Rechenzeiten */
+export interface WizardPlan {
+  device: HardwareDevice
+  models: { image: WizardModel | null; video: WizardModel | null; speech: WizardModel | null; music: WizardModel | null }
+  width: number
+  height: number
+  tier: string
+  quality: 'dfr' | 'standard'
+  /** zur Wahl je Aufgabe, die beste zuerst; best = vorgewählt */
+  options: Record<WizardRole, WizardModel[]>
+  best: Record<WizardRole, string | null>
+  /** seconds null: keine Messung für das gewählte Modell (source 'unknown'); 'rough' = aus einem anderen Modell hochgerechnet */
+  steps: { key: string; seconds: number | null; source: 'history' | 'estimate' | 'rough' | 'unknown'; runs: number }[]
+  total_seconds: number
+  notes: string[]
+}
 
 export interface VideoParams {
   loras?: LoraRef[]
@@ -911,6 +976,11 @@ export const api = {
   studioExport: (id: string, preset: string) =>
     req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
   studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),
+  /** Hardware-Katalog (seit 0.5.28): erkannte Karte und typische Zeiten je Modell */
+  hardware: () => req<HardwareInfo>('/api/hardware'),
+  /** Assistent (seit 0.5.28): Karte, Modelle und geschätzte Zeiten für ein Vorhaben */
+  studioWizardPlan: (body: Record<string, unknown>) =>
+    req<WizardPlan>('/api/studio/wizard/plan', { method: 'POST', body: JSON.stringify(body) }),
   studioConformPlan: (id: string) =>
     req<{ items: StudioConformItem[]; without_take: number; transition_markers: number; spoken_in_video?: number }>(`/api/studio/projects/${id}/conform`),
   studioPackageInfo: (id: string) =>

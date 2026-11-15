@@ -233,6 +233,22 @@ Eine selbst trainierte LoRA (ai-toolkit, kohya_ss, OneTrainer, musubi-tuner …)
 Zuordnung später ändern. Welche Modelle LoRAs nehmen, die Schritte, die getesteten LoRAs und die REST-Aufrufe:
 [LORAS.md](LORAS.md).
 
+### Deine Hardware
+
+Unter „Modelle“ zeigt **Deine Hardware**, auf welcher Grafikkarte NVAI-open rechnet, wie sie rechnet (NVFP4 auf RTX 50,
+INT8 auf älteren NVIDIA-Karten, FP8 oder bf16 auf Radeon) und wie schnell sie ungefähr ist, verglichen mit der RTX 5060
+Ti 16 GB, auf der alle Zeiten gemessen sind. Jedes Modell zeigt dann die typische Zeit für einen Auftrag auf deiner
+Karte, ebenso die Modellwahl im Reiter Generieren und der Assistent im Studio.
+
+![Unter „Modelle“: deine Grafikkarte aus dem Hardware-Katalog und die Zeit für einen Auftrag an jedem Modell](../images/models-hardware-de.jpg)
+
+Dahinter steht ein Hardware-Katalog mit 110 Grafikkarten und Chips: NVIDIA RTX 20 bis 50 samt Laptops und
+Workstation-Karten, AMD Radeon RX 7000 und 9000 sowie Apple M1 bis M6, jeweils mit Speicher, Bandbreite und dichtem
+Rechendurchsatz je Genauigkeit, mit Quellen (`server/nvai/hardware.json`). Die Geschwindigkeit ist eine Schätzung aus
+diesen Werten: FP4-Durchsatz für RTX 50, INT8 für ältere NVIDIA-Karten, FP8 oder FP16 mit Abschlag für Radeon.
+Gegengeprüft an einer zweiten Messung: Für eine RTX 4060 sagt sie 3,1-mal langsamer als die 5060 Ti voraus, gemessen
+wurde mit FLUX 3 3,2-mal. Sobald du ein paar Aufträge gerechnet hast, nimmt der Assistent deine echten Zeiten.
+
 ### NVFP4 oder INT8
 
 Nur RTX 50 rechnet NVFP4 in Hardware; RTX 20, 30 und 40 rechnen INT8. NVAI-open markiert die passende Fassung als

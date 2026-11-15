@@ -305,6 +305,10 @@ private struct SceneInspector: View {
                 }
             }
             modelPicker
+            if scene.lane == "video" && scene.kind == "video" {
+                SceneStartImageView(model: model, project: project, scene: scene,
+                                    chained: scene.chainFrom != nil || chainMarker != nil, update: update)
+            }
             if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
             if scene.lane == "video" { SceneCharactersView(project: project, scene: scene, update: update) }
             if scene.lane == "video" && scene.kind == "video" {
@@ -423,6 +427,104 @@ enum StudioRecordings {
 /// Stimme einer Sprecher-Szene (seit 0.5.3, wie unter Windows): beschreiben, die einer Figur (seit 0.5.5), gleich wie
 /// eine andere Sprecher-Szene (deren gewählter Take mit seinem Text) oder aus einer Aufnahme des Projekts; dazu die
 /// Sprache (bei einer Figur deren Sprache).
+/// Startbild einer Videoszene (seit Mac 0.5.6, wie StartImage in Inspector.tsx unter Windows seit 0.5.27): ein Bild
+/// aus dem Material hierher ziehen, aus dem Projektordner wählen oder von der Festplatte laden; entfernen. Bei einem
+/// Anschluss kommt das Startbild aus der Szene davor, dann nur ein Hinweis.
+private struct SceneStartImageView: View {
+    @ObservedObject var model: StudioModel
+    let project: StudioProject
+    let scene: StudioScene
+    let chained: Bool
+    let update: (StudioParams) -> Void
+    @State private var asset: AssetRecord?
+    @State private var choices: [AssetRecord] = []
+    @State private var hover = false
+
+    private var assetID: String? { scene.params["image_asset_id"]?.stringValue }
+
+    static func isPicture(_ a: AssetRecord) -> Bool {
+        a.kind == "image" || (a.kind == "upload"
+            && ["png", "jpg", "jpeg", "webp", "heic", "tif", "tiff"].contains((a.filename as NSString).pathExtension.lowercased()))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(t("Startbild", "Start image")).font(.caption).foregroundStyle(.secondary)
+            if chained {
+                Text(t("Kommt aus dem Anschluss: das letzte Bild der Szene davor.",
+                       "Comes from the chain: the last frame of the scene before."))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(hover ? Color.green : Color.secondary.opacity(0.4),
+                                      style: StrokeStyle(lineWidth: hover ? 2 : 1, dash: asset == nil ? [4] : []))
+                    if let asset {
+                        AssetThumbnail(asset: asset, maxSide: 400).padding(3)
+                    } else {
+                        Text(t("Bild aus dem Material hierher ziehen", "Drag a picture from the media here"))
+                            .font(.caption).foregroundStyle(.secondary).padding(8)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 56, maxHeight: 150)
+                .dropDestination(for: String.self) { ids, _ in
+                    guard let id = ids.first else { return false }
+                    Task { await use(id) }
+                    return true
+                } isTargeted: { hover = $0 }
+                HStack(spacing: 6) {
+                    Menu(t("Aus dem Projektordner …", "From the project folder …")) {
+                        if choices.isEmpty { Text(t("Keine Bilder im Projektordner", "No pictures in the project folder")) }
+                        ForEach(choices, id: \.id) { a in
+                            Button(a.prompt.isEmpty ? a.filename : String(a.prompt.prefix(48))) { Task { await use(a.id) } }
+                        }
+                    }
+                    .fixedSize()
+                    Button(t("Datei …", "File …")) { pickFile() }
+                    if assetID != nil {
+                        Button(t("Entfernen", "Remove")) { update(["params": .object(["image_asset_id": .null])]) }
+                    }
+                }
+                .font(.callout)
+                Text(t("Der Clip beginnt mit diesem Bild; mit einer Figur sieht sie so in jeder Szene gleich aus.",
+                       "The clip begins with this picture; with a character, it looks the same in every scene."))
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .task(id: (assetID ?? "") + "|" + project.id) { await load() }
+    }
+
+    private func load() async {
+        asset = nil
+        if let id = assetID { asset = await AssetStore.shared.get(id) }
+        choices = await AssetStore.shared.list(limit: 5000)
+            .filter { $0.meta["studio_project"]?.stringValue == project.id && Self.isPicture($0) }
+    }
+
+    /// Nur Bilder; das Bild kommt dabei in den Projektordner (wie unter Windows)
+    private func use(_ id: String) async {
+        guard let a = await AssetStore.shared.get(id), Self.isPicture(a) else {
+            model.notice = t("Als Startbild geht nur ein Bild.", "Only a picture works as a start image.")
+            return
+        }
+        await AssetStore.shared.tag([id], project: project.id)
+        update(["params": .object(["image_asset_id": .string(id)])])
+    }
+
+    private func pickFile() {
+        guard let url = Panels.chooseImage(t("Startbild wählen", "Choose a start image")),
+              let data = try? Data(contentsOf: url) else { return }
+        Task {
+            do {
+                let record = try await AssetStore.shared.addUpload(data: data, originalName: url.lastPathComponent)
+                await use(record.id)
+            } catch {
+                model.notice = error.localizedDescription
+            }
+        }
+    }
+}
+
 private struct VoiceInspector: View {
     let project: StudioProject
     let scene: StudioScene

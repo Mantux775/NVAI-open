@@ -384,7 +384,7 @@ class VhsRequest(BaseModel):
 
 
 ExpandTarget = Literal["image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music",
-                       "music_sa3", "3d"]
+                       "music_sa3", "3d", "translate"]
 
 
 class ExpandPromptRequest(BaseModel):

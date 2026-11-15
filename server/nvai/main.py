@@ -25,7 +25,7 @@ from starlette.requests import ClientDisconnect
 
 import httpx
 
-from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio
+from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio, wizard, hardware
 from .i18n import t
 from . import gpu as gpu_info
 from .schemas import (
@@ -134,6 +134,10 @@ API_FEATURES = [
                           # characters, character, audio_from; Übernehmen-Plan mit spoken_in_video (seit 0.5.24)
     "audio_prompt",    # GenerateVideoRequest.audio_prompt: eigene Tonbeschreibung fuer Modelle mit
                        # features.audio_prompt (Kandinsky 6, seit 0.5.25); andere lehnen sie mit Hinweis ab
+    "studio_wizard",   # Assistent im Studio: POST /api/studio/wizard/plan (Karte aus dem Hardware-Katalog, Modelle je
+                       # Aufgabe, geschätzte Rechenzeit; seit 0.5.28)
+    "hardware_catalog",  # GET /api/hardware: erkannte Karte im Hardware-Katalog und typische Rechenzeit je Modell
+                         # (Modelle-Seite, Generieren; seit 0.5.28)
 ]
 
 
@@ -1324,6 +1328,22 @@ async def studio_commands() -> list[dict[str, str]]:
 @app.get("/api/studio/presets")
 async def studio_presets() -> list[dict[str, Any]]:
     return studio.presets()
+
+
+@app.get("/api/hardware")
+async def hardware_info() -> dict[str, Any]:
+    """Hardware-Katalog (seit 0.5.28): die rechnende Karte und typische Rechenzeiten je Modell für sie."""
+    def _info() -> dict[str, Any]:
+        cat = hardware.catalog()
+        return {"device": hardware.profile(), "estimates": hardware.estimates(registry.list_models()),
+                "catalog": {"devices": len(cat.get("devices", [])), "generated": cat.get("generated")}}
+    return await asyncio.to_thread(_info)
+
+
+@app.post("/api/studio/wizard/plan")
+async def studio_wizard_plan(body: dict[str, Any]) -> dict[str, Any]:
+    """Assistent (seit 0.5.28): Karte, Modelle je Aufgabe, Bildgröße, Qualität und geschätzte Rechenzeit."""
+    return await asyncio.to_thread(wizard.plan, body)
 
 
 @app.get("/api/studio/projects/{pid}/conform")

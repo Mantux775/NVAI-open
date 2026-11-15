@@ -27,15 +27,58 @@ in and an out point, a speed, a volume and optionally a transition at its start.
 **Conform** puts the chosen takes into the edit. A clip stays linked to its scene: generate the scene again, conform,
 and the clip gets the new material while your cut stays.
 
+## The assistant
+
+New to the Studio? **✨ Assistant** next to "Conform" guides you through a whole video in seven short steps, and the
+Studio asks once when it starts and for every new project ("Don't show again" switches that off; the button stays).
+
+![The assistant's first step: six paths, from one continuous shot to an animation](images/studio-wizard.jpg)
+
+1. **Path:** one continuous shot, a short story in scenes, with a narrator, a character speaks, a face from a photo,
+   or animation.
+2. **Idea:** one or two sentences, the place, a style (live action, 3D animation, cartoon, ink, anime), a mood (it
+   sets the light and the music) and the format (YouTube or Shorts).
+3. **Character:** describe it and pick one of four drafts, optionally from your own sketch, or choose "Without a
+   character" for places, things and nature: then the start images come straight from your scenes, and a narrator
+   off screen reads the lines. With "a face from a photo" you load a portrait instead and say which role the person
+   plays.
+4. **Scenes:** how many (three suggestions with the film length and the computing time, or a number of your own up
+   to 20), what happens in each shot, the framing, 4 to 6 seconds, and a line: the character speaks it, without a
+   character the narrator reads it.
+5. **Sound:** a voice and the language of the lines; for the music 22 suggestions (the mood picks one) and a prompt
+   field to change it or write your own.
+6. **Models:** the best models for your graphics card are preselected, with the expected time from the
+   [hardware catalog](MODELS.md#your-hardware); you can pick another one for each task. If a model is missing, the
+   assistant asks whether to download it. "Best quality" is on by default; it takes longer.
+7. **Go:** the assistant sets up a normal Studio project, makes two start images per scene to choose from, and then
+   the videos. A small card says what comes next (check the takes, Conform, Export).
+
+<table><tr>
+<td><img src="images/studio-wizard-models.jpg" alt="Step 6: the best models for this graphics card with the expected time"></td>
+<td><img src="images/studio-wizard-board.jpg" alt="Step 7: two start images per scene, the chosen ones are marked"></td>
+</tr></table>
+
+The pictures in this guide come from one such run: Suomi, the rabbit from the [short film](SHORT_FILM.md), on the
+decks, in the "Ink" style of the film and the "Cool" mood, with his picture as the template, three scenes and one
+line.
+
+The assistant writes the prompts from fixed English building blocks and your words. Your descriptions are translated
+into English first, because the image and video models understand English best; spoken lines stay as you wrote them.
+Every line is spoken in one voice: the first line sets it, the others take it over.
+
+With **a face from a photo**, every start image is made from the portrait, and every clip ends in its start image
+again so that the face holds through the whole clip. A moving background (water, smoke) then stays rather still. The
+photo stays on your computer.
+
 ## Step by step
 
 1. **New project:** "+" next to the project list at the top left, then "New project". It starts at 1920 × 1080 and
    24 fps. Name, format and the quality of the video scenes are in the properties on the right; a click into empty
    space shows them.
 2. **Add scenes:** double-click a lane and write the prompt in the properties. Drag a scene to move it, drag its right
-   edge to change its length. A video scene can begin with a **start image** (since 0.5.27): drag an image from the
-   media list onto the field in the properties, or pick one with "Choose from the project folder …". That keeps a
-   character or a place the same across shots. A chain comes first: then the clip begins with the end of the scene
+   edge to change its length. A video scene can begin with a **start image** (since 0.5.27, Mac 0.5.6): drag an image
+   from the media list onto the field in the properties, or pick one with "Choose from the project folder …". That keeps
+   a character or a place the same across shots. A chain comes first: then the clip begins with the end of the scene
    before. An image dropped onto the scene itself still becomes a take.
 3. **Set markers:** double-click the marker row, or press M for a note at the playhead.
 4. **Generate scenes:** makes every scene that has no take yet. Sound and still images come first, then the videos; a
@@ -47,7 +90,7 @@ and the clip gets the new material while your cut stays.
    cuts at the playhead. A right-click anywhere shows what you can do.
 6. **Export:** pick a format and click "Export". The video also lands in the History.
 
-![While scenes are generated: next to "Conform" the scene being made with its percentage and how many are done, and Cancel; on the right the properties with the larger prompt field (1366 × 720)](images/studio-progress.jpg)
+![While scenes are generated: next to "Conform" the scene being made with its percentage, and Cancel](images/studio-progress.jpg)
 
 Every change is saved at once, and undo goes back up to 100 steps. "Delete" next to the project moves it into the
 Studio's trash folder (`studio\papierkorb` in the data folder).
@@ -64,7 +107,7 @@ last frames for chains and your uploads land there. In the Generate tab, "Save t
 images, videos and sound straight into a project's folder. The folder button next to the upload button shows the
 folders; ".." goes up one level. "Clear history" leaves project folders alone, and a deleted project keeps its folder.
 
-![The media list with folders: on the top level the project folders and the general History, inside a project folder ".." goes up](images/studio-folders.jpg)
+![The media list with folders: on the top level the project folders, inside a project folder ".." goes up](images/studio-folders.jpg)
 
 **Click** a file to play it in the monitor; Esc goes back to the edit. The properties show its details, a download of
 the lossless copy, "Insert at the playhead" and "Delete". Drag a file onto a track to make a clip, or onto a scene to
@@ -104,7 +147,7 @@ project settings; under "Characters", "+ Character" adds one:
 - **Voice:** as with a voice scene: describe it, take it over from the take of a voice scene, or from a recording.
   Once a line sounds right, choose it as the reference, so every further line keeps that voice.
 
-![The Studio with a character: its look from two LoRAs and a described voice; a portrait, a voice line and the clip that speaks it](images/studio-characters.jpg)
+![The Studio with a character: Suomi with a described voice; in the monitor the close-up in which he speaks his line](images/studio-characters.jpg)
 
 Then assign the character in the scenes:
 
@@ -149,7 +192,7 @@ every clip about half a second of spare material at its end.
 
 ## Scale and zoom with keyframes
 
-![The Scale tool: the clip zoomed to 150 % around the focus point, keyframes as diamonds on the clip](images/studio-scale.jpg)
+![The Scale tool: the clip zooms in around the focus point, keyframes as diamonds on the clip](images/studio-scale.jpg)
 
 Every video clip can be scaled from 10 to 800 % around a **focus point**, so a zoom goes towards the face instead of
 the middle. Below 100 % the clip becomes a picture in picture over the track below.
@@ -183,7 +226,7 @@ If conforming would cover or change something, "Conform" shows a list first: new
 cover an existing clip) and clips whose scene has a new take. Preselected is only what leaves your own cuts alone: a
 clip that is still as long as its scene gets the new take, a shortened or split one only if you tick it.
 
-![Before conforming again: a new clip that would cover an existing one (not ticked) and an unchanged clip that gets its scene's new take (ticked)](images/studio-conform.jpg)
+![Before conforming again: an unchanged clip that gets its scene's new take (ticked); the spoken line already sounds in its video](images/studio-conform.jpg)
 
 ## Passing projects on
 
@@ -276,7 +319,9 @@ What the Mac does differently:
   within 768 × 512 × 97 frames, for example 4 s at 768 × 512. Still images come from the active image model, music and
   sound from Stable Audio 3, voice scenes from Qwen3-TTS (since Mac 0.5.3; VoiceDesign 1.7B in 4-bit, Base 0.6B in 8-bit).
 - **Chain:** starts from the last frame; carrying the last second over needs LTX-2.5 and stays on Windows.
-- **Start image:** the field in a video scene's properties (Windows, since 0.5.27) is not in the Mac app yet.
+- **Assistant** (since Mac 0.5.6): the same seven steps, with the times for your Mac from the hardware catalog. Lines go
+  on the Voice track, and with a face from a photo the clip does not end in its start image again, so the face may
+  drift a little.
 - **Characters** (since Mac 0.5.5): the same as on Windows, with LoRAs for FLUX.2 Klein 4B. "Sound from voice scene"
   stays in the project but has no effect: no video model on the Mac takes a given sound, so Conform lays the line on
   the voice track as usual.
@@ -285,7 +330,10 @@ What the Mac does differently:
 - **REST:** the same `/api/studio/*` as on Windows, at `http://127.0.0.1:8100`.
 
 Measured on a Mac mini M1 with 8 GB: three test scenes (a 2-second video, a still image, 6 s of music) took 320 s,
-exporting 9 seconds at 1080p took 2 s.
+exporting 9 seconds at 1080p took 2 s. The assistant run from this guide (Suomi, three scenes of 4 s, a line and music)
+took 38 minutes on the same Mac: four drafts 14 min, six start images 15 min, three clips 8.5 min.
+
+![The assistant on the Mac: the times for this Mac from the hardware catalog](images/studio-mac-wizard.jpg)
 
 ## Not there yet
 

@@ -25,6 +25,8 @@ final class StudioModel: ObservableObject {
         didSet { UserDefaults.standard.set(pxPerSecond, forKey: "studio.zoom") }
     }
     @Published var notice: String?
+    /// Hinweiskarte nach dem Assistenten (Mac 0.5.6); im Modell, damit der Prüfstand sie vor dem Foto schließen kann
+    @Published var wizardCoach = false
     @Published var playing = false
     @Published var tool: Tool = .select
     /// Magnet (S): Ziehen rastet an 0, Abspielkopf, Szenen- und Clipkanten und Markern ein (9 px); aus: Umschalttaste.
@@ -162,8 +164,7 @@ final class StudioModel: ObservableObject {
         }
     }
 
-    /// Befehl ausführen; Fehler erscheinen in der Hinweisleiste.
-    @discardableResult
+    /// Offene Eingabe eines Felds anmelden (nil meldet ab); `commitEdits` übernimmt sie vor Erzeugen und Export.
     func registerEdit(_ token: UUID, _ flush: (() -> Void)?) { pendingEdits[token] = flush }
 
     /// Offene Eingaben übernehmen und warten, bis alle Befehle gespeichert sind: vor Erzeugen, Übernehmen und Export
@@ -176,6 +177,8 @@ final class StudioModel: ObservableObject {
         while inflight > 0 { await withCheckedContinuation { idleWaiters.append($0) } }
     }
 
+    /// Befehl ausführen; Fehler erscheinen in der Hinweisleiste.
+    @discardableResult
     func run(_ command: String, _ params: StudioParams = [:]) async -> JSONValue? {
         guard let id = project?.id else { return nil }
         inflight += 1

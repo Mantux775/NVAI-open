@@ -80,3 +80,16 @@ struct FitBadges: View {
             .help(help)
     }
 }
+
+/// Typische Zeit eines Auftrags auf diesem Mac aus dem Hardware-Katalog (seit Mac 0.5.6); ohne Messwert nichts
+struct EstimateBadge: View {
+    let id: String
+
+    var body: some View {
+        if let e = HardwareCatalog.estimate(id) {
+            Text("\(HardwareCatalog.duration(e.seconds)) \(HardwareCatalog.taskLabel(e.task))")
+                .font(.caption).foregroundStyle(.secondary)
+                .help(t("Geschätzt für diesen Mac (Hardware-Katalog), typischer Auftrag", "Estimated for this Mac (hardware catalog), typical job"))
+        }
+    }
+}

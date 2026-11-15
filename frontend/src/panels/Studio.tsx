@@ -30,6 +30,7 @@ import { ContextMenu, type MenuItem, type MenuState } from '../studio/ContextMen
 import { Inspector, MARKER_LABEL } from '../studio/Inspector'
 import { Monitor } from '../studio/Monitor'
 import { selIds, Timelines, TRANSITION_LABEL, type MenuTarget, type Selection, type Tool } from '../studio/Timelines'
+import { Wizard, WizardAsk, WizardCoach, wizardAskWanted } from '../studio/Wizard'
 import { clipEnd, clipSpeed, decimal, frameTicks, sec, snapFrame, trackKind, trackLabel, trackOrHighest, tracksOf } from '../studio/time'
 
 const KEY_PROJECT = 'nvai-studio-project'
@@ -127,6 +128,10 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
   const [conformPlan, setConformPlan] = useState<ConformPlan | null>(null)
   const [speedAsk, setSpeedAsk] = useState<SpeedAsk | null>(null)
+  // Assistent (seit 0.5.28): Frage beim Start und bei neuen Projekten, der Assistent selbst, Hinweise danach
+  const [askWizard, setAskWizard] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [coach, setCoach] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const upper = useRef<HTMLDivElement>(null)
   const importInput = useRef<HTMLInputElement>(null)
@@ -165,6 +170,19 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     api.health().then((h) => setActive(h.active_models)).catch(() => {})
     api.studioPresets().then(setPresets).catch(() => {})
   }, [open])
+
+  // Beim Start des Studios fragen, ob der Assistent führen soll (einmal je Sitzung; Nutzer 14.11.2026: „beim start von
+  // dem studio oder neuen Projekt soll es mich fragen ob ich geführt werden will, mit dem kästchen nicht mehr anzeigen“)
+  useEffect(() => {
+    if (!wizardAskWanted()) return
+    try {
+      if (sessionStorage.getItem('nvai-wizard-asked')) return
+      sessionStorage.setItem('nvai-wizard-asked', '1')
+    } catch {
+      /* ohne Sitzungsspeicher: trotzdem einmal fragen */
+    }
+    setAskWizard(true)
+  }, [])
 
   // Sprachmodelle gehören dazu (Sprecher-Bahn), sonst bot die Auswahl dort nur „aktives Modell“ (bis 0.5.21); LoRAs für
   // die Figuren (seit 0.5.24), neu geladen, wenn eine hinzukommt oder sich ihre Zuordnung ändert
@@ -390,6 +408,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
       const p = await api.studioCreate('')
       setProjects(await api.studioProjects())
       open(p.id)
+      if (wizardAskWanted()) setAskWizard(true)
     } catch (e: any) {
       setNotice(String(e.message ?? e))
     }
@@ -832,7 +851,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !project || menu || conformPlan || speedAsk) return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !project || menu || conformPlan || speedAsk
+        || wizardOpen || askWizard) return
       const ctrl = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
       if (e.key === 'Escape') {
@@ -1008,6 +1028,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         <button className="btn small" disabled={!project} onClick={conform} title={t('Gewählte Takes in den Schnitt legen, Marker auswerten; fragt nach, bevor Vorhandenes überschrieben wird', 'Put the chosen takes into the edit, apply the markers; asks before anything in the edit is overwritten')}>
           {t('Übernehmen', 'Conform')} ↓
         </button>
+        <button className="btn small wz-open" onClick={() => setWizardOpen(true)} title={t('Der Assistent führt Schritt für Schritt durch ein ganzes Video', 'The assistant guides you step by step through a whole video')}>
+          ✨ {t('Assistent', 'Assistant')}
+        </button>
         {running > 0 && (
           <span className="st-gen" title={current ? `${current.title || current.prompt.slice(0, 40)} · ${jobProgress[currentJob!]?.stage ?? ''}` : t('Wartet auf die Grafikkarte', 'Waiting for the GPU')}>
             <span className="st-gen-bar"><span style={{ width: `${current ? Math.max(2, currentPct) : 0}%` }} /></span>
@@ -1068,6 +1091,30 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         </button>
       </div>
 
+      {askWizard && (
+        <WizardAsk
+          onStart={() => setWizardOpen(true)}
+          onClose={(never) => {
+            setAskWizard(false)
+            if (never) setNotice(t('Den Assistenten startest du jederzeit oben über „✨ Assistent“ neben „Übernehmen“.', 'You can start the assistant any time with "✨ Assistant" at the top, next to "Conform".'))
+          }}
+        />
+      )}
+      {wizardOpen && (
+        <Wizard
+          project={project}
+          onClose={() => setWizardOpen(false)}
+          onOpenProject={async (id) => {
+            setProjects(await api.studioProjects())
+            open(id)
+          }}
+          onDone={() => {
+            setWizardOpen(false)
+            setCoach(true)
+          }}
+        />
+      )}
+      {coach && <WizardCoach running={running} onClose={() => setCoach(false)} />}
       {notice && (
         <div className="st-notice" onClick={() => setNotice(null)}>
           {notice}

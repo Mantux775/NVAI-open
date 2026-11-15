@@ -216,10 +216,22 @@ struct ModelsView: View {
         }
     }
 
+    /// Hardware-Katalog (seit Mac 0.5.6): Chip mit GPU-Kernen, Katalogeintrag und Geschwindigkeit gegenüber dem Mac mini
+    /// M1, auf dem die Zeiten an den Modellen gemessen sind
     private var macInfo: some View {
-        Text(t("Dieser Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB Arbeitsspeicher",
-               "This Mac: \(SystemInfo.chip), \(SystemInfo.memoryGB) GB memory"))
+        let cores = HardwareCatalog.gpuCores.map { t(", \($0) GPU-Kerne", ", \($0) GPU cores") } ?? ""
+        var text = t("Dieser Mac: \(SystemInfo.chip)\(cores), \(SystemInfo.memoryGB) GB Arbeitsspeicher",
+                     "This Mac: \(SystemInfo.chip)\(cores), \(SystemInfo.memoryGB) GB memory")
+        if let sp = HardwareCatalog.speed, HardwareCatalog.device?.id != HardwareCatalog.referenceID {
+            text += t(" · etwa \(String(format: "%.1f", sp))-mal so schnell wie ein M1", " · about \(String(format: "%.1f", sp))× an M1")
+        }
+        return Text(text)
             .font(.caption).foregroundStyle(.secondary).fixedSize()
+            .help(HardwareCatalog.device == nil
+                  ? t("Dieser Chip steht noch nicht im Hardware-Katalog; die Zeiten gelten für einen Mac mini M1.",
+                      "This chip is not in the hardware catalog yet; the times are for a Mac mini M1.")
+                  : t("Aus dem Hardware-Katalog (110 Grafikkarten und Chips, mit Quellen). Die Zeiten an den Modellen sind für diesen Mac geschätzt.",
+                      "From the hardware catalog (110 graphics cards and chips, with sources). The times on the models are estimated for this Mac."))
     }
 }
 
@@ -283,6 +295,7 @@ struct ModelCard: View {
                         .foregroundStyle(.secondary)
                         .help(ContentRating.help(row.model.id))
                     FitBadges(fit: row.model.fits, recommended: MacRecommendations.isRecommended(row.model.id))
+                    EstimateBadge(id: row.model.id)
                     if state.activeModelID == row.model.id {
                         Text(t("aktiv", "active")).font(.caption.bold()).padding(.horizontal, 6).padding(.vertical, 2)
                             .background(Color.accentColor.opacity(0.25)).clipShape(Capsule())

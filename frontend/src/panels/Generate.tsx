@@ -6,6 +6,7 @@ import type { Downloads } from '../downloads'
 import { ContentBadge } from '../components/ContentBadge'
 import { LicenseBadge, OutputBadge, licenseBlocked } from '../components/LicenseBadge'
 import { ModelTip, Recommendations } from '../components/Recommendations'
+import { ModelEstimate } from '../components/HardwareInfo'
 import { Lightbox } from '../components/Lightbox'
 import { locale, t } from '../i18n'
 import { I2V_WORKFLOWS, OPTIONAL_START_WORKFLOWS } from '../videoStart'
@@ -1715,6 +1716,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         {selected && <p className="hint small">{selected.best_for}</p>}
         {selected?.features?.tested && <p className="hint small tested">{selected.features.tested}</p>}
         <ModelTip mode={mode} model={selected} />
+        <ModelEstimate id={selected?.id} />
         {selected && (mode === 'image' || mode === 'video') && (
           <div className="feature-chips"><ContentBadge model={selected} /><LicenseBadge model={selected} /></div>
         )}

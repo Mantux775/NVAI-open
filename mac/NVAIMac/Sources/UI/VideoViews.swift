@@ -126,6 +126,7 @@ struct VideoModelCard: View {
                         .foregroundStyle(.secondary)
                         .help(ContentRating.help(VideoModel.ltxv2B.id))
                     FitBadges(fit: MacFit.of(needGB: model.needGB), recommended: MacRecommendations.isRecommended(model.id))
+                    EstimateBadge(id: model.id)
                     Spacer()
                     Text(installed ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
                         .foregroundStyle(installed ? .green : .secondary)

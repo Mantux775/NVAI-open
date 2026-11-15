@@ -28,16 +28,58 @@ einen Anfangs- und einen Endpunkt, eine Geschwindigkeit, eine Lautstärke und au
 **Übernehmen** legt die gewählten Takes in den Schnitt. Ein Clip bleibt mit seiner Szene verbunden: Szene neu
 erzeugen, übernehmen, und der Clip bekommt das neue Material, dein Schnitt bleibt.
 
+## Der Assistent
+
+Neu im Studio? **✨ Assistent** neben „Übernehmen“ führt in sieben kurzen Schritten durch ein ganzes Video. Das Studio
+fragt einmal beim Start und bei jedem neuen Projekt („Nicht mehr anzeigen“ schaltet das ab, der Knopf bleibt).
+
+![Der erste Schritt des Assistenten: sechs Wege, von der durchgehenden Einstellung bis zur Animation](../images/studio-wizard-de.jpg)
+
+1. **Weg:** eine durchgehende Einstellung, eine Kurzgeschichte in Szenen, mit Sprecher, eine Figur spricht, ein
+   Gesicht aus einem Foto oder Animation.
+2. **Idee:** ein, zwei Sätze, der Ort, ein Stil (Realfilm, 3D-Animation, Zeichentrick, Tusche, Anime), eine Stimmung
+   (sie bestimmt Licht und Musik) und das Format (YouTube oder Shorts).
+3. **Figur:** beschreiben und einen von vier Entwürfen wählen, auf Wunsch aus deiner eigenen Skizze, oder „Ohne
+   Figur“ für Orte, Dinge und Natur: Dann entstehen die Startbilder direkt aus deinen Szenen, und Sätze liest ein
+   Sprecher aus dem Off. Bei „Gesicht aus einem Foto“ lädst du stattdessen ein Porträt und sagst, welche Rolle die
+   Person spielt.
+4. **Szenen:** wie viele (drei Vorschläge mit Filmlänge und Rechenzeit oder eine eigene Anzahl bis 20), was in jeder
+   Einstellung passiert, der Bildausschnitt, 4 bis 6 Sekunden und ein Satz: Ihn spricht die Figur, ohne Figur liest
+   ihn der Sprecher.
+5. **Ton:** eine Stimme und die Sprache der Sätze; für die Musik 22 Vorschläge (die Stimmung wählt einen vor) und ein
+   Prompt-Feld, um ihn zu ändern oder einen eigenen zu schreiben.
+6. **Modelle:** Vorgewählt sind die besten Modelle für deine Grafikkarte, mit der zu erwartenden Zeit aus dem
+   [Hardware-Katalog](MODELLE.md#deine-hardware); je Aufgabe lässt sich ein anderes wählen. Fehlt ein Modell, fragt
+   der Assistent, ob er es laden soll. „Beste Qualität“ ist vorgewählt; das dauert länger.
+7. **Los:** Der Assistent legt ein normales Studio-Projekt an, erzeugt je Szene zwei Startbilder zur Auswahl und
+   danach die Videos. Eine kleine Karte sagt, wie es weitergeht (Takes prüfen, Übernehmen, Exportieren).
+
+<table><tr>
+<td><img src="../images/studio-wizard-models-de.jpg" alt="Schritt 6: die besten Modelle für diese Grafikkarte mit der zu erwartenden Zeit"></td>
+<td><img src="../images/studio-wizard-board-de.jpg" alt="Schritt 7: zwei Startbilder je Szene, die gewählten sind markiert"></td>
+</tr></table>
+
+Die Bilder dieser Anleitung stammen aus einem solchen Lauf: Suomi, der Hase aus dem [Kurzfilm](KURZFILM.md), legt auf,
+im Stil „Tusche“ wie im Film und in der Stimmung „Lässig“, mit seinem Bild als Vorlage, drei Szenen und einem Satz.
+
+Die Prompts baut der Assistent aus festen englischen Bausteinen und deinen Worten. Deine Beschreibungen werden vorher
+ins Englische übertragen, weil Bild- und Videomodelle Englisch am besten verstehen; gesprochene Sätze bleiben, wie du
+sie geschrieben hast. Alle Sätze sprechen mit einer Stimme: Der erste gibt sie vor, die anderen übernehmen sie.
+
+Bei **Gesicht aus einem Foto** entsteht jedes Startbild aus dem Porträt, und jeder Clip endet wieder in seinem
+Startbild, damit das Gesicht über den ganzen Clip hält. Ein bewegter Hintergrund (Wasser, Rauch) steht dann eher
+still. Das Foto bleibt auf deinem Rechner.
+
 ## Schritt für Schritt
 
 1. **Neues Projekt:** oben links „+“ neben der Projektauswahl, dann „Neues Projekt“. Es beginnt mit 1920 × 1080 und
    24 fps. Name, Format und die Qualität der Videoszenen stehen rechts in den Eigenschaften; ein Klick ins Leere zeigt
    sie.
 2. **Szenen anlegen:** Doppelklick auf eine Bahn und in den Eigenschaften den Prompt schreiben. Eine Szene verschiebst
-   du durch Ziehen, ihre Länge am rechten Rand. Eine Videoszene kann mit einem **Startbild** beginnen (seit 0.5.27): ein
-   Bild aus dem Material auf das Feld in den Eigenschaften ziehen oder mit „Aus dem Projektordner wählen …“ aussuchen.
-   So bleiben eine Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann beginnt der
-   Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
+   du durch Ziehen, ihre Länge am rechten Rand. Eine Videoszene kann mit einem **Startbild** beginnen (seit 0.5.27, Mac
+   0.5.6): ein Bild aus dem Material auf das Feld in den Eigenschaften ziehen oder mit „Aus dem Projektordner wählen …“
+   aussuchen. So bleiben eine Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann
+   beginnt der Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
 3. **Marker setzen:** Doppelklick auf die Markerzeile oder M für eine Notiz am Abspielkopf.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine
    Anschluss-Szene wartet auf die Szene davor, eine Sprecher-Szene auf die Stimme, die sie übernimmt. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
@@ -47,7 +89,7 @@ erzeugen, übernehmen, und der Clip bekommt das neue Material, dein Schnitt blei
    per Klick teilen; Strg+K schneidet am Abspielkopf. Ein Rechtsklick zeigt überall, was geht.
 6. **Exportieren:** Format wählen und „Exportieren“ klicken. Das Video steht danach auch im Verlauf.
 
-![Während Szenen erzeugt werden: neben „Übernehmen“ die Szene, die gerade entsteht, mit Prozent und wie viele fertig sind, und Abbrechen; rechts die Eigenschaften mit dem größeren Prompt-Feld (1366 × 720)](../images/studio-progress-de.jpg)
+![Während Szenen erzeugt werden: neben „Übernehmen“ die Szene, die gerade entsteht, mit Prozent, und Abbrechen](../images/studio-progress-de.jpg)
 
 Das Studio speichert jede Änderung sofort, Rückgängig reicht 100 Schritte zurück. „Löschen“ neben dem Projekt
 verschiebt es in den Papierkorb des Studios (`studio\papierkorb` im Datenordner).
@@ -65,7 +107,7 @@ Generieren-Knopf Bilder, Videos und Ton direkt in den Ordner eines Projekts. Der
 Hochladen-Knopf blendet die Ordner ein; „..“ geht eine Ebene hoch. „Verlauf leeren“ lässt Projektordner in Ruhe, und
 ein gelöschtes Projekt behält seinen Ordner.
 
-![Das Material mit Ordnern: auf der obersten Ebene die Projektordner und der allgemeine Verlauf, im Projektordner führt „..“ eine Ebene hoch](../images/studio-folders-de.jpg)
+![Das Material mit Ordnern: auf der obersten Ebene die Projektordner, im Projektordner führt „..“ eine Ebene hoch](../images/studio-folders-de.jpg)
 
 **Anklicken** spielt eine Datei im Monitor ab; Esc führt zurück zum Schnitt. Die Eigenschaften zeigen ihre Angaben,
 den Download der verlustfreien Kopie, „Am Abspielkopf einfügen“ und „Löschen“. Auf eine Spur gezogen wird eine Datei
@@ -108,7 +150,7 @@ Projekteinstellungen; unter „Figuren“ legt „+ Figur“ eine an:
 - **Stimme:** wie bei einer Sprecher-Szene: beschreiben, vom Take einer Sprecher-Szene übernehmen oder aus einer
   Aufnahme. Klingt ein Satz richtig, ihn als Vorlage wählen, dann behalten alle weiteren Sätze diese Stimme.
 
-![Das Studio mit einer Figur: Aussehen aus zwei LoRAs und eine beschriebene Stimme; ein Porträt, ein Satz und der Clip, der ihn spricht](../images/studio-characters-de.jpg)
+![Das Studio mit einer Figur: Suomi mit einer beschriebenen Stimme; im Monitor die Nahaufnahme, in der er seinen Satz spricht](../images/studio-characters-de.jpg)
 
 Danach die Figur in den Szenen zuordnen:
 
@@ -155,7 +197,7 @@ Material nicht, steht sein letztes Bild. Lass jedem Clip deshalb rund eine halbe
 
 ## Skalieren und zoomen mit Keyframes
 
-![Das Werkzeug Skalieren: der Clip auf 150 % um den Fokuspunkt vergrößert, Keyframes als Rauten auf dem Clip](../images/studio-scale-de.jpg)
+![Das Werkzeug Skalieren: Der Clip zoomt um den Fokuspunkt heran, Keyframes als Rauten auf dem Clip](../images/studio-scale-de.jpg)
 
 Jeder Videoclip lässt sich um einen **Fokuspunkt** von 10 bis 800 % skalieren, so geht ein Zoom auf das Gesicht zu
 statt in die Mitte. Unter 100 % wird der Clip zum Bild im Bild über der Spur darunter.
@@ -191,7 +233,7 @@ einer einen vorhandenen überdecken würde) und Clips, deren Szene einen neuen T
 eigenen Schnitt in Ruhe lässt: Ein Clip, der noch so lang ist wie seine Szene, bekommt den neuen Take, ein gekürzter
 oder geteilter nur, wenn du ihn ankreuzt.
 
-![Vor dem erneuten Übernehmen: ein neuer Clip, der einen vorhandenen überdecken würde (ohne Häkchen), und ein unveränderter Clip, der den neuen Take seiner Szene bekommt (mit Häkchen)](../images/studio-conform-de.jpg)
+![Vor dem erneuten Übernehmen: ein unveränderter Clip, der den neuen Take seiner Szene bekommt (mit Häkchen); der Satz klingt schon in seinem Video](../images/studio-conform-de.jpg)
 
 ## Projekte weitergeben
 
@@ -288,7 +330,9 @@ Was der Mac anders macht:
   0.6B in 8 Bit).
 - **Anschluss:** beginnt mit dem letzten Bild; die letzte Sekunde zu übernehmen braucht LTX-2.5 und bleibt Windows
   vorbehalten.
-- **Startbild:** Das Feld in den Eigenschaften einer Videoszene (Windows, seit 0.5.27) hat die Mac-App noch nicht.
+- **Assistent** (seit Mac 0.5.6): dieselben sieben Schritte, mit den Zeiten für deinen Mac aus dem Hardware-Katalog.
+  Sätze kommen auf die Spur „Stimme“, und bei einem Gesicht aus einem Foto endet der Clip nicht wieder in seinem
+  Startbild, das Gesicht kann deshalb etwas wandern.
 - **Figuren** (seit Mac 0.5.5): wie unter Windows, mit LoRAs für FLUX.2 Klein 4B. „Ton aus Sprecher-Szene“ bleibt im
   Projekt, wirkt aber nicht: Kein Videomodell auf dem Mac nimmt einen vorgegebenen Ton, Übernehmen legt den Satz deshalb
   wie gewohnt auf die Spur „Stimme“.
@@ -297,7 +341,11 @@ Was der Mac anders macht:
 - **REST:** dieselben `/api/studio/*` wie unter Windows, unter `http://127.0.0.1:8100`.
 
 Gemessen auf einem Mac mini M1 mit 8 GB: Drei Testszenen (ein 2-Sekunden-Video, ein Standbild, 6 s Musik) brauchten
-320 s, der Export von 9 Sekunden in 1080p 2 s.
+320 s, der Export von 9 Sekunden in 1080p 2 s. Der Lauf des Assistenten aus dieser Anleitung (Suomi, drei Szenen zu
+4 s, ein Satz und Musik) brauchte auf demselben Mac 38 Minuten: vier Entwürfe 14 min, sechs Startbilder 15 min, drei
+Clips 8,5 min.
+
+![Der Assistent auf dem Mac: die Zeiten für diesen Mac aus dem Hardware-Katalog](../images/studio-mac-wizard-de.jpg)
 
 ## Was noch fehlt
 

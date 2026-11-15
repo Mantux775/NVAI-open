@@ -200,6 +200,22 @@ def list_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, fold
     return [_row_to_job(r) for r in rows]
 
 
+def recent_done_jobs(kind: str, limit: int = 400) -> list[tuple[str, dict[str, Any], float | None, float | None]]:
+    """Fertige Aufträge einer Art, neueste zuerst, als (Art, Parameter, Start, Ende): Laufzeiten auf diesem Rechner für
+    die Schätzungen des Assistenten (wizard.py, seit 0.5.28)."""
+    with _lock:
+        rows = _c().execute("SELECT kind, params, started_at, finished_at FROM jobs WHERE kind = ? AND status = 'done' "
+                            "ORDER BY created_at DESC LIMIT ?", (kind, limit)).fetchall()
+    out = []
+    for r in rows:
+        try:
+            params = json.loads(r["params"] or "{}")
+        except ValueError:
+            params = {}
+        out.append((r["kind"], params, r["started_at"], r["finished_at"]))
+    return out
+
+
 # -------------------------------------------------------------- assets
 
 def create_asset(

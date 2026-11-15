@@ -27,6 +27,9 @@ struct ExpandPromptRow: View {
                      + "Ort und Licht, 40 bis 70 Wörter (Qwen3 aus FLUX.2 Klein). Danach lesen und Erfundenes streichen.",
                      "Turns a few words into a video description: shot, motion, one camera move, setting and light, "
                      + "40 to 70 words (Qwen3 from FLUX.2 Klein). Read it afterwards and delete what was invented.")
+        case .translate:
+            return t("Überträgt den Text treu ins Englische (Qwen3 aus FLUX.2 Klein).",
+                     "Translates the text faithfully into English (Qwen3 from FLUX.2 Klein).")
         }
     }
 

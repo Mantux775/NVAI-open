@@ -1,0 +1,4322 @@
+{
+ "generated": "2026-11-14",
+ "devices": [
+  {
+   "id": "rtx-5090",
+   "name": "NVIDIA GeForce RTX 5090",
+   "match": [
+    "rtx 5090"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "5090 d",
+    "5090d"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    32
+   ],
+   "bandwidth_gbs": 1792,
+   "fp16_tflops": 209.5,
+   "fp16acc_tflops": 419.0,
+   "int8_tops": 838.0,
+   "fp8_tflops": 419.0,
+   "fp4_tflops": 1676.0,
+   "neural_accel": null,
+   "gpu_cores": 170,
+   "units": "SM",
+   "tgp_w": 575,
+   "year": 2025,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5080",
+   "name": "NVIDIA GeForce RTX 5080",
+   "match": [
+    "rtx 5080"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 960,
+   "fp16_tflops": 112.6,
+   "fp16acc_tflops": 225.1,
+   "int8_tops": 450.2,
+   "fp8_tflops": 225.1,
+   "fp4_tflops": 900.4,
+   "neural_accel": null,
+   "gpu_cores": 84,
+   "units": "SM",
+   "tgp_w": 360,
+   "year": 2025,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5070-ti",
+   "name": "NVIDIA GeForce RTX 5070 Ti",
+   "match": [
+    "rtx 5070 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 896,
+   "fp16_tflops": 87.9,
+   "fp16acc_tflops": 175.8,
+   "int8_tops": 351.5,
+   "fp8_tflops": 175.8,
+   "fp4_tflops": 703.0,
+   "neural_accel": null,
+   "gpu_cores": 70,
+   "units": "SM",
+   "tgp_w": 300,
+   "year": 2025,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5070",
+   "name": "NVIDIA GeForce RTX 5070",
+   "match": [
+    "rtx 5070"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "5070 ti",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 672,
+   "fp16_tflops": 61.7,
+   "fp16acc_tflops": 123.5,
+   "int8_tops": 246.9,
+   "fp8_tflops": 123.5,
+   "fp4_tflops": 493.9,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "SM",
+   "tgp_w": 250,
+   "year": 2025,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5060-ti-16",
+   "name": "NVIDIA GeForce RTX 5060 Ti",
+   "match": [
+    "rtx 5060 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 47.4,
+   "fp16acc_tflops": 94.9,
+   "int8_tops": 189.8,
+   "fp8_tflops": 94.9,
+   "fp4_tflops": 379.5,
+   "neural_accel": null,
+   "gpu_cores": 36,
+   "units": "SM",
+   "tgp_w": 180,
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (759 AI TOPS = FP4 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5060-ti-8",
+   "name": "NVIDIA GeForce RTX 5060 Ti",
+   "match": [
+    "rtx 5060 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 47.4,
+   "fp16acc_tflops": 94.9,
+   "int8_tops": 189.8,
+   "fp8_tflops": 94.9,
+   "fp4_tflops": 379.5,
+   "neural_accel": null,
+   "gpu_cores": 36,
+   "units": "SM",
+   "tgp_w": 180,
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (759 AI TOPS = FP4 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5060",
+   "name": "NVIDIA GeForce RTX 5060",
+   "match": [
+    "rtx 5060"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "5060 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 38.4,
+   "fp16acc_tflops": 76.8,
+   "int8_tops": 153.5,
+   "fp8_tflops": 76.8,
+   "fp4_tflops": 307.0,
+   "neural_accel": null,
+   "gpu_cores": 30,
+   "units": "SM",
+   "tgp_w": 145,
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (614 AI TOPS = FP4 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5050",
+   "name": "NVIDIA GeForce RTX 5050",
+   "match": [
+    "rtx 5050"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 320,
+   "fp16_tflops": 26.3,
+   "fp16acc_tflops": 52.6,
+   "int8_tops": 105.3,
+   "fp8_tflops": 52.6,
+   "fp4_tflops": 210.5,
+   "neural_accel": null,
+   "gpu_cores": 20,
+   "units": "SM",
+   "tgp_w": 130,
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (421 AI TOPS = FP4 sparse); GDDR6",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-5090-laptop",
+   "name": "NVIDIA GeForce RTX 5090 Laptop GPU",
+   "match": [
+    "rtx 5090 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 896,
+   "fp16_tflops": 114.0,
+   "fp16acc_tflops": 228.0,
+   "int8_tops": 456.0,
+   "fp8_tflops": 228.0,
+   "fp4_tflops": 912.0,
+   "neural_accel": null,
+   "gpu_cores": 82,
+   "units": "SM",
+   "tgp_w": [
+    95,
+    150
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (1824 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "fp4_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 90.7,
+   "max_boost_mhz": 2160
+  },
+  {
+   "id": "rtx-5080-laptop",
+   "name": "NVIDIA GeForce RTX 5080 Laptop GPU",
+   "match": [
+    "rtx 5080 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 896,
+   "fp16_tflops": 83.4,
+   "fp16acc_tflops": 166.8,
+   "int8_tops": 333.5,
+   "fp8_tflops": 166.8,
+   "fp4_tflops": 667.0,
+   "neural_accel": null,
+   "gpu_cores": 60,
+   "units": "SM",
+   "tgp_w": [
+    80,
+    150
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (1334 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "fp4_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 70.3,
+   "max_boost_mhz": 2287
+  },
+  {
+   "id": "rtx-5070-ti-laptop",
+   "name": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+   "match": [
+    "rtx 5070 ti laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 672,
+   "fp16_tflops": 62.0,
+   "fp16acc_tflops": 124.0,
+   "int8_tops": 248.0,
+   "fp8_tflops": 124.0,
+   "fp4_tflops": 496.0,
+   "neural_accel": null,
+   "gpu_cores": 46,
+   "units": "SM",
+   "tgp_w": [
+    60,
+    115
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (992 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "fp4_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 52.3,
+   "max_boost_mhz": 2220
+  },
+  {
+   "id": "rtx-5070-laptop",
+   "name": "NVIDIA GeForce RTX 5070 Laptop GPU",
+   "match": [
+    "rtx 5070 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8,
+    12
+   ],
+   "bandwidth_gbs": 384,
+   "fp16_tflops": 49.9,
+   "fp16acc_tflops": 99.8,
+   "int8_tops": 199.5,
+   "fp8_tflops": 99.8,
+   "fp4_tflops": 399.0,
+   "neural_accel": null,
+   "gpu_cores": 36,
+   "units": "SM",
+   "tgp_w": [
+    50,
+    100
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (798 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "fp4_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 43.3,
+   "max_boost_mhz": 2347,
+   "year_note": "12 GB variant added April 2026"
+  },
+  {
+   "id": "rtx-5060-laptop",
+   "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+   "match": [
+    "rtx 5060 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 384,
+   "fp16_tflops": 35.8,
+   "fp16acc_tflops": 71.5,
+   "int8_tops": 143.0,
+   "fp8_tflops": 71.5,
+   "fp4_tflops": 286.0,
+   "neural_accel": null,
+   "gpu_cores": 26,
+   "units": "SM",
+   "tgp_w": [
+    45,
+    100
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (572 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "fp4_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 33.2,
+   "max_boost_mhz": 2497
+  },
+  {
+   "id": "rtx-5050-laptop",
+   "name": "NVIDIA GeForce RTX 5050 Laptop GPU",
+   "match": [
+    "rtx 5050 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 384,
+   "fp16_tflops": 27.5,
+   "fp16acc_tflops": 55.0,
+   "int8_tops": 110.0,
+   "fp8_tflops": 55.0,
+   "fp4_tflops": 220.0,
+   "neural_accel": null,
+   "gpu_cores": 20,
+   "units": "SM",
+   "tgp_w": [
+    35,
+    100
+   ],
+   "year": 2025,
+   "tflops_basis": "ai_tops_derived (440 AI TOPS = FP4 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://www.nvidia.com/en-us/geforce/laptops/50-series/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_50_series"
+   ],
+   "uncertain": [],
+   "fp16_tflops_max_boost_calc": 27.3,
+   "max_boost_mhz": 2662
+  },
+  {
+   "id": "rtx-4090",
+   "name": "NVIDIA GeForce RTX 4090",
+   "match": [
+    "rtx 4090"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "4090 d",
+    "4090d"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 1008,
+   "fp16_tflops": 165.2,
+   "fp16acc_tflops": 330.3,
+   "int8_tops": 660.6,
+   "fp8_tflops": 330.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 128,
+   "units": "SM",
+   "tgp_w": 450,
+   "year": 2022,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4090-d",
+   "name": "NVIDIA GeForce RTX 4090 D",
+   "match": [
+    "rtx 4090 d",
+    "rtx 4090d"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 1008,
+   "fp16_tflops": 147.1,
+   "fp16acc_tflops": 294.2,
+   "int8_tops": 588.3,
+   "fp8_tflops": 294.2,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 114,
+   "units": "SM",
+   "tgp_w": 425,
+   "year": 2023,
+   "tflops_basis": "sm_boost_calc (114 SM x 2520 MHz)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [],
+   "market": "China only"
+  },
+  {
+   "id": "rtx-4080-super",
+   "name": "NVIDIA GeForce RTX 4080 SUPER",
+   "match": [
+    "rtx 4080 super"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 736,
+   "fp16_tflops": 104.5,
+   "fp16acc_tflops": 209.0,
+   "int8_tops": 418.0,
+   "fp8_tflops": 209.0,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 80,
+   "units": "SM",
+   "tgp_w": 320,
+   "year": 2024,
+   "tflops_basis": "ai_tops_derived (836 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4080",
+   "name": "NVIDIA GeForce RTX 4080",
+   "match": [
+    "rtx 4080"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 716.8,
+   "fp16_tflops": 97.5,
+   "fp16acc_tflops": 194.9,
+   "int8_tops": 389.9,
+   "fp8_tflops": 194.9,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 76,
+   "units": "SM",
+   "tgp_w": 320,
+   "year": 2022,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4070-ti-super",
+   "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+   "match": [
+    "rtx 4070 ti super"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 672,
+   "fp16_tflops": 88.3,
+   "fp16acc_tflops": 176.5,
+   "int8_tops": 353.0,
+   "fp8_tflops": 176.5,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 66,
+   "units": "SM",
+   "tgp_w": 285,
+   "year": 2024,
+   "tflops_basis": "ai_tops_derived (706 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4070-ti",
+   "name": "NVIDIA GeForce RTX 4070 Ti",
+   "match": [
+    "rtx 4070 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 504,
+   "fp16_tflops": 80.2,
+   "fp16acc_tflops": 160.4,
+   "int8_tops": 320.7,
+   "fp8_tflops": 160.4,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 60,
+   "units": "SM",
+   "tgp_w": 285,
+   "year": 2023,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4070-super",
+   "name": "NVIDIA GeForce RTX 4070 SUPER",
+   "match": [
+    "rtx 4070 super"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "4070 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 504,
+   "fp16_tflops": 71.0,
+   "fp16acc_tflops": 142.0,
+   "int8_tops": 284.0,
+   "fp8_tflops": 142.0,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 56,
+   "units": "SM",
+   "tgp_w": 220,
+   "year": 2024,
+   "tflops_basis": "ai_tops_derived (568 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4070",
+   "name": "NVIDIA GeForce RTX 4070",
+   "match": [
+    "rtx 4070"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "4070 ti",
+    "4070 super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": {
+    "GDDR6X": 504,
+    "GDDR6": 480
+   },
+   "fp16_tflops": 58.3,
+   "fp16acc_tflops": 116.6,
+   "int8_tops": 233.2,
+   "fp8_tflops": 116.6,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 46,
+   "units": "SM",
+   "tgp_w": 200,
+   "year": 2023,
+   "tflops_basis": "whitepaper (GDDR6 20 Gbps variant since Aug 2024)",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4060-ti-16",
+   "name": "NVIDIA GeForce RTX 4060 Ti",
+   "match": [
+    "rtx 4060 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 288,
+   "fp16_tflops": 44.1,
+   "fp16acc_tflops": 88.3,
+   "int8_tops": 176.5,
+   "fp8_tflops": 88.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 34,
+   "units": "SM",
+   "tgp_w": 165,
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (353 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4060-ti-8",
+   "name": "NVIDIA GeForce RTX 4060 Ti",
+   "match": [
+    "rtx 4060 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 288,
+   "fp16_tflops": 44.1,
+   "fp16acc_tflops": 88.3,
+   "int8_tops": 176.5,
+   "fp8_tflops": 88.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 34,
+   "units": "SM",
+   "tgp_w": 160,
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (353 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4060",
+   "name": "NVIDIA GeForce RTX 4060",
+   "match": [
+    "rtx 4060"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "4060 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 272,
+   "fp16_tflops": 30.3,
+   "fp16acc_tflops": 60.5,
+   "int8_tops": 121.0,
+   "fp8_tflops": 60.5,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 24,
+   "units": "SM",
+   "tgp_w": 115,
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (242 AI TOPS = FP8 sparse)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4090-laptop",
+   "name": "NVIDIA GeForce RTX 4090 Laptop GPU",
+   "match": [
+    "rtx 4090 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 576,
+   "fp16_tflops": 85.8,
+   "fp16acc_tflops": 171.5,
+   "int8_tops": 343.0,
+   "fp8_tflops": 171.5,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 76,
+   "units": "SM",
+   "tgp_w": [
+    80,
+    150
+   ],
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (686 AI TOPS = FP8 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "int8_tops"
+   ],
+   "fp16_tflops_max_boost_calc": 79.4,
+   "max_boost_mhz": 2040
+  },
+  {
+   "id": "rtx-4080-laptop",
+   "name": "NVIDIA GeForce RTX 4080 Laptop GPU",
+   "match": [
+    "rtx 4080 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 432,
+   "fp16_tflops": 67.8,
+   "fp16acc_tflops": 135.5,
+   "int8_tops": 271.0,
+   "fp8_tflops": 135.5,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 58,
+   "units": "SM",
+   "tgp_w": [
+    60,
+    150
+   ],
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (542 AI TOPS = FP8 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series"
+   ],
+   "uncertain": [],
+   "fp16_tflops_max_boost_calc": 67.7,
+   "max_boost_mhz": 2280
+  },
+  {
+   "id": "rtx-4070-laptop",
+   "name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+   "match": [
+    "rtx 4070 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 256,
+   "fp16_tflops": 40.1,
+   "fp16acc_tflops": 80.3,
+   "int8_tops": 160.5,
+   "fp8_tflops": 80.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 36,
+   "units": "SM",
+   "tgp_w": [
+    35,
+    115
+   ],
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (321 AI TOPS = FP8 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series"
+   ],
+   "uncertain": [],
+   "fp16_tflops_max_boost_calc": 40.1,
+   "max_boost_mhz": 2175
+  },
+  {
+   "id": "rtx-4060-laptop",
+   "name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+   "match": [
+    "rtx 4060 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 256,
+   "fp16_tflops": 29.1,
+   "fp16acc_tflops": 58.3,
+   "int8_tops": 116.5,
+   "fp8_tflops": 58.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 24,
+   "units": "SM",
+   "tgp_w": [
+    35,
+    115
+   ],
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (233 AI TOPS = FP8 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series"
+   ],
+   "uncertain": [],
+   "fp16_tflops_max_boost_calc": 29.1,
+   "max_boost_mhz": 2370
+  },
+  {
+   "id": "rtx-4050-laptop",
+   "name": "NVIDIA GeForce RTX 4050 Laptop GPU",
+   "match": [
+    "rtx 4050 laptop"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": true,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    6
+   ],
+   "bandwidth_gbs": 192,
+   "fp16_tflops": 24.3,
+   "fp16acc_tflops": 48.5,
+   "int8_tops": 97.0,
+   "fp8_tflops": 48.5,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 20,
+   "units": "SM",
+   "tgp_w": [
+    35,
+    115
+   ],
+   "year": 2023,
+   "tflops_basis": "ai_tops_derived (194 AI TOPS = FP8 sparse, at max TGP)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/laptops/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_40_series"
+   ],
+   "uncertain": [],
+   "fp16_tflops_max_boost_calc": 24.3,
+   "max_boost_mhz": 2370
+  },
+  {
+   "id": "rtx-3090-ti",
+   "name": "NVIDIA GeForce RTX 3090 Ti",
+   "match": [
+    "rtx 3090 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 1008,
+   "fp16_tflops": 80.0,
+   "fp16acc_tflops": 160.0,
+   "int8_tops": 320.0,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 84,
+   "units": "SM",
+   "tgp_w": 450,
+   "year": 2022,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3090",
+   "name": "NVIDIA GeForce RTX 3090",
+   "match": [
+    "rtx 3090"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3090 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 936,
+   "fp16_tflops": 71.2,
+   "fp16acc_tflops": 142.3,
+   "int8_tops": 284.7,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 82,
+   "units": "SM",
+   "tgp_w": 350,
+   "year": 2020,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3080-ti",
+   "name": "NVIDIA GeForce RTX 3080 Ti",
+   "match": [
+    "rtx 3080 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 912,
+   "fp16_tflops": 68.2,
+   "fp16acc_tflops": 136.4,
+   "int8_tops": 272.8,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 80,
+   "units": "SM",
+   "tgp_w": 350,
+   "year": 2021,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3080-12",
+   "name": "NVIDIA GeForce RTX 3080",
+   "match": [
+    "rtx 3080"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3080 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 912,
+   "fp16_tflops": 61.3,
+   "fp16acc_tflops": 122.6,
+   "int8_tops": 245.1,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 70,
+   "units": "SM",
+   "tgp_w": 350,
+   "year": 2022,
+   "tflops_basis": "sm_boost_calc (70 SM x 1710 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3080-10",
+   "name": "NVIDIA GeForce RTX 3080",
+   "match": [
+    "rtx 3080"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3080 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    10
+   ],
+   "bandwidth_gbs": 760,
+   "fp16_tflops": 59.5,
+   "fp16acc_tflops": 119.1,
+   "int8_tops": 238.1,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 68,
+   "units": "SM",
+   "tgp_w": 320,
+   "year": 2020,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3070-ti",
+   "name": "NVIDIA GeForce RTX 3070 Ti",
+   "match": [
+    "rtx 3070 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 608,
+   "fp16_tflops": 43.5,
+   "fp16acc_tflops": 87.0,
+   "int8_tops": 174.0,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "SM",
+   "tgp_w": 290,
+   "year": 2021,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3070",
+   "name": "NVIDIA GeForce RTX 3070",
+   "match": [
+    "rtx 3070"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3070 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 40.6,
+   "fp16acc_tflops": 81.3,
+   "int8_tops": 162.5,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 46,
+   "units": "SM",
+   "tgp_w": 220,
+   "year": 2020,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/blackwell/nvidia-rtx-blackwell-gpu-architecture.pdf",
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3060-ti",
+   "name": "NVIDIA GeForce RTX 3060 Ti",
+   "match": [
+    "rtx 3060 ti"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": {
+    "GDDR6": 448,
+    "GDDR6X": 608
+   },
+   "fp16_tflops": 32.4,
+   "fp16acc_tflops": 64.8,
+   "int8_tops": 129.6,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 38,
+   "units": "SM",
+   "tgp_w": 200,
+   "year": 2020,
+   "tflops_basis": "sm_boost_calc (38 SM x 1665 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3060-3060ti/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3060-12",
+   "name": "NVIDIA GeForce RTX 3060",
+   "match": [
+    "rtx 3060"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3060 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 360,
+   "fp16_tflops": 25.5,
+   "fp16acc_tflops": 51.0,
+   "int8_tops": 101.9,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 28,
+   "units": "SM",
+   "tgp_w": 170,
+   "year": 2021,
+   "tflops_basis": "sm_boost_calc (28 SM x 1777 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3060-3060ti/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3060-8",
+   "name": "NVIDIA GeForce RTX 3060",
+   "match": [
+    "rtx 3060"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3060 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 240,
+   "fp16_tflops": 25.5,
+   "fp16acc_tflops": 51.0,
+   "int8_tops": 101.9,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 28,
+   "units": "SM",
+   "tgp_w": 170,
+   "year": 2022,
+   "tflops_basis": "sm_boost_calc (28 SM x 1777 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3060-3060ti/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "bandwidth_gbs"
+   ]
+  },
+  {
+   "id": "rtx-3050-8",
+   "name": "NVIDIA GeForce RTX 3050",
+   "match": [
+    "rtx 3050"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3050 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 224,
+   "fp16_tflops": 18.2,
+   "fp16acc_tflops": 36.4,
+   "int8_tops": 72.8,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 20,
+   "units": "SM",
+   "tgp_w": 130,
+   "year": 2022,
+   "tflops_basis": "sm_boost_calc (20 SM x 1777 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-3050-6",
+   "name": "NVIDIA GeForce RTX 3050",
+   "match": [
+    "rtx 3050"
+   ],
+   "exclude": [
+    "laptop",
+    "max-q",
+    "mobile",
+    "3050 ti"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    6
+   ],
+   "bandwidth_gbs": 168,
+   "fp16_tflops": 13.5,
+   "fp16acc_tflops": 27.1,
+   "int8_tops": 54.2,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 18,
+   "units": "SM",
+   "tgp_w": 70,
+   "year": 2024,
+   "tflops_basis": "sm_boost_calc (18 SM x 1470 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_30_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2080-ti",
+   "name": "NVIDIA GeForce RTX 2080 Ti",
+   "match": [
+    "rtx 2080 ti"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    11
+   ],
+   "bandwidth_gbs": 616,
+   "fp16_tflops": 53.8,
+   "fp16acc_tflops": 107.6,
+   "int8_tops": 215.2,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 68,
+   "units": "SM",
+   "tgp_w": 250,
+   "year": 2018,
+   "tflops_basis": "whitepaper (reference 1545 MHz; FE 56.9)",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/en-zz/Solutions/design-visualization/technologies/turing-architecture/NVIDIA-Turing-Architecture-Whitepaper.pdf",
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2080-super",
+   "name": "NVIDIA GeForce RTX 2080 SUPER",
+   "match": [
+    "rtx 2080 super"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 496,
+   "fp16_tflops": 44.6,
+   "fp16acc_tflops": 89.2,
+   "int8_tops": 178.4,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "SM",
+   "tgp_w": 250,
+   "year": 2019,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2080",
+   "name": "NVIDIA GeForce RTX 2080",
+   "match": [
+    "rtx 2080"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile",
+    "2080 ti",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 40.3,
+   "fp16acc_tflops": 80.5,
+   "int8_tops": 161.1,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 46,
+   "units": "SM",
+   "tgp_w": 215,
+   "year": 2018,
+   "tflops_basis": "whitepaper (reference 1710 MHz; FE 42.4)",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/en-zz/Solutions/design-visualization/technologies/turing-architecture/NVIDIA-Turing-Architecture-Whitepaper.pdf",
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2070-super",
+   "name": "NVIDIA GeForce RTX 2070 SUPER",
+   "match": [
+    "rtx 2070 super"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 36.3,
+   "fp16acc_tflops": 72.5,
+   "int8_tops": 145.0,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 40,
+   "units": "SM",
+   "tgp_w": 215,
+   "year": 2019,
+   "tflops_basis": "whitepaper",
+   "sources": [
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2070",
+   "name": "NVIDIA GeForce RTX 2070",
+   "match": [
+    "rtx 2070"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 29.9,
+   "fp16acc_tflops": 59.7,
+   "int8_tops": 119.4,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 36,
+   "units": "SM",
+   "tgp_w": 175,
+   "year": 2018,
+   "tflops_basis": "whitepaper (reference 1620 MHz; FE 31.5)",
+   "sources": [
+    "https://images.nvidia.com/aem-dam/en-zz/Solutions/design-visualization/technologies/turing-architecture/NVIDIA-Turing-Architecture-Whitepaper.pdf",
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2060-super",
+   "name": "NVIDIA GeForce RTX 2060 SUPER",
+   "match": [
+    "rtx 2060 super"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 28.7,
+   "fp16acc_tflops": 57.4,
+   "int8_tops": 114.9,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 34,
+   "units": "SM",
+   "tgp_w": 175,
+   "year": 2019,
+   "tflops_basis": "sm_boost_calc (34 SM x 1650 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_20_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2060-12",
+   "name": "NVIDIA GeForce RTX 2060",
+   "match": [
+    "rtx 2060"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 336,
+   "fp16_tflops": 28.7,
+   "fp16acc_tflops": 57.4,
+   "int8_tops": 114.9,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 34,
+   "units": "SM",
+   "tgp_w": 185,
+   "year": 2021,
+   "tflops_basis": "sm_boost_calc (34 SM x 1650 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_20_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-2060-6",
+   "name": "NVIDIA GeForce RTX 2060",
+   "match": [
+    "rtx 2060"
+   ],
+   "exclude": [
+    "max-q",
+    "laptop",
+    "mobile",
+    "super"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Turing",
+   "compute_cap": 7.5,
+   "memory_gb": [
+    6
+   ],
+   "bandwidth_gbs": 336,
+   "fp16_tflops": 25.8,
+   "fp16acc_tflops": 51.6,
+   "int8_tops": 103.2,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 30,
+   "units": "SM",
+   "tgp_w": 160,
+   "year": 2019,
+   "tflops_basis": "sm_boost_calc (30 SM x 1680 MHz)",
+   "sources": [
+    "https://www.nvidia.com/en-us/geforce/graphics-cards/compare/",
+    "https://en.wikipedia.org/wiki/GeForce_RTX_20_series",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-pro-6000-blackwell",
+   "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+   "match": [
+    "rtx pro 6000"
+   ],
+   "exclude": [
+    "max-q",
+    "server"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    96
+   ],
+   "bandwidth_gbs": 1792,
+   "fp16_tflops": 500.0,
+   "fp16acc_tflops": 500.0,
+   "int8_tops": null,
+   "fp8_tflops": 1000.0,
+   "fp4_tflops": 2000.0,
+   "neural_accel": null,
+   "gpu_cores": 188,
+   "units": "SM",
+   "tgp_w": 600,
+   "year": 2025,
+   "tflops_basis": "datasheet_derived (4000 FP4 TOPS sparse; FP4:FP8:FP16|BF16 = 4:2:1 per server page, full-rate FP32 accumulate)",
+   "sources": [
+    "https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/",
+    "https://www.pny.com/File%20Library/Company/Support/Product%20Brochures/NVIDIA%20RTX/English/NVIDIA-RTX-PRO-6000-Blackwell-Workstation-Edition.pdf",
+    "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "int8_tops"
+   ]
+  },
+  {
+   "id": "rtx-pro-6000-blackwell-maxq",
+   "name": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+   "match": [
+    "rtx pro 6000 blackwell max-q"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    96
+   ],
+   "bandwidth_gbs": 1792,
+   "fp16_tflops": 438.9,
+   "fp16acc_tflops": 438.9,
+   "int8_tops": null,
+   "fp8_tflops": 877.8,
+   "fp4_tflops": 1755.5,
+   "neural_accel": null,
+   "gpu_cores": 188,
+   "units": "SM",
+   "tgp_w": 300,
+   "year": 2025,
+   "tflops_basis": "datasheet_derived (3511 FP4 TOPS sparse; FP4:FP8:FP16|BF16 = 4:2:1 per server page, full-rate FP32 accumulate)",
+   "sources": [
+    "https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/professional-desktop-gpus/rtx-pro-6000-max-q/workstation-datasheet-blackwell-rtx-pro-6000-max-q-nvidia-us-5349650-web.pdf",
+    "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "int8_tops"
+   ]
+  },
+  {
+   "id": "rtx-pro-6000-blackwell-server",
+   "name": "NVIDIA RTX PRO 6000 Blackwell Server Edition",
+   "match": [
+    "rtx pro 6000 blackwell server"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Blackwell",
+   "compute_cap": 12.0,
+   "memory_gb": [
+    96
+   ],
+   "bandwidth_gbs": 1597,
+   "fp16_tflops": 500.0,
+   "fp16acc_tflops": 500.0,
+   "int8_tops": null,
+   "fp8_tflops": 1000.0,
+   "fp4_tflops": 2000.0,
+   "neural_accel": null,
+   "gpu_cores": 188,
+   "units": "SM",
+   "tgp_w": 600,
+   "year": 2025,
+   "tflops_basis": "datasheet_derived (4000 FP4 TOPS sparse; FP4:FP8:FP16|BF16 = 4:2:1 per server page, full-rate FP32 accumulate)",
+   "sources": [
+    "https://www.nvidia.com/en-us/data-center/rtx-pro-6000-blackwell-server-edition/",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "int8_tops"
+   ]
+  },
+  {
+   "id": "rtx-6000-ada",
+   "name": "NVIDIA RTX 6000 Ada Generation",
+   "match": [
+    "rtx 6000 ada"
+   ],
+   "exclude": [],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    48
+   ],
+   "bandwidth_gbs": 960,
+   "fp16_tflops": 182.1,
+   "fp16acc_tflops": 364.3,
+   "int8_tops": 728.5,
+   "fp8_tflops": 364.3,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 142,
+   "units": "SM",
+   "tgp_w": 300,
+   "year": 2022,
+   "tflops_basis": "datasheet_derived (1457 TFLOPS FP8 sparse; GeForce-style half-rate FP32 accumulate assumed)",
+   "sources": [
+    "https://www.nvidia.com/en-us/products/workstations/rtx-6000/",
+    "https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/rtx-6000/proviz-print-rtx6000-datasheet-web-2504660.pdf",
+    "https://images.nvidia.com/aem-dam/Solutions/geforce/ada/nvidia-ada-gpu-architecture.pdf",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp8_tflops",
+    "int8_tops"
+   ]
+  },
+  {
+   "id": "rtx-a6000",
+   "name": "NVIDIA RTX A6000",
+   "match": [
+    "rtx a6000"
+   ],
+   "exclude": [
+    "laptop"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    48
+   ],
+   "bandwidth_gbs": 768,
+   "fp16_tflops": 154.8,
+   "fp16acc_tflops": 154.8,
+   "int8_tops": 309.7,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 84,
+   "units": "SM",
+   "tgp_w": 300,
+   "year": 2020,
+   "tflops_basis": "whitepaper (full-rate FP32 accumulate)",
+   "sources": [
+    "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rtx-4000-ada",
+   "name": "NVIDIA RTX 4000 Ada Generation",
+   "match": [
+    "rtx 4000 ada"
+   ],
+   "exclude": [
+    "sff",
+    "laptop"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ada Lovelace",
+   "compute_cap": 8.9,
+   "memory_gb": [
+    20
+   ],
+   "bandwidth_gbs": 360,
+   "fp16_tflops": 53.5,
+   "fp16acc_tflops": 106.9,
+   "int8_tops": 213.8,
+   "fp8_tflops": 106.9,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "SM",
+   "tgp_w": 130,
+   "year": 2023,
+   "tflops_basis": "datasheet_derived (427.6 TFLOPS FP8 sparse per product page; datasheet says 327.6)",
+   "sources": [
+    "https://www.nvidia.com/en-us/products/workstations/rtx-4000/",
+    "https://www.nvidia.com/content/dam/en-zz/Solutions/products/workstations/nvidia-rtx-4000-datasheet.pdf",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "fp16acc_tflops",
+    "fp8_tflops",
+    "int8_tops"
+   ]
+  },
+  {
+   "id": "rtx-a4000",
+   "name": "NVIDIA RTX A4000",
+   "match": [
+    "rtx a4000"
+   ],
+   "exclude": [
+    "laptop"
+   ],
+   "vendor": "nvidia",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "Ampere",
+   "compute_cap": 8.6,
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 448,
+   "fp16_tflops": 76.7,
+   "fp16acc_tflops": 76.7,
+   "int8_tops": 153.4,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "SM",
+   "tgp_w": 140,
+   "year": 2021,
+   "tflops_basis": "datasheet_derived (153.4 TFLOPS FP16 sparse; INT8 = 48 SM x 1560 MHz x 2048)",
+   "sources": [
+    "https://www.nvidia.com/en-us/design-visualization/rtx-a4000/",
+    "https://www.nvidia.com/content/dam/en-zz/Solutions/gtcs21/rtx-a4000/nvidia-rtx-a4000-datasheet.pdf",
+    "https://developer.nvidia.com/cuda-gpus"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-9070-xt",
+   "name": "AMD Radeon RX 9070 XT",
+   "match": [
+    "rx 9070 xt"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1201",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 640,
+   "fp16_tflops": 195,
+   "fp16acc_tflops": null,
+   "int8_tops": 389,
+   "fp8_tflops": 389,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 64,
+   "units": "CU",
+   "tgp_w": 304,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-9070",
+   "name": "AMD Radeon RX 9070",
+   "match": [
+    "rx 9070"
+   ],
+   "exclude": [
+    "9070 xt",
+    "9070 gre"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1201",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 640,
+   "fp16_tflops": 145,
+   "fp16acc_tflops": null,
+   "int8_tops": 289,
+   "fp8_tflops": 289,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 56,
+   "units": "CU",
+   "tgp_w": 220,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-9070-gre",
+   "name": "AMD Radeon RX 9070 GRE",
+   "match": [
+    "rx 9070 gre"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1201",
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 432,
+   "fp16_tflops": 137,
+   "fp16acc_tflops": null,
+   "int8_tops": 274,
+   "fp8_tflops": 274,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 48,
+   "units": "CU",
+   "tgp_w": 220,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9070-gre.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": [
+    "year"
+   ]
+  },
+  {
+   "id": "rx-9060-xt-16",
+   "name": "AMD Radeon RX 9060 XT",
+   "match": [
+    "rx 9060 xt"
+   ],
+   "exclude": [
+    " lp"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1200",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 320,
+   "fp16_tflops": 103,
+   "fp16acc_tflops": null,
+   "int8_tops": 205,
+   "fp8_tflops": 205,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 32,
+   "units": "CU",
+   "tgp_w": 160,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9060xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-9060-xt-8",
+   "name": "AMD Radeon RX 9060 XT",
+   "match": [
+    "rx 9060 xt"
+   ],
+   "exclude": [
+    " lp"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1200",
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 320,
+   "fp16_tflops": 103,
+   "fp16acc_tflops": null,
+   "int8_tops": 205,
+   "fp8_tflops": 205,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 32,
+   "units": "CU",
+   "tgp_w": 150,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9060xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": [
+    "tgp_w"
+   ]
+  },
+  {
+   "id": "rx-9060",
+   "name": "AMD Radeon RX 9060",
+   "match": [
+    "rx 9060"
+   ],
+   "exclude": [
+    "9060 xt"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1200",
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 288,
+   "fp16_tflops": 86,
+   "fp16acc_tflops": null,
+   "int8_tops": 172,
+   "fp8_tflops": 172,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 28,
+   "units": "CU",
+   "tgp_w": 132,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/9000-series/amd-radeon-rx-9060.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": [
+    "year"
+   ]
+  },
+  {
+   "id": "radeon-ai-pro-r9700",
+   "name": "AMD Radeon AI PRO R9700",
+   "match": [
+    "r9700"
+   ],
+   "exclude": [
+    "r9700s"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 4",
+   "compute_cap": null,
+   "gfx_target": "gfx1201",
+   "memory_gb": [
+    32
+   ],
+   "bandwidth_gbs": 640,
+   "fp16_tflops": 191,
+   "fp16acc_tflops": null,
+   "int8_tops": 383,
+   "fp8_tflops": 383,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 64,
+   "units": "CU",
+   "tgp_w": 300,
+   "year": 2025,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/workstations/radeon-ai-pro/ai-9000-series/amd-radeon-ai-pro-r9700.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7900-xtx",
+   "name": "AMD Radeon RX 7900 XTX",
+   "match": [
+    "rx 7900 xtx"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1100",
+   "memory_gb": [
+    24
+   ],
+   "bandwidth_gbs": 960,
+   "fp16_tflops": 123,
+   "fp16acc_tflops": null,
+   "int8_tops": 123,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 96,
+   "units": "CU",
+   "tgp_w": 355,
+   "year": 2022,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": true
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xtx.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7900-xt",
+   "name": "AMD Radeon RX 7900 XT",
+   "match": [
+    "rx 7900 xt"
+   ],
+   "exclude": [
+    "xtx"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1100",
+   "memory_gb": [
+    20
+   ],
+   "bandwidth_gbs": 800,
+   "fp16_tflops": 103,
+   "fp16acc_tflops": null,
+   "int8_tops": 103,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 84,
+   "units": "CU",
+   "tgp_w": 315,
+   "year": 2022,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7900-gre",
+   "name": "AMD Radeon RX 7900 GRE",
+   "match": [
+    "rx 7900 gre"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1100",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 576,
+   "fp16_tflops": 92,
+   "fp16acc_tflops": null,
+   "int8_tops": 92,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 80,
+   "units": "CU",
+   "tgp_w": 260,
+   "year": 2023,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7900-gre.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7800-xt",
+   "name": "AMD Radeon RX 7800 XT",
+   "match": [
+    "rx 7800 xt"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1101",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 624,
+   "fp16_tflops": 74.6,
+   "fp16acc_tflops": null,
+   "int8_tops": 74.6,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 60,
+   "units": "CU",
+   "tgp_w": 263,
+   "year": 2023,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7800-xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7700-xt",
+   "name": "AMD Radeon RX 7700 XT",
+   "match": [
+    "rx 7700 xt"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1101",
+   "memory_gb": [
+    12
+   ],
+   "bandwidth_gbs": 432,
+   "fp16_tflops": 70.3,
+   "fp16acc_tflops": null,
+   "int8_tops": 70.3,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 54,
+   "units": "CU",
+   "tgp_w": 245,
+   "year": 2023,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7700-xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7600-xt",
+   "name": "AMD Radeon RX 7600 XT",
+   "match": [
+    "rx 7600 xt"
+   ],
+   "exclude": [],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1102",
+   "memory_gb": [
+    16
+   ],
+   "bandwidth_gbs": 288,
+   "fp16_tflops": 45.1,
+   "fp16acc_tflops": null,
+   "int8_tops": 45.1,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 32,
+   "units": "CU",
+   "tgp_w": 190,
+   "year": 2024,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": false,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7600-xt.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "rx-7600",
+   "name": "AMD Radeon RX 7600",
+   "match": [
+    "rx 7600"
+   ],
+   "exclude": [
+    "7600 xt",
+    "7600m",
+    "7600s"
+   ],
+   "vendor": "amd",
+   "platform": "windows",
+   "laptop": false,
+   "arch": "RDNA 3",
+   "compute_cap": null,
+   "gfx_target": "gfx1102",
+   "memory_gb": [
+    8
+   ],
+   "bandwidth_gbs": 288,
+   "fp16_tflops": 43.5,
+   "fp16acc_tflops": null,
+   "int8_tops": 43.5,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": null,
+   "gpu_cores": 32,
+   "units": "CU",
+   "tgp_w": 165,
+   "year": 2023,
+   "tflops_basis": "amd_spec_page (dense matrix, no sparsity)",
+   "rocm": {
+    "rocm_10_1_matrix_linux_windows": true,
+    "windows_pytorch_rocm_7_2_1": false
+   },
+   "sources": [
+    "https://www.amd.com/en/products/graphics/desktops/radeon/7000-series/amd-radeon-rx-7600.html",
+    "https://rocm.docs.amd.com/en/latest/compatibility/compatibility-matrix.html",
+    "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-7c",
+   "name": "Apple M1",
+   "match": [
+    "apple m1"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16
+   ],
+   "bandwidth_gbs": 68.25,
+   "fp16_tflops": 2.29,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 7,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2020,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-8c",
+   "name": "Apple M1",
+   "match": [
+    "apple m1"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16
+   ],
+   "bandwidth_gbs": 68.25,
+   "fp16_tflops": 2.62,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 8,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2020,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-pro-14c",
+   "name": "Apple M1 Pro",
+   "match": [
+    "apple m1 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    32
+   ],
+   "bandwidth_gbs": 200,
+   "fp16_tflops": 4.64,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 14,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2021,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-pro-16c",
+   "name": "Apple M1 Pro",
+   "match": [
+    "apple m1 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    32
+   ],
+   "bandwidth_gbs": 200,
+   "fp16_tflops": 5.31,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 16,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2021,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-max-24c",
+   "name": "Apple M1 Max",
+   "match": [
+    "apple m1 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    32,
+    64
+   ],
+   "bandwidth_gbs": 400,
+   "fp16_tflops": 7.96,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 24,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2021,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-max-32c",
+   "name": "Apple M1 Max",
+   "match": [
+    "apple m1 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    32,
+    64
+   ],
+   "bandwidth_gbs": 400,
+   "fp16_tflops": 10.62,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 32,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2021,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-ultra-48c",
+   "name": "Apple M1 Ultra",
+   "match": [
+    "apple m1 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    64,
+    128
+   ],
+   "bandwidth_gbs": 800,
+   "fp16_tflops": 15.93,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 48,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2022,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m1-ultra-64c",
+   "name": "Apple M1 Ultra",
+   "match": [
+    "apple m1 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M1",
+   "compute_cap": null,
+   "memory_gb": [
+    64,
+    128
+   ],
+   "bandwidth_gbs": 800,
+   "fp16_tflops": 21.23,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 64,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2022,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M1"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-8c",
+   "name": "Apple M2",
+   "match": [
+    "apple m2"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16,
+    24
+   ],
+   "bandwidth_gbs": 100,
+   "fp16_tflops": 2.86,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 8,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2022,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-10c",
+   "name": "Apple M2",
+   "match": [
+    "apple m2"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16,
+    24
+   ],
+   "bandwidth_gbs": 100,
+   "fp16_tflops": 3.58,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 10,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2022,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-pro-16c",
+   "name": "Apple M2 Pro",
+   "match": [
+    "apple m2 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    32
+   ],
+   "bandwidth_gbs": 200,
+   "fp16_tflops": 5.73,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 16,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-pro-19c",
+   "name": "Apple M2 Pro",
+   "match": [
+    "apple m2 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    32
+   ],
+   "bandwidth_gbs": 200,
+   "fp16_tflops": 6.8,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 19,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-max-30c",
+   "name": "Apple M2 Max",
+   "match": [
+    "apple m2 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    32,
+    64
+   ],
+   "bandwidth_gbs": 400,
+   "fp16_tflops": 10.74,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 30,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": [
+    "memory_gb"
+   ]
+  },
+  {
+   "id": "m2-max-38c",
+   "name": "Apple M2 Max",
+   "match": [
+    "apple m2 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    32,
+    64,
+    96
+   ],
+   "bandwidth_gbs": 400,
+   "fp16_tflops": 13.6,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 38,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-ultra-60c",
+   "name": "Apple M2 Ultra",
+   "match": [
+    "apple m2 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    64,
+    128,
+    192
+   ],
+   "bandwidth_gbs": 800,
+   "fp16_tflops": 21.47,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 60,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m2-ultra-76c",
+   "name": "Apple M2 Ultra",
+   "match": [
+    "apple m2 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M2",
+   "compute_cap": null,
+   "memory_gb": [
+    64,
+    128,
+    192
+   ],
+   "bandwidth_gbs": 800,
+   "fp16_tflops": 27.2,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 76,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M2"
+   ],
+   "uncertain": []
+  },
+  {
+   "id": "m3-8c",
+   "name": "Apple M3",
+   "match": [
+    "apple m3"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16,
+    24
+   ],
+   "bandwidth_gbs": 100,
+   "fp16_tflops": 2.83,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 8,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-10c",
+   "name": "Apple M3",
+   "match": [
+    "apple m3"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    8,
+    16,
+    24
+   ],
+   "bandwidth_gbs": 100,
+   "fp16_tflops": 3.53,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 10,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-pro-14c",
+   "name": "Apple M3 Pro",
+   "match": [
+    "apple m3 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    18,
+    36
+   ],
+   "bandwidth_gbs": 150,
+   "fp16_tflops": 4.95,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 14,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-pro-18c",
+   "name": "Apple M3 Pro",
+   "match": [
+    "apple m3 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    18,
+    36
+   ],
+   "bandwidth_gbs": 150,
+   "fp16_tflops": 6.36,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 18,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-max-30c",
+   "name": "Apple M3 Max",
+   "match": [
+    "apple m3 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    36,
+    96
+   ],
+   "bandwidth_gbs": 300,
+   "fp16_tflops": 10.6,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 30,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-max-40c",
+   "name": "Apple M3 Max",
+   "match": [
+    "apple m3 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    48,
+    64,
+    128
+   ],
+   "bandwidth_gbs": 400,
+   "fp16_tflops": 14.13,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 40,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2023,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3",
+    "https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-ultra-60c",
+   "name": "Apple M3 Ultra",
+   "match": [
+    "apple m3 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    96,
+    256
+   ],
+   "bandwidth_gbs": 819,
+   "fp16_tflops": 21.2,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 60,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2025,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m3-ultra-80c",
+   "name": "Apple M3 Ultra",
+   "match": [
+    "apple m3 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M3",
+   "compute_cap": null,
+   "memory_gb": [
+    96,
+    256,
+    512
+   ],
+   "bandwidth_gbs": 819,
+   "fp16_tflops": 28.26,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 80,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2025,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M3"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m4-8c",
+   "name": "Apple M4",
+   "match": [
+    "apple m4"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    24,
+    32
+   ],
+   "bandwidth_gbs": 120,
+   "fp16_tflops": 3.01,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 8,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4"
+   ],
+   "uncertain": [
+    "fp16_tflops",
+    "memory_gb"
+   ]
+  },
+  {
+   "id": "m4-10c",
+   "name": "Apple M4",
+   "match": [
+    "apple m4"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    24,
+    32
+   ],
+   "bandwidth_gbs": 120,
+   "fp16_tflops": 3.76,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 10,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m4-pro-16c",
+   "name": "Apple M4 Pro",
+   "match": [
+    "apple m4 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    24,
+    48,
+    64
+   ],
+   "bandwidth_gbs": 273,
+   "fp16_tflops": 6.46,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 16,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4",
+    "https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m4-pro-20c",
+   "name": "Apple M4 Pro",
+   "match": [
+    "apple m4 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    24,
+    48,
+    64
+   ],
+   "bandwidth_gbs": 273,
+   "fp16_tflops": 8.08,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 20,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4",
+    "https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m4-max-32c",
+   "name": "Apple M4 Max",
+   "match": [
+    "apple m4 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    36
+   ],
+   "bandwidth_gbs": 410,
+   "fp16_tflops": 12.92,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 32,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4",
+    "https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m4-max-40c",
+   "name": "Apple M4 Max",
+   "match": [
+    "apple m4 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M4",
+   "compute_cap": null,
+   "memory_gb": [
+    48,
+    64,
+    128
+   ],
+   "bandwidth_gbs": 546,
+   "fp16_tflops": 16.16,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": false,
+   "gpu_cores": 40,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2024,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M4",
+    "https://www.apple.com/newsroom/2024/10/apple-introduces-m4-pro-and-m4-max/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ]
+  },
+  {
+   "id": "m5-8c",
+   "name": "Apple M5",
+   "match": [
+    "apple m5"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    24,
+    32
+   ],
+   "bandwidth_gbs": 153,
+   "fp16_tflops": 3.32,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 8,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/macbook-air/specs/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4, over 6x vs M1 (Neural Accelerator in each GPU core); no TFLOPS published"
+  },
+  {
+   "id": "m5-10c",
+   "name": "Apple M5",
+   "match": [
+    "apple m5"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    24,
+    32
+   ],
+   "bandwidth_gbs": 153,
+   "fp16_tflops": 4.15,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 10,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2025,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2025/10/apple-unleashes-m5-the-next-big-leap-in-ai-performance-for-apple-silicon/",
+    "https://www.apple.com/macbook-air/specs/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4, over 6x vs M1 (Neural Accelerator in each GPU core); no TFLOPS published"
+  },
+  {
+   "id": "m5-pro-16c",
+   "name": "Apple M5 Pro",
+   "match": [
+    "apple m5 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    24,
+    48
+   ],
+   "bandwidth_gbs": 307,
+   "fp16_tflops": 6.64,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 16,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/03/apple-debuts-m5-pro-and-m5-max-to-supercharge-the-most-demanding-pro-workflows/",
+    "https://www.apple.com/macbook-pro/specs/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4 Pro, over 6x vs M1 Pro; no TFLOPS published"
+  },
+  {
+   "id": "m5-pro-20c",
+   "name": "Apple M5 Pro",
+   "match": [
+    "apple m5 pro"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    24,
+    48,
+    64
+   ],
+   "bandwidth_gbs": 307,
+   "fp16_tflops": 8.29,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 20,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/03/apple-debuts-m5-pro-and-m5-max-to-supercharge-the-most-demanding-pro-workflows/",
+    "https://www.apple.com/macbook-pro/specs/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4 Pro, over 6x vs M1 Pro; no TFLOPS published"
+  },
+  {
+   "id": "m5-max-32c",
+   "name": "Apple M5 Max",
+   "match": [
+    "apple m5 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    36
+   ],
+   "bandwidth_gbs": 460,
+   "fp16_tflops": 13.27,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 32,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/03/apple-debuts-m5-pro-and-m5-max-to-supercharge-the-most-demanding-pro-workflows/",
+    "https://www.apple.com/macbook-pro/specs/",
+    "https://support.apple.com/128107"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4 Max, over 6x vs M1 Max; no TFLOPS published"
+  },
+  {
+   "id": "m5-max-40c",
+   "name": "Apple M5 Max",
+   "match": [
+    "apple m5 max"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    48,
+    64,
+    128
+   ],
+   "bandwidth_gbs": 614,
+   "fp16_tflops": 16.59,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 40,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/03/apple-debuts-m5-pro-and-m5-max-to-supercharge-the-most-demanding-pro-workflows/",
+    "https://www.apple.com/macbook-pro/specs/",
+    "https://support.apple.com/128107"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: over 4x peak GPU compute for AI vs M4 Max, over 6x vs M1 Max; no TFLOPS published"
+  },
+  {
+   "id": "m5-ultra-64c",
+   "name": "Apple M5 Ultra",
+   "match": [
+    "apple m5 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    96
+   ],
+   "bandwidth_gbs": 1228.8,
+   "fp16_tflops": 26.54,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 64,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/08/apple-introduces-m6-and-m5-ultra-for-a-big-leap-in-performance-and-ai-compute/",
+    "https://support.apple.com/128107"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: up to 4.5x peak GPU compute for AI vs M3 Ultra, over 6x vs M1 Ultra; no TFLOPS published"
+  },
+  {
+   "id": "m5-ultra-80c",
+   "name": "Apple M5 Ultra",
+   "match": [
+    "apple m5 ultra"
+   ],
+   "exclude": [],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M5",
+   "compute_cap": null,
+   "memory_gb": [
+    256,
+    512
+   ],
+   "bandwidth_gbs": 1228.8,
+   "fp16_tflops": 33.18,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 80,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://en.wikipedia.org/wiki/Apple_M5",
+    "https://www.apple.com/newsroom/2026/08/apple-introduces-m6-and-m5-ultra-for-a-big-leap-in-performance-and-ai-compute/",
+    "https://support.apple.com/128107"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: up to 4.5x peak GPU compute for AI vs M3 Ultra, over 6x vs M1 Ultra; no TFLOPS published"
+  },
+  {
+   "id": "m6-12c",
+   "name": "Apple M6",
+   "match": [
+    "apple m6"
+   ],
+   "exclude": [
+    "pro",
+    "max",
+    "ultra"
+   ],
+   "vendor": "apple",
+   "platform": "mac",
+   "laptop": null,
+   "arch": "Apple M6",
+   "compute_cap": null,
+   "memory_gb": [
+    16,
+    24,
+    32
+   ],
+   "bandwidth_gbs": {
+    "16": 153,
+    "24": 170,
+    "32": 170
+   },
+   "fp16_tflops": 5.33,
+   "fp16acc_tflops": null,
+   "int8_tops": null,
+   "fp8_tflops": null,
+   "fp4_tflops": null,
+   "neural_accel": true,
+   "gpu_cores": 12,
+   "units": "GPU cores",
+   "tgp_w": null,
+   "year": 2026,
+   "tflops_basis": "apple_fp32_vector_calc (cores x 128 ALU x 2 x clock; FP16 runs at the FP32 rate)",
+   "sources": [
+    "https://en.wikipedia.org/wiki/Apple_silicon",
+    "https://www.apple.com/newsroom/2026/08/apple-introduces-m6-and-m5-ultra-for-a-big-leap-in-performance-and-ai-compute/",
+    "https://www.apple.com/macbook-pro/specs/"
+   ],
+   "uncertain": [
+    "fp16_tflops"
+   ],
+   "apple_ai_claim": "Apple: nearly 30% more peak GPU compute for AI than M5, more than 8x vs M1; no TFLOPS published"
+  }
+ ],
+ "notes": [
+  "Matching: lowercase the reported name; an entry matches if it contains any 'match' string and no 'exclude' string. Same-name variants (RTX 5060 Ti/4060 Ti 16|8, 3080 12|10, 3060 12|8, 3050 8|6, 2060 12|6, RX 9060 XT 16|8) must be told apart by reported VRAM; Apple variants by GPU core count (gpu_cores). RTX 20 laptops without Max-Q report desktop names.",
+  "NVIDIA fp16_tflops = dense FP16 tensor with FP32 accumulate (PyTorch default). fp16acc_tflops = FP16 accumulate (e.g. ComfyUI --fast fp16_accumulation): 2x on GeForce, equal on RTX A-series/PRO Blackwell. fp8_tflops = dense FP8 with FP32 accumulate (what torch._scaled_mm uses); GeForce Ada/Blackwell run it at half their FP8-with-FP16-accumulate rate (whitepaper: 4090 330.3 vs 660.6). fp4_tflops = dense FP4 with FP32 accumulate, full rate (5090: 1676 = 8x fp16). int8_tops = dense INT8.",
+  "Whitepaper values: RTX Blackwell WP App. A-C (5090/5080/5070 Ti/5070 plus 4090/4080/4070 Ti/4070, 3090/3080/3070 Ti/3070), Ada WP (3090 Ti, 3080 Ti, 2080 Super, 2080 Ti FE), GA102 WP (A6000, 2080, 2070 Super), Turing WP (2080 Ti, 2080, 2070 reference clocks; FE about 5-6 % higher).",
+  "Derivations (stated per device in tflops_basis): NVIDIA 'AI TOPS' are sparse; RTX 50 = FP4 sparse -> fp16 = AI/16, fp8 = AI/8, int8 = AI/4, fp4 = AI/2; RTX 40 = FP8 sparse -> fp16 = AI/8, fp8 = AI/4, int8 = AI/2 (ratios from the whitepaper tables; matches SM x boost within 0.5 % on desktop cards). Non-whitepaper RTX 30/20 cards: SM x boost MHz x 512 (FP16/FP32acc) and x 2048 (INT8) per SM per clock, the rate every GeForce generation from Turing to Blackwell shares in the whitepapers.",
+  "Laptops: NVIDIA laptop AI TOPS for RTX 50 Laptop GPUs (except 5050) and the 4090 Laptop imply clocks above the listed max boost (5090 Laptop: ~2.7 GHz vs 2160 MHz). fp16_tflops_max_boost_calc = SM x max boost x 512 is 10-25 % lower; real throughput also depends on TGP. Use the lower value for speed estimates.",
+  "Pro cards: A6000/A4000 have full-rate FP32 accumulate (GA102 WP). RTX PRO 6000 Blackwell: server page lists FP4 4 / FP8 2 / FP16|BF16 1 PFLOPS (sparse) -> full-rate FP32 accumulate assumed for all editions (BF16 always accumulates in FP32); INT8 not published. RTX 6000/4000 Ada: only FP8 sparse published; the Ada WP lists the same-die L40 at half rate, so GeForce ratios are used (could be 2x if full rate). RTX 4000 Ada: product page 427.6 vs datasheet 327.6 TFLOPS FP8 sparse; 427.6 matches the boost clock.",
+  "Precision support by compute capability: Turing 7.5 has no BF16/FP8 (BF16 models need FP16 or FP32), Ampere 8.6 adds BF16, Ada 8.9 adds FP8, Blackwell 12.0 (RTX 50, RTX PRO Blackwell) adds FP4/NVFP4. Laptop compute capability follows the architecture (developer.nvidia.com/cuda-gpus lists desktop SKUs only).",
+  "AMD: dense FP16/FP8/INT8 matrix (WMMA) figures straight from amd.com spec pages (sparse figures ignored). RDNA 3: no FP8, INT8 = FP16 rate. RDNA 4: FP8 and INT8 at 2x FP16, plus 2:4 sparsity. RX 9060 XT 8 GB shares all compute specs with the 16 GB card (AMD lists one spec set); its 150 W TBP comes from AMD partner material via search, not fetched.",
+  "ROCm 10.1.0 matrix (page dated 2026-08-26, 'applies to Linux and Windows', Windows 11 25H2, Adrenalin 26.10.41.05): gfx1201 RX 9070 XT/9070 GRE/9070, AI PRO R9700(S)/R9600(D); gfx1200 RX 9060 XT (LP)/9060/9050; gfx1100 RX 7900 XTX/XT/GRE, PRO W7900/W7800; gfx1101 RX 7800 XT/7700 XT/7700, PRO W7700; gfx1102 RX 7600. RX 7600 XT is not named (same gfx1102). Linux: Ubuntu 26.04.1/24.04.5/22.04.5, RHEL 10.2/9.8.",
+  "AMD 'PyTorch on Windows' matrix (radeon-ryzen docs, ROCm 7.2.1 + PyTorch 2.9, Windows 11 only, 'entire ROCm stack not yet supported on Windows'): RX 9070, RX 9070 XT, AI PRO R9700, RX 9060 XT, RX 7900 XTX, PRO W7900 (+Dual Slot), RX 7700; FP8 only on RDNA 4.",
+  "Apple: fp16_tflops holds GPU FP32 vector TFLOPS (Wikipedia 'Apple silicon' table: cores x 128 x 2 x clock; M3+ clocks from third-party measurements); Apple GPUs run FP16 at the FP32 rate. M5/M5 Pro/M5 Max/M5 Ultra/M6 add a Neural Accelerator per GPU core; Apple publishes only multipliers (apple_ai_claim), so treat their figure as a floor for matrix work. laptop = null: the same chips ship in laptops and desktops.",
+  "Apple bandwidth uses Apple's figures where published (M5 Ultra '1.2 TB/s' = 1228.8 theoretical; M1 68.25 theoretical). M6 bandwidth depends on memory size (153 GB/s with 16 GB, 170 GB/s with 24/32 GB). M5 Ultra 64-core ships with 96 GB, 80-core with 256/512 GB (Apple configurator; Wikipedia also lists 96 GB for 80-core).",
+  "New since mid-2026: M5 Pro/Max (Mar 2026), M5 Ultra and M6 (Aug 2026; M6 MacBook Pro Oct 27 2026), RTX 5070 Laptop 12 GB (Apr 2026). No M6 Pro/Max yet.",
+  "Not released as of 2026-11-14: GeForce RTX 50 Super (reported indefinitely delayed over GDDR7 shortage; absent from NVIDIA's compare page). Reports in Oct 2026 say RTX 5090 production is winding down and NVIDIA's store dropped the 5080; both remain common.",
+  "Not catalogued: China-only RTX 5090 D / D v2 (excluded from the 5090 match), RX 9050, RX 9060 XT LP, RTX 4000 SFF Ada (70 W, excluded), Ryzen AI Max iGPUs (gfx1151, ROCm-supported)."
+ ]
+}

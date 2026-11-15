@@ -490,6 +490,11 @@ format; there video scenes use the Mac's video model and a chain starts from the
 | `studio_generate(project_id, scene_ids=None, wait=True)` | Generates every scene without a take, or the given ones; `wait` blocks for at most an hour. For several DFR scenes use `wait=False` and poll `studio_get` |
 | `studio_export(project_id, preset)` | Renders the edit, returns the file path |
 
+For people, the web interface has an assistant (**✨ Assistant** next to "Conform") that builds a project in seven
+steps. Its building blocks are a good model for your own prompts; `POST /api/studio/wizard/plan` returns the models it
+would pick and the expected time, and `GET /api/hardware` the detected graphics card with the typical time per model
+(estimated from the hardware catalog, or measured once jobs have run). Tell the user these times before long runs.
+
 Workflow:
 
 1. `studio_create`, then one `scene.add` per shot, each video prompt written like for `generate_video`. Add

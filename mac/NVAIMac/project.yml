@@ -53,6 +53,8 @@ targets:
       - path: Resources/Assets.xcassets
       - path: Resources/Third-Party-Notices.txt
         buildPhase: resources
+      - path: Resources/hardware.json
+        buildPhase: resources
     dependencies:
       - package: Flux2
         product: Flux2Core
@@ -82,8 +84,8 @@ targets:
         PRODUCT_NAME: NVAI-open
         PRODUCT_MODULE_NAME: NVAIMac
         PRODUCT_BUNDLE_IDENTIFIER: io.github.mantux775.nvai.mac
-        MARKETING_VERSION: "0.5.5"
-        CURRENT_PROJECT_VERSION: "25"
+        MARKETING_VERSION: "0.5.6"
+        CURRENT_PROJECT_VERSION: "26"
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         INFOPLIST_FILE: Resources/Info.plist

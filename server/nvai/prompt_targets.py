@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import re
 
-TARGETS = ("image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music", "music_sa3", "3d")
+TARGETS = ("image", "video", "video_sound", "video_multishot", "video_start", "sfx", "music", "music_sa3", "3d",
+           "translate")
 # „music“ war das Ziel für ACE-Step (am 26.10.2026 entfernt); es bleibt für ältere Clients und meint jetzt Stable Audio 3
 ALIASES = {"music": "music_sa3"}
 
@@ -125,6 +126,17 @@ SYSTEM: dict[str, str] = {
     ),
 }
 
+# Nur übersetzen (seit 0.5.28, Assistent im Studio): freie Texte des Nutzers treu ins Englische, damit Bild- und
+# Videomodelle sie verstehen. Gemessen 14.11.: Ein deutscher Szenentext im Startbild-Prompt (Upsampler aus) kam bei
+# FLUX 3 als handgeschriebene Schrift ins Bild. Nummerierte Zeilen bleiben nummeriert, damit ein Aufruf alles übersetzt.
+SYSTEM["translate"] = (
+    "You translate short texts that describe a picture, a scene, a person or a place into English. Translate "
+    "faithfully: keep every detail, add nothing, leave out nothing, do not explain and do not describe more. Names "
+    "stay as they are. Text that is already English stays unchanged. When the lines start with a number in square "
+    "brackets, translate every line separately and keep its number in front, one line per number. Output only the "
+    "translation, no heading, no quotation marks."
+)
+
 # Zum Ausbau eines Videos mit Startbild liest der Upsampler das Bild mit.
 WITH_IMAGE = {"video_start"}
 
@@ -148,6 +160,8 @@ FORMAT = {
 
 
 def user_text(target: str, prompt: str) -> str:
+    if target == "translate":
+        return f"Text:\n{prompt.strip()}\nOutput only the English translation."
     return f"Idea: {prompt.strip()}\n{FORMAT.get(target, 'Output the prompt.')}"
 
 

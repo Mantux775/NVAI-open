@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.27",
+  "version": "0.5.28",
   "x-api-version": 1
  },
  "paths": {
@@ -2976,6 +2976,70 @@
     }
    }
   },
+  "/api/hardware": {
+   "get": {
+    "summary": "Hardware Info",
+    "description": "Hardware-Katalog (seit 0.5.28): die rechnende Karte und typische Rechenzeiten je Modell für sie.",
+    "operationId": "hardware_info_api_hardware_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Hardware Info Api Hardware Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/wizard/plan": {
+   "post": {
+    "summary": "Studio Wizard Plan",
+    "description": "Assistent (seit 0.5.28): Karte, Modelle je Aufgabe, Bildgröße, Qualität und geschätzte Rechenzeit.",
+    "operationId": "studio_wizard_plan_api_studio_wizard_plan_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Studio Wizard Plan Api Studio Wizard Plan Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/studio/projects/{pid}/conform": {
    "get": {
     "summary": "Studio Conform Plan",
@@ -3538,7 +3602,8 @@
        "sfx",
        "music",
        "music_sa3",
-       "3d"
+       "3d",
+       "translate"
       ],
       "title": "Target",
       "description": "Wofuer: image (Bildbeschreibung), video (Wan, LTX-Video), video_sound (LTX-2.5, mit Ton), video_multishot (LTX-2.5, 2-4 Einstellungen mit Schnitten und Ton), video_start (nur Bewegung, liest das Startbild in reference_asset_ids mit), sfx (Stable Audio), music (wie music_sa3), 3d (Bild fuer ein Mesh: ein Objekt, kein Boden, kein Schatten)",

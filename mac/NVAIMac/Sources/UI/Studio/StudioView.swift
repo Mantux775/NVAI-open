@@ -17,6 +17,10 @@ struct StudioView: View {
     @AppStorage("studio.sideWidth") private var sideWidth = 330.0
     @State private var confirmCancel = false
     @State private var dragStart: Double?  // Wert eines Teilers zu Beginn des Ziehens
+    // Assistent (seit Mac 0.5.6): Frage beim Start und bei neuen Projekten, der Assistent selbst, Hinweise danach
+    @State private var showAsk = false
+    @State private var showWizard = false
+    @MainActor private static var askedThisSession = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +35,44 @@ struct StudioView: View {
             }
             if model.project == nil { start } else { panes }
         }
-        .task { await model.start() }
+        .task {
+            await model.start()
+            if WizardDemo.script != nil {
+                showWizard = true
+            } else if StudioWizardAsk.wanted && !Self.askedThisSession && !WizardDemo.requested {
+                Self.askedThisSession = true
+                showAsk = true
+            }
+        }
+        .sheet(isPresented: $showAsk) {
+            StudioWizardAsk { start, never in
+                if never {
+                    UserDefaults.standard.set(true, forKey: StudioWizardAsk.neverKey)
+                    model.notice = t("Den Assistenten startest du jederzeit oben über „✨ Assistent“ neben „Übernehmen“.", "You can start the assistant any time with \"✨ Assistant\" at the top, next to \"Conform\".")
+
+                }
+                showAsk = false
+                if start { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showWizard = true } }
+            }
+        }
+        .sheet(isPresented: $showWizard) {
+            StudioWizard(model: model, onClose: { showWizard = false }, onDone: {
+                showWizard = false
+                model.wizardCoach = true
+            })
+        }
+        .onReceive(NotificationCenter.default.publisher(for: WizardDemo.loaded)) { _ in
+            // Startet die App schon im Studio, kann die Frage vor dem Prüfstand offen sein: erst schließen
+            if showAsk {
+                showAsk = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showWizard = true }
+            } else {
+                showWizard = true
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if model.wizardCoach { StudioWizardCoach(running: model.busyScenes) { model.wizardCoach = false }.padding(16) }
+        }
         .onAppear { model.installKeys() }
         .onDisappear {
             model.removeKeys()
@@ -62,7 +103,8 @@ struct StudioView: View {
                    "Whole videos from scenes: compose at the top, edit below, generate with this Mac's models."))
                 .foregroundStyle(.secondary)
             HStack {
-                Button(t("+ Neues Projekt", "+ New project")) { Task { await model.newProject() } }.buttonStyle(.borderedProminent).tint(.green)
+                Button(t("+ Neues Projekt", "+ New project")) { Task { await model.newProject(); if StudioWizardAsk.wanted { showAsk = true } } }
+                    .buttonStyle(.borderedProminent).tint(.green)
                 Button(t("Projekt importieren …", "Import project …")) { importPackage() }
             }
         }
@@ -190,7 +232,7 @@ struct StudioView: View {
             .help(model.project?.name ?? t("Projekt wählen", "Choose a project"))
             .simultaneousGesture(TapGesture().onEnded { model.clearSelection() })
             Menu {
-                Button(t("Neues Projekt", "New project")) { Task { await model.newProject() } }
+                Button(t("Neues Projekt", "New project")) { Task { await model.newProject(); if StudioWizardAsk.wanted { showAsk = true } } }
                 Menu(t("Projekt exportieren", "Export project")) {
                     if let p = model.project {
                         let info = StudioPackage.info(p)
@@ -235,6 +277,9 @@ struct StudioView: View {
             Button(t("Übernehmen ↓", "Conform ↓")) { Task { await model.conform() } }
                 .fixedSize()
                 .help(t("Legt die gewählten Takes in den Schnitt", "Puts the chosen takes into the edit"))
+            Button("✨ " + t("Assistent", "Assistant")) { showWizard = true }
+                .fixedSize()
+                .help(t("Der Assistent führt Schritt für Schritt durch ein ganzes Video", "The assistant guides you step by step through a whole video"))
             if model.busyScenes > 0 { generation(compact: compact) }
             Menu(compact ? "+ ◆" : t("+ Marker", "+ Marker")) {
                 ForEach(Studio.markerKinds, id: \.self) { kind in

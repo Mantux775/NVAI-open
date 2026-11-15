@@ -115,6 +115,7 @@ enum LaunchOptions {
             }
         }
         if let snapshot {
+            if let wizard = value("--studio-wizard") { WizardDemo.load(wizard) }
             let tab = value("--tab") ?? "generate"
             AppState.shared.selectedTab = tab == "search" ? "models" : tab == "player" ? "history"
                 : ["restore", "audio", "video"].contains(tab) ? "generate" : tab
@@ -143,6 +144,24 @@ enum LaunchOptions {
                 if args.contains("--studio-cancel") {
                     await StudioModel.shared.cancelGenerate()
                     AppLog.info("Studio cancel test: \(StudioModel.shared.notice ?? "-")")
+                }
+            }
+            if tab == "studio", let demo = WizardDemo.script {
+                // Prüfstand des Assistenten: warten, bis er durch ist, dann auf die Szenen (höchstens 90 min)
+                let t0 = Date()
+                while !WizardDemo.finished, Date().timeIntervalSince(t0) < 5400 { try? await Task.sleep(nanoseconds: 1_000_000_000) }
+                if demo.generate == true {
+                    try? await Task.sleep(nanoseconds: 20_000_000_000)
+                    WizardDemo.snap("wz-8-coach", sheet: false)
+                    while StudioModel.shared.busyScenes > 0, Date().timeIntervalSince(t0) < 5400 {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    }
+                    let scenes = StudioModel.shared.project?.scenes ?? []
+                    AppLog.info("Wizard demo: scenes finished after \(Int(Date().timeIntervalSince(t0))) s: "
+                                + scenes.map { "\($0.lane) \($0.takes.isEmpty ? "no take" : "take")\($0.error.map { " (\($0))" } ?? "")" }.joined(separator: ", "))
+                    if demo.conform == true { await StudioModel.shared.conform() }
+                    StudioModel.shared.wizardCoach = false
+                    if let clip = StudioModel.shared.project?.clips.first { StudioModel.shared.snapshotSelect(clip.id) }
                 }
             }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
@@ -301,7 +320,7 @@ enum LaunchOptions {
         }
     }
 
-    private static func write(_ path: String, sheet: Bool) {
+    static func write(_ path: String, sheet: Bool) {
         guard let window = NSApp.windows.first(where: { $0.isVisible && $0.frame.width > 400 && $0.sheetParent == nil })
         else {
             let list = NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) \(Int($0.frame.width))×\(Int($0.frame.height))" }

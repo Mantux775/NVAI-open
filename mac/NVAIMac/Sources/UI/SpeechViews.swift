@@ -163,6 +163,7 @@ struct SpeechModelCard: View {
                     Text(SpeechCatalog.name).font(.headline)
                     FitBadges(fit: MacFit.of(needGB: MacFit.speechNeedGB),
                               recommended: MacRecommendations.isRecommended(SpeechCatalog.id))
+                    EstimateBadge(id: SpeechCatalog.id)
                     Spacer()
                     Text(state.speechInstalled ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
                         .foregroundStyle(state.speechInstalled ? .green : .secondary)

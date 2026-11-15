@@ -100,6 +100,7 @@ struct AudioModelCard: View {
                     Text(AudioCatalog.name).font(.headline)
                     FitBadges(fit: MacFit.of(needGB: MacFit.audioNeedGB),
                               recommended: MacRecommendations.isRecommended(AudioCatalog.id))
+                    EstimateBadge(id: AudioCatalog.id)
                     Spacer()
                     Text(state.audioInstalled ? t("geladen", "downloaded") : t("nicht geladen", "not downloaded"))
                         .foregroundStyle(state.audioInstalled ? .green : .secondary)

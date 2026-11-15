@@ -5,6 +5,8 @@ import Foundation
 /// kleinere Qwen3-4B satzweise vorgegeben; Kürzen und Aufräumen wie dort.
 enum PromptTarget: String, Codable, Sendable, CaseIterable {
     case image, video
+    /// Nur übersetzen (seit Mac 0.5.6, Assistent im Studio): freie Texte treu ins Englische, nichts dazu erfinden
+    case translate
 }
 
 enum PromptTargets {
@@ -31,6 +33,13 @@ enum PromptTargets {
                 + "movement: pushing in, pulling back, panning, tracking, orbiting or staying still. Last sentence: the "
                 + "setting, the light and the time of day. One continuous shot of about four seconds, no cuts. "
                 + common + noInvent
+        case .translate:
+            // Wie unter Windows (prompt_targets.py): Ein deutscher Szenentext kam bei FLUX sonst als Schrift ins Bild
+            return "You translate short texts that describe a picture, a scene, a person or a place into English. "
+                + "Translate faithfully: keep every detail, add nothing, leave out nothing, do not explain and do not "
+                + "describe more. Names stay as they are. Text that is already English stays unchanged. When the lines "
+                + "start with a number in square brackets, translate every line separately and keep its number in front, "
+                + "one line per number. Output only the translation, no heading, no quotation marks."
         }
     }
 
@@ -39,13 +48,14 @@ enum PromptTargets {
         switch target {
         case .image: return prompt
         case .video: return "Idea: \(prompt)\nWrite 4 to 5 sentences, 40 to 70 words, no more, with one camera movement."
+        case .translate: return "Text:\n\(prompt)\nOutput only the English translation."
         }
     }
 
     /// Höchstlänge in Wörtern nach dem Kürzen.
     static func budget(_ target: PromptTarget) -> Int? {
         switch target {
-        case .image: return nil
+        case .image, .translate: return nil
         case .video: return 70
         }
     }

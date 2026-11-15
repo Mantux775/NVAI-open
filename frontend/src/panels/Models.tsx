@@ -5,6 +5,7 @@ import {
 import type { Downloads } from '../downloads'
 import { t } from '../i18n'
 import { GpuSettings } from '../components/GpuSettings'
+import { EstimateBadge, HardwareSection } from '../components/HardwareInfo'
 import { ContentBadge } from '../components/ContentBadge'
 import { LicenseBadge, licenseBlocked } from '../components/LicenseBadge'
 import { FolderSettings } from '../components/FolderSettings'
@@ -284,6 +285,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
   return (
     <div className="models">
       <FolderSettings />
+      <HardwareSection />
       <GpuSettings />
       <div className="model-toolbar">
         <div className="filters">
@@ -485,6 +487,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
                       {t('empfohlen', 'recommended')}
                     </span>
                   )}
+                  <EstimateBadge id={m.id} />
                   {m.partially_installed && (
                     <span className="badge running">{t('unvollständig', 'incomplete')}</span>
                   )}

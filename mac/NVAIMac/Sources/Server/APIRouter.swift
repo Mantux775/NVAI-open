@@ -96,8 +96,8 @@ enum APIRouter {
                 // Wie unter Windows `target`; der Mac kennt Bild und (seit 0.4.8) Video.
                 let raw = req.json?["target"]?.stringValue ?? "image"
                 guard let target = PromptTarget(rawValue: raw) else {
-                    throw APIError(422, t("target \(raw) gibt es auf dem Mac nicht (image oder video).",
-                                          "target \(raw) is not available on the Mac (image or video)."))
+                    throw APIError(422, t("target \(raw) gibt es auf dem Mac nicht (image, video oder translate).",
+                                          "target \(raw) is not available on the Mac (image, video or translate)."))
                 }
                 let result = try await JobQueue.expandAndWait(prompt, target: target)
                 return .json(["prompt": prompt, "expanded": result.expanded, "target": target.rawValue,
