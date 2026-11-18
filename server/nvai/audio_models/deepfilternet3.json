@@ -1,0 +1,25 @@
+{
+  "id": "deepfilternet3",
+  "label_de": "DeepFilterNet3 (Sprache entrauschen)",
+  "label_en": "DeepFilterNet3 (speech denoiser)",
+  "task": "denoise",
+  "license_code": "MIT OR Apache-2.0",
+  "license_weights": "MIT OR Apache-2.0",
+  "commercial_ok": true,
+  "license_url": "https://github.com/Rikorose/DeepFilterNet/blob/d375b2d8309e0935d165700c91da9de862a99c31/LICENSE",
+  "sample_rate": 48000,
+  "stems": ["clean", "removed"],
+  "files": [
+    {
+      "url": "https://raw.githubusercontent.com/Rikorose/DeepFilterNet/d375b2d8309e0935d165700c91da9de862a99c31/models/DeepFilterNet3_onnx.tar.gz",
+      "path": "DeepFilterNet3_onnx.tar.gz",
+      "size": 7983136,
+      "sha256": "c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616"
+    }
+  ],
+  "vram_gb": 0,
+  "seconds_per_minute": 5.2,
+  "device": "cpu",
+  "notes_de": "Schneller Entrauscher für Sprache, rechnet auf dem Prozessor (gemessen 5,2 s je Minute Stereo). Alles, was keine Sprache ist, gilt als Störung: Rauschen, Brummen, auch Musik. In Sprechpausen wurde Musik 25 bis 45 dB leiser, die Stimme blieb bis auf 0,5 dB erhalten. Für ein natürliches Ergebnis die Dämpfung begrenzen (atten_lim_db 12 bis 24, gemessen: mit 18 genau 18 dB). Wer Musik behalten will, nimmt eine Stimm-Trennung.",
+  "notes_en": "Fast speech denoiser that runs on the CPU (measured 5.2 s per minute of stereo). Everything that is not speech counts as noise: hiss, hum and music too. In speech pauses music dropped by 25 to 45 dB while the voice stayed within 0.5 dB. For a natural result limit the attenuation (atten_lim_db 12 to 24, measured: 18 gives exactly 18 dB). To keep the music, use a voice separation model instead."
+}

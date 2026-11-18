@@ -6,11 +6,13 @@ import { useDownloads } from './downloads'
 import { getLang, setLang, t, type Lang } from './i18n'
 import { GeneratePanel } from './panels/Generate'
 import { HistoryPanel } from './panels/History'
+import { LorasPanel } from './panels/Loras'
 import { ModelsPanel } from './panels/Models'
 import { StudioPanel } from './panels/Studio'
 import { VhsPanel } from './panels/Vhs'
+import { AudioPanel } from './panels/Audio'
 
-type Tab = 'generate' | 'studio' | 'vhs' | 'history' | 'models'
+type Tab = 'generate' | 'studio' | 'vhs' | 'history' | 'models' | 'loras' | 'audio'
 
 // Studio vorn und beim Start offen (Nutzer 27.10.2026: „die App soll zukünftig mit Studio in der ersten Position und
 // gleich offen starten, danach folgen Generate, History und Models“); VHS seit 28.10. als eigener Reiter (Nutzer:
@@ -20,6 +22,10 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'generate', label: t('Generieren', 'Generate') },
   { id: 'history', label: t('Verlauf', 'History') },
   { id: 'models', label: t('Modelle', 'Models') },
+  // Seit 0.5.29 (Nutzer 16.11.2026: „integriere neuen Bereich ‚LoRA erstellen/Bearbeiten‘“), vor VHS, das ganz hinten bleibt
+  { id: 'loras', label: t('LoRA erstellen/Bearbeiten', 'Create/Edit LoRA') },
+  // Seit 17.11.2026 (Nutzer: „dann neuer Bereich Audio“): Stimme trennen, entrauschen, Filter, Export, vor VHS
+  { id: 'audio', label: t('Ton-Forensik', 'Audio forensics') },
   { id: 'vhs', label: t('VHS', 'VHS') },
 ]
 
@@ -32,9 +38,9 @@ const LANGS: { id: Lang; label: string; name: string }[] = [
 export function App() {
   const [tab, setTab] = useState<Tab>('studio')
   // Reiter, die nach dem ersten Besuch bestehen bleiben (siehe unten bei <main>)
-  const [kept, setKept] = useState<{ generate?: boolean; vhs?: boolean }>({})
+  const [kept, setKept] = useState<{ generate?: boolean; vhs?: boolean; loras?: boolean; audio?: boolean }>({})
   useEffect(() => {
-    if ((tab === 'generate' || tab === 'vhs') && !kept[tab]) setKept((k) => ({ ...k, [tab]: true }))
+    if ((tab === 'generate' || tab === 'vhs' || tab === 'loras' || tab === 'audio') && !kept[tab]) setKept((k) => ({ ...k, [tab]: true }))
   }, [tab, kept])
   const [health, setHealth] = useState<Health | null>(null)
   const [events, setEvents] = useState<ServerEvent | null>(null)
@@ -306,6 +312,16 @@ export function App() {
         {(tab === 'vhs' || kept.vhs) && (
           <div hidden={tab !== 'vhs'}>
             <VhsPanel event={events} downloads={downloads} onShowModels={() => setTab('models')} />
+          </div>
+        )}
+        {(tab === 'loras' || kept.loras) && (
+          <div hidden={tab !== 'loras'}>
+            <LorasPanel event={events} modelsVersion={modelsVersion} onShowModels={() => setTab('models')} />
+          </div>
+        )}
+        {(tab === 'audio' || kept.audio) && (
+          <div hidden={tab !== 'audio'}>
+            <AudioPanel event={events} active={tab === 'audio'} />
           </div>
         )}
         {tab === 'history' && <HistoryPanel event={events} />}

@@ -1167,6 +1167,7 @@ private struct MediaInspector: View {
                         .font(.headline)
                     if inEdit { Badge(text: t("im Schnitt", "in edit"), color: .green) }
                 }
+                FileNameRow(name: (r.filename as NSString).lastPathComponent)
                 Text(StudioMaterial.label(r)).font(.caption).lineLimit(6).textSelection(.enabled)
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 3) {
                     if !r.modelID.isEmpty { row(t("Modell", "Model"), Self.modelName(r)) }
@@ -1215,5 +1216,70 @@ private struct MediaInspector: View {
             Text(label).foregroundStyle(.secondary)
             Text(value).textSelection(.enabled)
         }
+    }
+}
+
+/// Dateiname der angeklickten Datei (Nutzer 15.11.2026: „sonst finde ich die nicht“): ein Klick markiert ihn ganz,
+/// „Kopieren“ legt ihn in die Zwischenablage, wie `FileName` in studio/Inspector.tsx unter Windows.
+private struct FileNameRow: View {
+    let name: String
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            SelectAllField(text: name)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 3)
+                .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+                .help(t("Ein Klick markiert den ganzen Namen", "One click selects the whole name"))
+            Button(copied ? t("Kopiert", "Copied") : t("Kopieren", "Copy")) {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                copied = pasteboard.setString(name, forType: .string)
+                if copied { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false } }
+            }
+            .help(t("Dateinamen in die Zwischenablage kopieren", "Copy the file name to the clipboard"))
+        }
+        .onChange(of: name) { _, _ in copied = false }
+    }
+}
+
+/// Nur lesbares Textfeld, das beim Klick den ganzen Inhalt markiert; ⌘C kopiert ihn dann (die Studio-Tastatur lässt
+/// Tasten durch, solange ein Textfeld den Fokus hat). Lange Namen brechen zeichenweise um.
+private struct SelectAllField: NSViewRepresentable {
+    let text: String
+
+    final class Field: NSTextField {
+        override func mouseDown(with event: NSEvent) {
+            super.mouseDown(with: event)
+            currentEditor()?.selectAll(nil)
+        }
+    }
+
+    func makeNSView(context: Context) -> Field {
+        let field = Field(wrappingLabelWithString: text)
+        field.isSelectable = true
+        field.isEditable = false
+        field.lineBreakMode = .byCharWrapping
+        field.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateNSView(_ field: Field, context: Context) {
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    /// So breit wie angeboten, höchstens eine Zeile lang und mindestens 40 pt; die Höhe folgt dem Umbruch.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView field: Field, context: Context) -> CGSize? {
+        let unbounded = NSRect(x: 0, y: 0, width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        let line = ceil(field.cell?.cellSize(forBounds: unbounded).width ?? field.intrinsicContentSize.width)
+        var width = proposal.width ?? line
+        if !width.isFinite { width = line }
+        width = max(40, min(width, line))
+        let bounds = NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
+        let height = field.cell?.cellSize(forBounds: bounds).height ?? field.intrinsicContentSize.height
+        return CGSize(width: width, height: ceil(height))
     }
 }

@@ -182,8 +182,10 @@ def list_jobs(limit: int = 50, offset: int = 0, exclude: str | None = None, fold
     laufenden Download, auch wenn seither viele andere Aufträge dazukamen."""
     where, args = [], []
     if exclude:
-        where.append("kind != ?")
-        args.append(exclude)
+        # Auch mehrere Arten, durch Kommas getrennt (seit 0.5.29: der Verlauf lässt die Aufträge des LoRA-Bereichs weg)
+        kinds = [k for k in exclude.split(",") if k]
+        where.append(f"kind NOT IN ({','.join('?' * len(kinds))})")
+        args.extend(kinds)
     if kind:
         where.append("kind = ?")
         args.append(kind)

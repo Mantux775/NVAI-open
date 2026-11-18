@@ -102,9 +102,12 @@ struct GenerateView: View {
     }
 
     var body: some View {
+        // Einstellungen links, mit dem Teiler nach rechts bis 1100 px breiter zu ziehen (Nutzer 18.11. auf einem MacBook
+        // M4 mit 1710 px: „inhalte von den einstellungen links und rechts gecropt, der bereich soll sich mit dem schiebe
+        // regler nach rechts vergrößern lassen“; vorher höchstens 600 px)
         HSplitView {
-            form.frame(minWidth: 400, idealWidth: 460, maxWidth: 600)
-            results.frame(minWidth: 400)
+            form.frame(minWidth: 420, idealWidth: 560, maxWidth: 1100)
+            results.frame(minWidth: 380)
         }
         .onAppear {
             // Auf 8-GB-Macs ist 512 × 512 die einzige flüssige Größe.
@@ -138,15 +141,11 @@ struct GenerateView: View {
     private var form: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Picker(t("Aufgabe", "Task"), selection: $formMode) {
-                    Text(t("Bild erzeugen", "Create image")).tag(FormMode.generate)
-                    Text(t("Foto restaurieren", "Restore photo")).tag(FormMode.restore)
-                    Text(t("Musik und Klänge", "Music and sounds")).tag(FormMode.audio)
-                    Text(t("Sprache", "Speech")).tag(FormMode.speech)
-                    Text(t("Video", "Video")).tag(FormMode.video)
+                // Fünf Aufgaben als Leiste; ist die Spalte dafür zu schmal, als Menü statt links und rechts abgeschnitten
+                ViewThatFits(in: .horizontal) {
+                    taskPicker.pickerStyle(.segmented).fixedSize()
+                    taskPicker.pickerStyle(.menu).frame(maxWidth: 260, alignment: .leading)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 switch formMode {
                 case .restore: restoreForm
                 case .audio: audioForm
@@ -157,6 +156,17 @@ struct GenerateView: View {
             }
             .padding(14)
         }
+    }
+
+    private var taskPicker: some View {
+        Picker(t("Aufgabe", "Task"), selection: $formMode) {
+            Text(t("Bild erzeugen", "Create image")).tag(FormMode.generate)
+            Text(t("Foto restaurieren", "Restore photo")).tag(FormMode.restore)
+            Text(t("Musik und Klänge", "Music and sounds")).tag(FormMode.audio)
+            Text(t("Sprache", "Speech")).tag(FormMode.speech)
+            Text(t("Video", "Video")).tag(FormMode.video)
+        }
+        .labelsHidden()
     }
 
     /// Ein Bild als Auswahl mit null oder einem Eintrag (für ImageStrip).

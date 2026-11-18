@@ -1,0 +1,29 @@
+{
+  "id": "whisper_large_v3",
+  "label_de": "Whisper large-v3 (Sprache erkennen, 99 Sprachen)",
+  "label_en": "Whisper large-v3 (speech recognition, 99 languages)",
+  "task": "asr",
+  "license_code": "MIT",
+  "license_weights": "MIT",
+  "commercial_ok": true,
+  "license_url": "https://github.com/openai/whisper/blob/main/LICENSE",
+  "sample_rate": 16000,
+  "stems": [],
+  "files": [
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/model.safetensors", "path": "model.safetensors", "size": 3087130976, "sha256": "a8e94b85976e5864ba3e9525c7e6c83b2a1eca42d4b797a0c7c24d778e40fd95"},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/config.json", "path": "config.json", "size": 1272},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/generation_config.json", "path": "generation_config.json", "size": 3903},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/preprocessor_config.json", "path": "preprocessor_config.json", "size": 340},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/tokenizer.json", "path": "tokenizer.json", "size": 2480617},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/tokenizer_config.json", "path": "tokenizer_config.json", "size": 282843},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/vocab.json", "path": "vocab.json", "size": 1036558},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/merges.txt", "path": "merges.txt", "size": 493869},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/added_tokens.json", "path": "added_tokens.json", "size": 34648},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/special_tokens_map.json", "path": "special_tokens_map.json", "size": 2072},
+    {"url": "https://huggingface.co/openai/whisper-large-v3/resolve/06f233fe06e710322aca913c1bc4249a0d71fce1/normalizer.json", "path": "normalizer.json", "size": 52666}
+  ],
+  "vram_gb": 5,
+  "device": "cuda",
+  "notes_de": "Beste offene Spracherkennung für Tagalog/Filipino (FLEURS: rund 12 % Wortfehler bei vorgelesener Sprache) und 98 weitere Sprachen; kommt mit eingestreutem Englisch (Taglish) zurecht. Gerechnet wird nur, wo Sprache gefunden wurde, sonst erfindet Whisper auf Stille und Lärm Sätze. Den Ton vorher nicht entrauschen (verschlechtert die Erkennung). Ergebnis ist ein Entwurf zum Prüfen.",
+  "notes_en": "Best open speech recognition for Tagalog/Filipino (FLEURS: about 12 % word errors on read speech) and 98 more languages; copes with English mixed in (Taglish). It only runs where speech was found, otherwise Whisper invents sentences on silence and noise. Do not denoise the audio first (it hurts recognition). The result is a draft to be checked."
+}

@@ -768,8 +768,12 @@ struct StudioWizard: View {
                         TextField(t("z. B. Kapitän Lena", "e.g. Captain Lena"), text: $charName).textFieldStyle(.roundedBorder)
                     }
                     field(t("Porträtfoto", "Portrait photo")) {
-                        Button(reference == nil ? t("Foto wählen …", "Choose a photo …") : t("✓ Foto geladen, anderes wählen", "✓ Photo loaded, choose another")) {
-                            pickReference()
+                        // Nutzer 18.11.: das gewählte Foto von der Figur entfernen und ein neues hochladen können
+                        HStack {
+                            Button(reference == nil ? t("Foto wählen …", "Choose a photo …") : t("Anderes Foto hochladen …", "Upload another photo …")) {
+                                pickReference()
+                            }
+                            if reference != nil { Button(t("Foto entfernen", "Remove photo")) { reference = nil } }
                         }
                         .disabled(busy != nil)
                     }
@@ -786,14 +790,15 @@ struct StudioWizard: View {
                     }
                     field(t("Eigene Vorlage (freiwillig)", "Your own template (optional)")) {
                         HStack {
-                            Button(reference == nil ? t("Skizze oder Foto …", "Sketch or photo …") : t("✓ Vorlage geladen", "✓ Template loaded")) {
+                            Button(reference == nil ? t("Skizze oder Foto …", "Sketch or photo …") : t("Andere Vorlage hochladen …", "Upload another template …")) {
                                 pickReference()
                             }
-                            if reference != nil { Button(t("ohne Vorlage", "no template")) { reference = nil } }
+                            if reference != nil { Button(t("Vorlage entfernen", "Remove template")) { reference = nil } }
                         }
                         .disabled(busy != nil)
                     }
                 }
+                if let reference { AssetThumbnail(asset: reference, maxSide: 300).frame(maxHeight: 140) }
                 field(t("Wie sieht sie oder er aus?", "What does the character look like?")) {
                     TextField(t("z. B. ein kleiner weißer Hase mit langen Ohren, müden Augen und hängenden Schultern",
                                 "e.g. a small white rabbit with long ears, tired eyes and slumped shoulders"), text: $look, axis: .vertical)

@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Startoptionen für Tests ohne Bildschirm (wie bei der PhotoCraft-App):
 ///
-///     NVAI-open --snapshot <png> [--tab studio|generate|restore|audio|video|history|models|search|settings] [--report <md>] [--quit]
+///     NVAI-open --snapshot <png> [--tab studio|generate|restore|audio|video|history|forensic|models|search|settings] [--report <md>] [--quit]
+///               [--review-package <ordner>] [--review-script <js>] [--review-save-dir <ordner>] [--review-shot <png>]
+///               (Ton-Forensik, siehe `ReviewTest` in ForensicView.swift)
 ///               [--studio-select <id>]   (im Studio: cl_ Clip, sc_ Szene, mk_ Marker, ast_ Material als Quelle)
 ///     Optionen der Form „-schlüssel wert“ (etwa -serverPort) verhindern unter macOS 27 das Fenster: vorher per
 ///     `defaults write` setzen.
@@ -163,6 +165,12 @@ enum LaunchOptions {
                     StudioModel.shared.wizardCoach = false
                     if let clip = StudioModel.shared.project?.clips.first { StudioModel.shared.snapshotSelect(clip.id) }
                 }
+            }
+            if tab == "forensic", ReviewTest.active {
+                // Prüfstand der Ton-Forensik: Paket laden, Skript ausführen, Seite fotografieren (höchstens 15 min)
+                let t0 = Date()
+                while !ReviewTest.finished, Date().timeIntervalSince(t0) < 900 { try? await Task.sleep(nanoseconds: 1_000_000_000) }
+                AppLog.info("Review test finished after \(Int(Date().timeIntervalSince(t0))) s")
             }
             // Rendern und – bei der Suche – die Trefferliste von Hugging Face abwarten.
             try? await Task.sleep(nanoseconds: tab == "search" ? 9_000_000_000 : tab == "player" || tab == "studio" ? 4_000_000_000 : 2_500_000_000)

@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 
-export type RecommendationMode = 'image' | 'audio' | 'speech' | 'video' | '3d' | 'restore' | 'vhs'
+export type RecommendationMode = 'image' | 'audio' | 'speech' | 'video' | '3d' | 'restore' | 'vhs' | 'lora' | 'audiolab'
 
 // Empfohlene Einstellungen je Reiter (seit 0.5.11, Nutzerwunsch): nur Gemessenes, Zahlen von einer RTX 5060 Ti.
 // Quelle und Belege: CLAUDE.md bzw. docs/CLAUDE_CODE.md ("Recommended settings at a glance") -- beide
@@ -555,6 +555,95 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'slightly. “Smooth cadence” computes the missing in-between frames with RIFE (50 fps, measured: pan steps 1.29 / 1.40 / 0.48 → '
           + '0.48–0.62 px). For the next tape better set the converter to 4:3 and record at 50 or 25 fps. Full-range brightness is '
           + 'converted correctly now.',
+      ),
+    },
+  ],
+  // LoRA erstellen/Bearbeiten (seit 0.5.29): gemessen an den drei Somi-LoRAs vom 15./16.11.2026 (notizen/loras.md)
+  lora: [
+    {
+      head: t('Datensatz', 'Dataset'),
+      text: t(
+        '24 Bilder derselben Figur in verschiedenen Haltungen, Ausschnitten und Hintergründen. Aus einer Skizze macht '
+          + 'Qwen-Image-Edit-2511 sie in rund 44 s je Bild. Was gleich bleiben muss (Farben, Gesichtsausdruck), '
+          + 'ausdrücklich ins Feld unter der Vorlage schreiben: Ohne das kippte bei Somi Depri der Ausdruck ins '
+          + 'Mürrische, und die Farben der Ohren wanderten.',
+        '24 images of the same character in different poses, framings and backgrounds. From a sketch, '
+          + 'Qwen-Image-Edit-2511 makes them in about 44 s per image. Write what has to stay the same (colors, facial '
+          + 'expression) explicitly into the field below the template: without it, Somi Depri\'s expression tipped '
+          + 'into grumpy and the ear colors drifted.',
+      ),
+    },
+    {
+      head: t('Aussortieren', 'Sorting out'),
+      text: t(
+        'Jedes Bild in voller Größe ansehen und alles aussortieren, was nicht zur Figur passt: Fehler lernt die LoRA '
+          + 'mit. Ersatz kommt in derselben Haltung mit neuem Seed.',
+        'Look at every image at full size and reject everything that does not fit the character: the LoRA learns '
+          + 'mistakes too. Replacements come in the same pose with a new seed.',
+      ),
+    },
+    {
+      head: t('Training', 'Training'),
+      text: t(
+        '24 Bilder × 20 Epochen sind 480 Schritte: auf einer RTX 5060 Ti rund 2 h 10 min samt Text-Encoder '
+          + '(13–16 s je Schritt, höchstens 14,3 GB Grafikspeicher). Mit Lernrate 2e-4 und Alpha 16 trafen unsere '
+          + 'Somi-LoRAs die Figur ab Epoche 15 bei Stärke 1 (mit 1e-4 erst bei 2,5). Farben wie Ohren und Nase im '
+          + 'Prompt nennen, sonst kamen die Ohren oft rosa.',
+        '24 images × 20 epochs are 480 steps: on an RTX 5060 Ti about 2 h 10 min including the text encoder (13–16 s '
+          + 'per step, at most 14.3 GB graphics memory). With learning rate 2e-4 and alpha 16 our Somi LoRAs matched the '
+          + 'character at strength 1 from epoch 15 on (with 1e-4 only at 2.5). Name colors such as ears and nose in the '
+          + 'prompt, otherwise the ears often came out pink.',
+      ),
+    },
+    {
+      head: t('Lizenz', 'License'),
+      text: t(
+        'Keine Bilder aus FLUX 3: Dessen Lizenz verbietet in 4(b), damit ein anderes Bildmodell zu trainieren; die App '
+          + 'lehnt sie ab. Qwen-Image-Edit-2511, Qwen-Image-2512 und musubi-tuner stehen unter Apache-2.0.',
+        'No images from FLUX 3: its license forbids in 4(b) training another image model with them; the app refuses '
+          + 'them. Qwen-Image-Edit-2511, Qwen-Image-2512 and musubi-tuner are under Apache-2.0.',
+      ),
+    },
+  ],
+  // Bereich „Audio“ (seit 17.11.2026), Messwerte notizen/audio-bereich.md
+  audiolab: [
+    {
+      head: t('Erst eine Auswahl', 'A selection first'),
+      text: t(
+        'Eine Auswahl von 30 bis 60 s als Vorschau rechnen und anhören, dann die ganze Spur. KI-Schritte laufen in '
+          + 'Abschnitten: Anhalten behält das Fertige, Fortsetzen macht dort weiter.',
+        'Render a 30-60 s selection as a preview and listen, then the whole track. AI steps run in sections: pausing '
+          + 'keeps what is finished, resuming continues there.',
+      ),
+    },
+    {
+      head: t('Welches Modell', 'Which model'),
+      text: t(
+        'Stimme über Musik: Mel-RoFormer. Gespräche mit Geräuschen oder Publikum: Bandit v2 (rund 8 s je Minute Ton). '
+          + 'Rauschen aus Sprache: MossFormer2 (rund 1 s je Minute). DeepFilterNet3 läuft auf dem Prozessor, entfernt '
+          + 'aber auch Musik (in Musikpausen 25 bis 45 dB).',
+        'Voice over music: Mel-RoFormer. Talk with noise or an audience: Bandit v2 (about 8 s per minute of audio). '
+          + 'Noise in speech: MossFormer2 (about 1 s per minute). DeepFilterNet3 runs on the CPU but also removes music '
+          + '(25 to 45 dB in music passages).',
+      ),
+    },
+    {
+      head: t('Ein Geräusch entfernen', 'Removing one sound'),
+      text: t(
+        '4 bis 10 Beispiele markieren, gern mit Gespräch darüber; „Alarme und Piepser suchen“ findet gleichbleibende '
+          + 'Töne. Im Test war ein Zweiton-Alarm an nicht markierten Stellen 20 bis 22 dB leiser, die Sprache änderte '
+          + 'sich um −0,04 dB.',
+        'Mark 4 to 10 examples, talking over them is fine; “Find alarms and beeps” finds steady tones. In the test a '
+          + 'two-tone alarm was 20 to 22 dB quieter at unmarked places, and speech changed by −0.04 dB.',
+      ),
+    },
+    {
+      head: t('Lange Aufnahmen', 'Long recordings'),
+      text: t(
+        'Einlesen braucht rund 2 s je Minute Ton (12 h in rund 15 min). Als Ergebnis eher MP3, M4A oder FLAC: WAV wird '
+          + 'ab rund 3 h größer als 4 GB (dann RF64). Für Sprache reicht mono.',
+        'Reading takes about 2 s per minute of audio (12 h in about 15 min). Prefer MP3, M4A or FLAC for results: WAV '
+          + 'exceeds 4 GB beyond about 3 h (then RF64). Mono is enough for speech.',
       ),
     },
   ],

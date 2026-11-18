@@ -661,8 +661,9 @@ def _character_loras(value: Any) -> list[dict[str, Any]]:
         if entry is None or entry.get("kind") != "lora":
             raise StudioError(t(f"Unbekannte LoRA: {model_id}", f"Unknown LoRA: {model_id}"))
         strength = float(item.get("strength", 0.8))
-        if not 0.0 <= strength <= 2.0:
-            raise StudioError(t("LoRA-Stärke 0 bis 2.", "LoRA strength 0 to 2."))
+        # bis 3 wie beim Generieren (LoraRef): selbst trainierte LoRAs brauchen manchmal mehr (Somi mit alpha 1: 2,5)
+        if not 0.0 <= strength <= 3.0:
+            raise StudioError(t("LoRA-Stärke 0 bis 3.", "LoRA strength 0 to 3."))
         if all(x["model_id"] != model_id for x in out):
             out.append({"model_id": model_id, "strength": round(strength, 3)})
     return out

@@ -176,6 +176,8 @@ enum APIRouter {
             if parts.count >= 2, parts[0] == "api", parts[1] == "studio",
                let response = try await StudioRoutes.handle(req, parts) { return response }
             if let c = route("GET", "/files/:name") { return try file(c[0]) }
+            // Ton-Forensik (seit 0.5.7): Prüf-App, Prüfpaket mit Range, Änderungen und Exporte
+            if parts.first == "review", let response = try await ReviewRoutes.handle(req, parts) { return response }
             return .error(404, t("Nicht gefunden: \(req.method) \(req.path)", "Not found: \(req.method) \(req.path)"))
         } catch let error as APIError {
             return .error(error.status, error.detail)

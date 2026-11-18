@@ -56,6 +56,23 @@ the header), `POST /api/loras/upload` (the file as the body, details in the quer
 `lora_upload`. Put the trigger words into the prompt: without them a pixel-art LoRA left the image almost unchanged.
 Which families each model takes and the tested LoRAs with their settings: [LORAS.md](LORAS.md).
 
+**Training a LoRA (since 0.5.29)** happens in the web area "Create/Edit LoRA" (REST `/api/lora-train/*`, feature
+`lora_train`, no MCP tool): datasets of 20 to 30 captioned images (from the history, a kohya folder, or a template drawn
+in 24 poses by Qwen-Image-Edit-2511), training of Qwen-Image-2512 with musubi-tuner (fp8 + block swap 40, text encoder
+cached on the CPU), test images per checkpoint, then "Add as LoRA". Measured on 16 GB: 24 images x 20 epochs = 480 steps
+in 2 h 7 min to 2 h 18 min, at most 14.3 GB. The preset (rank 16, alpha 16, learning rate 2e-4, 20 epochs) hit the
+Somi characters at strength 1 from epoch 15 on; earlier runs with alpha 1 or learning rate 1e-4 needed 2 to 2.5
+(characters in the Studio take up to 3). Name colors such as ears and nose in the prompt: without that sentence the ears
+often came out pink, once the whole head blue. Images from FLUX 3 are refused (license 4(b)), also as an edit
+template; to match a look from FLUX, describe its features to Qwen-Image-Edit-2511 in words. The web area has a
+five-step assistant and a training monitor (loss curve, `POST /api/lora-train/runs/{id}/pause {mode: "epoch" | "now"}`,
+`…/resume {epochs}` from the state saved after every epoch, `…/branch {checkpoint, epochs, lr}` for a new run from a
+checkpoint with another learning rate, `…/quicktest {checkpoint, prompt, strengths}`, `GET …/log`); over REST: `POST …/datasets/{id}/sketch {asset_id}` sets a starting image, `POST …/drafts
+{count}` draws frontal drafts from it and the dataset's `notes` (or from the notes alone), `POST …/template/pick
+{file}` makes a draft the template, `generate` takes `sources` (dataset images used as the template in turn), and
+`train` takes `start_at` (Unix seconds): the run waits as `scheduled` and starts at that time, also after a restart. Leave the training to the user; it blocks
+the graphics card for hours.
+
 All `generate_*` tools **block until done** and return absolute file paths. Limits: 65 minutes of render time for a
 video, 30 for everything else, plus up to an hour in the queue. A call that runs past its limit does not fail: it
 returns `pending: true` with the `job_id`, and the job keeps running and lands in the history. **Never submit it
@@ -105,6 +122,7 @@ both in step when a new finding comes in.
 | Narrator voice, one speaker over many lines | `generate_speech` with `voice` (one sentence: gender, age, pitch, pace, mood) for the first line, then that line as `voice_asset_id` with its exact text as `voice_text`; Studio: `voice_from` | lines taken over stayed at 0.99 similarity to the reference, another seed of the same description 0.97–0.98; the same "deep male voice" description gave 102–175 Hz depending on the seed |
 | 3D source image | one object, plain background, no floor, no cast shadow; `project_front=True` for lettering | floor and shadow become a plate; lettering became a distorted relief |
 | Old photo | `restore_image` with `repair_mode="auto"` (default), `batch_size=2`, known colors in `notes` | auto chose right on 20 of 21 test photos; color hints cut the color error by 40 % |
+| Your own character LoRA | the preset in "Create/Edit LoRA": rank 16, alpha 16, learning rate 2e-4, 20 epochs, 20–30 images checked at full size; name the colors in the prompt | the Somi characters at strength 1 from epoch 15 on; with alpha 1 or learning rate 1e-4 only at 2–2.5 |
 | 4K from a 1080p clip, or a larger old clip | `upscale_video(asset_id)` (RelayVSR ×2, 5.3 GB model; in the History the **Upscale ×2** button) | 5 s from 1080p to 4K in 104 s, about four times as sharp as plain enlarging, faces unchanged; native 1080p from LTX-2.5 stays a little finer |
 
 ## Run times
@@ -283,6 +301,40 @@ What FLUX 3 computes falls under the FLUX Kommunity License; SeedVR2 output is f
 
 Every audio output goes through NVAI-open's limiter (−1 dBFS; video sound −2.5 dBFS). There is no model for songs with
 vocals. Normalize before putting a track into a video (−14 LUFS); the Studio export does that itself.
+
+### Audio area: separate, denoise, remove one sound (since 17 Nov 2026)
+
+The web area "Audio" (REST `/api/audio/*`, no MCP tool yet) works on recordings of any length, also many hours. A
+project is one recording (`POST /api/audio/projects {asset_id | path}`; a path is read in place, not copied) with
+tracks: the original and every result. Reading measures loudness, noise floor, peak and mains hum and returns
+`suggestions`. Operations go to `POST /api/audio/projects/{id}/ops`:
+
+- `{"kind": "classic", "track": "t_orig", "chain": [{"type": "hum"}, {"type": "highpass", "freq": 80},
+  {"type": "linewhistle"}, {"type": "denoise", "strength": "light"}, {"type": "loudness", "target": -16}]}`
+- `{"kind": "ai", "model": "melroformer_kim" | "bandit_v2" | "mossformer2_se48k" | "deepfilternet3", "track": …}`
+  (voice/rest, speech/music/effects, clean/removed).
+- `{"kind": "learned", "profile": …}` after `POST …/learn {name, steps}`, which trains a small mask network from the
+  project's "noise" markers (`PUT …/markers`); `POST …/scan` finds steady tones (alarms, beeps) grouped by pitch.
+
+Add `"region": [start_s, end_s]` for a preview track first. AI steps run in windows that are kept on disk: cancelling
+the job pauses it, sending the same request again resumes. `POST …/export {tracks, format, into_video, mono}` mixes
+into the History (WAV beyond 4 GB is written as RF64). Measured: a 12-hour video read in about 15 min; MossFormer2
+about 1 s, Bandit v2 about 8 s per minute of audio; a learned two-tone alarm was 20–22 dB quieter at unmarked places
+while speech changed by −0.04 dB. Do not install audio packages into the ComfyUI venv; the area has its own small venv
+that borrows ComfyUI's PyTorch. Demucs weights are research-only.
+
+### Audio forensics and review packages (since 0.5.29)
+
+The same projects in the web area "Audio forensics": `POST /api/audio/projects/{id}/tracks/{tid}/spectro`
+(spectrogram), `POST …/vad {tracks}` (Silero speech map), `POST …/scan` (steady tones such as alarms become events),
+`POST …/transcribe {tracks, source_lang, target_lang, region, translate}` (Whisper large-v3 behind the Silero gate,
+Qwen3.5-9B translates via English), `GET …/transcript` (blocks with `status` draft/checked, `note`, and `credits`:
+models, licenses, graphics card, program), `PUT …/markers {"markers": [...]}` (notes are `kind: "note"`) and
+`POST …/package {dest_dir, images, video, originals}`, which writes a review package: a folder with the review app
+NVAI-Pruefer.html, the case, the original audio as bit-exact WAV and PRUEFSUMMEN.sha256. Data files of a voyage data
+recorder (VR-7000 format) are read under `/api/audio/vdr/*`. Every block is a draft until a person checks it; never
+present the translation as certified. Measured on a 95-second demo case: spectrogram 2 s, translation track with 15
+blocks 34 s, review package 2 s.
 
 ### Narrator voice (since 0.5.21)
 

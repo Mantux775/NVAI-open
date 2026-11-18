@@ -109,11 +109,12 @@ folders; ".." goes up one level. "Clear history" leaves project folders alone, a
 
 ![The media list with folders: on the top level the project folders, inside a project folder ".." goes up](images/studio-folders.jpg)
 
-**Click** a file to play it in the monitor; Esc goes back to the edit. The properties show its details, a download of
-the lossless copy, "Insert at the playhead" and "Delete". Drag a file onto a track to make a clip, or onto a scene to
-add it as a take. A file that lies in the edit can only be deleted after its clip.
+**Click** a file to play it in the monitor; Esc goes back to the edit. The properties show its file name (one click
+selects it, "Copy" puts it on the clipboard), its details, a download of the lossless copy, "Insert at the playhead"
+and "Delete". The search above the list also finds files by name. Drag a file onto a track to make a clip, or onto a
+scene to add it as a take. A file that lies in the edit can only be deleted after its clip.
 
-![Clicked in the media list: the clip plays in the source monitor, the properties show its details](images/studio-source.jpg)
+![Clicked in the media list: the clip plays in the source monitor, the properties show its file name with Copy and its details](images/studio-source.jpg)
 
 Lossless files and uploaded MKV, MOV or AVI files do not play in a browser, so NVAI-open makes an H.264 preview for
 watching. The export and the download use the original.

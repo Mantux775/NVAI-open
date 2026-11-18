@@ -6,27 +6,37 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.28.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.28/NVAI-open-Setup-0.5.28.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.6.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.28/NVAI-open-0.5.6.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.29.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-Setup-0.5.29.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.7.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-0.5.7.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.28 for Windows and 0.5.6 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.28))
+November 2026: NVAI-open 0.5.29 for Windows and 0.5.7 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29))
 
-- **An assistant for beginners:** "✨ Assistant" in the Studio guides you through a whole video in seven short steps. You pick a path (from one continuous shot to a face from a photo), write your idea, describe a character or go without one, choose how many scenes, pick the music from 22 suggestions or write your own prompt, and the assistant suggests the best models for your hardware with the expected time. Missing models it downloads only after asking. Then it makes two start images per scene to choose from, and the videos. Windows and Mac. [Details](docs/STUDIO.md#the-assistant)
-- **Your hardware:** a catalog of 110 graphics cards and Apple chips estimates how long each model takes on your computer; "Models" shows your card and the time per model. [Details](docs/MODELS.md#your-hardware)
+- **Audio forensics** (0.5.29): a long recording with many channels becomes a case: tracks, spectrogram, speech activity, events, notes and a translation track. Whisper large-v3 writes down what is said, Qwen3.5-9B translates it, and every block stays a draft until a person has checked it; a note says which models, under which license and on which graphics card. It also reads the data files of a voyage data recorder (VR-7000 format). [Details](docs/AUDIO.md#audio-forensics)
+- **Review app** (0.5.29): "Export" → "Review package" gives a folder with the case, the original audio and the review app NVAI-Pruefer.html, for people without NVAI-open, a law firm for example. It runs in Edge or Chrome without installation, internet or AI; changes go into a subfolder together with a chained log, and the reviewer's name can be changed at the top right. On the Mac (0.5.7) in the new "Audio forensics" tab. [Details](docs/AUDIO.md#review-package-and-review-app)
+- **Audio** (0.5.29): separate voices from music and speech from noise, and remove one recurring sound such as an alarm, learned from a few examples you mark. [Details](docs/AUDIO.md)
+- **Train your own LoRA** (0.5.29): the area "Create/Edit LoRA" puts a dataset together (from the History, from files, or drawn from one template in 24 poses), trains it on your graphics card and adds the result to the model list. [Details](docs/LORAS.md#training-your-own-lora)
+- **File name in the Studio** (0.5.29): the properties of a file show its name; one click selects it, "Copy" copies it. Windows and Mac.
+- **An assistant for beginners** (0.5.28): "✨ Assistant" in the Studio guides you through a whole video in seven short steps. You pick a path (from one continuous shot to a face from a photo), write your idea, describe a character or go without one, choose how many scenes, pick the music from 22 suggestions or write your own prompt, and the assistant suggests the best models for your hardware with the expected time. Missing models it downloads only after asking. Then it makes two start images per scene to choose from, and the videos. Windows and Mac. [Details](docs/STUDIO.md#the-assistant)
+- **Your hardware** (0.5.28): a catalog of 110 graphics cards and Apple chips estimates how long each model takes on your computer; "Models" shows your card and the time per model. [Details](docs/MODELS.md#your-hardware)
 - **Start image in the Studio** (0.5.27): a video scene's properties now have a "Start image" field. Drag an image from the media list onto it or pick one from the project folder. The clip begins with it, so a character looks the same in every shot. Before, only Claude Code could set it over MCP. [Details](docs/STUDIO.md#step-by-step)
 - **Kandinsky 6 Pro and Lite, with sound** (0.5.25): two more video models that make picture and sound in one pass, 5 s at 864 × 480, from text or a start image (NVIDIA only). What can be heard goes into its own "Sound" field. In the test Pro kept the action and the face, but it takes about 17 minutes for 5 s. **The sound may not be used commercially, and its video VAE is not licensed in the EU.** [Details](docs/MODELS.md#other-video-models)
 - **Your own LoRAs** (0.5.24): "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
 - **Characters in the Studio** (0.5.24): a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.28 und für den Mac in 0.5.6:
+Neu in 0.5.29 und für den Mac in 0.5.7:
 
-- **Ein Assistent für Einsteiger:** „✨ Assistent“ im Studio führt in sieben kurzen Schritten durch ein ganzes Video. Du wählst einen Weg (von der durchgehenden Einstellung bis zum Gesicht aus einem Foto), schreibst deine Idee, beschreibst eine Figur oder lässt sie weg, wählst die Anzahl der Szenen, nimmst die Musik aus 22 Vorschlägen oder schreibst einen eigenen Prompt, und der Assistent schlägt die besten Modelle für deine Hardware mit der zu erwartenden Zeit vor. Fehlende Modelle lädt er erst nach Rückfrage. Danach erzeugt er je Szene zwei Startbilder zur Auswahl und die Videos. Windows und Mac. [Einzelheiten](docs/de/STUDIO.md#der-assistent)
-- **Deine Hardware:** Ein Katalog mit 110 Grafikkarten und Apple-Chips schätzt, wie lange jedes Modell auf deinem Rechner braucht; „Modelle“ zeigt deine Karte und die Zeit je Modell. [Einzelheiten](docs/de/MODELLE.md#deine-hardware)
+- **Ton-Forensik** (0.5.29): Aus einer langen Aufnahme mit vielen Kanälen wird ein Fall: Spuren, Spektrogramm, Sprachaktivität, Ereignisse, Notizen und eine Übersetzer-Spur. Whisper large-v3 schreibt auf, was gesprochen wird, Qwen3.5-9B übersetzt es, und jeder Block bleibt Entwurf, bis ein Mensch ihn geprüft hat; ein Vermerk nennt Modelle, Lizenzen und Grafikkarte. Sie liest auch die Datendateien eines Schiffsdatenschreibers (Format VR-7000). [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
+- **Prüf-App** (0.5.29): „Export“ → „Prüfpaket“ ergibt einen Ordner mit dem Fall, dem Originalton und der Prüf-App NVAI-Pruefer.html, für Menschen ohne NVAI-open, etwa eine Kanzlei. Sie läuft in Edge oder Chrome ohne Installation, Internet und KI; Änderungen kommen mit einem verketteten Protokoll in einen Unterordner, und der Name des Bearbeiters lässt sich oben rechts ändern. Auf dem Mac (0.5.7) im neuen Reiter „Ton-Forensik“. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
+- **Audio** (0.5.29): Stimmen von Musik trennen und Sprache von Rauschen, dazu ein wiederkehrendes Geräusch wie einen Alarm entfernen, gelernt aus ein paar markierten Beispielen. [Einzelheiten](docs/de/AUDIO.md)
+- **Eigene LoRA trainieren** (0.5.29): Der Bereich „LoRA erstellen/Bearbeiten“ stellt einen Datensatz zusammen (aus dem Verlauf, aus Dateien oder aus einer Vorlage in 24 Haltungen gezeichnet), trainiert ihn auf deiner Grafikkarte und nimmt das Ergebnis in die Modellliste. [Einzelheiten](docs/de/LORAS.md#eigene-lora-trainieren)
+- **Dateiname im Studio** (0.5.29): Die Eigenschaften einer Datei zeigen ihren Namen; ein Klick markiert ihn, „Kopieren“ kopiert ihn. Windows und Mac.
+- **Ein Assistent für Einsteiger** (0.5.28): „✨ Assistent“ im Studio führt in sieben kurzen Schritten durch ein ganzes Video. Du wählst einen Weg (von der durchgehenden Einstellung bis zum Gesicht aus einem Foto), schreibst deine Idee, beschreibst eine Figur oder lässt sie weg, wählst die Anzahl der Szenen, nimmst die Musik aus 22 Vorschlägen oder schreibst einen eigenen Prompt, und der Assistent schlägt die besten Modelle für deine Hardware mit der zu erwartenden Zeit vor. Fehlende Modelle lädt er erst nach Rückfrage. Danach erzeugt er je Szene zwei Startbilder zur Auswahl und die Videos. Windows und Mac. [Einzelheiten](docs/de/STUDIO.md#der-assistent)
+- **Deine Hardware** (0.5.28): Ein Katalog mit 110 Grafikkarten und Apple-Chips schätzt, wie lange jedes Modell auf deinem Rechner braucht; „Modelle“ zeigt deine Karte und die Zeit je Modell. [Einzelheiten](docs/de/MODELLE.md#deine-hardware)
 - **Startbild im Studio** (0.5.27): In den Eigenschaften einer Videoszene gibt es jetzt das Feld „Startbild“. Ein Bild aus dem Material darauf ziehen oder aus dem Projektordner wählen. Der Clip beginnt damit, so sieht eine Figur in jeder Einstellung gleich aus. Bisher ging das nur über Claude Code per MCP. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 - **Kandinsky 6 Pro und Lite, mit Ton** (0.5.25): zwei weitere Videomodelle, die Bild und Ton in einem Durchgang machen, 5 s in 864 × 480, aus Text oder einem Startbild (nur NVIDIA). Was zu hören ist, kommt in ein eigenes Feld „Ton“. Pro hielt im Test Handlung und Gesicht, braucht aber rund 17 Minuten für 5 s. **Der Ton ist nicht kommerziell nutzbar, und die Video-VAE ist in der EU nicht lizenziert.** [Einzelheiten](docs/de/MODELLE.md#weitere-videomodelle)
 - **Eigene LoRAs** (0.5.24): „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
@@ -56,6 +66,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 - **Speech:** a narrator voice you describe in one sentence or take over from a recording, in 10 languages. In the Studio one speaker keeps the same voice over many lines.
 - **3D models:** from an image to a textured model for Unity, Blender or any engine.
 - **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
+- **Audio and audio forensics:** separate voices from music, speech from noise, remove one recurring sound such as an alarm, also in recordings of many hours; examine a case with a translation track and hand it over as a review package. [Details](docs/AUDIO.md)
 - **A few words are enough:** "Expand prompt" writes the full description for you.
 - **Claude Code:** Claude creates your assets while it works on your project.
 - **No filter of its own:** uncensored models are one click away. You are responsible for what you make.
@@ -196,6 +207,9 @@ Every tab has a **Recommended settings** box with what we measured. The most imp
 - **Video:** keep the prompt short (4–8 sentences) and name loud sounds explicitly; sounds described as soft come out almost inaudible.
 - **Faces in video:** keep the face large, make the start image with FLUX 3 from a frontal photo and tick "Loop" or give an end image. Let people speak only with their face in the shot, about 2 words per second, and make a few variants to pick by ear.
 - **Two clips without a seam:** use the chain marker in the Studio or "Extend"; the second clip takes over the last second of the first.
+- **Your own LoRA:** the assistant under "Create/Edit LoRA" leads through it; 24 images of the character in different poses and settings, every one checked at full size;
+  20 epochs take about 2 h 10 min on an RTX 5060 Ti; with the preset our characters showed at strength 1. Name colors
+  such as ears and nose in the prompt. No images from FLUX 3, its license forbids training other models with them. [How it works](docs/LORAS.md#training-your-own-lora)
 - **Upscaling:** "Upscale ×2" in the History doubles a finished video (5 s from 1080p to 4K in 104 s). Generated directly at 1080p it is still a little finer, so use it for 4K exports and smaller clips.
 - **MiniMax H3:** only with a separate license from MiniMax in the EU, the UK, South Korea and the USA, and never publish what it makes. It tends to slow motion, so describe the pace of every movement.
 - **Narrator voice:** describe gender, age, pitch, pace and mood in one sentence. The same description sounds different with every seed, so pick the best take and use it as the recording for all further lines.
@@ -223,7 +237,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 
 ### Mac app, PhotoCraft add-on, iOS
 
-- **Mac:** a native app for Apple Silicon. Images with FLUX.2 Klein and Z-Image Turbo (generate, edit, fill, reference images, LoRAs), restoring old photos, music and sounds with Stable Audio 3, short videos with LTX-Video (bigger video models with sound from 16 GB of memory) and the Studio. On a Mac mini M1 with 8 GB, 30 seconds of music take about 13 seconds and 2 seconds of video about 95 seconds.
+- **Mac:** a native app for Apple Silicon. Images with FLUX.2 Klein and Z-Image Turbo (generate, edit, fill, reference images, LoRAs), restoring old photos, music and sounds with Stable Audio 3, short videos with LTX-Video (bigger video models with sound from 16 GB of memory), the Studio, and review packages from audio forensics. On a Mac mini M1 with 8 GB, 30 seconds of music take about 13 seconds and 2 seconds of video about 95 seconds.
 - **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Needs PhotoCraft 0.10.0 or newer. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
@@ -310,6 +324,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 - **Sprache:** eine Sprecherstimme, die du in einem Satz beschreibst oder aus einer Aufnahme übernimmst, in 10 Sprachen. Im Studio behält ein Sprecher über viele Zeilen dieselbe Stimme.
 - **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
 - **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
+- **Audio und Ton-Forensik:** Stimmen von Musik trennen, Sprache von Rauschen, ein wiederkehrendes Geräusch wie einen Alarm entfernen, auch in Aufnahmen von vielen Stunden; einen Fall mit Übersetzer-Spur untersuchen und als Prüfpaket weitergeben. [Einzelheiten](docs/de/AUDIO.md)
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
 - **Claude Code:** Claude erzeugt deine Assets, während es an deinem Projekt arbeitet.
 - **Kein eigener Filter:** unzensierte Modelle sind einen Klick entfernt. Für das, was du erzeugst, bist du selbst verantwortlich.
@@ -450,6 +465,10 @@ In jedem Reiter steht unter **Empfohlene Einstellungen**, was wir gemessen haben
 - **Video:** den Prompt kurz halten (4–8 Sätze) und laute Geräusche ausdrücklich nennen; leise beschriebene kommen fast unhörbar.
 - **Gesichter im Video:** das Gesicht groß halten, das Startbild mit FLUX 3 aus einem frontalen Foto machen und „Schleife“ anhaken oder ein Endbild mitgeben. Personen nur mit Gesicht im Bild sprechen lassen, rund 2 Wörter je Sekunde, und ein paar Varianten nach Gehör wählen.
 - **Zwei Clips ohne Naht:** den Anschluss-Marker im Studio oder „Verlängern“ nehmen; der zweite Clip übernimmt die letzte Sekunde des ersten.
+- **Eigene LoRA:** Der Assistent unter „LoRA erstellen/Bearbeiten“ führt hindurch; 24 Bilder der Figur in verschiedenen Haltungen und Umgebungen, jedes in voller Größe geprüft;
+  20 Epochen dauern auf einer RTX 5060 Ti rund 2 h 10 min; mit der Vorgabe zeigten sich unsere Figuren bei Stärke 1.
+  Farben wie Ohren und Nase im Prompt nennen. Keine Bilder aus FLUX 3, dessen Lizenz verbietet, damit andere Modelle zu
+  trainieren. [So geht's](docs/de/LORAS.md#eigene-lora-trainieren)
 - **Hochskalieren:** „Hochskalieren ×2“ im Verlauf verdoppelt ein fertiges Video (5 s von 1080p auf 4K in 104 s). Direkt in 1080p erzeugt ist es noch etwas feiner; gut für 4K-Exporte und kleinere Clips.
 - **MiniMax H3:** in der EU, in Großbritannien, Südkorea und den USA nur mit eigener Lizenz von MiniMax, und nichts damit Erzeugtes veröffentlichen. Es neigt zu Zeitlupe, also jede Bewegung mit Tempo beschreiben.
 - **Sprecherstimme:** Geschlecht, Alter, Tonlage, Tempo und Stimmung in einem Satz beschreiben. Dieselbe Beschreibung klingt mit jedem Seed anders, also die beste Probe wählen und sie als Aufnahme für alle weiteren Zeilen nehmen.
@@ -477,7 +496,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 
 ### Mac-App, PhotoCraft-Add-on, iOS
 
-- **Mac:** eine native App für Apple Silicon. Bilder mit FLUX.2 Klein und Z-Image Turbo (generieren, überarbeiten, füllen, Referenzbilder, LoRAs), alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3, kurze Videos mit LTX-Video (größere Videomodelle mit Ton ab 16 GB Speicher) und das Studio. Auf einem Mac mini M1 mit 8 GB dauern 30 Sekunden Musik rund 13 Sekunden und 2 Sekunden Video rund 95 Sekunden.
+- **Mac:** eine native App für Apple Silicon. Bilder mit FLUX.2 Klein und Z-Image Turbo (generieren, überarbeiten, füllen, Referenzbilder, LoRAs), alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3, kurze Videos mit LTX-Video (größere Videomodelle mit Ton ab 16 GB Speicher), das Studio und Prüfpakete aus der Ton-Forensik. Auf einem Mac mini M1 mit 8 GB dauern 30 Sekunden Musik rund 13 Sekunden und 2 Sekunden Video rund 95 Sekunden.
 - **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Braucht PhotoCraft ab 0.10.0. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 

@@ -50,6 +50,11 @@ export interface Asset {
 }
 
 /** Adresse einer Asset-Datei unter /files/, je Abschnitt kodiert (Projektnamen mit Leerzeichen, Umlauten, #). */
+/** Bild eines LoRA-Datensatzes (datasets/<id>/<datei>) oder Probebild eines Trainings (runs/<id>/test/<datei>) */
+export function loraFileUrl(area: 'datasets' | 'runs', item: string, name: string): string {
+  return `/api/lora-train/files/${area}/${encodeURIComponent(item)}/${name.split('/').map(encodeURIComponent).join('/')}`
+}
+
 export function fileUrl(name: string): string {
   return '/files/' + name.split('/').map(encodeURIComponent).join('/')
 }
@@ -128,6 +133,346 @@ export interface ModelInfo {
   uploaded?: boolean
   /** LoRAs für Wan 14B: an welchen Experten sie gehen ('high' | 'low' | 'both'); sonst leer. */
   expert?: string
+  /** Seit 0.5.29: im Bereich „LoRA erstellen/Bearbeiten“ trainiert (Lauf, Zwischenstand, Epoche, Bilder, Datensatz) */
+  trained?: LoraTrained | null
+}
+
+export interface LoraTrained {
+  run_id: string
+  checkpoint: string
+  epoch: number
+  images?: number
+  dataset?: string
+  settings?: LoraTrainSettings
+}
+
+// ---- LoRA erstellen/Bearbeiten (seit 0.5.29, server/nvai/lora_train.py)
+
+export interface LoraTrainSettings { epochs?: number; lr?: string; rank?: number; alpha?: number; save_every?: number }
+
+export interface LoraTrainImage {
+  file: string
+  caption: string
+  status: 'keep' | 'reject'
+  source: 'asset' | 'folder' | 'template' | string
+  width: number
+  height: number
+  pose?: number
+  model_id?: string
+  license_note?: string
+  /** Bild des Datensatzes, aus dem dieses entstand („weitere aus ausgewählten“) */
+  ref?: string
+}
+
+/** Entwurf der Figur (Assistent): frontal und ganz, aus der Skizze und/oder der Beschreibung */
+export interface LoraDraft { file: string; seed: number; from_sketch: boolean; added?: number }
+
+export interface LoraDataset {
+  id: string
+  name: string
+  trigger: string
+  class_word: string
+  notes: string
+  images: LoraTrainImage[]
+  template: string | null
+  /** Datei, aus der die Vorlage stammt (Skizze oder Entwurf) */
+  template_from?: string | null
+  /** Ausgangsbild für Entwürfe: Skizze, Foto oder Bild */
+  sketch?: string | null
+  drafts?: LoraDraft[]
+  updated?: number
+  /** Hinweis nach dem Hinzufügen (abgelehnte FLUX-Bilder, entfernter Anfang der Bildbeschreibungen) */
+  message?: string
+}
+
+export interface LoraDatasetSummary {
+  id: string
+  name: string
+  trigger: string
+  class_word: string
+  images: number
+  keep: number
+  cover: string | null
+  template: string | null
+  sketch?: string | null
+  drafts?: number
+  updated?: number
+}
+
+// Bereich „Audio“ (seit 17.11.2026, Server: audio_lab.py)
+export interface AudioModel {
+  id: string
+  label: string
+  task: 'voice' | 'dialogue' | 'denoise' | 'music' | string
+  license_code: string
+  license_weights: string
+  commercial_ok: boolean
+  license_url?: string
+  sample_rate: number
+  stems: string[]
+  vram_gb?: number
+  seconds_per_minute?: number
+  device?: 'cuda' | 'cpu'
+  notes: string
+  installed: boolean
+  size_mb: number
+  recommended_for: string[]
+}
+
+export interface AudioTrack {
+  id: string
+  name: string
+  kind: 'original' | 'stem' | 'processed' | 'preview'
+  frames: number
+  bars: number
+  peak: number
+  /** Beginn in Sekunden (Vorschau eines Ausschnitts) */
+  offset: number
+  gain_db: number
+  mute: boolean
+  solo: boolean
+  color: string
+  op: Record<string, any> | null
+  created: number
+  /** Abtastrate der Spur (sonst die des Projekts) */
+  sr?: number
+  /** Herkunft, z. B. „VDR“ (Kanäle eines Schiffsschreibers) */
+  group?: string
+  /** Kanal eines Schiffsschreibers: Eingang (MIC1, VHF1), Ort an Bord, Art (MIC, VHF) */
+  channel?: { input: string; position?: string; category?: string }
+  /** Spektrogramm (Ton-Forensik), Stufen mit 1-, 32- und 1024-facher Spaltenbreite */
+  spec?: { bins: number; hop: number; sr: number; fmax: number; levels: { factor: number; cols: number }[] }
+  /** Sprachaktivität (aus dem Spektrogramm-Durchgang oder Silero VAD) */
+  activity?: { method: string; rate: number; segments: number; speech_seconds: number }
+  /** Sprachkarte mit Silero VAD (je 0,1 s), genauer als activity; nötig bei geschalteten VDR-Mikrofonen */
+  vad?: { method: string; rate: number; speech_seconds: number; time: number }
+  /** „Bester Kanal“: aus welchen Spuren gemischt */
+  mix_of?: string[]
+}
+
+export interface AudioMarker { id: string; start: number; end: number; kind: 'noise' | 'keep' | 'note'; label: string; author?: string; created?: number }
+
+export interface AudioProfile {
+  id: string
+  name: string
+  created: number
+  track: string
+  metrics: { noise_reduction_db: number | null; clean_change_db: number | null; examples: number; example_seconds: number;
+    clean_seconds: number; steps: number; train_seconds: number; device: string }
+}
+
+/** Fall im Papierkorb der Ton-Forensik (wiederherstellbar, bis er endgültig gelöscht wird) */
+export interface AudioTrashEntry { entry: string; id: string; name: string; deleted: number; duration: number | null; tracks: number; kind: string; size: number; exists: boolean }
+export interface AudioProjectSummary { id: string; name: string; duration?: number; status?: string; tracks: number; updated?: number; has_video: boolean; kind?: string; source_kind?: string }
+
+export interface AudioProject {
+  id: string
+  name: string
+  status: 'preparing' | 'ready' | 'error'
+  error?: string | null
+  source: { kind?: 'vdr' | string; name: string; asset_id?: string; path?: string; has_video?: boolean; sha256?: string; size?: number; sha256_time?: number; video?: { width: number; height: number; fps: number | null; codec: string } | null; codec?: string; container?: string; source_rate?: number; source_channels?: number }
+  sample_rate?: number
+  channels?: number
+  duration?: number
+  analysis?: { lufs: number | null; noise_floor_db: number | null; peak_db: number | null; clipped: number; levels_db?: number[]; hum?: { freq: number; db_over_floor: number; harmonics_db: number[]; present: boolean } | null }
+  tracks: AudioTrack[]
+  markers: AudioMarker[]
+  history: Record<string, any>[]
+  suggestions?: { kind: 'classic' | 'ai' | 'info'; chain?: Record<string, any>[]; task?: string; model?: string; text: string }[]
+  /** gelernte Geräusche (Geräusch lernen) */
+  profiles?: AudioProfile[]
+  /** Ergebnis der Ton-Suche (Alarme, Piepser): Gruppen nach Tonhöhe mit ihren Stellen */
+  scan?: { clusters: { freqs: number[]; freq: number; count: number; total_s: number; mean_s: number; tonality_db: number; score: number;
+    events: [number, number][] }[]; events: number; seconds_scanned: number; track: string; time: number }
+  job_id?: string
+  updated?: number
+  /** Zeitpunkt (UTC, Unix-Sekunden) von Sekunde 0, z. B. Beginn der Aufzeichnung eines Schiffsschreibers */
+  time_origin?: number | null
+  /** Zusammenfassung eines Schiffsschreibers (audio_vdr.py) */
+  vdr?: Record<string, any>
+  /** zugeordnetes Video (z. B. Bildschirmaufnahme des Wiedergabeprogramms), über den Ton ausgerichtet:
+   * Video-Zeit = a · Aufnahme-Zeit + b */
+  video?: { path: string; name: string; size: number; fit: { a: number; b: number }; drift_ppm: number; method?: 'clock' | 'audio';
+    residual_ms: { median: number; max: number }; points: number; duration: number; time: number }
+}
+
+/** Ton-Forensik: Block der Übersetzer-Spur */
+export interface TranscriptSegment {
+  /** Spur von Hand festgelegt (Übersetzer-KI mit fester Spur); ein Lauf mit Automatik lässt den Block stehen */
+  pinned?: boolean
+  id: string
+  start: number
+  end: number
+  track: string
+  speaker: string
+  kind: 'speech' | 'radio' | 'sound' | 'note'
+  /** Original in der Quellsprache */
+  text: string
+  lang: string
+  /** Übersetzung je Zielsprache */
+  translation: Record<string, string>
+  conf: number | null
+  /** draft = Entwurf der KI, checked = von einem Menschen geprüft */
+  status: 'draft' | 'checked'
+  /** ai: ungeänderter Entwurf der KI (ein neuer Lauf ersetzt ihn), human: von Hand angelegt oder geändert */
+  origin?: 'ai' | 'human'
+  /** zweitbester Kanal (Gegenprobe) */
+  second?: string | null
+  note: string
+  /** je Wort: Anfang, Ende, Wort, Sicherheit (min. Whisper/Omnilingual), bestätigt (Omnilingual hört dasselbe) */
+  words?: [number | null, number | null, string, number, number?][]
+  /** Zweitmeinung: was Omnilingual CTC 1B selbst hört */
+  alt_text?: string
+  /** Buchstaben-Ähnlichkeit zwischen Whisper und Zweitmeinung (0–1), null = keine brauchbare Zweitmeinung */
+  second_sim?: number | null
+}
+
+export interface TranscriptDoc {
+  version?: number
+  source_lang: string
+  target_lang: string
+  speakers: { id: string; name: string; color: string }[]
+  segments: TranscriptSegment[]
+  runs?: Record<string, any>[]
+  updated?: number
+  /** womit gerechnet wurde (vom Server zusammengefasst, im Prüfpaket fest eingetragen) */
+  credits?: TranscriptCredits | null
+}
+
+/** Modelle (Hersteller, Lizenz), Grafikkarten und Programmstand der Läufe der Übersetzer-Spur */
+export interface TranscriptCredits {
+  local: boolean
+  models: { role: 'asr' | 'translate' | 'second' | 'vad' | string; id: string; name: string; by: string; license: string; license_url: string }[]
+  /** festgehaltene Karten; gpus_now = Karte des Auswerte-Rechners für Läufe ohne Eintrag (unrecorded) */
+  gpus: string[]
+  gpus_now: string[]
+  runs: number
+  unrecorded: number
+  programs: string[]
+}
+
+/** Daten eines Schiffsschreibers: je Sekunde ein Wert (null = keiner) */
+export interface VdrSeries { t0_utc: number; dt: number; n: number; series: Record<string, { label_de: string; label_en: string; unit: string; values: (number | null)[] }> }
+export interface VdrEvent { t: number; end: number | null; kind: string; label: string; detail: string; source: string }
+export interface VdrImages { sources: { id: string; label: string; count: number }[]; frames: Record<string, [number, string][]> }
+
+export interface AudioStatus {
+  root: string
+  models_dir: string
+  env_ready: boolean
+  env: string
+  nvidia: boolean
+  free_gb: number
+  models: AudioModel[]
+  recommended: Record<string, string>
+  projects: AudioProjectSummary[]
+  tasks: Record<string, { label: string; stems: string[] }>
+  stem_labels: Record<string, string>
+}
+
+export interface AudioOp {
+  kind: 'classic' | 'ai' | 'learned'
+  /** bei kind = learned: das gelernte Geräusch */
+  profile?: string
+  track: string
+  chain?: Record<string, any>[]
+  model?: string
+  task?: string
+  params?: Record<string, any>
+  region?: [number, number] | null
+  name?: string
+}
+
+/** Kennung dieses Browserfensters: Es lädt bei seinen eigenen Speicher-Meldungen nicht neu */
+export const CLIENT_ID = Math.random().toString(36).slice(2, 12)
+
+/** Prüf-App (eigenständig, ohne Server): Ton, Video und Dateien kommen aus dem Fallordner. Der Haken liefert dann für
+ * eine Server-Adresse eine Objekt-URL; ohne Prüf-App bleibt er leer. */
+export const mediaHook: { url?: (path: string) => string | undefined } = {}
+const media = (path: string): string => mediaHook.url?.(path) ?? path
+
+export function audioSpecUrl(pid: string, tid: string, level: '0' | '1' | '2' | '3' | 'act' | 'vad'): string {
+  return `/api/audio/projects/${encodeURIComponent(pid)}/spec/${encodeURIComponent(tid)}/${level}`
+}
+
+export function vdrImageUrl(pid: string, source: string, index: number): string {
+  return `/api/audio/projects/${encodeURIComponent(pid)}/vdr/image/${encodeURIComponent(source)}/${index}`
+}
+
+export function audioVideoUrl(pid: string): string {
+  return media(`/api/audio/projects/${encodeURIComponent(pid)}/video`)
+}
+
+export function audioSourceUrl(pid: string): string {
+  return media(`/api/audio/projects/${encodeURIComponent(pid)}/source`)
+}
+
+export function audioFileUrl(pid: string, area: 'tracks' | 'peaks' | 'proxy' | 'exports' | 'data', name: string): string {
+  return media(`/api/audio/projects/${encodeURIComponent(pid)}/files/${area}/${encodeURIComponent(name)}`)
+}
+
+export interface LoraCheckpoint { file: string; epoch: number; final: boolean; size_mb: number }
+
+export interface LoraRun {
+  id: string
+  name: string
+  trigger: string
+  class_word?: string
+  dataset_id?: string
+  images?: number
+  settings: LoraTrainSettings
+  status: 'scheduled' | 'queued' | 'running' | 'done' | 'error' | 'cancelled' | string
+  /** geplanter Start (Unix-Sekunden), solange status = scheduled */
+  start_at?: number
+  queued?: number
+  started?: number
+  finished?: number
+  job_id?: string
+  error?: string | null
+  log?: string
+  checkpoints: LoraCheckpoint[]
+  test_prompts?: string[]
+  tests: { prompts?: string[]; images?: Record<string, string[]>; time?: number; model_id?: string }
+  adopted?: { checkpoint: string; model_id: string; time: number }[]
+  /** Verlauf des Verlusts: [Schritt, gleitender Mittelwert] (nur in GET /runs/{id}) */
+  loss?: [number, number][]
+  /** während des Trainings: Stand und Tempo */
+  live?: { step: number; steps: number; epoch: number; epochs: number; s_per_step: number | null; eta: string; loss: number | null; time: number } | null
+  /** angeforderte Pause, solange der Lauf noch rechnet */
+  pause?: 'epoch' | 'now' | null
+  /** Haltepunkt zum Fortsetzen: Zustand nach dieser Epoche */
+  state?: { dir: string; epoch: number; size_mb: number } | null
+  epochs_done?: number
+  /** Abzweigung: Epoche des Zwischenstands, ab dem es weiterging */
+  epoch_base?: number
+  parent?: { run: string; checkpoint: string; epoch: number }
+  quick?: { file: string; checkpoint: string; epoch: number; strength: number; prompt: string; seed: number; time: number }[]
+  note?: string | null
+  resumed?: number | null
+}
+
+export interface LoraFilePart { key: string; label: string; size_gb: number; installed: boolean }
+
+export interface LoraTrainStatus {
+  root: string
+  nvidia: boolean
+  vendor: string | null
+  vram_gb: number | null
+  free_gb: number
+  tool: { installed: boolean; version: string | null; tag: string; size_gb: number; uv: boolean }
+  weights: LoraFilePart[]
+  edit: LoraFilePart[]
+  base: { installed: boolean; model_id: string | null; te_fp8: boolean }
+  ready: boolean
+  template_ready: boolean
+  defaults: Required<LoraTrainSettings>
+  timing: { seconds_per_step: number; te_seconds_per_caption: number; test_seconds_per_image: number;
+    edit_seconds_per_image: number }
+  poses: string[]
+  test_prompts: string[]
+  min_images: number
+  datasets: LoraDatasetSummary[]
+  runs: LoraRun[]
 }
 
 /** Prüfung einer LoRA-Datei vor dem Hochladen (POST /api/loras/inspect), aus ihrem safetensors-Kopf. */
@@ -846,6 +1191,113 @@ export const api = {
   /** Zuordnung einer LoRA aus dem Nutzer-Katalog ändern; fehlende Felder bleiben, wie sie sind. */
   updateLora: (id: string, a: Partial<LoraAssignment>) =>
     req<ModelInfo>(`/api/loras/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(a) }),
+  // Bereich „Audio“ (seit 17.11.2026)
+  audioStatus: () => req<AudioStatus>('/api/audio/status'),
+  audioSetup: (o: { env?: boolean; models?: string[] }) => req<Job>('/api/audio/setup', { method: 'POST', body: JSON.stringify(o) }),
+  audioModelDelete: (id: string) => req<{ ok: boolean }>(`/api/audio/models/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  audioCreate: (o: { asset_id?: string; path?: string; name?: string }) =>
+    req<AudioProject>('/api/audio/projects', { method: 'POST', body: JSON.stringify(o) }),
+  audioProject: (id: string) => req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}`),
+  audioProjectUpdate: (id: string, o: { name?: string }) =>
+    req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(o) }),
+  audioProjectDelete: (id: string) => req<{ ok: boolean; trash: string }>(`/api/audio/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  audioTrash: () => req<AudioTrashEntry[]>('/api/audio/trash'),
+  audioTrashRestore: (entry: string) => req<{ ok: boolean; id: string }>(`/api/audio/trash/${encodeURIComponent(entry)}/restore`, { method: 'POST' }),
+  audioTrashPurge: (entry: string) => req<{ ok: boolean; count: number; freed: number }>(`/api/audio/trash/${encodeURIComponent(entry)}`, { method: 'DELETE' }),
+  audioTrashEmpty: () => req<{ ok: boolean; count: number; freed: number }>('/api/audio/trash', { method: 'DELETE' }),
+  audioTrack: (id: string, tid: string, o: Partial<Pick<AudioTrack, 'name' | 'gain_db' | 'mute' | 'solo' | 'color'>>) =>
+    req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}/tracks/${encodeURIComponent(tid)}`, { method: 'PUT', body: JSON.stringify(o) }),
+  audioTrackDelete: (id: string, tid: string) =>
+    req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}/tracks/${encodeURIComponent(tid)}`, { method: 'DELETE' }),
+  audioMarkers: (id: string, markers: AudioMarker[]) =>
+    req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}/markers`, { method: 'PUT', body: JSON.stringify({ markers }) }),
+  audioOp: (id: string, op: AudioOp) => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/ops`, { method: 'POST', body: JSON.stringify(op) }),
+  audioLearn: (id: string, o: { name: string; track: string; steps: number }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/learn`, { method: 'POST', body: JSON.stringify(o) }),
+  audioScan: (id: string, track = 't_orig') => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/scan?track=${encodeURIComponent(track)}`, { method: 'POST' }),
+  audioProfileDelete: (id: string, prof: string) =>
+    req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}/profiles/${encodeURIComponent(prof)}`, { method: 'DELETE' }),
+  audioPackageEstimate: (id: string) => req<{ base: number; images: number; video: number; video_name: string | null; originals: Record<string, number>; app: boolean }>(`/api/audio/projects/${encodeURIComponent(id)}/package/estimate`),
+  audioPackage: (id: string, o: { dest_dir: string; images: boolean; video: boolean; originals: string[] }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/package`, { method: 'POST', body: JSON.stringify(o) }),
+  audioReveal: (id: string, index: number) => req<{ ok: boolean }>(`/api/audio/projects/${encodeURIComponent(id)}/reveal/${index}`, { method: 'POST' }),
+  audioExport: (id: string, o: { tracks: { id: string; gain_db: number; mute?: boolean }[]; format: string; into_video: boolean; name?: string; mono?: boolean; region?: [number, number] | null; dest_dir?: string | null }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/export`, { method: 'POST', body: JSON.stringify(o) }),
+  // Ton-Forensik (seit 17.11.2026 abends, Server: audio_forensic.py, audio_vdr.py)
+  audioSpectro: (id: string, tid: string) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/tracks/${encodeURIComponent(tid)}/spectro`, { method: 'POST' }),
+  audioActivity: (id: string, tid: string) =>
+    req<{ track: string; rate: number; method: string; segments: [number, number][]; speech_seconds: number }>(`/api/audio/projects/${encodeURIComponent(id)}/activity/${encodeURIComponent(tid)}`),
+  audioTranscript: (id: string) => req<TranscriptDoc>(`/api/audio/projects/${encodeURIComponent(id)}/transcript`),
+  audioHash: (id: string) => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/hash`, { method: 'POST' }),
+  audioVideoLink: (id: string, path: string, method: 'clock' | 'audio' = 'clock') =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/video`, { method: 'POST', body: JSON.stringify({ path, method }) }),
+  audioVideoExport: (id: string, o: { tracks: { id: string; gain_db: number; mute?: boolean }[]; region: [number, number] | null; subtitles: 'none' | 'original' | 'translation'; mono: boolean; name?: string; dest_dir?: string | null }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/video/export`, { method: 'POST', body: JSON.stringify(o) }),
+  audioRenderVideo: (id: string, o: { panels: string[]; tracks: { id: string; gain_db: number; view: string }[]; region: [number, number] | null; fps: number; mono: boolean; lang: string; spec: { lo: number; hi: number; fmax: number }; dest_dir?: string | null }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/render`, { method: 'POST', body: JSON.stringify(o) }),
+  audioVad: (id: string, tracks: string[]) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/vad`, { method: 'POST', body: JSON.stringify({ tracks }) }),
+  audioAutomix: (id: string, tracks: string[]) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/automix`, { method: 'POST', body: JSON.stringify({ tracks }) }),
+  audioTranscribe: (id: string, o: { tracks: string[]; source_lang: string; target_lang: string; region: [number, number] | null; translate?: boolean; force?: boolean }) =>
+    req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/transcribe`, { method: 'POST', body: JSON.stringify(o) }),
+  audioTranscriptSave: (id: string, doc: TranscriptDoc) =>
+    req<TranscriptDoc>(`/api/audio/projects/${encodeURIComponent(id)}/transcript`, { method: 'PUT', body: JSON.stringify({ ...doc, client: CLIENT_ID }) }),
+  vdrInspect: (path: string) => req<Record<string, any>>('/api/audio/vdr/inspect', { method: 'POST', body: JSON.stringify({ path }) }),
+  vdrCreate: (o: { path: string; name?: string }) => req<AudioProject>('/api/audio/vdr/projects', { method: 'POST', body: JSON.stringify(o) }),
+  vdrVerify: (id: string) => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/vdr/verify`, { method: 'POST' }),
+  vdrRaw: (id: string, time: number) =>
+    req<{ block: string; start: number; lines: { t: number; channel: string; text: string }[] }>(`/api/audio/projects/${encodeURIComponent(id)}/vdr/raw?t=${time}`),
+  // LoRA erstellen/Bearbeiten (seit 0.5.29)
+  loraTrainStatus: () => req<LoraTrainStatus>('/api/lora-train/status'),
+  loraTrainSetup: (parts: ('tool' | 'weights' | 'edit')[]) =>
+    req<Job>('/api/lora-train/setup', { method: 'POST', body: JSON.stringify({ parts }) }),
+  loraDatasetCreate: (d: { name: string; trigger: string; class_word: string; notes?: string }) =>
+    req<LoraDataset>('/api/lora-train/datasets', { method: 'POST', body: JSON.stringify(d) }),
+  loraDataset: (id: string) => req<LoraDataset>(`/api/lora-train/datasets/${id}`),
+  loraDatasetUpdate: (id: string, d: Partial<Pick<LoraDataset, 'name' | 'trigger' | 'class_word' | 'notes'>>) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}`, { method: 'PUT', body: JSON.stringify(d) }),
+  loraDatasetDelete: (id: string) => req<{ ok: boolean }>(`/api/lora-train/datasets/${id}`, { method: 'DELETE' }),
+  loraDatasetAddAssets: (id: string, asset_ids: string[], caption = '') =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/assets`, { method: 'POST', body: JSON.stringify({ asset_ids, caption }) }),
+  loraDatasetAddFolder: (id: string, path: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/folder`, { method: 'POST', body: JSON.stringify({ path }) }),
+  loraDatasetTemplate: (id: string, asset_id: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/template`, { method: 'POST', body: JSON.stringify({ asset_id }) }),
+  loraDatasetGenerate: (id: string, o: { count?: number; notes?: string; replace?: string[]; sources?: string[] }) =>
+    req<Job>(`/api/lora-train/datasets/${id}/generate`, { method: 'POST', body: JSON.stringify(o) }),
+  loraDatasetSketch: (id: string, asset_id: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/sketch`, { method: 'POST', body: JSON.stringify({ asset_id }) }),
+  loraDatasetDrafts: (id: string, o: { count: number; notes?: string }) =>
+    req<Job>(`/api/lora-train/datasets/${id}/drafts`, { method: 'POST', body: JSON.stringify(o) }),
+  loraDatasetDraftsClear: (id: string, keep?: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/drafts${keep ? `?keep=${encodeURIComponent(keep)}` : ''}`, { method: 'DELETE' }),
+  loraTemplatePick: (id: string, file: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/template/pick`, { method: 'POST', body: JSON.stringify({ file }) }),
+  loraImageUpdate: (id: string, file: string, d: { caption?: string; status?: 'keep' | 'reject' }) =>
+    req<LoraTrainImage>(`/api/lora-train/datasets/${id}/images/${encodeURIComponent(file)}`, { method: 'PUT', body: JSON.stringify(d) }),
+  loraImageDelete: (id: string, file: string) =>
+    req<LoraDataset>(`/api/lora-train/datasets/${id}/images/${encodeURIComponent(file)}`, { method: 'DELETE' }),
+  /** Sofort: der Auftrag. Mit start_at (Unix-Sekunden): der vorgemerkte Lauf mit scheduled = true. */
+  loraTrain: (id: string, s: Required<LoraTrainSettings> & { test: boolean; prompts: string[]; start_at?: number }) =>
+    req<Job | (LoraRun & { scheduled: true })>(`/api/lora-train/datasets/${id}/train`, { method: 'POST', body: JSON.stringify(s) }),
+  loraRun: (id: string) => req<LoraRun>(`/api/lora-train/runs/${encodeURIComponent(id)}`),
+  loraRunTest: (id: string, prompts: string[]) =>
+    req<Job>(`/api/lora-train/runs/${encodeURIComponent(id)}/test`, { method: 'POST', body: JSON.stringify({ prompts }) }),
+  loraRunAdopt: (id: string, checkpoint: string, name: string) =>
+    req<{ model: ModelInfo }>(`/api/lora-train/runs/${encodeURIComponent(id)}/adopt`, { method: 'POST', body: JSON.stringify({ checkpoint, name }) }),
+  loraRunDelete: (id: string) => req<{ ok: boolean }>(`/api/lora-train/runs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  loraRunPause: (id: string, mode: 'epoch' | 'now') =>
+    req<LoraRun>(`/api/lora-train/runs/${encodeURIComponent(id)}/pause`, { method: 'POST', body: JSON.stringify({ mode }) }),
+  loraRunResume: (id: string, o: { epochs?: number; test?: boolean; start_at?: number }) =>
+    req<LoraRun & { scheduled?: boolean }>(`/api/lora-train/runs/${encodeURIComponent(id)}/resume`, { method: 'POST', body: JSON.stringify(o) }),
+  loraRunBranch: (id: string, o: { checkpoint: string; epochs: number; lr: string; save_every?: number; test?: boolean; start_at?: number }) =>
+    req<LoraRun & { scheduled?: boolean }>(`/api/lora-train/runs/${encodeURIComponent(id)}/branch`, { method: 'POST', body: JSON.stringify(o) }),
+  loraRunQuick: (id: string, o: { checkpoint: string; prompt: string; strengths: number[]; seed: number }) =>
+    req<Job>(`/api/lora-train/runs/${encodeURIComponent(id)}/quicktest`, { method: 'POST', body: JSON.stringify(o) }),
+  loraRunLog: (id: string, lines = 80) => req<{ path: string | null; lines: string[] }>(`/api/lora-train/runs/${encodeURIComponent(id)}/log?lines=${lines}`),
+  loraRunStateDelete: (id: string) => req<LoraRun>(`/api/lora-train/runs/${encodeURIComponent(id)}/state`, { method: 'DELETE' }),
   /** Einen Job abbrechen: wartend sofort, Generierung sofort, Download nach dem aktuellen Datenblock. */
   cancelJob: (id: string) =>
     req<{ ok: boolean; job_id?: string; reason?: string; pending?: boolean; stopped?: string[] }>(
@@ -1022,6 +1474,12 @@ export type ServerEvent =
   | { type: 'assets.changed' }
   /** LoRA hinzugefügt, zugeordnet oder gelöscht (auch per MCP): Modelllisten neu laden */
   | { type: 'models.changed' }
+  /** LoRA erstellen/Bearbeiten: Datensatz oder Training geändert (neue Bilder, Zwischenstände, Probebilder) */
+  | { type: 'lora.changed'; dataset_id?: string; run_id?: string }
+  /** Bereich „Audio“: Projekt oder Modelle geändert */
+  | { type: 'audio.changed'; project_id?: string }
+  /** Ton-Forensik: Übersetzer-Spur geändert */
+  | { type: 'audio.transcript'; project_id: string; client?: string }
 
 /** Ein Studio-Projekt wurde gespeichert (Befehl, Claude per MCP, fertiger Auftrag, startender Anschluss). */
 export type StudioChangedEvent = { type: 'studio.changed'; project_id: string; updated_at: number | null }

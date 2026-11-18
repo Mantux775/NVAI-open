@@ -437,6 +437,7 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
         source_url=entry.get("source_url", ""),
         custom=bool(entry.get("custom")) and entry["id"] not in _CATALOG_IDS,
         uploaded=bool(entry.get("uploaded")),
+        trained=entry.get("trained"),
         expert=lora_expert(entry),
         **gpu_advice(entry),
         **content.lookup(entry["id"]),
@@ -1272,6 +1273,17 @@ def update_lora(model_id: str, family: str | None = None, trigger: str | None = 
             entry["expert"] = expert
         _save_user_catalog(entries)
     return entry
+
+
+def annotate_lora(model_id: str, data: dict[str, Any]) -> None:
+    """Zusatzangaben an einer LoRA des Nutzer-Katalogs, etwa trained (Lauf, Zwischenstand, Bilder, Einstellungen) fuer
+    selbst trainierte LoRAs (lora_train.adopt)."""
+    with _state_lock:
+        entries = _load_user_catalog()
+        entry = next((e for e in entries if e["id"] == model_id and e.get("kind") == "lora"), None)
+        if entry is not None:
+            entry.update(data)
+            _save_user_catalog(entries)
 
 
 # ------------------------------------------------------- aktives Modell

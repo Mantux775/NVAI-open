@@ -1,0 +1,24 @@
+{
+  "id": "silero_vad",
+  "label_de": "Silero VAD (Sprache finden)",
+  "label_en": "Silero VAD (find speech)",
+  "task": "vad",
+  "license_code": "MIT",
+  "license_weights": "MIT",
+  "commercial_ok": true,
+  "license_url": "https://github.com/snakers4/silero-vad/blob/5cd7945676eb32225748052e2e6a0580e4686a08/LICENSE",
+  "sample_rate": 16000,
+  "stems": [],
+  "files": [
+    {
+      "url": "https://raw.githubusercontent.com/snakers4/silero-vad/5cd7945676eb32225748052e2e6a0580e4686a08/src/silero_vad/data/silero_vad.jit",
+      "path": "silero_vad.jit",
+      "size": 2272526,
+      "sha256": "e1122837f4154c511485fe0b9c64455f7b929c96fbb8d79fbdb336383ebd3720"
+    }
+  ],
+  "vram_gb": 0,
+  "device": "cpu",
+  "notes_de": "Kleines Netz (2 MB, Fassung 6.2.3), das Sprache von Lärm, Wind, Maschine und Alarmen unterscheidet. Die Übersetzer-KI lässt Whisper nur dort hören, wo es Sprache findet; sonst erfindet Whisper auf Geräuschen Sätze.",
+  "notes_en": "Small network (2 MB, version 6.2.3) that tells speech from noise, wind, engines and alarms. The translation AI only lets Whisper listen where it finds speech; otherwise Whisper invents sentences on noise."
+}

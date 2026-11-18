@@ -7,7 +7,15 @@ from pydantic import BaseModel, Field
 
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
-                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts", "video_upscale"]
+                  "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts", "video_upscale",
+                  # LoRA erstellen/Bearbeiten (seit 0.5.29, lora_train.py)
+                  "lora_train", "lora_test", "lora_dataset", "lora_setup",
+                  # Bereich „Audio“ (seit 17.11.2026, audio_lab.py)
+                  "audio_prepare", "audio_dsp", "audio_ai", "audio_export", "audio_setup", "audio_learn", "audio_scan",
+                  # Ton-Forensik (seit 17.11.2026 abends, audio_forensic.py)
+                  "audio_spectro", "audio_vad", "audio_transcribe", "audio_align", "audio_hash", "audio_mix", "audio_vexport", "audio_render", "audio_package",
+                  # VDR-Aufzeichnungen im Bereich „Audio“ (seit 17.11.2026, audio_vdr.py)
+                  "audio_vdr_import", "audio_vdr_verify"]
 AssetKind = Literal["image", "audio", "video", "mesh", "upload"]
 # "controlnet" ist ein Zusatzmodell, kein eigenstaendiger Generator -- es taucht
 # deshalb nicht als eigener Modus auf, sondern nur als Auswahl beim Bild. Ebenso "upscale"
@@ -579,6 +587,9 @@ class ModelInfo(BaseModel):
     # die Zuordnung mit PUT /api/loras/{id} aendern. uploaded: die Datei kam vom Rechner (kein Download moeglich).
     custom: bool = False
     uploaded: bool = False
+    # Selbst trainiert im Bereich „LoRA erstellen/Bearbeiten“ (seit 0.5.29): Lauf, Zwischenstand, Epoche, Bilder,
+    # Datensatz, Einstellungen
+    trained: dict[str, Any] | None = None
     # LoRAs fuer Wan 14B: an welchen Experten sie gehen ("high", "low", "both"); bei anderen Basen leer
     expert: str = ""
 

@@ -88,6 +88,10 @@ LOCAL = [
      "Packages/ltx-video-swift-mlx"),
     ("mlx-audio-swift (Qwen3-TTS)", "0dda61b (local copy)", "https://github.com/Blaizzy/mlx-audio-swift",
      "Packages/qwen3-tts-swift"),
+    # in der Prüf-App NVAI-Pruefer.html (Bereich Ton-Forensik, seit 0.5.7) mitgebaut; Lizenztexte aus frontend/node_modules
+    ("react (in NVAI-Pruefer.html)", "19.2.8", "https://github.com/facebook/react", "Packages/web-licenses/react"),
+    ("react-dom (in NVAI-Pruefer.html)", "19.2.8", "https://github.com/facebook/react", "Packages/web-licenses/react-dom"),
+    ("scheduler (in NVAI-Pruefer.html)", "0.27.0", "https://github.com/facebook/react", "Packages/web-licenses/scheduler"),
 ]
 for name, version, location, folder in LOCAL:
     licenses = files_in(Path(folder), LICENSE_NAMES)

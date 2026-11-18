@@ -23,11 +23,21 @@ struct HTTPBodyFile: Sendable {
     let sha256: String
 }
 
+/// Ausschnitt einer Datei als Antwortkörper: der Server liest ihn beim Senden blockweise (1 MB), statt ihn ganz in den
+/// Speicher zu laden (seit 0.5.7 für die Ton-Forensik: Videos der Prüfpakete haben 9 GB und mehr).
+struct HTTPFileBody: Sendable {
+    let url: URL
+    let offset: UInt64
+    let length: UInt64
+}
+
 struct HTTPResponse: Sendable {
     var status: Int
     var contentType: String = "application/json"
     var body: Data = Data()
     var extraHeaders: [String: String] = [:]
+    /// statt `body`: Dateiausschnitt, beim Senden gestreamt
+    var file: HTTPFileBody? = nil
 
     static func json(_ object: Any, status: Int = 200) -> HTTPResponse {
         HTTPResponse(status: status, contentType: "application/json", body: JSON.data(object))
@@ -45,7 +55,7 @@ struct HTTPResponse: Sendable {
     func serialized() -> Data {
         var head = "HTTP/1.1 \(status) \(HTTPResponse.reason(status))\r\n"
         head += "Content-Type: \(contentType)\r\n"
-        head += "Content-Length: \(body.count)\r\n"
+        head += "Content-Length: \(file?.length ?? UInt64(body.count))\r\n"
         head += "Connection: close\r\n"
         head += "Cache-Control: no-cache\r\n"
         for (key, value) in extraHeaders { head += "\(key): \(value)\r\n" }
@@ -58,6 +68,7 @@ struct HTTPResponse: Sendable {
     static func reason(_ status: Int) -> String {
         switch status {
         case 200: return "OK"
+        case 206: return "Partial Content"
         case 400: return "Bad Request"
         case 403: return "Forbidden"
         case 404: return "Not Found"
@@ -65,6 +76,7 @@ struct HTTPResponse: Sendable {
         case 409: return "Conflict"
         case 411: return "Length Required"
         case 413: return "Payload Too Large"
+        case 416: return "Range Not Satisfiable"
         case 422: return "Unprocessable Entity"
         case 500: return "Internal Server Error"
         case 507: return "Insufficient Storage"
@@ -242,8 +254,41 @@ final class HTTPServer: @unchecked Sendable {
     }
 
     private func send(_ response: HTTPResponse, on connection: NWConnection) {
-        connection.send(content: response.serialized(), completion: .contentProcessed { _ in
+        guard let file = response.file else {
+            connection.send(content: response.serialized(), completion: .contentProcessed { _ in
+                connection.cancel()
+            })
+            return
+        }
+        let handle: FileHandle
+        do {
+            handle = try FileHandle(forReadingFrom: file.url)
+            try handle.seek(toOffset: file.offset)
+        } catch {
+            send(.error(500, error.localizedDescription), on: connection)
+            return
+        }
+        connection.send(content: response.serialized(), completion: .contentProcessed { [weak self] error in
+            guard let self, error == nil else { try? handle.close(); connection.cancel(); return }
+            self.streamFile(handle, remaining: file.length, on: connection)
+        })
+    }
+
+    /// Dateiausschnitt in Blöcken zu 1 MB senden; der nächste Block erst, wenn der vorige verarbeitet ist.
+    private func streamFile(_ handle: FileHandle, remaining: UInt64, on connection: NWConnection) {
+        guard remaining > 0 else { try? handle.close(); connection.cancel(); return }
+        let data: Data
+        do {
+            data = try handle.read(upToCount: Int(min(remaining, 1 << 20))) ?? Data()
+        } catch {
+            try? handle.close()
             connection.cancel()
+            return
+        }
+        guard !data.isEmpty else { try? handle.close(); connection.cancel(); return }
+        connection.send(content: data, completion: .contentProcessed { [weak self] error in
+            guard let self, error == nil else { try? handle.close(); connection.cancel(); return }
+            self.streamFile(handle, remaining: remaining - UInt64(data.count), on: connection)
         })
     }
 

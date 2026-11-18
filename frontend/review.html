@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Prüf-App: kein Netz. Nur die Seite selbst, Objekt-URLs (Ton, Video, Bilder aus dem Fallordner) und eingebettete Daten. -->
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self' blob: data:; font-src 'self' data:; worker-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>NVAI-open · Prüf-App</title>
+    <script>window.__NVAI_REVIEW__ = true</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/review/main.tsx"></script>
+  </body>
+</html>

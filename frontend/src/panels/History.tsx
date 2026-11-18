@@ -68,7 +68,9 @@ export function HistoryPanel({ event }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
 
   const load = useCallback(async () => {
-    const js = await api.jobs(limit + 1, 0, 'download', folder === 'all' ? undefined : folder)
+    // Ohne Downloads und ohne die Aufträge des LoRA-Bereichs (Training, Probebilder): die haben kein Material im Verlauf
+    const js = await api.jobs(limit + 1, 0, 'download,lora_train,lora_test,lora_dataset,lora_setup,audio_prepare,audio_dsp,audio_ai,audio_setup',
+      folder === 'all' ? undefined : folder)
     api.assetFolders().then(setFolders).catch(() => {})
     setHasMore(js.length > limit)
     const list = js.slice(0, limit)

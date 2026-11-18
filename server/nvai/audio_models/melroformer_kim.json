@@ -1,0 +1,26 @@
+{
+  "id": "melroformer_kim",
+  "label_de": "Mel-Band RoFormer Kim (Stimme trennen)",
+  "label_en": "Mel-Band RoFormer Kim (voice separation)",
+  "task": "voice",
+  "license_code": "MIT",
+  "license_weights": "MIT",
+  "commercial_ok": true,
+  "license_url": "https://huggingface.co/KimberleyJSN/melbandroformer/blob/ac9b0614ab3cd7f77219e18ba494dfd93956c348/README.md",
+  "license_evidence": "Weights: Hugging Face KimberleyJSN/melbandroformer, README license field changed from gpl-3.0 to mit in commit ac9b0614ab3cd7f77219e18ba494dfd93956c348 (2026-04-22, https://huggingface.co/KimberleyJSN/melbandroformer/commit/ac9b0614ab3cd7f77219e18ba494dfd93956c348); the checkpoint itself is unchanged since commit 94a0e5de (2024-08-06). Code: ZFTurbo/Music-Source-Separation-Training commit 1f700c386e0dd763fe0a57242bb9420dce987354 (MIT) and lucidrains/BS-RoFormer (MIT), license files in _vendor/melroformer_kim.",
+  "sample_rate": 44100,
+  "stems": ["voice", "rest"],
+  "files": [
+    {
+      "url": "https://huggingface.co/KimberleyJSN/melbandroformer/resolve/ac9b0614ab3cd7f77219e18ba494dfd93956c348/MelBandRoformer.ckpt",
+      "path": "MelBandRoformer.ckpt",
+      "size": 913106900,
+      "sha256": "87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e"
+    }
+  ],
+  "vram_gb": 3.0,
+  "seconds_per_minute": 6.0,
+  "device": "cuda",
+  "notes_de": "Trennt die Stimme (Sprache und Gesang) von allem anderen; Musik und Geräusche landen im Rest. Rechnet auf der Grafikkarte mit 44,1 kHz Stereo (gemessen 6 s je Minute, 3 GB). An einer Erzählung mit Musik darunter blieb die Stimme in Sprechpausen unter -95 dBFS, und die Musik blieb im Rest in Pausen und unter der Stimme etwa gleich laut (je Band höchstens 5 dB Unterschied). overlap 4 statt 2 kostet die doppelte Zeit (10 s je Minute) und änderte das Ergebnis kaum (43 dB Abstand). Gewichte unter MIT seit April 2026, vorher GPL-3.0.",
+  "notes_en": "Separates the voice (speech and singing) from everything else; music and sounds end up in the rest. Runs on the GPU at 44.1 kHz stereo (measured 6 s per minute, 3 GB). On a narration over music the voice stayed below -95 dBFS in speech pauses, and the music in the rest kept about the same level in pauses and under the voice (at most 5 dB difference per band). overlap 4 instead of 2 doubles the time (10 s per minute) and barely changed the result (43 dB apart). Weights under MIT since April 2026, GPL-3.0 before."
+}

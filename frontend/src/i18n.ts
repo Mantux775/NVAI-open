@@ -22,7 +22,26 @@ function readStored(): Lang {
   return 'en'
 }
 
-const current: Lang = readStored()
+let current: Lang = readStored()
+const listeners = new Set<(l: Lang) => void>()
+
+/** Sprache ohne Neuladen wechseln (Prüf-App: Ein Neuladen schlösse den geöffneten Fallordner). Wer neu zeichnet, hört
+ * über onLang mit; Konstanten, die beim Laden ausgewertet wurden, bleiben bis zum nächsten Laden in der alten Sprache. */
+export function setLangLive(l: Lang): void {
+  current = l
+  try {
+    localStorage.setItem(STORAGE_KEY, l)
+  } catch {
+    /* nicht speicherbar: gilt bis zum Schließen */
+  }
+  document.documentElement.lang = l
+  for (const f of listeners) f(l)
+}
+
+export function onLang(f: (l: Lang) => void): () => void {
+  listeners.add(f)
+  return () => { listeners.delete(f) }
+}
 
 export function getLang(): Lang {
   return current

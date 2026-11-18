@@ -78,6 +78,8 @@ struct ContentView: View {
                 StudioView().tabItem { Text("Studio") }.tag("studio")
                 GenerateView().tabItem { Text(t("Generieren", "Generate")) }.tag("generate")
                 HistoryView().tabItem { Text(t("Verlauf", "History")) }.tag("history")
+                // Prüfpakete aus der Ton-Forensik (seit 0.5.7), ohne KI
+                ForensicView().tabItem { Text(t("Ton-Forensik", "Audio forensics")) }.tag("forensic")
                 ModelsView().tabItem { Text(t("Modelle", "Models")) }.tag("models")
                 SettingsView().tabItem { Text(t("Einstellungen", "Settings")) }.tag("settings")
             }

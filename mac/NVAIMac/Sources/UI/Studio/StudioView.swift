@@ -268,12 +268,17 @@ struct StudioView: View {
             Button { Task { await model.redo() } } label: { Image(systemName: "arrow.uturn.forward") }
                 .disabled(model.redoCount == 0).help(t("Wiederholen (⇧⌘Z)", "Redo (⇧⌘Z)"))
             separator
-            Button((compact ? t("Erzeugen", "Generate") : t("Szenen erzeugen", "Generate scenes"))
+            // Mit gewählten Szenen erzeugt der Knopf genau diese (neu), sonst alle ohne Take (Nutzer 18.11.)
+            // auch in der kompakten Leiste sichtbar, dass die Auswahl erzeugt wird
+            Button((model.pickedScenes > 0 ? t("Gewählte erzeugen", "Generate selected")
+                    : compact ? t("Erzeugen", "Generate") : t("Szenen erzeugen", "Generate scenes"))
                    + (model.busyScenes > 0 ? " (\(model.busyScenes))" : "")) {
-                Task { await model.generate() }
+                Task { await model.generate(model.scenesToGenerate) }
             }
             .buttonStyle(.borderedProminent).tint(.green).fixedSize()
-            .help(t("Erzeugt alle Szenen ohne Take mit den Modellen dieses Macs", "Generates every scene without a take with this Mac's models"))
+            .help(model.pickedScenes > 0
+                  ? t("Erzeugt die gewählten Szenen neu, auch wenn sie schon einen Take haben", "Generates the selected scenes again, even if they already have a take")
+                  : t("Erzeugt alle Szenen ohne Take mit den Modellen dieses Macs; mit gewählten Szenen genau diese", "Generates every scene without a take with this Mac's models; with selected scenes exactly those"))
             Button(t("Übernehmen ↓", "Conform ↓")) { Task { await model.conform() } }
                 .fixedSize()
                 .help(t("Legt die gewählten Takes in den Schnitt", "Puts the chosen takes into the edit"))

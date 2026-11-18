@@ -1,0 +1,25 @@
+{
+  "id": "bandit_v2",
+  "label_de": "Bandit v2 (Filmton: Sprache, Musik, Effekte)",
+  "label_en": "Bandit v2 (cinematic: dialogue, music, effects)",
+  "task": "dialogue",
+  "license_code": "Apache-2.0",
+  "license_weights": "CC BY-SA 4.0",
+  "commercial_ok": true,
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "sample_rate": 48000,
+  "stems": ["speech", "music", "effects"],
+  "files": [
+    {
+      "url": "https://zenodo.org/api/records/12701995/files/checkpoint-multi.ckpt/content",
+      "path": "checkpoint-multi.ckpt",
+      "size": 446680129,
+      "sha256": "abcfccf65446752a057f4a302c941479a54b7560ebf8d7bca039d2ea98e64cfc"
+    }
+  ],
+  "vram_gb": 3.9,
+  "seconds_per_minute": 8.4,
+  "device": "cuda",
+  "notes_de": "Trennt Filmton in Sprache, Musik und Effekte, trainiert auf Filmmischungen in vielen Sprachen. Gemessen an einer deutschen Sprecheraufnahme mit Musikteppich: In Sprechpausen bleibt die Sprachspur still (unter −110 dBFS) und die Musik vollständig in der Musikspur, beim Sprechen liegt der Rest knapp 18 dB unter der Stimme. Rechnet in 8-s-Stücken mit 2 s Versatz, etwa 8 s je Minute Stereo und 3,9 GB Grafikspeicher; hop_seconds 4 halbiert die Zeit, die Musik- und Effektspur werden dann etwas ungenauer. Gewichte von Watcharasupat, Wu und Orife (Zenodo 12701995) unter CC BY-SA 4.0: Namensnennung nötig, geänderte Gewichte nur unter derselben Lizenz.",
+  "notes_en": "Splits film sound into dialogue, music and effects, trained on film-style mixes in many languages. Measured on a German narration over a music bed: in speech pauses the dialogue track stays silent (below −110 dBFS) and the music stays complete in the music track; while someone speaks the rest sits about 18 dB below the voice. Works in 8 s pieces with a 2 s hop, about 8 s per minute of stereo and 3.9 GB of VRAM; hop_seconds 4 halves the time, the music and effects tracks then get slightly less accurate. Weights by Watcharasupat, Wu and Orife (Zenodo 12701995) under CC BY-SA 4.0: attribution required, modified weights only under the same license."
+}

@@ -1,0 +1,32 @@
+{
+  "id": "omnilingual_ctc1b",
+  "label_de": "Omnilingual ASR CTC 1B v2 (Sprache erkennen, zweite Meinung, 1600+ Sprachen)",
+  "label_en": "Omnilingual ASR CTC 1B v2 (speech recognition, second opinion, 1600+ languages)",
+  "task": "asr",
+  "license_code": "Apache-2.0",
+  "license_weights": "Apache-2.0",
+  "commercial_ok": true,
+  "license_url": "https://github.com/facebookresearch/omnilingual-asr/blob/81f51e224ce9e74b02cc2a3eaf21b2d91d743455/LICENSE",
+  "license_evidence": "README of facebookresearch/omnilingual-asr (commit 81f51e224ce9e74b02cc2a3eaf21b2d91d743455): 'Omnilingual ASR code and models are released under the Apache 2.0'; LICENSE file is Apache-2.0. Checkpoint and tokenizer URLs from src/omnilingual_asr/cards/models/rc_models_v2.yaml (omniASR_CTC_1B_v2, tokenizer omniASR_tokenizer_written_v2). Checkpoint verified against the S3 multipart ETag e3f2ead30d1f46419bb0ab3e83b4826e-466, tokenizer against its MD5 ETag c268b79f7217b9581bd09e32da7c6e00.",
+  "sample_rate": 16000,
+  "stems": [],
+  "files": [
+    {
+      "url": "https://dl.fbaipublicfiles.com/mms/omniASR-CTC-1B-v2.pt",
+      "path": "omniASR-CTC-1B-v2.pt",
+      "size": 3902956068,
+      "sha256": "354f981756aa8f41591ea363e45b9c4eba1ec5144c2273af82e747efbb08919c"
+    },
+    {
+      "url": "https://dl.fbaipublicfiles.com/mms/omniASR_tokenizer_written_v2.model",
+      "path": "omniASR_tokenizer_written_v2.model",
+      "size": 91481,
+      "sha256": "8aa11a1092142ef472537476ef6e76541123e2f0d789b79f3ebd119008240b1e"
+    }
+  ],
+  "vram_gb": 2.3,
+  "seconds_per_minute": 0.4,
+  "device": "cuda",
+  "notes_de": "Zweite Meinung neben Whisper, von Meta für über 1600 Sprachen trainiert, darunter Tagalog/Filipino und Cebuano. Liefert Wortzeiten und je Wort eine Wahrscheinlichkeit und kann einen fremden Text (etwa den von Whisper) am Ton ausrichten: Wörter, die der Ton nicht hergibt, bekommen eine kleine Wahrscheinlichkeit. Gemessen an FLEURS: Tagalog 13,6 % Wortfehler (Whisper large-v3 11,8 %; ohne Sätze mit Zahlen beide knapp 12 %, Omnilingual schreibt Zahlen als Wörter), mit tiefem Motorgeräusch bei 0 dB 15,6 % (Whisper 13,5 %), Cebuano 19,5 % (Whisper 96 %, kennt kein Cebuano). Sehr schnell: rund 0,4 s je Minute Ton und 2,3 GB Grafikspeicher. Schreibt klein und ohne Satzzeichen. Beim ersten Start werden die Gewichte einmal umgeschrieben (rund 15 s, 2 GB zusätzlich im Modellordner).",
+  "notes_en": "Second opinion next to Whisper, trained by Meta on more than 1600 languages including Tagalog/Filipino and Cebuano. Gives word timings and a probability per word, and can align another text (for example Whisper's) to the audio: words the audio does not support get a low probability. Measured on FLEURS: Tagalog 13.6 % word errors (Whisper large-v3 11.8 %; without sentences containing numbers both just under 12 %, Omnilingual writes numbers as words), with low engine noise at 0 dB 15.6 % (Whisper 13.5 %), Cebuano 19.5 % (Whisper 96 %, it has no Cebuano). Very fast: about 0.4 s per minute of audio and 2.3 GB of video memory. Writes lower case without punctuation. On first use the weights are converted once (about 15 s, 2 GB extra in the model folder)."
+}

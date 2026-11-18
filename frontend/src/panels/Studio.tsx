@@ -294,7 +294,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
             ? t(`${n} Szene(n) in Arbeit, ${errors.length} nicht: ${errors[0]}`, `${n} scene(s) queued, ${errors.length} not: ${errors[0]}`) + later
             : n || w
               ? t(`${n} Szene(n) in Arbeit. Fertige erscheinen als Take.`, `${n} scene(s) queued. Finished ones appear as takes.`) + later
-              : t('Alle Szenen haben schon einen Take. Zum Neuerzeugen eine Szene wählen.', 'Every scene already has a take. Select a scene to generate it again.'),
+              : t('Alle Szenen haben schon einen Take. Eine Szene wählen, dann erzeugt „Gewählte erzeugen“ sie neu (auch eine kopierte Szene, die den Take ihrer Vorlage mitbringt).',
+                'Every scene already has a take. Select a scene, and "Generate selected" makes it again (also a copied scene that brought the take of its original).'),
         )
       } catch (e: any) {
         setNotice(String(e.message ?? e))
@@ -1022,8 +1023,24 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         <button className="btn small" disabled={!project?.history.undo} onClick={undo} title={t('Rückgängig (Strg+Z)', 'Undo (Ctrl+Z)')}>↶</button>
         <button className="btn small" disabled={!project?.history.redo} onClick={redo} title={t('Wiederholen (Strg+Y)', 'Redo (Ctrl+Y)')}>↷</button>
         <span className="st-sep" />
-        <button className="btn small primary" disabled={!project} onClick={() => generate()} title={t('Alle Szenen ohne Take erzeugen', 'Generate every scene without a take')}>
-          {t('Szenen erzeugen', 'Generate scenes')}{running ? ` (${running})` : ''}
+        {/* Mit gewählten Szenen erzeugt der Knopf genau diese neu, sonst alle ohne Take (Nutzer 18.11. am Mac: „ich kann
+            keine neue szene erzeugen, es sagt mir alle szenen haben schon einen Take“; eine kopierte Szene bringt den Take
+            ihrer Vorlage mit). Eine leere Liste hieße beim Server „alle ohne Take“: beschäftigte Szenen gar nicht senden. */}
+        <button className="btn small primary" disabled={!project}
+          onClick={() => {
+            const picked = selIds(selection, 'scene')
+            if (!picked.length) { void generate(); return }
+            const free = picked.filter((id) => project?.scenes.some((s) => s.id === id && !s.jobs?.length && !s.waiting_for))
+            if (!free.length) {
+              setNotice(t('Die gewählten Szenen laufen schon oder warten auf die Szene, an die sie anschließen.', 'The selected scenes are already running or waiting for the scene they continue.'))
+              return
+            }
+            void generate(free)
+          }}
+          title={selIds(selection, 'scene').length
+            ? t('Die gewählten Szenen neu erzeugen, auch wenn sie schon einen Take haben', 'Generate the selected scenes again, even if they already have a take')
+            : t('Alle Szenen ohne Take erzeugen; mit gewählten Szenen genau diese', 'Generate every scene without a take; with selected scenes exactly those')}>
+          {selIds(selection, 'scene').length ? t('Gewählte erzeugen', 'Generate selected') : t('Szenen erzeugen', 'Generate scenes')}{running ? ` (${running})` : ''}
         </button>
         <button className="btn small" disabled={!project} onClick={conform} title={t('Gewählte Takes in den Schnitt legen, Marker auswerten; fragt nach, bevor Vorhandenes überschrieben wird', 'Put the chosen takes into the edit, apply the markers; asks before anything in the edit is overwritten')}>
           {t('Übernehmen', 'Conform')} ↓

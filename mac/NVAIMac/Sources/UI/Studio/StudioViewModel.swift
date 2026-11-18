@@ -223,14 +223,24 @@ final class StudioModel: ObservableObject {
 
     // MARK: Erzeugen, Übernehmen, Export
 
+    /// Was „Szenen erzeugen“ in der Werkzeugleiste erzeugt: die gewählten Szenen (auch mit Take, also neu; ohne die,
+    /// die gerade laufen oder warten), ohne Auswahl nil = alle Szenen ohne Take. Nutzer 18.11. auf dem MacBook: „ich
+    /// kann keine neue Szene erzeugen, es sagt mir alle szenen haben schon einen Take“: Eine kopierte Szene bringt den
+    /// Take ihrer Vorlage mit, und der Knopf überging die Auswahl, zu der die Meldung riet.
+    var scenesToGenerate: [String]? {
+        guard kind == .scene, !selected.isEmpty, let p = project else { return nil }
+        return p.scenes.filter { selected.contains($0.id) && $0.jobs.isEmpty && $0.waitingFor == nil }.map(\.id)
+    }
+
+    /// Anzahl gewählter Szenen für die Beschriftung des Knopfs
+    var pickedScenes: Int { kind == .scene ? selected.count : 0 }
+
     func generate(_ sceneIDs: [String]? = nil) async {
         await commitEdits()
         guard let id = project?.id else { return }
-        if sceneIDs == nil, let p = project, !p.scenes.contains(where: { $0.take == nil && $0.jobs.isEmpty && $0.waitingFor == nil }) {
-            notice = t("Alle Szenen haben schon einen Take. Eine Szene auswählen, um sie neu zu erzeugen.",
-                       "Every scene already has a take. Select a scene to generate it again.")
-            return
-        }
+        // Wie unter Windows entscheidet der Generator, nachdem er den Stand aufgeräumt hat (fertige und verwaiste
+        // Aufträge); vorher prüfte die App hier am zwischengespeicherten Stand und brach mit „Alle Szenen haben schon
+        // einen Take“ ab, ohne ihn zu fragen
         do {
             let result = try await StudioGenerator.shared.generate(store, id, sceneIDs: sceneIDs)
             let jobs = result["jobs"]?.objectValue?.count ?? 0
@@ -240,6 +250,12 @@ final class StudioModel: ObservableObject {
             if waiting > 0 { text += " " + t("\(waiting) Anschluss-Szene(n) folgen danach.", "\(waiting) chained scene(s) follow afterwards.") }
             if !errors.isEmpty {
                 text = t("\(jobs) abgeschickt, \(errors.count) nicht: ", "\(jobs) queued, \(errors.count) not: ") + errors.joined(separator: " · ")
+            } else if jobs == 0 && waiting == 0 {
+                text = sceneIDs == nil
+                    ? t("Alle Szenen haben schon einen Take. Eine Szene wählen, dann erzeugt „Gewählte erzeugen“ sie neu (auch eine kopierte Szene, die den Take ihrer Vorlage mitbringt).",
+                        "Every scene already has a take. Select a scene, and \"Generate selected\" makes it again (also a copied scene that brought the take of its original).")
+                    : t("Die gewählten Szenen laufen schon oder warten auf die Szene, an die sie anschließen.",
+                        "The selected scenes are already running or waiting for the scene they continue.")
             }
             notice = text
             project = try await store.load(id)

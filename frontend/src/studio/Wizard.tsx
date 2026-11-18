@@ -922,8 +922,10 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                       <span>{t('Porträtfoto', 'Portrait photo')}</span>
                       <div className="wz-chips">
                         <button className="wz-chip" disabled={!!busy} onClick={() => fileInput.current?.click()}>
-                          {busy === 'upload' ? t('Lädt …', 'Uploading …') : refAsset ? t('✓ Foto geladen, anderes wählen', '✓ Photo loaded, choose another') : t('Foto wählen …', 'Choose a photo …')}
+                          {busy === 'upload' ? t('Lädt …', 'Uploading …') : refAsset ? t('Anderes Foto hochladen …', 'Upload another photo …') : t('Foto wählen …', 'Choose a photo …')}
                         </button>
+                        {/* Nutzer 18.11.: das gewählte Foto von der Figur entfernen und ein neues hochladen können */}
+                        {refAsset && <button className="wz-chip" disabled={!!busy} onClick={() => setRefAsset(null)}>{t('Foto entfernen', 'Remove photo')}</button>}
                       </div>
                       <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => { uploadRef(e.target.files?.[0]); e.target.value = '' }} />
                     </div>
@@ -949,13 +951,16 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                       <span>{t('Eigene Vorlage (freiwillig)', 'Your own template (optional)')}</span>
                       <div className="wz-chips">
                         <button className="wz-chip" disabled={!!busy} onClick={() => fileInput.current?.click()}>
-                          {refAsset ? t('✓ Vorlage geladen', '✓ Template loaded') : t('Skizze oder Foto …', 'Sketch or photo …')}
+                          {busy === 'upload' ? t('Lädt …', 'Uploading …') : refAsset ? t('Andere Vorlage hochladen …', 'Upload another template …') : t('Skizze oder Foto …', 'Sketch or photo …')}
                         </button>
-                        {refAsset && <button className="wz-chip" onClick={() => setRefAsset(null)}>{t('ohne Vorlage', 'no template')}</button>}
+                        {refAsset && <button className="wz-chip" disabled={!!busy} onClick={() => setRefAsset(null)}>{t('Vorlage entfernen', 'Remove template')}</button>}
                       </div>
                       <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => { uploadRef(e.target.files?.[0]); e.target.value = '' }} />
                     </div>
                   </div>
+                  {refAsset && (
+                    <div className="wz-photo"><img src={refAsset.thumb_url || refAsset.url} alt="" /></div>
+                  )}
                   <label className="wz-field">
                     <span>{t('Wie sieht sie oder er aus?', 'What does the character look like?')}</span>
                     <textarea rows={2} value={look} onChange={(e) => setLook(e.target.value)}

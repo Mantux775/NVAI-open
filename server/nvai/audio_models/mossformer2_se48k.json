@@ -1,0 +1,25 @@
+{
+  "id": "mossformer2_se48k",
+  "label_de": "MossFormer2 SE 48 kHz (Sprache entrauschen)",
+  "label_en": "MossFormer2 SE 48 kHz (speech enhancement)",
+  "task": "denoise",
+  "license_code": "Apache-2.0",
+  "license_weights": "Apache-2.0",
+  "commercial_ok": true,
+  "license_url": "https://github.com/modelscope/ClearerVoice-Studio/blob/6b3774dc79c46ae8bed2a4fa5f706f0ac8c75c61/LICENSE",
+  "sample_rate": 48000,
+  "stems": ["clean", "removed"],
+  "files": [
+    {
+      "url": "https://huggingface.co/alibabasglab/MossFormer2_SE_48K/resolve/eff8c97925c8bec812af707814b3e5d777fd4503/last_best_checkpoint.pt",
+      "path": "last_best_checkpoint.pt",
+      "size": 221552019,
+      "sha256": "03692b9f773bbd6bb43b9c5a41f96b1e28affd66e13796b7bec66ad3d8b227c6"
+    }
+  ],
+  "vram_gb": 0.9,
+  "seconds_per_minute": 3.0,
+  "device": "cuda",
+  "notes_de": "Entrauscht Sprache in voller 48-kHz-Qualität. Alles, was keine Sprache ist, gilt als Störung, auch Musik: Auf einem Sprecher über Musik blieb die Stimme bis auf 1 dB erhalten, in Sprechpausen wurde die Musik 27 dB leiser. Weißes Rauschen 5 dB unter der Stimme lag danach 16 dB darunter; tiefes Rauschen nimmt es nur zum Teil (ohne Sprache 4 dB leiser). Rechnet auf der Grafikkarte, gemessen rund 3 s je Minute Stereo plus 3 s Laden, unter 1 GB Grafikspeicher. Die Gewichte sind auch mit nicht öffentlichen Daten trainiert.",
+  "notes_en": "Enhances speech at full 48 kHz quality. Everything that is not speech counts as noise, music too: on a narrator over music the voice stayed within 1 dB while the music dropped by 27 dB in speech pauses. White noise 5 dB below the voice ended up 16 dB below it; low-frequency noise is only partly removed (4 dB quieter without speech). Runs on the GPU, measured about 3 s per minute of stereo plus 3 s loading, under 1 GB of video memory. The weights were trained partly on non-public data."
+}

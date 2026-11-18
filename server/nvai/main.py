@@ -53,6 +53,11 @@ from .schemas import (
     VhsRequest,
 )
 from . import vhs  # noqa: E402  (registriert die Auftraege vhs und vhs_clean)
+from . import lora_train  # noqa: E402  (Bereich „LoRA erstellen/Bearbeiten“, Auftraege lora_*)
+from . import audio_lab  # noqa: E402  (Bereich „Audio“, Auftraege audio_*)
+from . import audio_forensic  # noqa: E402  (Ton-Forensik: Spektrogramm, Sprachaktivitaet, Transkript)
+from . import audio_vdr  # noqa: E402  (VDR-Aufzeichnungen im Bereich „Audio“, Auftraege audio_vdr_*)
+from . import audio_package  # noqa: E402  (Prüfpaket für die Prüf-App)
 
 
 @asynccontextmanager
@@ -69,6 +74,7 @@ async def lifespan(app: FastAPI):
     except Exception:  # noqa: BLE001 - der Server soll trotzdem starten; was nicht wanderte, bleibt im Verlauf
         traceback.print_exc()
     await jobs.start()
+    lora_train.start_scheduler()  # vorgemerkte LoRA-Trainings zur Startzeit einreihen
     yield
     await jobs.shutdown()
     comfy.stop()
@@ -76,6 +82,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="NVAI-open", version=__version__, lifespan=lifespan)
+# LoRA erstellen/Bearbeiten (seit 0.5.29): /api/lora-train/*, vor allen anderen Routen eingehaengt
+app.include_router(lora_train.router)
+app.include_router(audio_lab.router)
+app.include_router(audio_forensic.router)
+app.include_router(audio_vdr.router)
+app.include_router(audio_package.router)
 
 # Vertragsversion der REST-API (GET /api/version). Steigt nur, wenn bestehende
 # Clients brechen: ein Endpunkt oder Feld faellt weg oder bedeutet etwas anderes.
@@ -138,6 +150,12 @@ API_FEATURES = [
                        # Aufgabe, geschätzte Rechenzeit; seit 0.5.28)
     "hardware_catalog",  # GET /api/hardware: erkannte Karte im Hardware-Katalog und typische Rechenzeit je Modell
                          # (Modelle-Seite, Generieren; seit 0.5.28)
+    "audio_lab",       # /api/audio/*: Bereich „Audio“ (Stimme trennen, entrauschen, Filter, Export), seit 17.11.2026
+    "audio_vdr",       # /api/audio/vdr/* und /api/audio/projects/{pid}/vdr/*: VDR-Export (Furuno VR-7000) als Projekt
+                       # mit Mono-Spuren, data/*.json (Reihen, Ereignisse, AIS, Bilder), Prüfsummen, Rohdaten
+    "lora_train",      # /api/lora-train/*: eigene LoRAs fuer Qwen-Image-2512 trainieren (Datensaetze, Vorlage mit
+                       # Qwen-Image-Edit-2511, musubi-tuner, Probebilder, Uebernehmen); Ereignis lora.changed, trained
+                       # an Modellen (seit 0.5.29)
 ]
 
 

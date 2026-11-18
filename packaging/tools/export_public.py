@@ -23,6 +23,10 @@ INCLUDE = [
     ("server/openapi.json", "server/openapi.json"),
     ("frontend/src", "frontend/src"),
     ("frontend/index.html", "frontend/index.html"),
+    # review app (NVAI-Pruefer.html): entry page, build config and the script that inlines it into one file
+    ("frontend/review.html", "frontend/review.html"),
+    ("frontend/vite.review.config.ts", "frontend/vite.review.config.ts"),
+    ("frontend/scripts", "frontend/scripts"),
     ("frontend/package.json", "frontend/package.json"),
     ("frontend/package-lock.json", "frontend/package-lock.json"),
     ("frontend/tsconfig.json", "frontend/tsconfig.json"),

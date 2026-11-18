@@ -3,7 +3,7 @@
 // Löschen); mehrere Objekte zeigen, was für alle gilt; ohne Auswahl das Projekt (Format, Bildrate). Eingaben gelten
 // beim Verlassen des Feldes oder mit Enter; jede Änderung am Projekt ist ein Befehl und lässt sich rückgängig machen.
 
-import { useEffect, useRef, useState, type DragEvent as RDragEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type DragEvent as RDragEvent } from 'react'
 import {
   api,
   fileUrl,
@@ -654,11 +654,11 @@ function StrengthInput({ value, onCommit }: { value: number; onCommit: (v: numbe
   useEffect(() => setText(decimal(String(value))), [value])
   const commit = () => {
     const v = Number(text.replace(',', '.'))
-    if (Number.isFinite(v) && v >= 0 && v <= 2 && v !== value) onCommit(Math.round(v * 100) / 100)
+    if (Number.isFinite(v) && v >= 0 && v <= 3 && v !== value) onCommit(Math.round(v * 100) / 100)
     else setText(decimal(String(value)))
   }
   return (
-    <input className="st-strength" value={text} inputMode="decimal" title={t('Stärke 0 bis 2, meist 0,6 bis 1', 'Strength 0 to 2, usually 0.6 to 1')}
+    <input className="st-strength" value={text} inputMode="decimal" title={t('Stärke 0 bis 3, meist 0,6 bis 1', 'Strength 0 to 3, usually 0.6 to 1')}
       onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />
   )
 }
@@ -886,6 +886,7 @@ function AssetProps({ p, a, model, playhead, onCommand, onDelete }: {
         {used && <span className="badge">{t('im Schnitt', 'in edit')}</span>}
         <OutputBadge model={model} />
       </h3>
+      <FileName name={a.filename.split('/').pop() || a.filename} />
       {model?.output_badge && !model.license_confirmed && model.warning && (
         <p className="warn-banner small">{model.warning}</p>
       )}
@@ -945,6 +946,49 @@ function AssetProps({ p, a, model, playhead, onCommand, onDelete }: {
           {asking ? t('Wirklich löschen? Die Datei ist dann weg.', 'Really delete? The file will be gone.') : t('Löschen', 'Delete')}
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Dateiname der angeklickten Datei (Nutzer 15.11.2026: „sonst finde ich die nicht“): ein Klick markiert ihn ganz,
+ *  der Knopf kopiert ihn. Ohne sicheren Kontext (Aufruf im LAN über http) fehlt navigator.clipboard, dann kopiert
+ *  der Knopf über die Markierung. */
+function FileName({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => setCopied(false), [name])
+  const copy = async () => {
+    let ok = false
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(name)
+        ok = true
+      }
+    } catch {
+      ok = false
+    }
+    if (!ok && ref.current) {
+      const range = document.createRange()
+      range.selectNodeContents(ref.current)
+      const sel = window.getSelection()
+      sel?.removeAllRanges()
+      sel?.addRange(range)
+      ok = document.execCommand('copy')
+    }
+    setCopied(ok)
+    if (ok) window.setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div className="st-filename">
+      <span ref={ref} className="st-filename-name" title={t('Ein Klick markiert den ganzen Namen', 'One click selects the whole name')}>
+        {/* Umbruch bevorzugt nach _ . - (wbr trägt keine Zeichen bei, kopiert wird genau der Name) */}
+        {name.split(/(?<=[_.-])/).map((part, i) => (
+          <Fragment key={i}>{part}<wbr /></Fragment>
+        ))}
+      </span>
+      <button className="btn small ghost" onClick={copy} title={t('Dateinamen in die Zwischenablage kopieren', 'Copy the file name to the clipboard')}>
+        {copied ? t('Kopiert', 'Copied') : t('Kopieren', 'Copy')}
+      </button>
     </div>
   )
 }

@@ -33,6 +33,8 @@ LoRAs, see [On the Mac](#on-the-mac).
   NVAI-open reads the file header and says which models the LoRA fits. Civitai needs your own API key for most
   downloads (civitai.com → Settings → API Keys).
 - **Your own file:** a LoRA you trained yourself (ai-toolkit, kohya_ss, OneTrainer, musubi-tuner …) or got elsewhere.
+- **Trained here:** the area "Create/Edit LoRA" trains one for Qwen-Image-2512 from your own images, see
+  [Training your own LoRA](#training-your-own-lora).
 
 ## Adding your own LoRA file
 
@@ -58,6 +60,68 @@ What NVAI-open checks:
 **Changing it later:** "Assignment" on the LoRA under "Models" changes the family, name, trigger words and expert. That
 works for every LoRA you added yourself or from the search; the LoRAs that come with the catalog stay as they are.
 Deleting a LoRA you added removes the file and its entry.
+
+## Training your own LoRA
+
+The area **Create/Edit LoRA** trains a LoRA for Qwen-Image-2512 on your own computer: a character or a style from 20
+to 30 images. It runs with musubi-tuner (kohya-ss, Apache-2.0) and needs an NVIDIA card. Measured on an RTX 5060 Ti
+with 16 GB and 64 GB of RAM; with less memory it is untested. An assistant leads through it in five steps (describe
+the character, choose a template, collect images, sort out, train), each with a short recommendation; "Everything on
+one page" shows all settings at once.
+
+![The area Create/Edit LoRA: a dataset of 24 images with their captions, below the training settings](images/lora-train.jpg)
+
+1. **Set up** once: the trainer (its own environment with PyTorch, about 6.5 GB) and Qwen-Image-2512 in bf16 for
+   training (57.5 GB; the NVFP4 file the app generates with cannot be trained). For images from a template also
+   Qwen-Image-Edit-2511 (21.4 GB).
+2. **Dataset:** a name, a trigger word that is not a real word (such as `somi_dark1`) and the class
+   (`a cartoon rabbit`). Images come from the history, from this computer or from a folder with `.txt` captions
+   (kohya), or Qwen-Image-Edit-2511 draws your template in 24 poses, framings and settings, about 44 s per image. A
+   caption names what changes from image to image (pose, framing, background), not the character itself; trigger word
+   and class go in front by themselves. Without a finished drawing, a sketch, a photo or only the description is
+   enough: "Generate drafts" draws the character frontally in full, and one draft becomes the template. A description
+   in English that names how the character differs from the ordinary (body shape, ears, what is missing) decides more
+   than the sketch. Images that came out well can be ticked to generate more from them.
+3. **Sort out:** look at every image at full size and reject what does not fit. The LoRA learns mistakes too.
+   "Replace rejected" draws the same pose again with a new seed.
+4. **Train:** 20 epochs, rank 16 with alpha 16, learning rate 2e-4, a checkpoint every 5 epochs. 24 images make 480
+   steps, about 2 h 10 min. The graphics card is busy all that time, other jobs wait. With these settings our Somi LoRAs
+   showed the character at strength 1 from epoch 15 on. Name colors such as ears and nose in the prompt, otherwise they
+   drift. "Schedule for" starts the training at a set time, for example at night, as soon as NVAI-open is running; the
+   images at the start count, so sorting out can go on until then. While it runs, the training view shows the loss
+   curve; "Pause after this epoch" frees the graphics card without losing anything (a resume point is saved after
+   every epoch, about 0.9 GB), "Resume" continues there with the dataset as it is then, also with more epochs. To try
+   another learning rate, start a new training from any checkpoint.
+5. **Compare and add:** afterwards NVAI-open renders test images for every checkpoint with a fixed seed, and one
+   without the LoRA. "Add as LoRA" under the best column puts it among your LoRAs with its trigger word. From there it
+   works like any other LoRA, also for characters in the Studio.
+
+**Licenses:** images from FLUX 3 cannot go into a dataset, because the FLUX Kommunity License forbids in 4(b) training
+another image model with its images. Qwen-Image-Edit-2511, Qwen-Image-2512 and musubi-tuner are under Apache-2.0.
+Images from Krea 2 or Qwen-Image 2.1 are marked: their terms carry over to the LoRA.
+
+### How the Somi LoRAs were made
+
+Somi is the rabbit from the [short film](SHORT_FILM.md). Its first variants came from FLUX 3 and could not be used for
+training, so everything started again from the hand sketch.
+
+![From the hand sketch to the dataset: drafts per type, the chosen one, and 24 images of it](images/somi-lora-dataset.jpg)
+
+1. Qwen-Image-Edit-2511 made four to eight drafts per type from the sketch (Depri, Dark, Happy), and one per type was
+   chosen.
+2. From each chosen draft came 24 images: 20 poses and settings shared by all types and four that suit the type, such
+   as Depri slumped over his desk.
+3. Sorting out showed what the prompt had not fixed. In most rejected Depri images the face had tipped into grumpy, the
+   ears changed color, once a tail showed up. One sentence about the expression and one about the colors fixed that,
+   and the replacements fit.
+4. Each LoRA trained for 2 h 7 min to 2 h 18 min (24 images, 20 epochs), at most 14.3 GB of graphics memory.
+5. The test images showed the catch: the LoRAs were too weak. At strength 1 Qwen-Image drew an ordinary black rabbit
+   (the "dark" in the trigger word pulls that way); only at 2.5 did Somi appear. Alpha 16 instead of 1 helped, but not
+   enough, also on an fp8 model instead of NVFP4.
+6. Before the third run, Depri and Happy were brought closer to the look of the short film. Qwen-Image-Edit-2511 got
+   only a description of the features (tired heavy lids and a small grumpy mouth for Depri, a friendly grin with flat
+   teeth for Happy), and their datasets were drawn again. With learning rate 2e-4 instead of 1e-4 all three LoRAs hit the
+   character at strength 1 from epoch 15 on. Without a sentence about the colors the ears often came out pink.
 
 ## Using LoRAs
 

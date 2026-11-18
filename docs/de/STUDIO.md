@@ -109,11 +109,13 @@ ein gelöschtes Projekt behält seinen Ordner.
 
 ![Das Material mit Ordnern: auf der obersten Ebene die Projektordner, im Projektordner führt „..“ eine Ebene hoch](../images/studio-folders-de.jpg)
 
-**Anklicken** spielt eine Datei im Monitor ab; Esc führt zurück zum Schnitt. Die Eigenschaften zeigen ihre Angaben,
-den Download der verlustfreien Kopie, „Am Abspielkopf einfügen“ und „Löschen“. Auf eine Spur gezogen wird eine Datei
-zum Clip, auf eine Szene gezogen zum Take. Was im Schnitt liegt, lässt sich erst nach seinem Clip löschen.
+**Anklicken** spielt eine Datei im Monitor ab; Esc führt zurück zum Schnitt. Die Eigenschaften zeigen ihren
+Dateinamen (ein Klick markiert ihn, „Kopieren“ legt ihn in die Zwischenablage), ihre Angaben, den Download der
+verlustfreien Kopie, „Am Abspielkopf einfügen“ und „Löschen“. Die Suche über der Liste findet Dateien auch über den
+Namen. Auf eine Spur gezogen wird eine Datei zum Clip, auf eine Szene gezogen zum Take. Was im Schnitt liegt, lässt
+sich erst nach seinem Clip löschen.
 
-![Im Material angeklickt: Der Clip läuft im Quellmonitor, die Eigenschaften zeigen seine Angaben](../images/studio-source-de.jpg)
+![Im Material angeklickt: Der Clip läuft im Quellmonitor, die Eigenschaften zeigen seinen Dateinamen mit „Kopieren“ und seine Angaben](../images/studio-source-de.jpg)
 
 Verlustfreie Dateien und hochgeladene MKV-, MOV- oder AVI-Dateien spielt kein Browser ab, deshalb macht NVAI-open
 dafür eine H.264-Vorschau zum Ansehen. Export und Download nehmen das Original.
