@@ -83,7 +83,9 @@ struct RestoreJobRequest: Sendable {
             megapixels = mp
         }
         let seed = o["seed"]?.intValue
-        if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
+        if let seed, !(0...APIError.maxSeed).contains(seed) {
+            throw APIError(422, t("seed muss zwischen 0 und \(APIError.maxSeed) liegen.", "seed must be between 0 and \(APIError.maxSeed)."))
+        }
 
         let seedValue = seed.map { UInt64($0) }
         guard repair || colorize else {

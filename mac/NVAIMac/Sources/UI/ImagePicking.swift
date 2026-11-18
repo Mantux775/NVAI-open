@@ -99,7 +99,7 @@ struct ImageStrip: View {
                 .strokeBorder(index != nil ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: index != nil ? 2.5 : 1))
             .overlay(alignment: .topLeading) {
                 if let index, limit > 1 {
-                    Text("\(index + 1)").font(.caption2.bold()).padding(4).background(.ultraThinMaterial, in: Circle()).padding(2)
+                    Text(verbatim: "\(index + 1)").font(.caption2.bold()).padding(4).background(.ultraThinMaterial, in: Circle()).padding(2)
                 }
             }
             .contentShape(Rectangle())
@@ -170,7 +170,7 @@ struct PreviewSheet: View {
             HStack {
                 Text(title).font(.headline).lineLimit(1).truncationMode(.tail).help(title)
                 Spacer()
-                if assets.count > 1 { Text("\(index + 1) / \(assets.count)").foregroundStyle(.secondary).monospacedDigit() }
+                if assets.count > 1 { Text(verbatim: "\(index + 1) / \(assets.count)").foregroundStyle(.secondary).monospacedDigit() }
             }
             AssetThumbnail(asset: showOriginal ? (original ?? asset) : asset, maxSide: 1600)
                 .frame(minWidth: 640, idealWidth: 960, maxWidth: .infinity, minHeight: 420, idealHeight: 680, maxHeight: .infinity)

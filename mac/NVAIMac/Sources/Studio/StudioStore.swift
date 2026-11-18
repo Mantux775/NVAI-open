@@ -45,6 +45,18 @@ actor StudioStore {
         onChange?(p)
     }
 
+    /// Name des Projekts, in dessen Schnitt das Asset als Clip liegt (wie studio.clip_owner unter Windows), sonst nil.
+    /// Liest alle Projektdateien; Exportpläne und Unlesbares fallen beim Dekodieren heraus, der Papierkorb liegt darunter.
+    func clipOwner(_ assetID: String) -> String? {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for url in files where url.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: url),
+                  let p = try? JSONDecoder().decode(StudioProject.self, from: data) else { continue }
+            if p.clips.contains(where: { $0.assetID == assetID }) { return p.name.isEmpty ? p.id : p.name }
+        }
+        return nil
+    }
+
     func load(_ id: String) throws -> StudioProject {
         let url = try path(id)
         guard let data = try? Data(contentsOf: url) else {
@@ -181,5 +193,33 @@ actor StudioStore {
         }
         restored.media.merge(current.media) { _, new in new }
         if let folder = current.folder { restored.folder = folder }
+    }
+}
+
+/// Ein Asset löschen wie DELETE /api/assets unter Windows (seit 0.5.9 auch am Mac, für REST, Verlauf, Bildauswahl und
+/// Studio): Was als Clip im Schnitt irgendeines Projekts liegt, bleibt. Vorher prüfte nur das Studio das offene Projekt;
+/// im Verlauf gelöscht fehlte der Clip danach, und der Export brach ab.
+enum AssetDeletion {
+    enum Outcome { case deleted(freedBytes: Int64), notFound, inEdit(project: String) }
+
+    static func delete(_ id: String) async -> Outcome {
+        if let owner = await StudioStore.shared.clipOwner(id) { return .inEdit(project: owner) }
+        var bytes: Int64 = 0
+        if let record = AssetSnapshot.shared.get(id) {
+            let path = AssetStore.shared.fileURL(record.filename).path
+            bytes = ((try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber)?.int64Value ?? 0
+        }
+        return await AssetStore.shared.delete(id) ? .deleted(freedBytes: bytes) : .notFound
+    }
+
+    static func inEditMessage(_ project: String) -> String {
+        t("Liegt als Clip im Schnitt von „\(project)“. Erst den Clip im Studio löschen.",
+          "It is a clip in the edit of \"\(project)\". Delete the clip in the Studio first.")
+    }
+
+    /// Für die Oberfläche: nil = gelöscht oder nicht mehr da, sonst der Hinweis.
+    static func deleteWithNotice(_ id: String) async -> String? {
+        if case .inEdit(let project) = await delete(id) { return inEditMessage(project) }
+        return nil
     }
 }

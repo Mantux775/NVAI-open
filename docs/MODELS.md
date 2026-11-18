@@ -550,6 +550,12 @@ Your own LoRA files (since Mac 0.5.5): "Models" → "Add LoRA file" works as on 
 4B, the only Mac model that loads LoRAs. LoRAs for the 9B model and the kohya format are refused with a message,
 because they would not take effect ([LORAS.md](LORAS.md#on-the-mac)).
 
+A face in a new scene (Mac 0.5.9): give the photo as a reference image, not as a start image. A start image keeps the
+photo's layout (since 0.5.8 it is cropped around the center instead of stretched). Say in the prompt who it is (woman
+or man, age, hair) and describe the new scene: with only "the person from the first image" a woman came back as a man.
+"Keep … exactly as in the first image" keeps the photo's clothes and framing. The assistant's "A face from a photo" asks
+who is in the photo.
+
 ![The same face sharpened to twice the size: original, SeedVR2 7B on Windows, SeedVR2 3B on the Mac](images/mac-sharpen-seedvr2.jpg)
 
 <a name="new-in-nvai-open-for-mac-050"></a>

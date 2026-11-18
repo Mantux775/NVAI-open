@@ -113,6 +113,7 @@ both in step when a new finding comes in.
 | A person who should stay still | a short prompt (4–8 sentences), the stillness in one positive sentence ("sits perfectly still like a statue …"), the small reaction named exactly; rewrite instead of appending | 8 instead of 14 sentences: 38–49 % less motion with the same seeds |
 | A small reaction (a start, a glance) | small and physical, say what does not move; avoid "fright", "flinch", "jerk" | "flinches briefly … jerk back" looked like a sneeze |
 | A recognizable person in video | start image with FLUX 3 from a frontal, sharp reference, face 250 px or more, few extras, an end image or `loop=True`, no extending; most faithful: the real photo outpainted to the video size | face similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 with the start image only |
+| A face from a photo in a new scene on the Mac | FLUX.2 Klein 4B with the photo in `reference_asset_ids` (not `image_asset_id`); name gender, age and hair, describe the new scene, no "keep … exactly" | a woman as ship captain: a man in 2 of 2 without the description, herself in 12 of 12 with it |
 | Video from several shots | Studio: one scene per shot, `chain` marker where shots must join, conform, export `youtube-1080p` | the chained clip went on with the same knight in the same pose |
 | Zoom on a clip | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and the end (e.g. 1.5) | the focus point stayed within 0.5 px in the export |
 | Quality through editing | leave `master` on (default); YouTube 1080p at 24 Mbit/s | export from the lossless copy 42.3 dB instead of 37.7 from the MP4 |
@@ -431,6 +432,12 @@ from a photo").
 
 With a real photo, the photo itself is the most faithful start image: outpaint it to the video size with FLUX 3, the
 face stays pixel for pixel. The voice is generated, never the person's real one.
+
+On the Mac (FLUX.2 Klein 4B, no prompt expander) the photo goes in `reference_asset_ids`, never as `image_asset_id`
+with `denoise`: that keeps the photo's layout. Name gender, age and hair ("The person from the first image, a woman in
+her forties with short curly red hair and freckles, with exactly the same face …: now a ship captain …"): with only "the
+person" a woman came back as a man in 2 of 2 images, with the description she stayed in 12 of 12. "Keep … exactly as
+in the first image" switches FLUX.2 to editing and keeps the photo's clothes and framing.
 
 ### Keeping faces, voices and characters over several clips
 

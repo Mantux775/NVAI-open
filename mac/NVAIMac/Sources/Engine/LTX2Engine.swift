@@ -32,7 +32,7 @@ actor LTX2Engine {
 
     static func makePipeline(_ model: VideoModel) throws -> LTXPipeline {
         guard let raw = model.ltx2, let ltx = LTXModel(rawValue: raw) else {
-            throw APIError(500, "LTX-2: \(model.id)")
+            throw APIError(500, t("LTX-2: unbekanntes Modell \(model.id)", "LTX-2: unknown model \(model.id)"))
         }
         LTXModelRegistry.customModelsDirectory = directory
         let quant: TransformerQuantization = model.bits == 8 ? .qint8 : .int4
@@ -95,7 +95,9 @@ actor LTX2Engine {
             loadedID = model.id
             timings["load"] = Date().timeIntervalSince(t0)
         }
-        guard let pipeline else { throw APIError(500, "LTX-2 pipeline") }
+        guard let pipeline else { throw APIError(500, t("LTX-2: Pipeline nicht geladen.", "LTX-2: pipeline not loaded.")) }
+        // Auch nach einem Fehler oder Abbruch entladen (seit 0.5.9; vorher blieben 28–50 GB stehen)
+        defer { if SystemInfo.memoryGB < 96 { unload() } }
         let upscaler = try await pipeline.downloadUpscalerWeights()
         var imagePath: String?
         if let startImage {
@@ -121,7 +123,6 @@ actor LTX2Engine {
                                                 fps: Double(fps), audioWaveform: result.audioWaveform,
                                                 audioSampleRate: result.audioSampleRate ?? 24000, to: url)
         timings["mp4"] = Date().timeIntervalSince(t0)
-        if SystemInfo.memoryGB < 96 { unload() }  // die anderen Modelle brauchen den Speicher wieder
         return VideoEngine.Result(url: url, frames: result.numFrames, timings: timings)
     }
 }

@@ -9,6 +9,9 @@ actor StudioGenerator {
     static let pollNanoseconds: UInt64 = 2_000_000_000
     /// Anschluss-Szenen, die auf ihre Vorlage warten: Szenen-ID → Task (nur im Speicher, wie unter Windows).
     private var chainTasks: [String: Task<Void, Never>] = [:]
+    /// Kennung je Anschluss-Task (seit 0.5.9): Ein abgebrochener alter Task räumt beim Enden nur seinen eigenen Eintrag
+    /// ab, nicht den eines gleich danach neu gestarteten (sonst gab refresh() dessen Warten frei, die Szene blieb leer).
+    private var chainTokens: [String: UUID] = [:]
 
     // MARK: Takes nachtragen
 
@@ -163,7 +166,9 @@ actor StudioGenerator {
         // Anschluss-Tasks vor dem Speichern anmelden (sie warten erst 2 s): Ein gleichzeitiges refresh() sieht sie
         // so schon als lebend und gibt das Warten nicht frei
         for (id, source) in waiting {
-            chainTasks[id] = Task { await self.chainLater(store, pid, sceneID: id, sourceID: source) }
+            let token = UUID()
+            chainTokens[id] = token
+            chainTasks[id] = Task { await self.chainLater(store, pid, sceneID: id, sourceID: source, token: token) }
         }
         do {
             _ = try await store.update(pid) { q in
@@ -185,6 +190,7 @@ actor StudioGenerator {
             for id in waiting.keys {
                 chainTasks[id]?.cancel()
                 chainTasks[id] = nil
+                chainTokens[id] = nil
             }
             throw error
         }
@@ -210,6 +216,7 @@ actor StudioGenerator {
         for id in waiting {
             chainTasks[id]?.cancel()
             chainTasks[id] = nil
+            chainTokens[id] = nil
         }
         if !waiting.isEmpty {
             _ = try await store.update(pid) { q in
@@ -228,12 +235,19 @@ actor StudioGenerator {
     /// Wartet, bis die Vorlage einer Szene fertig ist, und schickt dann deren Auftrag ab. Hat die Szene zwei Vorlagen
     /// (Anschluss und Satz für die Lippen, wie unter Windows seit 0.5.24), wartet sie danach auf die zweite. Endet
     /// still, wenn Szene oder Projekt gelöscht oder umgestellt wurden.
-    private func chainLater(_ store: StudioStore, _ pid: String, sceneID: String, sourceID: String) async {
-        defer { chainTasks[sceneID] = nil }
+    private func chainLater(_ store: StudioStore, _ pid: String, sceneID: String, sourceID: String, token: UUID) async {
+        defer {
+            if chainTokens[sceneID] == token {
+                chainTasks[sceneID] = nil
+                chainTokens[sceneID] = nil
+            }
+        }
         let env = store.env
         var sourceID = sourceID
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: Self.pollNanoseconds)
+            // Abbrechen während des Wartens: nicht mehr abschicken (sleep wirft, try? schluckt es)
+            guard !Task.isCancelled else { return }
             guard let fresh = try? await refresh(store, pid) else { return }
             var p = Self.resolvingChains(fresh)
             guard let i = p.scenes.firstIndex(where: { $0.id == sceneID }), p.scenes[i].waitingFor == sourceID else { return }
@@ -251,6 +265,7 @@ actor StudioGenerator {
                 if nextID == nil {
                     // auch wenn der Anschluss nur aus einem Marker kam; nicht für den Satz, dessen Ton das Video nimmt
                     if p.scenes[i].lane == "video" && sourceID != audioSource { p.scenes[i].chainFrom = sourceID }
+                    guard !Task.isCancelled else { return }
                     do { jobID = try await Self.submit(p, p.scenes[i], env).id } catch { failure = error.localizedDescription }
                 }
             } else {
@@ -346,7 +361,9 @@ actor StudioGenerator {
         // Format im Seitenverhältnis des Projekts, so groß, wie der Speicher dieses Macs es für die Länge zulässt.
         let video = s.modelID.flatMap(VideoCatalog.model).flatMap { $0.installed ? $0 : nil } ?? VideoCatalog.active
         let fps = VideoCatalog.fps
-        let frames = min(257, max(9, Int((secs * Double(fps) / 8).rounded(.toNearestOrEven)) * 8 + 1))
+        // Aufrunden wie unter Windows seit 0.5.26 (seit 0.5.9 auch hier): Gerundet blieben bei Längen neben dem Raster
+        // bis zu 3 Bilder am Szenenende schwarz (5,5 s: 129 statt 137 Bilder); 4 s bleibt 97
+        let frames = min(257, max(9, Int((secs * Double(fps) / 8 - 1e-6).rounded(.up)) * 8 + 1))
         guard let size = videoSize(p, frames: frames, maxVoxels: video.maxVoxels, step: video.sizeStep) else {
             throw StudioError(t("Die Szene ist für diesen Mac zu lang (\(frames) Bilder). Kürzer machen oder in zwei Szenen teilen.",
                                 "The scene is too long for this Mac (\(frames) frames). Shorten it or split it into two scenes."))
@@ -416,6 +433,9 @@ actor StudioGenerator {
         guard let record = AssetSnapshot.shared.get(assetID) else {
             throw StudioError(t("Unbekanntes Asset: \(assetID)", "Unknown asset: \(assetID)"), notFound: true)
         }
+        // Standbild-Szene (seit 0.5.9): Das Bild selbst ist ihr letztes Bild. AVFoundation öffnet kein PNG, der Anschluss
+        // an eine Bildszene scheiterte deshalb; unter Windows liest PyAV ein PNG als ein Bild.
+        if !AssetStore.mediaSuffixes.contains((record.filename as NSString).pathExtension.lowercased()) { return assetID }
         let asset = AVURLAsset(url: AssetStore.shared.fileURL(record.filename))
         let duration = try await asset.load(.duration)
         let fps = Double((try await asset.loadTracks(withMediaType: .video).first?.load(.nominalFrameRate)) ?? 24)

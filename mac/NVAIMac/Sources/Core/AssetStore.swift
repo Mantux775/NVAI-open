@@ -46,22 +46,54 @@ actor AssetStore {
 
     func load() {
         guard !loaded else { return }
-        loaded = true
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        if let data = try? Data(contentsOf: indexURL),
-           let list = try? JSONDecoder().decode([AssetRecord].self, from: data) {
-            // Einträge ohne Datei fallen weg (von Hand gelöscht).
-            assets = list.filter { FileManager.default.fileExists(atPath: fileURL($0.filename).path) }
+        let fm = FileManager.default
+        // Ablage auf einem Laufwerk, das (noch) nicht eingehängt ist (seit 0.5.9): nichts anlegen und nichts speichern,
+        // beim nächsten Zugriff noch einmal versuchen. Vorher galt der Verlauf als geladen (leer), und der erste neue
+        // Eintrag überschrieb später die index.json mit dem ganzen Verlauf.
+        if Self.volumeMissing(directory) {
+            AppLog.error("Assets folder not available (volume not mounted): \(directory.path)")
+            AssetSnapshot.shared.set(assets)
+            return
         }
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        if fm.fileExists(atPath: indexURL.path) {
+            if let data = try? Data(contentsOf: indexURL),
+               let list = try? JSONDecoder().decode([AssetRecord].self, from: data) {
+                // Einträge ohne Datei fallen weg (von Hand gelöscht).
+                assets = list.filter { fm.fileExists(atPath: fileURL($0.filename).path) }
+            } else {
+                Self.keepUnreadable(indexURL)
+            }
+        }
+        loaded = true
         AssetSnapshot.shared.set(assets)
     }
 
     private func save() {
-        if let data = try? JSONEncoder().encode(assets) {
-            try? data.write(to: indexURL, options: .atomic)
+        // Nur ein gelesener Verlauf wird geschrieben; Fehler stehen im Protokoll statt still verschluckt
+        if loaded {
+            do {
+                try JSONEncoder().encode(assets).write(to: indexURL, options: .atomic)
+            } catch {
+                AppLog.error("Assets index not saved: \(error.localizedDescription)")
+            }
         }
         AssetSnapshot.shared.set(assets)
         onChange?()
+    }
+
+    /// Liegt der Ordner auf einem Laufwerk unter /Volumes, das gerade fehlt?
+    private static func volumeMissing(_ url: URL) -> Bool {
+        let parts = url.standardizedFileURL.pathComponents  // ["/", "Volumes", "<Name>", …]
+        guard parts.count > 2, parts[1] == "Volumes" else { return false }
+        return !FileManager.default.fileExists(atPath: "/Volumes/" + parts[2])
+    }
+
+    /// Unlesbare index.json beiseitelegen, bevor ein neuer Verlauf sie überschreibt (seit 0.5.9).
+    private static func keepUnreadable(_ url: URL) {
+        let backup = url.deletingLastPathComponent().appendingPathComponent("index-unlesbar-\(Int(Date().timeIntervalSince1970)).json")
+        try? FileManager.default.copyItem(at: url, to: backup)
+        AppLog.error("Assets index unreadable, kept a copy: \(backup.lastPathComponent)")
     }
 
     nonisolated func fileURL(_ filename: String) -> URL {
@@ -70,10 +102,29 @@ actor AssetStore {
     }
 
     /// Neueste zuerst.
-    func list(kind: String? = nil, limit: Int = 200) -> [AssetRecord] {
+    /// Neueste zuerst, wie GET /api/assets unter Windows (seit 0.5.9 mit offset, media und q): `media` (image, video,
+    /// audio, all) nach der Endung, also mit Uploads; `q` sucht in Prompt, Dateiname und Angaben.
+    func list(kind: String? = nil, limit: Int = 200, offset: Int = 0, media: String? = nil, query: String? = nil) -> [AssetRecord] {
         load()
-        let filtered = assets.reversed().filter { kind == nil || $0.kind == kind }
-        return Array(filtered.prefix(max(0, limit)))
+        let q = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let filtered = assets.reversed().filter { r in
+            if let kind, r.kind != kind { return false }
+            if let media, media != "all", Self.media(of: r) != media { return false }
+            if !q.isEmpty {
+                let text = ([r.prompt, r.filename] + r.meta.values.compactMap(\.stringValue)).joined(separator: " ").lowercased()
+                if !text.contains(q) { return false }
+            }
+            return true
+        }
+        return Array(filtered.dropFirst(max(0, offset)).prefix(max(0, limit)))
+    }
+
+    /// image, video oder audio nach der Endung (Uploads haben die Art „upload“).
+    static func media(of r: AssetRecord) -> String {
+        let ext = (r.filename as NSString).pathExtension.lowercased()
+        if ["mp4", "mov", "m4v"].contains(ext) { return "video" }
+        if mediaSuffixes.contains(ext) { return "audio" }
+        return "image"
     }
 
     func get(_ id: String) -> AssetRecord? {
@@ -302,7 +353,9 @@ actor AssetStore {
 
     private static func readIndex(_ url: URL) -> [AssetRecord] {
         guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([AssetRecord].self, from: data)) ?? []
+        if let list = try? JSONDecoder().decode([AssetRecord].self, from: data) { return list }
+        keepUnreadable(url)
+        return []
     }
 
     private static func writeIndex(_ list: [AssetRecord], to url: URL) {
@@ -322,6 +375,9 @@ final class AssetSnapshot: @unchecked Sendable {
         let map = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         lock.lock()
         byID = map
+        // Wieder da (Paket-Import mit derselben ID, seit 0.5.9): nicht mehr als gelöscht führen, sonst strich das
+        // Studio den Take bei jedem refresh() aus den Takes
+        deletedIDs.subtract(map.keys)
         lock.unlock()
     }
 

@@ -39,12 +39,16 @@ final class Downloader: NSObject, URLSessionDownloadDelegate {
     /// Laedt die URL und gibt den Pfad der fertigen temporaeren Datei zurueck.
     func lade(_ url: URL, fortschritt: @escaping (Stand) -> Void) async throws -> URL {
         onProgress = fortschritt
+        // Schon abgebrochen: gar nicht erst laden. onCancel lief sonst, bevor es eine Aufgabe gab, und die Datei kam
+        // trotzdem ganz (seit 0.5.9)
+        try Task.checkCancellation()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { fortsetzung in
                 weiter = fortsetzung
                 let t = session.downloadTask(with: url)
                 task = t
                 t.resume()
+                if Task.isCancelled { t.cancel() }
             }
         } onCancel: { [weak self] in
             self?.task?.cancel()

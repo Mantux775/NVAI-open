@@ -40,7 +40,9 @@ struct SpeechJobRequest: Sendable {
                                   "Language not supported: \(language). Possible: \(SpeechCatalog.languages.joined(separator: ", "))"))
         }
         let seed = o["seed"]?.intValue
-        if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
+        if let seed, !(0...APIError.maxSeed).contains(seed) {
+            throw APIError(422, t("seed muss zwischen 0 und \(APIError.maxSeed) liegen.", "seed must be between 0 and \(APIError.maxSeed)."))
+        }
         guard SpeechCatalog.installed else {
             throw APIError(409, t("Die Sprecherstimme (Qwen3-TTS) ist nicht geladen. In NVAI-open unter „Modelle“ herunterladen.",
                                   "The narrator voice (Qwen3-TTS) is not downloaded. Download it in NVAI-open under \"Models\"."))

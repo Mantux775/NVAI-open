@@ -24,7 +24,7 @@ enum AudioCatalog {
         files.allSatisfy { file in
             let path = directory.appendingPathComponent(file.name).path
             let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64 ?? 0
-            return Double(size) >= Double(file.bytes) * 0.95
+            return (file.bytes < 1_000_000 ? size > 0 : Double(size) >= Double(file.bytes) * 0.95)
         }
     }
 
@@ -35,10 +35,11 @@ enum AudioCatalog {
         let total = files.reduce(Int64(0)) { $0 + $1.bytes }
         var before: Int64 = 0
         for file in files {
+            try Task.checkCancellation()  // Abbrechen zwischen zwei Dateien (seit 0.5.9)
             let target = directory.appendingPathComponent(file.name)
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64 ?? 0
-            if Double(size) < Double(file.bytes) * 0.95 {
+            if (file.bytes < 1_000_000 ? size == 0 : Double(size) < Double(file.bytes) * 0.95) {
                 let url = URL(string: "https://huggingface.co/\(repo)/resolve/main/\(file.name)")!
                 let offset = before
                 let tmp = try await Downloader().lade(url) { stand in

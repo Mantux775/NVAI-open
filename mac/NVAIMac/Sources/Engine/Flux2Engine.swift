@@ -140,10 +140,17 @@ actor Flux2Engine {
 
     private func render(_ job: EngineJob, onProgress: @escaping @Sendable (Int, Int) -> Void) async throws -> CGImage {
         guard let p = pipeline else { throw APIError(500, t("Kein Modell geladen.", "No model loaded.")) }
-        // FLUX.2 rechnet in Vielfachen von 32 (VAE 8 × Patch 2, gepackt). Das Ergebnis bringt
-        // die Warteschlange danach auf die bestellte Größe.
-        let w = max(256, (job.width / 32) * 32)
-        let h = max(256, (job.height / 32) * 32)
+        // FLUX.2 rechnet in Vielfachen von 16 (VAE 8 × Patch 2, LatentUtils.validateDimensions); nur der Weg über
+        // Anfangs-Latents (Bild zu Bild, Füllen) verlangt laut Paket 32. Bis 0.5.8 galt 32 für alles: 1360 × 768 wurde
+        // 1344 × 768 und 1088 × 720 beim Restaurieren 1088 × 704, danach nur in einer Richtung zurückgestreckt.
+        // Das Ergebnis bringt die Warteschlange danach auf die bestellte Größe.
+        let step: Int
+        switch job.mode {
+        case .text, .references: step = 16
+        case .imageToImage, .inpaint: step = 32
+        }
+        let w = max(256, (job.width / step) * step)
+        let h = max(256, (job.height / step) * step)
         switch job.mode {
         case .text:
             return try await p.generateWithResult(
@@ -173,7 +180,8 @@ actor Flux2Engine {
                 referenceImages: refs.isEmpty ? nil : Array(refs.prefix(3)),
                 steps: job.steps, guidance: job.guidance, seed: job.seed, strength: 1.0,
                 compositeOnOriginal: true,   // außerhalb der Maske bitgleich
-                maxPixels: max(w * h, 256 * 256),
+                // die bestellte Fläche: aus der abgerundeten rechnete die Kette noch einmal kleiner (1488 × 704 → 1472 × 672)
+                maxPixels: max(job.width * job.height, 256 * 256),
                 onProgress: onProgress
             )
             return try await chain.run().image

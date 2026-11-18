@@ -215,7 +215,17 @@ enum UserCoreMLCatalog {
     static func model(from a: HuggingFace.Angebot) -> CoreMLModel {
         let slug = (a.repo + "-" + a.titel).lowercased()
             .map { $0.isLetter || $0.isNumber ? $0 : "-" }
-        let id = "coreml-" + String(slug).split(separator: "-").joined(separator: "-").prefix(60)
+        let full = String(slug).split(separator: "-").joined(separator: "-")
+        // Lange Namen gekürzt und mit Prüfsumme des ganzen Namens (seit 0.5.9): „original“ und „split_einsum_v2“
+        // desselben Repos ergaben vorher dieselbe ID und überschrieben sich gegenseitig. FNV-1a, über Starts gleich.
+        let id: String
+        if full.count <= 60 {
+            id = "coreml-" + full
+        } else {
+            var hash: UInt32 = 2_166_136_261
+            for byte in full.utf8 { hash = (hash ^ UInt32(byte)) &* 16_777_619 }
+            id = "coreml-" + full.prefix(51) + "-" + String(format: "%08x", hash)
+        }
         let quelle: CoreMLQuelle
         switch a.form {
         case .zip(let p): quelle = .zip(HuggingFace.dateiURL(a.repo, p))

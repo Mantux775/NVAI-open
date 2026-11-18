@@ -77,6 +77,17 @@ enum ImageFiles {
         return ctx.makeImage() ?? image
     }
 
+    /// Ausgangsbild aufs Zielformat (seit 0.5.8) wie unter Windows (`ImageScale`, crop „center“): gleichmäßig skaliert und
+    /// mittig beschnitten statt gestreckt. Vorher zog FLUX.2 ein Hochkantfoto für 16:9 auf weniger als die halbe Höhe
+    /// zusammen; mit Stärke 0,5 blieb das verzerrte Foto stehen (Nutzer 18.11.: „nur Seitenverhältnis geändert“).
+    /// Weicht das Format nur ums Runden ab (bis 2 %), wird wie bisher gestreckt, damit nichts verrutscht.
+    static func filled(_ image: CGImage, width: Int, height: Int) -> CGImage {
+        let target = Double(width) / Double(height)
+        let source = Double(image.width) / Double(image.height)
+        guard abs(source / target - 1) > 0.02 else { return resized(image, width: width, height: height) }
+        return resized(VideoStartImage.cropped(image, aspect: target), width: width, height: height)
+    }
+
     /// Verkleinertes Vorschaubild (längste Seite `maxSide`).
     static func thumbnail(_ url: URL, maxSide: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }

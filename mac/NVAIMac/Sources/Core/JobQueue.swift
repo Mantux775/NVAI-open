@@ -99,11 +99,20 @@ actor JobQueue {
     func job(_ id: String) -> JobRecord? { jobs[id] }
 
     /// Neueste zuerst.
-    func list(limit: Int = 100) -> [JobRecord] {
-        Array(order.reversed().compactMap { jobs[$0] }.prefix(max(0, limit)))
+    /// Neueste zuerst, wie GET /api/jobs unter Windows (seit 0.5.9 mit offset, exclude, kind und active; vorher kam mit
+    /// active=true auch Fertiges zurück).
+    func list(limit: Int = 100, offset: Int = 0, exclude: Set<String> = [], kind: String? = nil, active: Bool = false) -> [JobRecord] {
+        let all = order.reversed().compactMap { jobs[$0] }.filter { job in
+            !exclude.contains(job.kind) && (kind == nil || job.kind == kind) && (!active || !job.isFinished)
+        }
+        return Array(all.dropFirst(max(0, offset)).prefix(max(0, limit)))
     }
 
-    var currentJobID: String? { runningID }
+    /// Der laufende Rechenauftrag; ein laufender Download steht unter currentDownloadID (wie unter Windows, seit 0.5.9).
+    var currentJobID: String? {
+        guard let id = runningID, jobs[id]?.kind != "download" else { return nil }
+        return id
+    }
 
     var queueDepth: Int { jobs.values.filter { $0.status == "queued" && $0.kind != "download" }.count }
 
@@ -328,8 +337,10 @@ actor JobQueue {
         return jobs[id]!
     }
 
+    /// Bricht den laufenden Rechenauftrag ab; ein Download bleibt (wie unter Windows, seit 0.5.9: vorher traf
+    /// „current“ auch einen Modell-Download, während das Bild des Clients noch wartete).
     func cancelCurrent() -> JobRecord? {
-        guard let id = runningID else { return nil }
+        guard let id = currentJobID else { return nil }
         return try? cancel(id)
     }
 
@@ -410,6 +421,12 @@ actor JobQueue {
             } else if let request = job.request {
                 try await runImage(id, request)
             }
+            // project_id wie unter Windows (seit 0.5.9): Die Ergebnisse gehören gleich zum Studio-Projekt und stehen in
+            // seinem Material, bevor der Auftrag „fertig“ meldet. Vorher landeten sie still im allgemeinen Verlauf.
+            if let project = job.params["project_id"]?.stringValue, !project.isEmpty,
+               let ids = jobs[id]?.assetIDs, !ids.isEmpty {
+                await AssetStore.shared.tag(ids, project: project)
+            }
             update(id) {
                 let cancelled = $0.cancelRequested
                 $0.status = cancelled ? "cancelled" : "done"
@@ -446,14 +463,18 @@ actor JobQueue {
         let plan = try StudioRender.plan(p, preset: req.preset)
         let temp = FileManager.default.temporaryDirectory.appendingPathComponent("\(id).\(plan.preset.ext)")
         let task = Task { try await StudioRender.render(plan, to: temp) { [weak self] fraction, stage in
-            Task { await self?.update(id) { $0.progress = fraction; $0.stage = stage } }
+            Task { await self?.exportProgress(id, fraction: fraction, stage: stage) }
         } }
         exportTask = task
+        // Abbrechen kurz nach dem Start (Prefetch, Plan) ging vorher verloren (seit 0.5.9 wie bei Bild und Z-Image)
+        if jobs[id]?.cancelRequested == true { task.cancel() }
         defer {
             exportTask = nil
             try? FileManager.default.removeItem(at: temp)  // nach Erfolg schon in die Ablage verschoben, sonst Reste
         }
         let result = try await task.value
+        // abgebrochen, während der Export gerade fertig wurde: kein Asset ablegen
+        if jobs[id]?.cancelRequested == true { throw CancellationError() }
         let meta: [String: JSONValue] = [
             "studio_project": .string(p.id), "preset": .string(req.preset), "encoder": .string(result.encoder),
             "render_seconds": .double((result.renderSeconds * 10).rounded() / 10), "frames": .int(result.frames),
@@ -464,6 +485,15 @@ actor JobQueue {
         let asset = try await AssetStore.shared.addStudioExport(file: result.url, ext: plan.preset.ext, jobID: id,
                                                                 prompt: p.name, meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
+    }
+
+    /// Fortschritt des Studio-Exports; späte Meldungen nach dem Ende überschrieben vorher „fertig“ (seit 0.5.9 nicht mehr).
+    private func exportProgress(_ id: String, fraction: Double, stage: String) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            $0.progress = fraction
+            $0.stage = stage
+        }
     }
 
     private func loadProgress(_ id: String, fraction: Double, message: String, isDownload: Bool) {
@@ -575,7 +605,7 @@ actor JobQueue {
         }
         await CoreMLEngine.shared.unload()
         // Qwen3 neben einem geladenen Video- oder Klangmodell sprengt 8 GB (wie vor einem Video, siehe runVideo).
-        if SystemInfo.memoryGB <= 16 {
+        if SystemInfo.oneModelAtATime {
             await VideoEngine.shared.unload()
             await AudioEngine.shared.unload()
             await SpeechEngine.shared.unload()
@@ -585,8 +615,16 @@ actor JobQueue {
             MemoryLog.release()
         }
         update(id) { $0.stage = t("baut den Prompt aus", "expanding the prompt") }
-        let text = try await Flux2Engine.shared.expand(prompt, model: model, target: target)
-        update(id) { $0.expanded = text }
+        var text = try await Flux2Engine.shared.expand(prompt, model: model, target: target)
+        // Ein einzelner Text ohne Nummern kam trotzdem als „[1] A fishing boat …“ bzw. „[A] A fisher boat …“ zurück
+        // (Qwen3-4B, gemessen 18.11. per REST): Der Systemprompt beschreibt die Nummern für den Assistenten. Ohne Nummern
+        // im Text fällt jede kurze Marke in Klammern am Zeilenanfang weg.
+        if target == .translate, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("[") {
+            text = text.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.replacingOccurrences(of: #"^\s*\[[^\]]{1,4}\]\s*"#, with: "", options: .regularExpression) }
+                .joined(separator: "\n")
+        }
+        update(id) { [text] in $0.expanded = text }
         AppLog.info("Expanded prompt: \(prompt.split(separator: " ").count) → \(text.split(separator: " ").count) words")
     }
 
@@ -642,9 +680,10 @@ actor JobQueue {
                             mask: ImageFiles.resized(mask, width: req.width, height: req.height), references: refs)
         } else if let image {
             // denoise 1.0 hieße: Ausgangsbild verwerfen. Dann dient es als Referenz (wie FLUX 3 unter Windows).
+            // Unter 1.0 mittig aufs Zielformat zugeschnitten statt gestreckt (ImageFiles.filled)
             mode = req.denoise >= 0.999
                 ? .references([image] + refs)
-                : .imageToImage(image, strength: Float(req.denoise), references: refs)
+                : .imageToImage(ImageFiles.filled(image, width: req.width, height: req.height), strength: Float(req.denoise), references: refs)
         } else if !refs.isEmpty {
             mode = .references(refs)
         } else {
@@ -760,7 +799,8 @@ actor JobQueue {
     private func runCoreML(_ id: String, _ req: ImageJobRequest, model: CoreMLModel) async throws {
         var start: CGImage?
         if let a = req.imageAssetID, req.denoise < 0.999 {
-            start = ImageFiles.resized(try await loadImage(a, t("Ausgangsbild", "Start image")), width: model.resolution, height: model.resolution)
+            // mittig zugeschnitten statt gestreckt (seit 0.5.9, wie FLUX.2 seit 0.5.8): Core ML rechnet quadratisch
+            start = ImageFiles.filled(try await loadImage(a, t("Ausgangsbild", "Start image")), width: model.resolution, height: model.resolution)
         }
         update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         await Flux2Engine.shared.unload()
@@ -793,7 +833,9 @@ actor JobQueue {
             }
             let seconds = Date().timeIntervalSince(started)
             let peak = sampler.stop()
-            let png = try ImageFiles.pngData(ImageFiles.resized(result, width: req.width, height: req.height))
+            // Das quadratische Ergebnis mittig aufs bestellte Format zuschneiden statt es zu strecken (seit 0.5.9; ein
+            // Studio-Bild 1360 × 768 aus 512² war vorher 2,7-fach breit und 1,5-fach hoch gezogen)
+            let png = try ImageFiles.pngData(ImageFiles.filled(result, width: req.width, height: req.height))
             var meta: [String: JSONValue] = [
                 "seed": .int(Int(seed)), "width": .int(req.width), "height": .int(req.height),
                 "native_size": .int(model.resolution), "steps": .int(req.steps), "cfg": .double(Double(req.guidance)),
@@ -821,7 +863,7 @@ actor JobQueue {
 
     /// Auf Macs bis 16 GB passt neben FLUX.2 kein weiteres Modell: Klang, SeedVR2, Qwen3.5 und Z-Image freigeben.
     private func freeHelpers() async {
-        guard SystemInfo.memoryGB <= 16 else { return }
+        guard SystemInfo.oneModelAtATime else { return }
         await AudioEngine.shared.unload()
         await SpeechEngine.shared.unload()
         await SeedVR2Engine.shared.unload()
@@ -833,7 +875,7 @@ actor JobQueue {
     /// Z-Image Turbo (`ZImageEngine`): Text zu Bild, 8 Schritte.
     private func runZImage(_ id: String, _ req: ImageJobRequest, model: ZImageModel) async throws {
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 {
+        if SystemInfo.oneModelAtATime {
             await Flux2Engine.shared.unload()
             await AudioEngine.shared.unload()
             await SpeechEngine.shared.unload()
@@ -902,7 +944,7 @@ actor JobQueue {
     /// Stable Audio 3 Medium (`AudioEngine`), wie unter Windows 8 Schritte mit cfg 1; WAV in die Ablage.
     private func runAudio(_ id: String, _ req: AudioJobRequest) async throws {
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 {
+        if SystemInfo.oneModelAtATime {
             await Flux2Engine.shared.unload()
             await SeedVR2Engine.shared.unload()
             await VisionEngine.shared.unload()
@@ -976,7 +1018,7 @@ actor JobQueue {
             referenceMode = referenceText != nil ? "text" : (read.trimmed ? "klang (gekuerzt)" : "klang")
         }
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 {
+        if SystemInfo.oneModelAtATime {
             await Flux2Engine.shared.unload()
             await AudioEngine.shared.unload()
             await SeedVR2Engine.shared.unload()
@@ -1015,6 +1057,7 @@ actor JobQueue {
         }
         speechTask = work
         defer { speechTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }  // Abbrechen beim Laden (seit 0.5.9)
         let raw: [Float]
         do {
             raw = try await work.value
@@ -1065,7 +1108,8 @@ actor JobQueue {
         var startImage: CGImage?
         if let image = req.imageAssetID { startImage = try await loadImage(image, t("Startbild", "Start image")) }
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 {
+        // LTX-2 (28–50 GB) und der 13B brauchen den Speicher auch auf großen Macs (seit 0.5.9)
+        if SystemInfo.oneModelAtATime || req.model.isLTX2 || req.model.is13B {
             await Flux2Engine.shared.unload()
             await AudioEngine.shared.unload()
             await SpeechEngine.shared.unload()
@@ -1093,6 +1137,7 @@ actor JobQueue {
         }
         videoTask = work
         defer { videoTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }  // Abbrechen beim Startbild oder Entladen (seit 0.5.9)
         let result: VideoEngine.Result
         do {
             result = try await work.value
@@ -1207,7 +1252,7 @@ actor JobQueue {
         }
         let photo = try await loadImage(req.imageAssetID, t("Foto", "Photo"))
         await CoreMLEngine.shared.unload()
-        if SystemInfo.memoryGB <= 16 {
+        if SystemInfo.oneModelAtATime {
             await AudioEngine.shared.unload()
             await SpeechEngine.shared.unload()
             await ZImageEngine.shared.unload()
@@ -1219,7 +1264,7 @@ actor JobQueue {
         if req.repair && req.repairMode == "auto" {
             if HelperModel.vision.installed {
                 update(id) { $0.stage = t("Schäden entfernen · prüft die Art der Schäden", "Removing damage · checking the kind of damage") }
-                if SystemInfo.memoryGB <= 16, await VisionEngine.shared.cachedAnswer(req.imageAssetID) == nil {
+                if SystemInfo.oneModelAtATime, await VisionEngine.shared.cachedAnswer(req.imageAssetID) == nil {
                     await Flux2Engine.shared.unload()
                 }
                 let started = Date()
@@ -1350,7 +1395,7 @@ actor JobQueue {
                 h = Int(Double(h) * k)
             }
             let label = t("Schärfen", "Sharpening")
-            if SystemInfo.memoryGB <= 16 {
+            if SystemInfo.oneModelAtATime {
                 await Flux2Engine.shared.unload()
                 MemoryLog.release()
             }
@@ -1398,7 +1443,7 @@ actor JobQueue {
             }
             MemoryLog.line("after SeedVR2")
             // Auf kleinen Macs Platz machen für das nächste Bild mit FLUX.2.
-            if SystemInfo.memoryGB <= 16 { await SeedVR2Engine.shared.unload() }
+            if SystemInfo.oneModelAtATime { await SeedVR2Engine.shared.unload() }
         }
         if jobs[id]?.cancelRequested == true { return }
 

@@ -560,6 +560,12 @@ Eigene LoRA-Dateien (seit Mac 0.5.5): „Modelle“ → „LoRA-Datei hinzufüge
 FLUX.2 Klein 4B gemacht sind, das einzige Mac-Modell, das LoRAs lädt. LoRAs für das 9B-Modell und das kohya-Format
 lehnt die Prüfung mit einem Hinweis ab, weil sie nicht wirken würden ([LORAS.md](LORAS.md#auf-dem-mac)).
 
+Ein Gesicht in einer neuen Szene (Mac 0.5.9): das Foto als Referenzbild geben, nicht als Ausgangsbild. Ein Ausgangsbild
+behält die Bildaufteilung des Fotos (seit 0.5.8 mittig zugeschnitten statt gestreckt). Im Prompt sagen, wer es ist (Frau
+oder Mann, Alter, Haare), und die neue Szene beschreiben: Mit nur „the person from the first image“ kam eine Frau als
+Mann zurück. „Keep … exactly as in the first image“ behält Kleidung und Ausschnitt des Fotos. Der Assistent fragt im Weg
+„Gesicht aus einem Foto“, wer auf dem Foto ist.
+
 ![Dasselbe Gesicht auf doppelte Größe geschärft: Original, SeedVR2 7B unter Windows, SeedVR2 3B auf dem Mac](../images/mac-sharpen-seedvr2-de.jpg)
 
 <a name="neu-in-nvai-open-für-mac-050"></a>

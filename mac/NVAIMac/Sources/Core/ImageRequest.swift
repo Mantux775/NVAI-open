@@ -6,6 +6,9 @@ struct APIError: Error, LocalizedError {
     let detail: String
     init(_ status: Int, _ detail: String) { self.status = status; self.detail = detail }
     var errorDescription: String? { detail }
+    /// Größter Seed (seit 0.5.9): 2^53 − 1, so genau wie JSON-Zahlen in jedem Client. Seeds nahe Int.max liefen mit
+    /// „+ Index“ der Varianten über und beendeten die App.
+    static let maxSeed = 9_007_199_254_740_991
 }
 
 /// Ein Bildauftrag, geprüft und mit Standardwerten ergänzt.
@@ -70,7 +73,9 @@ struct ImageJobRequest: Sendable {
             throw APIError(422, t("width und height müssen zwischen 256 und 2048 liegen.", "width and height must be between 256 and 2048."))
         }
         let seed = try int("seed")
-        if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
+        if let seed, !(0...APIError.maxSeed).contains(seed) {
+            throw APIError(422, t("seed muss zwischen 0 und \(APIError.maxSeed) liegen.", "seed must be between 0 and \(APIError.maxSeed)."))
+        }
         let batch = try int("batch_size") ?? 1
         guard (1...8).contains(batch) else { throw APIError(422, t("batch_size muss zwischen 1 und 8 liegen.", "batch_size must be between 1 and 8.")) }
         let denoise = try number("denoise") ?? 1.0
@@ -161,12 +166,21 @@ struct ImageJobRequest: Sendable {
         let steps = try int("steps") ?? (features["steps"] as? Int ?? 4)
         guard (1...80).contains(steps) else { throw APIError(422, t("steps muss zwischen 1 und 80 liegen.", "steps must be between 1 and 80.")) }
         let cfg = try number("cfg") ?? (features["cfg"] as? Double ?? 1.0)
+        // wie unter Windows 0 bis 30 (seit 0.5.9): cfg 1e39 wurde als Float unendlich, und der Verlauf ließ sich danach
+        // nicht mehr speichern
+        guard (0...30).contains(cfg) else { throw APIError(422, t("cfg muss zwischen 0 und 30 liegen.", "cfg must be between 0 and 30.")) }
         var negative = try string("negative_prompt") ?? ""
 
         switch model {
         case .flux:
             if refs.count > 3 {
                 throw APIError(422, t("FLUX.2 Klein nimmt höchstens 3 Referenzbilder (features.references = 3).", "FLUX.2 Klein takes at most 3 reference images (features.references = 3)."))
+            }
+            // Ausgangsbild mit Stärke 1,0 wird selbst Referenz (JobQueue.runImage): zusammen höchstens 3, sonst fiel eins
+            // still weg (seit 0.5.9)
+            if image != nil, mask == nil, outpaint == nil, denoise >= 0.999, refs.count + 1 > 3 {
+                throw APIError(422, t("Mit Stärke 1,0 zählt das Ausgangsbild als Referenz: zusammen höchstens 3 Bilder.",
+                                      "With strength 1.0 the start image counts as a reference: at most 3 images together."))
             }
             negative = ""   // destilliert, cfg 1: wirkt nicht
         case .coreml(let m):

@@ -11,6 +11,10 @@ struct SettingsView: View {
     @State private var problemMessage: String?
     @State private var assetsMessage: String?
     @State private var relocating = false
+    /// Hugging-Face-Token (seit 0.5.9 eintragbar; vorher verwiesen LTX-2.5 und die Fehlermeldungen auf ein Feld, das es
+    /// nicht gab). Das Feld zeigt den gespeicherten Wert nie an.
+    @State private var hfToken = ""
+    @State private var hfSaved = Settings.hfToken != nil
 
     var body: some View {
         Form {
@@ -55,8 +59,39 @@ struct SettingsView: View {
                     }
                     Button(t("Im Finder zeigen", "Show in Finder")) { NSWorkspace.shared.open(state.modelsDirectory) }
                 }
-                Text(t("Modelle sind je 5 bis 11 GB groß. Ein externer Datenträger geht auch; der Ordner heißt dann „models“.",
-                       "Each model is 5 to 11 GB. An external drive works too; the folder is then called \"models\"."))
+                // Nicht während eines Auftrags oder Downloads (seit 0.5.9): Das Entladen mitten im Bild beendete die App,
+                // ein Download legte den Rest ins neue Verzeichnis
+                .disabled(state.runningJob != nil)
+                Text(t("Modelle sind je 5 bis 11 GB groß. Ein externer Datenträger geht auch; der Ordner heißt dann „models“. "
+                       + "Während ein Auftrag oder Download läuft, lässt sich der Ordner nicht wechseln.",
+                       "Each model is 5 to 11 GB. An external drive works too; the folder is then called \"models\". "
+                       + "The folder cannot change while a job or download is running."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("Hugging Face") {
+                SecureField(t("Token", "Token"), text: $hfToken, prompt: Text(verbatim: "hf_…"))
+                HStack {
+                    Button(t("Speichern", "Save")) {
+                        let token = hfToken.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Settings.hfToken = token.isEmpty ? nil : token
+                        hfToken = ""
+                        hfSaved = Settings.hfToken != nil
+                    }
+                    .disabled(hfToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    if hfSaved {
+                        Button(t("Token entfernen", "Remove token")) {
+                            Settings.hfToken = nil
+                            hfSaved = false
+                        }
+                    }
+                    Link(t("Token anlegen …", "Create a token …"), destination: URL(string: "https://huggingface.co/settings/tokens")!)
+                }
+                Text(hfSaved ? t("Ein Token ist gespeichert.", "A token is saved.") : t("Kein Token gespeichert.", "No token saved."))
+                    .font(.caption)
+                Text(t("Nur für gesperrte Modelle nötig (LTX-2.5): auf Hugging Face die Lizenz des Modells annehmen, ein Token "
+                       + "mit Leserecht anlegen und hier eintragen. Es bleibt auf diesem Mac.",
+                       "Only needed for gated models (LTX-2.5): accept the model's license on Hugging Face, create a token "
+                       + "with read access and enter it here. It stays on this Mac."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(t("Erzeugte Dateien", "Generated files")) {

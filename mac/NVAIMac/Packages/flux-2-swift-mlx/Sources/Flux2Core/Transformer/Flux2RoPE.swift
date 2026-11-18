@@ -60,13 +60,17 @@ public class Flux2RoPE: Module, @unchecked Sendable {
         return freqs
     }
 
-    /// Generate cache key from position IDs shape
-    /// For deterministic position IDs (text/image), shape uniquely identifies the embeddings
+    /// Generate cache key from the position IDs themselves
+    ///
+    /// NVAI-open: the sequence length alone is not unique. 512 × 288 and 384 × 384 both have 576 image tokens but a
+    /// different (H, W) grid; a cache hit gave the second image the positions of the first and it came out torn into
+    /// bands. The key therefore hashes every position value (S × 4, a few thousand numbers).
     private func cacheKey(for ids: MLXArray) -> String {
-        // Shape-based key: seqLen determines the embeddings
-        // We also include a hash of first/last positions for extra safety
-        let seqLen = ids.shape[0]
-        return "rope_\(seqLen)"
+        let values = ids.asType(.float32).asArray(Float.self)
+        var hasher = Hasher()
+        hasher.combine(ids.shape)
+        for v in values { hasher.combine(v.bitPattern) }
+        return "rope_\(ids.shape[0])_\(hasher.finalize())"
     }
 
     /// Generate rotary embeddings for position IDs

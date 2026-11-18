@@ -516,6 +516,32 @@ struct StudioMedia: Codable, Equatable, Sendable {
     var width: Int?
     var height: Int?
     var fps: Double?
+
+    enum CodingKeys: String, CodingKey { case kind, duration, audio, width, height, fps }
+}
+
+extension StudioMedia {
+    /// Windows schreibt `fps` als Paar [Zähler, Nenner] (video_tools.probe), der Mac als Zahl. Bis 0.5.8 scheiterte
+    /// deshalb jedes Windows-Projekt mit Video am Mac beim Öffnen und Importieren (19 von 20 Projekten der Installation).
+    /// Beides annehmen, ganze Zahlen auch als Kommazahl.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func int(_ key: CodingKeys) -> Int? {
+            if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return i }
+            if let d = try? c.decodeIfPresent(Double.self, forKey: key), d.isFinite, abs(d) < 9e15 { return Int(d) }
+            return nil
+        }
+        kind = try c.decode(String.self, forKey: .kind)
+        duration = int(.duration)
+        audio = try? c.decodeIfPresent(Bool.self, forKey: .audio)
+        width = int(.width)
+        height = int(.height)
+        if let pair = try? c.decodeIfPresent([Double].self, forKey: .fps), pair.count == 2, pair[1] > 0 {
+            fps = pair[0] / pair[1]
+        } else {
+            fps = try? c.decodeIfPresent(Double.self, forKey: .fps)
+        }
+    }
 }
 
 // MARK: - Befehlsparameter

@@ -318,7 +318,10 @@ struct StudioMaterial: View {
 
     private func delete(_ r: AssetRecord) async {
         armed = nil
-        await AssetStore.shared.delete(r.id)
+        if let notice = await AssetDeletion.deleteWithNotice(r.id) {
+            model.notice = notice
+            return
+        }
         if model.mediaID == r.id { model.leaveSource() }
         await state.refresh()
     }

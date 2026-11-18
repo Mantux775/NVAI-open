@@ -88,7 +88,9 @@ enum ReviewRoutes {
             try req.body.write(to: url, options: .atomic)
             return .json(["ok": true, "bytes": req.body.count])
         }
-        guard req.method == "GET" else { throw APIError(405, "\(req.method)") }
+        guard req.method == "GET" else {
+            throw APIError(405, t("Methode nicht erlaubt: \(req.method)", "Method not allowed: \(req.method)"))
+        }
         let url = try resolve(root, rel)
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue,
@@ -103,7 +105,7 @@ enum ReviewRoutes {
             return response
         }
         guard let (start, end) = parseRange(header, size: size) else {
-            var bad = HTTPResponse.error(416, "Range")
+            var bad = HTTPResponse.error(416, t("Ungültiger Bereich (Range).", "Invalid range (Range)."))
             bad.extraHeaders["Content-Range"] = "bytes */\(size)"
             return bad
         }
@@ -174,7 +176,9 @@ actor ReviewExports {
         guard let f = files[token] else { throw APIError(404, t("Export nicht offen.", "Export not open.")) }
         switch req.method {
         case "PUT":
-            guard let at = UInt64(req.query["at"] ?? "") else { throw APIError(400, "at") }
+            guard let at = UInt64(req.query["at"] ?? "") else {
+                throw APIError(400, t("Die Angabe at fehlt oder ist keine Zahl.", "The value at is missing or not a number."))
+            }
             try f.handle.seek(toOffset: at)
             try f.handle.write(contentsOf: req.body)
             files[token]?.bytes = max(f.bytes, at + UInt64(req.body.count))
@@ -192,7 +196,7 @@ actor ReviewExports {
             AppLog.info("Review export cancelled, partial file removed")
             return .json(["ok": true])
         default:
-            throw APIError(405, req.method)
+            throw APIError(405, t("Methode nicht erlaubt: \(req.method)", "Method not allowed: \(req.method)"))
         }
     }
 }

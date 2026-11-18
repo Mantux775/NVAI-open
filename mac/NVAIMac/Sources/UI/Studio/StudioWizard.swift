@@ -459,6 +459,9 @@ struct StudioWizard: View {
     @State private var useCharacter = true
     @State private var charName = ""
     @State private var look = ""
+    /// „Gesicht aus einem Foto“: wer auf dem Foto ist (Frau oder Mann, Alter, Haare). Ohne das wurde aus einer Frau als
+    /// Kapitänin ein fremder Mann (Test 18.11., FLUX.2 Klein 4B); mit Geschlecht und Merkmalen blieb sie erkennbar
+    @State private var who = ""
     @State private var reference: AssetRecord?
     @State private var drafts: [AssetRecord] = []
     @State private var chosenDraft: String?
@@ -528,8 +531,8 @@ struct StudioWizard: View {
     }
 
     private var faceHelp: String {
-        t("Ein Foto von Kopf und Schultern, frontal und gut beleuchtet, trifft das Gesicht am besten. Das Foto bleibt auf deinem Mac. Auf dem Mac endet ein Clip nicht wieder im Startbild (das kann nur LTX-2.5 unter Windows), das Gesicht kann deshalb im Clip etwas wandern.",
-          "A head-and-shoulders photo, frontal and well lit, gets the face best. The photo stays on your Mac. On the Mac a clip does not end in its start image again (only LTX-2.5 on Windows can do that), so the face may drift a little within the clip.")
+        t("Ein Foto von Kopf und Schultern, frontal und gut beleuchtet, trifft das Gesicht am besten. Kleidung und Ort kommen aus deinen Angaben. Sag dazu, wer auf dem Foto ist, sonst rät das Bildmodell Geschlecht und Alter. Das Foto bleibt auf deinem Mac. Auf dem Mac endet ein Clip nicht wieder im Startbild (das kann nur LTX-2.5 unter Windows), das Gesicht kann deshalb im Clip etwas wandern.",
+          "A head-and-shoulders photo, frontal and well lit, gets the face best. Clothes and place come from what you enter. Say who is in the photo, otherwise the image model guesses gender and age. The photo stays on your Mac. On the Mac a clip does not end in its start image again (only LTX-2.5 on Windows can do that), so the face may drift a little within the clip.")
     }
 
     // MARK: Kopf und Fuß
@@ -579,7 +582,8 @@ struct StudioWizard: View {
     private var canNext: Bool {
         switch step {
         case .idea: return !idea.trimmingCharacters(in: .whitespaces).isEmpty
-        case .character: return path.photo ? (reference != nil && !look.trimmingCharacters(in: .whitespaces).isEmpty)
+        case .character: return path.photo ? (reference != nil && !look.trimmingCharacters(in: .whitespaces).isEmpty
+                                              && !who.trimmingCharacters(in: .whitespaces).isEmpty)
                                            : (!characterOn || chosenDraft != nil)
         case .scenes: return scenes.allSatisfy { !$0.action.trimmingCharacters(in: .whitespaces).isEmpty }
         default: return true
@@ -779,6 +783,10 @@ struct StudioWizard: View {
                     }
                 }
                 if let reference { AssetThumbnail(asset: reference, maxSide: 300).frame(maxHeight: 140) }
+                field(t("Wer ist auf dem Foto? Frau oder Mann, Alter, Haare", "Who is in the photo? Woman or man, age, hair")) {
+                    TextField(t("z. B. eine Frau um die 40 mit kurzen roten Locken und Sommersprossen", "e.g. a woman in her forties with short curly red hair and freckles"),
+                              text: $who, axis: .vertical).lineLimit(1...2).textFieldStyle(.roundedBorder)
+                }
                 field(t("Wer soll die Person sein? Rolle und Kleidung", "Who should the person be? Role and clothes")) {
                     TextField(t("z. B. eine Kapitänin in dunkelblauer Uniform mit weißer Mütze", "e.g. a ship captain in a dark blue uniform with a white cap"),
                               text: $look, axis: .vertical).lineLimit(2...3).textFieldStyle(.roundedBorder)
@@ -895,7 +903,8 @@ struct StudioWizard: View {
                 }
                 field(t("Sprache der Sätze", "Language of the lines")) {
                     Picker("", selection: $language) {
-                        ForEach(SpeechCatalog.languages.filter { $0 != "auto" }, id: \.self) { Text($0).tag($0) }
+                        // Namen statt Kürzel wie unter Windows (seit 0.5.9)
+                        ForEach(SpeechForm.languageNames.filter { $0.id != "auto" }, id: \.id) { Text($0.label).tag($0.id) }
                     }
                     .labelsHidden().frame(width: 120)
                 }
@@ -1350,10 +1359,13 @@ struct StudioWizard: View {
         return out
     }
 
-    private func startPrompt(_ s: WizardSceneDraft, action: String, place: String, look: String) -> String {
+    private func startPrompt(_ s: WizardSceneDraft, action: String, place: String, look: String, who: String = "") -> String {
         let setting = place.isEmpty ? "" : " Setting: \(place)."
         if path.photo {
-            return "\(style.image) The person from the first image, with exactly the same face, eyes, nose, mouth and hair color: \(look). \(s.framing.prompt): \(action), the face clearly visible.\(setting) \(mood.light)"
+            // Wer es ist, steht vor der Rolle (gemessen 18.11.: „The person …“ machte aus einer Frau einen Mann, mit
+            // Geschlecht und Merkmalen blieb sie erkennbar; notizen/mac.md)
+            let person = who.isEmpty ? "The person from the first image" : "The person from the first image, \(who),"
+            return "\(style.image) \(person) with exactly the same face, eyes, nose, mouth and hair: now \(look). \(s.framing.prompt): \(action), the face clearly visible.\(setting) \(mood.light)"
         }
         let who = charName.isEmpty ? "the character" : charName
         let char = characterOn && chosenDraft != nil
@@ -1378,12 +1390,16 @@ struct StudioWizard: View {
         defer { busy = nil; stage = nil }
         do {
             let pid = try await ensureProject()
+            // Format und Name noch einmal setzen (seit 0.5.9): Das Projekt entsteht schon bei „Foto wählen“ oder den
+            // Entwürfen; wechselte man danach auf Hochkant, blieb es 1920 × 1080, die Clips kamen aber hochkant
+            let (projectW, projectH) = portrait ? (1080, 1920) : (1920, 1080)
+            _ = await model.run("project.update", ["name": .string(projectName()), "width": .int(projectW), "height": .int(projectH)])
             stage = t("Texte werden ins Englische übertragen …", "Translating the texts into English …")
             // Der Musik-Prompt nur, wenn er nicht englisch aussieht (die Vorschläge sind englisch und bleiben wörtlich)
             let ownMusic = (musicText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let musicIn = !ownMusic.isEmpty && WizardMusic.looksGerman(ownMusic) ? ownMusic : ""
-            let en = await toEnglish([idea, place, look, musicIn] + scenes.map(\.action))
-            let txPlace = dot(en[1]), txLook = dot(en[2])
+            let en = await toEnglish([idea, place, look, musicIn] + scenes.map(\.action) + [who])
+            let txPlace = dot(en[1]), txLook = dot(en[2]), txWho = dot(en[4 + scenes.count])
             let musicPrompt = !musicIn.isEmpty ? en[3] : (ownMusic.isEmpty ? musicPreset.prompt : ownMusic)
             let actions = scenes.indices.map { dot(en[4 + $0].isEmpty ? en[0] : en[4 + $0]) }
             stage = t("Szenen werden angelegt …", "Setting up the scenes …")
@@ -1437,7 +1453,7 @@ struct StudioWizard: View {
             board = ids.enumerated().map { i, id in WizardBoardItem(id: id, job: (path.chain && i > 0) ? nil : "pending") }
             for (i, s) in scenes.enumerated() where !(path.chain && i > 0) {
                 do {
-                    let variants = try await images(prompt: startPrompt(s, action: actions[i], place: txPlace, look: txLook),
+                    let variants = try await images(prompt: startPrompt(s, action: actions[i], place: txPlace, look: txLook, who: txWho),
                                                     width: w, height: h, count: 2, references: refs, project: pid)
                     board[i].variants = variants
                     board[i].chosen = variants.first?.id
@@ -1483,6 +1499,7 @@ struct StudioWizard: View {
         await snap("wz-2-idea")
         charName = s.name ?? ""
         look = s.look ?? ""
+        who = s.who ?? ""
         if let ref = s.reference {
             let file = (ref as NSString).expandingTildeInPath
             do {
@@ -1571,6 +1588,8 @@ enum WizardDemo {
         let place: String?
         let name: String?
         let look: String?
+        /// Fotoweg: wer auf dem Foto ist
+        let who: String?
         let reference: String?
         let scenes: [Scene]
         /// Anzahl der Szenen wie im Schritt „Szenen“ gewählt, danach `recount` zum Prüfen des Änderns

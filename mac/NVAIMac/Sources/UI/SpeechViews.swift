@@ -4,21 +4,24 @@ import SwiftUI
 /// Sprache. Wie der Reiter „Sprache“ unter Windows.
 struct SpeechForm: View {
     @EnvironmentObject var state: AppState
-    @State private var text = ""
-    @State private var fromRecording = false
-    @State private var voice = ""
-    @State private var recordingID: String?
-    @State private var voiceText = ""
-    @State private var language = "auto"
-    @State private var seedText = ""
-    @State private var lastJobID: String?
+    // Im Fenster gemerkt statt @State (seit 0.5.9): Das Formular entsteht bei jedem Wechsel der Aufgabe neu und verlor
+    // vorher Text, Stimme, Aufnahme und den laufenden Auftrag; die anderen Formulare behielten ihren Stand
+    @SceneStorage("speech.text") private var text = ""
+    @SceneStorage("speech.fromRecording") private var fromRecording = false
+    @SceneStorage("speech.voice") private var voice = ""
+    @SceneStorage("speech.recording") private var recordingID: String?
+    @SceneStorage("speech.voiceText") private var voiceText = ""
+    @SceneStorage("speech.language") private var language = "auto"
+    @SceneStorage("speech.seed") private var seedText = ""
+    @SceneStorage("speech.lastJob") private var lastJobID: String?
     @State private var message: String?
 
-    static let languageNames: [(id: String, label: String)] = [
+    /// Berechnet statt einmal gespeichert (seit 0.5.9): „Automatisch“ folgt so dem Sprachwechsel der App.
+    static var languageNames: [(id: String, label: String)] { [
         ("auto", t("Automatisch", "Automatic")), ("de", "Deutsch"), ("en", "English"), ("fr", "Français"),
         ("es", "Español"), ("it", "Italiano"), ("pt", "Português"), ("ru", "Русский"), ("zh", "中文"),
         ("ja", "日本語"), ("ko", "한국어"),
-    ]
+    ] }
 
     private var currentJob: JobRecord? { lastJobID.flatMap { id in state.jobs.first { $0.id == id } } }
     /// Aufnahmen, aus denen sich eine Stimme übernehmen lässt: Ton (auch eigene Sprecherzeilen), Videos, Uploads.

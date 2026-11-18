@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 
 /// REST des Studios (`/api/studio/*`), Pfade und Antworten wie im Windows-Server (main.py), damit Claude und
@@ -20,7 +21,9 @@ enum StudioRoutes {
                                                fps: fps.count == 2 ? fps : [24, 1])
                 return .json(StudioJSON.full(p, history: (0, 0)).any)
             case ("GET", 1, "presets"):
+                // codec wie unter Windows (seit 0.5.9)
                 return .json(StudioRender.presets.map { ["id": $0.id, "label": Lang.current == .de ? $0.label.de : $0.label.en,
+                                                         "codec": $0.codec == .hevc ? "hevc" : $0.codec == .proRes4444 ? "prores" : "h264",
                                                          "ext": $0.ext] })
             case ("POST", 1, "import"):
                 // Studio-Paket (.zip) oder Projektdatei (.json) als multipart/form-data, Feld file
@@ -28,7 +31,9 @@ enum StudioRoutes {
                       let part = Multipart.parts(req.body, boundary: boundary).first(where: { $0.name == "file" }), !part.data.isEmpty else {
                     return .error(422, t("Erwartet wird multipart/form-data mit dem Feld file.", "Expected multipart/form-data with the field file."))
                 }
-                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("import-\(UUID().uuidString)-\(part.filename ?? "paket.zip")")
+                // nur die Endung des Client-Dateinamens (seit 0.5.9; ein „/“ darin gab vorher einen Serverfehler 500)
+                let ext = ((part.filename ?? "paket.zip") as NSString).pathExtension.lowercased()
+                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("import-\(UUID().uuidString).\(ext.isEmpty ? "zip" : ext)")
                 try part.data.write(to: temp)
                 defer { try? FileManager.default.removeItem(at: temp) }
                 let p = try await StudioPackage.importFile(temp, store: store)
@@ -68,8 +73,9 @@ enum StudioRoutes {
         case ("POST", "redo"):
             return .json(await view(try await store.redo(id)).any)
         case ("POST", "generate"):
+            // Eine leere Liste heißt wie unter Windows „alle Szenen ohne Take“ (seit 0.5.9; vorher erzeugte der Mac nichts)
             let ids = req.json?["scene_ids"]?.arrayValue?.compactMap(\.stringValue)
-            return .json(try await StudioGenerator.shared.generate(store, id, sceneIDs: ids).any)
+            return .json(try await StudioGenerator.shared.generate(store, id, sceneIDs: ids?.isEmpty == true ? nil : ids).any)
         case ("POST", "cancel"):
             return .json(try await StudioGenerator.shared.cancel(store, id).any)
         case ("POST", "export"):
@@ -90,9 +96,24 @@ enum StudioRoutes {
         case ("GET", "package"):
             let p = try await store.load(id)
             let out = FileManager.default.temporaryDirectory.appendingPathComponent("\(p.id)-\(Int(Date().timeIntervalSince1970)).zip")
-            defer { try? FileManager.default.removeItem(at: out) }
-            try StudioPackage.build(p, to: out)
-            return .file(try Data(contentsOf: out), contentType: "application/zip")
+            do {
+                try StudioPackage.build(p, to: out)
+            } catch {
+                try? FileManager.default.removeItem(at: out)
+                throw error
+            }
+            // Gestreamt (seit 0.5.9): Ein Paket mit Videos hat schnell einige GB und lag vorher zweimal im Speicher.
+            // Die Teildatei löscht der Server, sobald er sie geöffnet hat. Dateiname wie unter Windows (FileResponse).
+            let size = ((try? FileManager.default.attributesOfItem(atPath: out.path))?[.size] as? NSNumber)?.uint64Value ?? 0
+            var response = HTTPResponse(status: 200, contentType: "application/zip")
+            response.file = HTTPFileBody(url: out, offset: 0, length: size, removeAfterOpen: true)
+            let name = "\(p.name).zip"
+            let ascii = String(name.unicodeScalars.map { $0.isASCII && $0 != "\"" && $0 != "\\" && $0.value >= 32 ? Character($0) : "_" })
+            // nur ASCII im Kopf: .alphanumerics ließe „ü“ stehen
+            let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+            let encoded = name.addingPercentEncoding(withAllowedCharacters: unreserved) ?? ascii
+            response.extraHeaders["Content-Disposition"] = "attachment; filename=\"\(ascii)\"; filename*=UTF-8''\(encoded)"
+            return response
         case ("GET", "conform"):
             // Was „Übernehmen“ täte (neue Clips, ausgetauschtes Material, Überdeckungen), ohne etwas zu ändern
             let p = try await StudioGenerator.shared.refresh(store, id)

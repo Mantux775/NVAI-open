@@ -334,6 +334,17 @@ struct ModelCard: View {
                     if row.installed && state.activeModelID != row.model.id {
                         Button(t("Als aktives Modell", "Make active")) { state.setActiveModel(row.model.id) }
                     }
+                    if case .flux(let m) = row.model, row.installed || row.partial {
+                        // seit 0.5.9 (vorher ließ sich FLUX.2 Klein nur im Finder löschen); nicht während eines Auftrags
+                        Button(t("Löschen", "Delete"), role: .destructive) {
+                            Task {
+                                await Flux2Engine.shared.unload()
+                                ModelCatalog.delete(m)
+                                state.refreshModels()
+                            }
+                        }
+                        .disabled(state.runningJob != nil)
+                    }
                     if case .zimage(let m) = row.model, row.installed {
                         Button(t("Löschen", "Delete"), role: .destructive) {
                             Task {

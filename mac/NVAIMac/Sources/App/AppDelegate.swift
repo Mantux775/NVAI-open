@@ -120,15 +120,17 @@ enum LaunchOptions {
             if let wizard = value("--studio-wizard") { WizardDemo.load(wizard) }
             let tab = value("--tab") ?? "generate"
             AppState.shared.selectedTab = tab == "search" ? "models" : tab == "player" ? "history"
-                : ["restore", "audio", "video"].contains(tab) ? "generate" : tab
+                : ["restore", "audio", "video", "speech"].contains(tab) ? "generate" : tab
             if tab == "search" {
                 AppState.shared.searchPreset = (HuggingFace.Art(rawValue: value("--search-kind") ?? "image") ?? .bild,
                                                 value("--search-query") ?? "")
                 AppState.shared.showSearch = true
             }
+            if tab == "generate" { AppState.shared.generateStartPreset = value("--generate-start") }
             if tab == "restore" { AppState.shared.showRestore = true }
             if tab == "audio" { AppState.shared.showAudio = true }
             if tab == "video" { AppState.shared.showVideo = true }
+            if tab == "speech" { AppState.shared.showSpeech = true }
             if tab == "player" { AppState.shared.snapshotPlayVideo = AppState.shared.videos.first }
             if tab == "studio", let pick = value("--studio-select") {
                 // Studio erst laden lassen, dann auswählen (Prüfstand für Eigenschaften und Quellansicht)

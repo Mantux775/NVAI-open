@@ -369,6 +369,7 @@ enum VideoCatalog {
                                     progress: @escaping @Sendable (Double, String) -> Void) async throws {
         var before = start
         for file in t5Files {
+            try Task.checkCancellation()  // Abbrechen zwischen zwei Dateien (seit 0.5.9)
             let target = t5Directory.appendingPathComponent(file.name)
             if !HFRange.complete(target) {
                 try FileManager.default.createDirectory(at: t5Directory, withIntermediateDirectories: true)

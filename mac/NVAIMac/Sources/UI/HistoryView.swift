@@ -6,6 +6,8 @@ struct HistoryView: View {
     @State private var selection: String?
     @State private var preview: AssetRecord?
     @State private var playing: AssetRecord?
+    /// Hinweis, wenn ein Asset nicht gelöscht wurde (Clip im Schnitt eines Projekts, seit 0.5.9)
+    @State private var notice: String?
     /// Größe der Vorschaubilder und Breite der Bildvorschau rechts, über Neustarts gemerkt (Nutzerwunsch 25.10.2026).
     @AppStorage("history.thumbSize") private var thumbSize = 150.0
     @AppStorage("history.previewWidth") private var previewWidth = 380.0
@@ -49,6 +51,11 @@ struct HistoryView: View {
             PreviewSheet(assets: list, index: list.firstIndex(of: asset) ?? 0).environmentObject(state)
         }
         .sheet(item: $playing) { asset in VideoPlayerSheet(asset: asset) }
+        .alert(t("Nicht gelöscht", "Not deleted"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("OK") { notice = nil }
+        } message: {
+            Text(notice ?? "")
+        }
         .onAppear {
             if let video = state.snapshotPlayVideo {
                 state.snapshotPlayVideo = nil
@@ -99,11 +106,11 @@ struct HistoryView: View {
             Divider().frame(height: 16)
             Label(t("Vorschaubilder", "Thumbnails"), systemImage: "square.grid.2x2")
             Slider(value: $thumbSize, in: 80...320, step: 10).frame(width: 150)
-            Text("\(Int(thumbSize)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
+            Text(verbatim: "\(Int(thumbSize)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 52, alignment: .leading)
             Divider().frame(height: 16)
             Label(t("Vorschau", "Preview"), systemImage: "sidebar.right")
             Slider(value: $previewWidth, in: 280...1000, step: 20).frame(width: 150)
-            Text("\(Int(previewWidth)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 60, alignment: .leading)
+            Text(verbatim: "\(Int(previewWidth)) px").monospacedDigit().foregroundStyle(.secondary).frame(width: 60, alignment: .leading)
             Spacer()
             Text(countText).foregroundStyle(.secondary)
         }
@@ -175,8 +182,13 @@ struct HistoryView: View {
 
     private func delete(_ asset: AssetRecord) {
         let id = asset.id
-        if selection == id { selection = nil }
-        Task { await AssetStore.shared.delete(id) }
+        Task {
+            if let message = await AssetDeletion.deleteWithNotice(id) {
+                notice = message
+            } else if selection == id {
+                selection = nil
+            }
+        }
     }
 
     private func metaRows(_ asset: AssetRecord) -> [(String, String)] {

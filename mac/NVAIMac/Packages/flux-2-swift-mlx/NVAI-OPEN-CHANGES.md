@@ -19,6 +19,10 @@ the rest (`lastMergeCount`, `lastMergeSkipped`); `LoRALoader` skips pairs that a
 accepts LoRA files from the user's computer, and a LoRA for another model size (FLUX.2 Klein 9B on 4B) used to end the
 whole app on a failed broadcast.
 
+Changed (0.5.9): `Flux2RoPE.cacheKey` hashes the position IDs instead of using only their count. Two sizes with
+the same number of tokens (512 × 288 and 384 × 384, or 1024 × 576 and 768 × 768) shared one cache entry, and the
+second image came out torn into bands.
+
 Kopie von flux-2-swift-mlx 3.1.0 (MIT). Geändert: Nach jedem Denoising-Schritt prüft
 `Flux2Pipeline.swift` auf Abbruch, damit NVAI-open ein laufendes Bild innerhalb eines Schritts
 abbrechen kann statt erst nach dem ganzen Bild.
@@ -31,3 +35,6 @@ Geändert (0.5.5): `Flux2WeightLoader.mergeLoRAWeights` verrechnet nur LoRA-Paar
 zählt die übrigen (`lastMergeCount`, `lastMergeSkipped`); `LoRALoader` überspringt Paare, die keine zwei Matrizen sind.
 NVAI-open nimmt seither LoRA-Dateien vom Rechner an, und eine LoRA für eine andere Modellgröße (FLUX.2 Klein 9B auf
 4B) beendete vorher die ganze App an einem gescheiterten Broadcast.
+Geändert (0.5.9): `Flux2RoPE.cacheKey` bildet den Schlüssel aus den Positionswerten statt nur aus ihrer Anzahl. Zwei
+Größen mit gleich vielen Token (512 × 288 und 384 × 384, oder 1024 × 576 und 768 × 768) teilten sich einen Eintrag,
+und das zweite Bild kam in Streifen zerrissen heraus.

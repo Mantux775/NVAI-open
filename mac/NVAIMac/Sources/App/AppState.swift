@@ -37,12 +37,16 @@ final class AppState: ObservableObject {
     @Published var showSearch = false
     /// `--snapshot --tab search --search-kind video --search-query ltx`: so öffnet sich die Modellsuche.
     var searchPreset: (art: HuggingFace.Art, query: String)?
+    /// `--snapshot --tab generate --generate-start <asset>`: „Generieren“ mit diesem Ausgangsbild öffnen (Prüfstand)
+    var generateStartPreset: String?
     /// „Generieren“ mit „Foto restaurieren“ öffnen (`--snapshot --tab restore`).
     @Published var showRestore = false
     /// „Generieren“ mit „Musik und Klänge“ öffnen (`--snapshot --tab audio`).
     @Published var showAudio = false
     /// „Generieren“ mit „Video“ öffnen (`--snapshot --tab video`).
     @Published var showVideo = false
+    /// „Generieren“ mit „Sprecherstimme“ öffnen (`--snapshot --tab speech`, seit 0.5.9).
+    @Published var showSpeech = false
     /// `--snapshot --tab player`: Verlauf öffnen und dieses Video abspielen (Prüfung des Players ohne Klick).
     @Published var snapshotPlayVideo: AssetRecord?
     /// "auto", "en" oder "de"; die Texte liefert t() aus Lang.ui.
@@ -128,6 +132,7 @@ final class AppState: ObservableObject {
     }
 
     func changeModelsDirectory(_ url: URL) async {
+        guard runningJob == nil else { return }  // die Oberfläche sperrt den Knopf ohnehin (seit 0.5.9)
         let normalized = Settings.normalizedModelsDirectory(url)
         Settings.modelsDirectory = normalized
         modelsDirectory = normalized

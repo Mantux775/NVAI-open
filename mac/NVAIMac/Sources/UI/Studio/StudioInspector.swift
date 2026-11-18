@@ -1196,7 +1196,10 @@ private struct MediaInspector: View {
                        role: .destructive) {
                     if confirm {
                         Task {
-                            await AssetStore.shared.delete(r.id)
+                            if let notice = await AssetDeletion.deleteWithNotice(r.id) {
+                                model.notice = notice
+                                return
+                            }
                             model.leaveSource()
                             await AppState.shared.refresh()
                         }

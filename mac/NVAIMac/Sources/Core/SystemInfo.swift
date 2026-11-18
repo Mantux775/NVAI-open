@@ -13,6 +13,10 @@ enum SystemInfo {
 
     /// Arbeitsspeicher in GB, gerundet (8, 16, 24, 32 …).
     static let memoryGB: Int = Int((Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824).rounded())
+    /// Ein großes Modell zur Zeit: vor jedem Auftrag die anderen entladen (seit 0.5.9 unter 32 GB, vorher bis 16 GB).
+    /// Darüber blieb alles geladen, gemessen nie: Bild, Video, Musik und Stimme des Assistenten zusammen rund 18 GB
+    /// plus Rechenspeicher, auf einem Mac mit 18 oder 24 GB zu viel. Der Weg bis 16 GB ist am Mac mini gemessen.
+    static var oneModelAtATime: Bool { memoryGB < 32 }
 
     static var memoryMB: Int { Int(ProcessInfo.processInfo.physicalMemory / 1_048_576) }
 

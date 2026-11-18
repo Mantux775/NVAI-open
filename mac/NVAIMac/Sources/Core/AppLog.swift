@@ -29,8 +29,10 @@ enum AppLog {
                 try? fm.moveItem(at: file, to: old)
             }
             if let handle = try? FileHandle(forWritingTo: file) {
-                handle.seekToEndOfFile()
-                handle.write(Data(line.utf8))
+                // Die werfenden Varianten (seit 0.5.9): seekToEndOfFile()/write(_:) lösen bei voller Platte eine
+                // Objective-C-Ausnahme aus, die Swift nicht fängt; die App endete dann mitten im Protokollieren.
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: Data(line.utf8))
                 try? handle.close()
             } else {
                 try? Data(line.utf8).write(to: file)

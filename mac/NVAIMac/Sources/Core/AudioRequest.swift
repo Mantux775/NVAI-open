@@ -38,7 +38,9 @@ struct AudioJobRequest: Sendable {
         let cfg = o["cfg"]?.doubleValue ?? 1
         guard (0...10).contains(cfg) else { throw APIError(422, t("cfg muss zwischen 0 und 10 liegen.", "cfg must be between 0 and 10.")) }
         let seed = o["seed"]?.intValue
-        if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
+        if let seed, !(0...APIError.maxSeed).contains(seed) {
+            throw APIError(422, t("seed muss zwischen 0 und \(APIError.maxSeed) liegen.", "seed must be between 0 and \(APIError.maxSeed)."))
+        }
         return AudioJobRequest(prompt: prompt, seconds: seconds, steps: steps, cfg: cfg, seed: seed.map { UInt64($0) },
                                params: body)
     }

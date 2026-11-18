@@ -87,7 +87,10 @@ enum StudioRender {
     }
 
     /// Was der Export braucht: Dateien, Clips in Sekunden, Ausgabeformat (wie render_plan unter Windows).
-    static func plan(_ p: StudioProject, preset id: String) throws -> Plan {
+    /// `skipMissing` (Monitor, seit 0.5.9): fehlende Dateien auslassen statt den ganzen Plan scheitern zu lassen. Vorher
+    /// war der Monitor bei einem einzigen gelöschten Clip für den ganzen Schnitt schwarz und stumm; der Export bricht
+    /// weiter mit „Datei fehlt“ ab.
+    static func plan(_ p: StudioProject, preset id: String, skipMissing: Bool = false) throws -> Plan {
         guard let pr = preset(id) else {
             throw StudioError(t("Unbekannte Vorlage: \(id)", "Unknown preset: \(id)"))
         }
@@ -100,6 +103,7 @@ enum StudioRender {
         for c in p.clips {
             guard let record = AssetSnapshot.shared.get(c.assetID),
                   FileManager.default.fileExists(atPath: AssetStore.shared.fileURL(record.filename).path) else {
+                if skipMissing { continue }
                 throw StudioError(t("Datei fehlt: \(c.assetID)", "File missing: \(c.assetID)"))
             }
             let media = p.media[c.assetID] ?? StudioMediaCache.shared.get(c.assetID)
@@ -609,6 +613,15 @@ enum StudioRender {
             }
         }
         func sampleAt(_ seconds: Double) -> Int { Int((seconds * Double(rate)).rounded(.down)) }
+        /// Ist aller Ton übergeben, den Toneingang schließen (seit 0.5.9): Der AAC-Kodierer gibt sein letztes Stück erst
+        /// dann heraus, und der Schreiber nahm bis dahin die letzten Bilder nicht an. Gemessen 18.11. am Mac mini: bei
+        /// 1024 × 576 klemmte Bild 138 von 144 mit allem Ton übergeben und bereitem Toneingang, 20 s lang.
+        var audioFinished = false
+        func finishAudioIfComplete() {
+            guard !audioFinished, audioSent >= audioTotal else { return }
+            audioInput.markAsFinished()
+            audioFinished = true
+        }
 
         let stage = t("Video mit VideoToolbox", "Video with VideoToolbox")
         for f in 0..<frames {
@@ -624,7 +637,13 @@ enum StudioRender {
             context.render(canvas ?? black, to: buffer, bounds: frameRect, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!)
             let ahead = sampleAt(Double(f + 1) / fps + 1)
             try pumpAudio(upTo: ahead)
-            try waitUntilReady(videoInput, writer) { try pumpAudio(upTo: ahead) }
+            // Nimmt der Schreiber kein Bild an, den restlichen Ton hinterherschicken, so weit er ihn nimmt (seit 0.5.9):
+            // H.264 unter 1920 × 1080 (720p, 1024 × 576) blieb mit nur 1 s Vorlauf jedes Mal stehen, weil der Schreiber
+            // erst mehr Ton sehen wollte; 1080p und ProRes liefen durch (gemessen 18.11. am Mac mini)
+            try waitUntilReady(videoInput, writer, detail: { "video frame \(f)/\(frames), audio \(audioSent)/\(audioTotal), audio ready \(audioInput.isReadyForMoreMediaData), audio finished \(audioFinished)" }) {
+                try pumpAudio(upTo: audioTotal)
+                finishAudioIfComplete()
+            }
             guard adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(f) * CMTimeValue(plan.fps.den),
                                                                       timescale: CMTimeScale(plan.fps.num))) else {
                 throw StudioError(writer.error?.localizedDescription ?? t("Bild nicht angenommen.", "Frame not accepted."))
@@ -634,11 +653,13 @@ enum StudioRender {
         }
         // erst das Bild schließen, dann den restlichen Ton hinterher (ohne offenes Bild wartet der Schreiber nicht mehr)
         videoInput.markAsFinished()
-        while audioSent < audioTotal {
-            try waitUntilReady(audioInput, writer)
-            try appendAudio(upTo: min(audioTotal, audioSent + rate / 4))
+        if !audioFinished {
+            while audioSent < audioTotal {
+                try waitUntilReady(audioInput, writer, detail: { "audio \(audioSent)/\(audioTotal) after the last frame" })
+                try appendAudio(upTo: min(audioTotal, audioSent + rate / 4))
+            }
+            audioInput.markAsFinished()
         }
-        audioInput.markAsFinished()
         await writer.finishWriting()
         guard writer.status == .completed else {
             throw StudioError(writer.error?.localizedDescription ?? t("Export fehlgeschlagen.", "Export failed."))
@@ -652,7 +673,7 @@ enum StudioRender {
     /// Warten, bis der Schreiber wieder annimmt; Abbrechen wirkt sofort, nach 20 s Stillstand eine Meldung statt eines
     /// Exports, der ewig steht.
     private static func waitUntilReady(_ input: AVAssetWriterInput, _ writer: AVAssetWriter,
-                                       meanwhile: () throws -> Void = {}) throws {
+                                       detail: () -> String = { "" }, meanwhile: () throws -> Void = {}) throws {
         let started = Date()
         while !input.isReadyForMoreMediaData {
             try meanwhile()
@@ -661,6 +682,7 @@ enum StudioRender {
                 throw StudioError(writer.error?.localizedDescription ?? t("Export fehlgeschlagen.", "Export failed."))
             }
             if Date().timeIntervalSince(started) > 20 {
+                AppLog.error("Export stuck: \(detail())")
                 throw StudioError(t("Der Export steht: Der Schreiber nimmt seit 20 s nichts mehr an.", "The export is stuck: the writer has accepted nothing for 20 s."))
             }
             Thread.sleep(forTimeInterval: 0.005)

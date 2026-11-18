@@ -75,6 +75,7 @@ struct ZImageModel: Identifiable, Sendable, Equatable {
                                       "vae/0.safetensors": 164_700_000]
         var before: Int64 = 0
         for file in files {
+            try Task.checkCancellation()  // Abbrechen zwischen zwei Dateien (seit 0.5.9)
             let target = directory.appendingPathComponent(file)
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             let expected = sizes[file] ?? 0

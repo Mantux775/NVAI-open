@@ -109,7 +109,7 @@ enum HelperModel: String, CaseIterable, Identifiable, Sendable {
             let complete = Self.seedvr2Files.allSatisfy { file in
                 let path = dir.appendingPathComponent(file.name).path
                 let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64 ?? 0
-                return Double(size) >= Double(file.bytes) * 0.95
+                return (file.bytes < 1_000_000 ? size > 0 : Double(size) >= Double(file.bytes) * 0.95)
             }
             return complete ? dir : nil
         }
@@ -129,9 +129,10 @@ enum HelperModel: String, CaseIterable, Identifiable, Sendable {
             let total = Self.seedvr2Files.reduce(Int64(0)) { $0 + $1.bytes }
             var before: Int64 = 0
             for file in Self.seedvr2Files {
+                try Task.checkCancellation()  // Abbrechen zwischen zwei Dateien (seit 0.5.9)
                 let target = dir.appendingPathComponent(file.name)
                 let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64 ?? 0
-                if Double(size) < Double(file.bytes) * 0.95 {
+                if (file.bytes < 1_000_000 ? size == 0 : Double(size) < Double(file.bytes) * 0.95) {
                     let url = URL(string: "https://huggingface.co/\(repo)/resolve/main/\(file.name)")!
                     let offset = before
                     let tmp = try await Downloader().lade(url) { stand in

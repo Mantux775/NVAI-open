@@ -21,7 +21,8 @@ actor VideoEngine {
     private var loadedID: String?
 
     /// Kachel der letzten Decoder-Stufe in Pixeln bei 1/8 der Auflösung (32 → 256 px), 0 = ein Stück.
-    private var decodeTile: Int { SystemInfo.memoryGB <= 8 ? 32 : SystemInfo.memoryGB <= 16 ? 64 : 0 }
+    /// Kacheln der letzten Decoder-Stufe; unter 32 GB auch über 16 GB (seit 0.5.9, vorher dort in einem Stück, ungemessen)
+    private var decodeTile: Int { SystemInfo.memoryGB <= 8 ? 32 : SystemInfo.memoryGB <= 16 ? 64 : SystemInfo.memoryGB < 32 ? 128 : 0 }
 
     func unload() {
         tokenizer = nil
@@ -55,7 +56,7 @@ actor VideoEngine {
                                                         frames: frames, fps: fps, seed: seed, startImage: startImage,
                                                         onStep: onStep)
         }
-        let small = SystemInfo.memoryGB <= 16 || (model.is13B && SystemInfo.memoryGB < 48)
+        let small = SystemInfo.oneModelAtATime || (model.is13B && SystemInfo.memoryGB < 48)
         if loadedID != model.id {
             transformer = nil
             decoder = nil

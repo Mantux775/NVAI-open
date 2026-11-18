@@ -881,7 +881,7 @@ actor PreviewRenderer {
         key = p.updatedAt
         guard !p.clips.isEmpty else { return nil }
         await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets([:], p))
-        guard var plan = try? StudioRender.plan(p, preset: "project") else { return nil }
+        guard var plan = try? StudioRender.plan(p, preset: "project", skipMissing: true) else { return nil }
         let scale = min(1, 960 / Double(plan.width))
         plan.width = Int(Double(plan.width) * scale) / 2 * 2
         plan.height = Int(Double(plan.height) * scale) / 2 * 2
@@ -906,7 +906,7 @@ actor PreviewRenderer {
     /// Clips über sein Ende hinaus.
     static func audioItem(_ p: StudioProject) async -> AVPlayerItem? {
         await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets([:], p))
-        guard let plan = try? StudioRender.plan(p, preset: "project") else { return nil }
+        guard let plan = try? StudioRender.plan(p, preset: "project", skipMissing: true) else { return nil }
         let composition = AVMutableComposition()
         var params: [AVMutableAudioMixInputParameters] = []
         func time(_ s: Double) -> CMTime { CMTime(seconds: s, preferredTimescale: 600_000) }

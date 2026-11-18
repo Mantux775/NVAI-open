@@ -81,6 +81,7 @@ enum APIRouter {
             if let c = route("PUT", "/api/loras/:id") { return try loraUpdate(c[0], req) }
             if route("POST", "/api/generate/image") != nil {
                 let request = try ImageJobRequest.parse(req.json)
+                try await checkProject(req.json)
                 return .json(await JobQueue.shared.submit(request).json)
             }
             if route("POST", "/api/image/restore") != nil {
@@ -88,6 +89,7 @@ enum APIRouter {
                 guard await AssetStore.shared.get(request.imageAssetID) != nil else {
                     throw APIError(404, t("Unbekanntes Asset: \(request.imageAssetID)", "Unknown asset: \(request.imageAssetID)"))
                 }
+                try await checkProject(req.json)
                 return .json(await JobQueue.shared.submitRestore(request).json)
             }
             if route("POST", "/api/prompt/expand") != nil {
@@ -108,10 +110,18 @@ enum APIRouter {
                 if let asset = request.voiceAssetID, await AssetStore.shared.get(asset) == nil {
                     throw APIError(404, t("Aufnahme nicht gefunden: \(asset)", "Recording not found: \(asset)"))
                 }
+                // Ein Bild als Aufnahme endete mit einer rohen AVFoundation-Meldung (seit 0.5.9 gleich 422)
+                if let asset = request.voiceAssetID, let record = await AssetStore.shared.get(asset),
+                   !AssetStore.mediaSuffixes.contains((record.filename as NSString).pathExtension.lowercased()) {
+                    throw APIError(422, t("Die Aufnahme muss eine Ton- oder Videodatei sein: \(asset)",
+                                          "The recording must be an audio or video file: \(asset)"))
+                }
+                try await checkProject(req.json)
                 return .json(await JobQueue.shared.submitSpeech(request).json)
             }
             if route("POST", "/api/generate/audio") != nil {
                 let request = try AudioJobRequest.parse(req.json)
+                try await checkProject(req.json)
                 return .json(await JobQueue.shared.submitAudio(request).json)
             }
             if route("POST", "/api/generate/video") != nil {
@@ -119,6 +129,7 @@ enum APIRouter {
                 if let image = request.imageAssetID, await AssetStore.shared.get(image) == nil {
                     throw APIError(404, t("Unbekanntes Asset: \(image)", "Unknown asset: \(image)"))
                 }
+                try await checkProject(req.json)
                 return .json(await JobQueue.shared.submitVideo(request).json)
             }
             if let c = route("POST", "/api/generate/:kind") {
@@ -126,14 +137,23 @@ enum APIRouter {
                                       "NVAI-open for Mac generates images, audio and video (\(c[0]) is not available here)."))
             }
             if route("GET", "/api/jobs") != nil {
+                // offset, exclude (Arten mit Komma), kind und active wie unter Windows (seit 0.5.9)
                 let limit = Int(req.query["limit"] ?? "") ?? 100
-                return .json(await JobQueue.shared.list(limit: limit).map(\.json))
+                let offset = Int(req.query["offset"] ?? "") ?? 0
+                let exclude = Set((req.query["exclude"] ?? "").split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+                let kind = req.query["kind"].flatMap { $0.isEmpty ? nil : $0 }
+                let active = ["true", "1", "yes"].contains((req.query["active"] ?? "").lowercased())
+                return .json(await JobQueue.shared.list(limit: limit, offset: offset, exclude: exclude, kind: kind, active: active)
+                    .map(\.json))
             }
             if route("POST", "/api/jobs/current/cancel") != nil {
+                // Felder wie unter Windows (ok, reason bzw. job_id, stopped), die alten bleiben dabei (seit 0.5.9)
                 guard let job = await JobQueue.shared.cancelCurrent() else {
-                    return .json(["cancelled": false, "detail": t("Es läuft kein Auftrag.", "No job is running.")])
+                    let reason = t("Es läuft kein Auftrag.", "No job is running.")
+                    return .json(["ok": false, "reason": reason, "cancelled": false, "detail": reason])
                 }
-                return .json(["cancelled": true, "job_id": job.id,
+                return .json(["ok": true, "job_id": job.id, "stopped": [String](), "cancelled": true,
                               "detail": t("Der Auftrag endet nach dem aktuellen Rechenschritt.", "The job ends after the current step.")])
             }
             if let c = route("POST", "/api/jobs/:id/cancel") {
@@ -156,21 +176,34 @@ enum APIRouter {
             if let c = route("GET", "/api/jobs/:id/assets") {
                 let known = await JobQueue.shared.job(c[0]) != nil
                 let assets = await AssetStore.shared.assets(ofJob: c[0])
-                guard known || !assets.isEmpty else { throw APIError(404, t("Unbekannter Auftrag: \(c[0])", "Unknown job: \(c[0])")) }
+                // unbekannter Auftrag: leere Liste wie unter Windows (seit 0.5.9)
+                guard known || !assets.isEmpty else { return .json([Any]()) }
                 return .json(assets.map(\.json))
             }
             if route("GET", "/api/assets") != nil {
+                // offset, media und q wie unter Windows (seit 0.5.9)
                 let limit = Int(req.query["limit"] ?? "") ?? 200
+                let offset = Int(req.query["offset"] ?? "") ?? 0
                 let kind = req.query["kind"].flatMap { $0.isEmpty ? nil : $0 }
-                return .json(await AssetStore.shared.list(kind: kind, limit: limit).map(\.json))
+                let media = req.query["media"].flatMap { $0.isEmpty ? nil : $0 }
+                return .json(await AssetStore.shared.list(kind: kind, limit: limit, offset: offset, media: media,
+                                                          query: req.query["q"]).map(\.json))
             }
             if let c = route("GET", "/api/assets/:id") {
                 guard let asset = await AssetStore.shared.get(c[0]) else { throw APIError(404, t("Unbekanntes Asset: \(c[0])", "Unknown asset: \(c[0])")) }
                 return .json(asset.json)
             }
             if let c = route("DELETE", "/api/assets/:id") {
-                guard await AssetStore.shared.delete(c[0]) else { throw APIError(404, t("Unbekanntes Asset: \(c[0])", "Unknown asset: \(c[0])")) }
-                return .json(["deleted": true, "id": c[0]])
+                // Clip im Schnitt eines Projekts: 409 wie unter Windows (seit 0.5.9), Antwort mit ok und freed_mb
+                switch await AssetDeletion.delete(c[0]) {
+                case .deleted(let bytes):
+                    return .json(["ok": true, "freed_mb": (Double(bytes) / 1_048_576 * 100).rounded() / 100,
+                                  "deleted": true, "id": c[0]])
+                case .notFound:
+                    throw APIError(404, t("Unbekanntes Asset: \(c[0])", "Unknown asset: \(c[0])"))
+                case .inEdit(let project):
+                    throw APIError(409, AssetDeletion.inEditMessage(project))
+                }
             }
             if route("POST", "/api/upload") != nil { return try await upload(req) }
             if parts.count >= 2, parts[0] == "api", parts[1] == "studio",
@@ -423,41 +456,88 @@ enum APIRouter {
         return .json(["ok": true, "active": ["image": model.id]])
     }
 
+    /// project_id an den Erzeugen-Aufträgen wie unter Windows (seit 0.5.9): unbekanntes Projekt 404; die Ergebnisse
+    /// markiert der Auftrag nach dem Rechnen (`JobQueue.runInLanguage`), dann stehen sie im Material des Projekts.
+    static func checkProject(_ body: JSONValue?) async throws {
+        guard let id = body?["project_id"]?.stringValue, !id.isEmpty else { return }
+        do {
+            _ = try await StudioStore.shared.load(id)
+        } catch {
+            throw APIError(404, t("Unbekanntes Projekt: \(id)", "Unknown project: \(id)"))
+        }
+    }
+
+    /// Ordner eines Uploads wie unter Windows („Studio/<Projektname>“, auch die Projekt-ID) → die ID des Projekts.
+    /// Der Mac hat keine Projektordner auf der Platte, sein Material gehört über `meta.studio_project` zum Projekt.
+    static func projectForFolder(_ folder: String) async throws -> String {
+        let clean = folder.replacingOccurrences(of: "\\", with: "/").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let name = clean.hasPrefix("Studio/") ? String(clean.dropFirst("Studio/".count)) : clean
+        for entry in await StudioStore.shared.list() {
+            guard let id = entry["id"]?.stringValue else { continue }
+            if id == name || entry["name"]?.stringValue == name || entry["folder"]?.stringValue == clean { return id }
+        }
+        throw APIError(404, t("Ordner nicht gefunden: \(folder)", "Folder not found: \(folder)"))
+    }
+
     static func upload(_ req: HTTPRequest) async throws -> HTTPResponse {
         guard let boundary = Multipart.boundary(from: req.headers["content-type"]) else {
             throw APIError(422, t("Erwartet wird multipart/form-data mit dem Feld file.", "Expected multipart/form-data with the field file."))
         }
-        guard let part = Multipart.parts(req.body, boundary: boundary).first(where: { $0.name == "file" }),
-              !part.data.isEmpty else {
+        let parts = Multipart.parts(req.body, boundary: boundary)
+        guard let part = parts.first(where: { $0.name == "file" }), !part.data.isEmpty else {
             throw APIError(422, t("Das Feld file fehlt oder ist leer.", "The field file is missing or empty."))
         }
+        // folder wie unter Windows (seit 0.5.9): „Studio/<Projekt>“ ordnet das Material dem Projekt zu, unbekannt 404.
+        // Vorher wurde das Feld still übergangen.
+        let folder = parts.first(where: { $0.name == "folder" }).flatMap { String(data: $0.data, encoding: .utf8) }?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let project = folder.isEmpty ? nil : try await projectForFolder(folder)
         let name = part.filename ?? "upload.png"
         let ext = (name as NSString).pathExtension.lowercased()
-        guard AssetStore.mediaSuffixes.contains(ext) else {
-            // Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage.
-            _ = try ImageFiles.load(part.data)
-            return .json(try await AssetStore.shared.addUpload(data: part.data, originalName: name).json)
+        let asset: AssetRecord
+        if AssetStore.mediaSuffixes.contains(ext) {
+            // Video und Ton fürs Studio: was AVFoundation nicht liest, fliegt wieder raus.
+            asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
+            do {
+                StudioMediaCache.shared.set(asset.id, try await StudioMediaProbe.probe(url: AssetStore.shared.fileURL(asset.filename)))
+            } catch {
+                await AssetStore.shared.delete(asset.id)
+                throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+            }
+        } else {
+            // Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage (seit 0.5.9 als 422 statt 500,
+            // vorher kam „Bild nicht lesbar“ als Serverfehler zurück)
+            do {
+                _ = try ImageFiles.load(part.data)
+            } catch {
+                throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+            }
+            asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
         }
-        // Video und Ton fürs Studio: was AVFoundation nicht liest, fliegt wieder raus.
-        let asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
-        do {
-            StudioMediaCache.shared.set(asset.id, try await StudioMediaProbe.probe(url: AssetStore.shared.fileURL(asset.filename)))
-        } catch {
-            await AssetStore.shared.delete(asset.id)
-            throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+        if let project {
+            await AssetStore.shared.tag([asset.id], project: project)
+            return .json((await AssetStore.shared.get(asset.id) ?? asset).json)
         }
         return .json(asset.json)
     }
 
     static func file(_ name: String) throws -> HTTPResponse {
         let url = AssetStore.shared.fileURL(name)
-        guard let data = try? Data(contentsOf: url) else { throw APIError(404, t("Datei nicht gefunden", "File not found")) }
+        // Gestreamt statt ganz geladen (seit 0.5.9): Ein ProRes-Export hat schnell einige GB, und die Antwort lag vorher
+        // zweimal im Speicher (Datei und Antwort)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue,
+              let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber else {
+            throw APIError(404, t("Datei nicht gefunden", "File not found"))
+        }
         let ext = url.pathExtension.lowercased()
         let type = ["png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp",
                     "tif": "image/tiff", "tiff": "image/tiff", "heic": "image/heic", "wav": "audio/wav",
                     "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "video/mp4", "mov": "video/quicktime",
                     "m4v": "video/x-m4v", "aac": "audio/aac", "aif": "audio/aiff", "aiff": "audio/aiff",
                     "flac": "audio/flac", "caf": "audio/x-caf", "json": "application/json"][ext] ?? "application/octet-stream"
-        return .file(data, contentType: type)
+        var response = HTTPResponse(status: 200, contentType: type)
+        response.file = HTTPFileBody(url: url, offset: 0, length: size.uint64Value)
+        return response
     }
 }

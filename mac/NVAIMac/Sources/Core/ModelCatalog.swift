@@ -127,6 +127,20 @@ enum ModelCatalog {
             }
     }
 
+    /// Löschen (seit 0.5.9; vorher gab es für FLUX.2 Klein keinen Knopf, 8,8 bis 10,6 GB blieben liegen): der
+    /// Transformer dieser Fassung; Text-Encoder (Qwen3-4B, auch für „Prompt ausbauen“) und VAE erst mit der letzten
+    /// FLUX.2-Fassung. Die Pfade kommen aus dem Paket selbst, nichts wird geraten.
+    static func delete(_ m: CatalogModel) {
+        let fm = FileManager.default
+        try? fm.removeItem(at: ModelRegistry.localPath(for: .transformer(transformerVariant(m))))
+        let othersLeft = all.contains { $0.id != m.id && ModelRegistry.isDownloaded(.transformer(transformerVariant($0))) }
+        guard !othersLeft else { return }
+        for variant in [Qwen3Variant.qwen3_4B_4bit, .qwen3_4B_8bit] {
+            if let path = TextEncoderModelDownloader.findQwen3ModelPath(for: variant) { try? fm.removeItem(at: path) }
+        }
+        try? fm.removeItem(at: ModelRegistry.localPath(for: .vae(.smallDecoder)))
+    }
+
     static func fits(_ m: CatalogModel) -> String {
         let ram = SystemInfo.memoryGB
         if ram >= m.recommendedRAMGB { return "ja" }

@@ -27,7 +27,7 @@ actor ZImageEngine {
         Memory.clearCache()
     }
 
-    private var small: Bool { SystemInfo.memoryGB <= 16 }
+    private var small: Bool { SystemInfo.oneModelAtATime }
 
     /// Prompt-Merkmale (hidden_states[-2] von Qwen3-4B, Chat-Vorlage wie im Port).
     private func encode(_ prompt: String, model: ZImageModel) async throws -> MLXArray {

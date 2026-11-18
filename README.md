@@ -7,14 +7,15 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.29.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-Setup-0.5.29.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.7.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-0.5.7.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.9.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-0.5.9.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.29 for Windows and 0.5.7 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29))
+November 2026: NVAI-open 0.5.29 for Windows and 0.5.9 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29))
 
+- **Mac 0.5.9:** a face from a photo now lands reliably in a new scene: put the photo under "Reference images" and say who it is (woman or man, age, hair). A start image is cropped to the format instead of stretched, and the assistant asks who is in the photo. A full bug hunt fixed, among other things: Studio projects from Windows with video now open on the Mac, FLUX.2 no longer tears an image when two sizes with the same number of pixels follow each other, Studio exports below 1080p no longer get stuck, the Hugging Face token has a field in the settings, and deleting a file no longer breaks a clip in a project. [All fixes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Audio forensics** (0.5.29): a long recording with many channels becomes a case: tracks, spectrogram, speech activity, events, notes and a translation track. Whisper large-v3 writes down what is said, Qwen3.5-9B translates it, and every block stays a draft until a person has checked it; a note says which models, under which license and on which graphics card. It also reads the data files of a voyage data recorder (VR-7000 format). [Details](docs/AUDIO.md#audio-forensics)
 - **Review app** (0.5.29): "Export" → "Review package" gives a folder with the case, the original audio and the review app NVAI-Pruefer.html, for people without NVAI-open, a law firm for example. It runs in Edge or Chrome without installation, internet or AI; changes go into a subfolder together with a chained log, and the reviewer's name can be changed at the top right. On the Mac (0.5.7) in the new "Audio forensics" tab. [Details](docs/AUDIO.md#review-package-and-review-app)
 - **Audio** (0.5.29): separate voices from music and speech from noise, and remove one recurring sound such as an alarm, learned from a few examples you mark. [Details](docs/AUDIO.md)
@@ -28,8 +29,9 @@ November 2026: NVAI-open 0.5.29 for Windows and 0.5.7 for the Mac ([release note
 - **Characters in the Studio** (0.5.24): a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
 - **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
 
-Neu in 0.5.29 und für den Mac in 0.5.7:
+Neu in 0.5.29 und für den Mac in 0.5.9:
 
+- **Mac 0.5.9:** Ein Gesicht aus einem Foto kommt jetzt zuverlässig in eine neue Szene: das Foto unter „Referenzbilder“ legen und sagen, wer es ist (Frau oder Mann, Alter, Haare). Ein Ausgangsbild wird aufs Format zugeschnitten statt gestreckt, und der Assistent fragt, wer auf dem Foto ist. Eine große Fehlersuche hat unter anderem behoben: Studio-Projekte von Windows mit Video öffnen jetzt auf dem Mac, FLUX.2 zerreißt kein Bild mehr, wenn zwei Formate mit gleich vielen Bildpunkten aufeinander folgen, Studio-Exporte unter 1080p bleiben nicht mehr stehen, das Hugging-Face-Token hat ein Feld in den Einstellungen, und Löschen zerstört keinen Clip in einem Projekt mehr. [Alle Korrekturen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Ton-Forensik** (0.5.29): Aus einer langen Aufnahme mit vielen Kanälen wird ein Fall: Spuren, Spektrogramm, Sprachaktivität, Ereignisse, Notizen und eine Übersetzer-Spur. Whisper large-v3 schreibt auf, was gesprochen wird, Qwen3.5-9B übersetzt es, und jeder Block bleibt Entwurf, bis ein Mensch ihn geprüft hat; ein Vermerk nennt Modelle, Lizenzen und Grafikkarte. Sie liest auch die Datendateien eines Schiffsdatenschreibers (Format VR-7000). [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
 - **Prüf-App** (0.5.29): „Export“ → „Prüfpaket“ ergibt einen Ordner mit dem Fall, dem Originalton und der Prüf-App NVAI-Pruefer.html, für Menschen ohne NVAI-open, etwa eine Kanzlei. Sie läuft in Edge oder Chrome ohne Installation, Internet und KI; Änderungen kommen mit einem verketteten Protokoll in einen Unterordner, und der Name des Bearbeiters lässt sich oben rechts ändern. Auf dem Mac (0.5.7) im neuen Reiter „Ton-Forensik“. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
 - **Audio** (0.5.29): Stimmen von Musik trennen und Sprache von Rauschen, dazu ein wiederkehrendes Geräusch wie einen Alarm entfernen, gelernt aus ein paar markierten Beispielen. [Einzelheiten](docs/de/AUDIO.md)
@@ -213,6 +215,7 @@ Every tab has a **Recommended settings** box with what we measured. The most imp
 - **Upscaling:** "Upscale ×2" in the History doubles a finished video (5 s from 1080p to 4K in 104 s). Generated directly at 1080p it is still a little finer, so use it for 4K exports and smaller clips.
 - **MiniMax H3:** only with a separate license from MiniMax in the EU, the UK, South Korea and the USA, and never publish what it makes. It tends to slow motion, so describe the pace of every movement.
 - **Narrator voice:** describe gender, age, pitch, pace and mood in one sentence. The same description sounds different with every seed, so pick the best take and use it as the recording for all further lines.
+- **A face in a new scene on the Mac:** put the photo under "Reference images", not "Start image", say who it is (woman or man, age, hair) and describe the new scene. The assistant's "A face from a photo" asks for this.
 - **3D:** one object on a plain background, without floor or shadow; both would end up in the mesh.
 - **FLUX 3 and LTX-2.5:** accept the license on Hugging Face and store a read token under "Models". Step by step: [docs/HUGGINGFACE.md](docs/HUGGINGFACE.md)
 - **Old photos:** leave it on "Automatic", put known colors into the hints ("his suit is dark brown") and compare both variants at full size.
@@ -472,6 +475,7 @@ In jedem Reiter steht unter **Empfohlene Einstellungen**, was wir gemessen haben
 - **Hochskalieren:** „Hochskalieren ×2“ im Verlauf verdoppelt ein fertiges Video (5 s von 1080p auf 4K in 104 s). Direkt in 1080p erzeugt ist es noch etwas feiner; gut für 4K-Exporte und kleinere Clips.
 - **MiniMax H3:** in der EU, in Großbritannien, Südkorea und den USA nur mit eigener Lizenz von MiniMax, und nichts damit Erzeugtes veröffentlichen. Es neigt zu Zeitlupe, also jede Bewegung mit Tempo beschreiben.
 - **Sprecherstimme:** Geschlecht, Alter, Tonlage, Tempo und Stimmung in einem Satz beschreiben. Dieselbe Beschreibung klingt mit jedem Seed anders, also die beste Probe wählen und sie als Aufnahme für alle weiteren Zeilen nehmen.
+- **Gesicht in neuer Szene auf dem Mac:** das Foto unter „Referenzbilder“ legen, nicht als „Ausgangsbild“, sagen, wer es ist (Frau oder Mann, Alter, Haare), und die neue Szene beschreiben. Der Assistent fragt im Weg „Gesicht aus einem Foto“ danach.
 - **3D:** ein Objekt vor schlichtem Hintergrund, ohne Boden und Schatten; beides landet sonst im Mesh.
 - **FLUX 3 und LTX-2.5:** die Lizenz auf Hugging Face annehmen und unter „Modelle“ einen Token mit Leserecht eintragen. Schritt für Schritt: [docs/de/HUGGINGFACE.md](docs/de/HUGGINGFACE.md)
 - **Alte Fotos:** auf „Automatisch“ lassen, bekannte Farben in die Hinweise schreiben („his suit is dark brown“) und die zwei Varianten in voller Größe vergleichen.

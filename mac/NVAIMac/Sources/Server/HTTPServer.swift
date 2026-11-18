@@ -29,6 +29,9 @@ struct HTTPFileBody: Sendable {
     let url: URL
     let offset: UInt64
     let length: UInt64
+    /// Temporäre Datei (Projektpaket, seit 0.5.9): gleich nach dem Öffnen gelöscht, der offene Handle liest sie
+    /// trotzdem zu Ende. So bleibt nichts liegen, auch wenn der Client mittendrin abbricht.
+    var removeAfterOpen = false
 }
 
 struct HTTPResponse: Sendable {
@@ -263,8 +266,16 @@ final class HTTPServer: @unchecked Sendable {
         let handle: FileHandle
         do {
             handle = try FileHandle(forReadingFrom: file.url)
+        } catch {
+            if file.removeAfterOpen { try? FileManager.default.removeItem(at: file.url) }
+            send(.error(500, error.localizedDescription), on: connection)
+            return
+        }
+        if file.removeAfterOpen { try? FileManager.default.removeItem(at: file.url) }
+        do {
             try handle.seek(toOffset: file.offset)
         } catch {
+            try? handle.close()
             send(.error(500, error.localizedDescription), on: connection)
             return
         }

@@ -36,16 +36,16 @@ enum VideoWriter {
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height,
         ])
-        guard writer.canAdd(input) else { throw Failure(text: "MP4: input rejected") }
+        guard writer.canAdd(input) else { throw Failure(text: t("MP4: Videospur nicht angenommen.", "MP4: video track rejected.")) }
         writer.add(input)
-        guard writer.startWriting() else { throw writer.error ?? Failure(text: "MP4: cannot start") }
+        guard writer.startWriting() else { throw writer.error ?? Failure(text: t("MP4: Schreiben lässt sich nicht starten.", "MP4: cannot start writing.")) }
         writer.startSession(atSourceTime: .zero)
         for (index, rgb) in frames.enumerated() {
             while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 2_000_000) }
-            guard let pool = adaptor.pixelBufferPool else { throw writer.error ?? Failure(text: "MP4: no buffer pool") }
+            guard let pool = adaptor.pixelBufferPool else { throw writer.error ?? Failure(text: t("MP4: kein Bildspeicher.", "MP4: no frame buffer pool.")) }
             var buffer: CVPixelBuffer?
             guard CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer) == kCVReturnSuccess, let pixels = buffer else {
-                throw Failure(text: "MP4: no pixel buffer")
+                throw Failure(text: t("MP4: kein Bildspeicher frei.", "MP4: no frame buffer available."))
             }
             CVPixelBufferLockBaseAddress(pixels, [])
             let base = CVPixelBufferGetBaseAddress(pixels)!.assumingMemoryBound(to: UInt8.self)
@@ -64,11 +64,11 @@ enum VideoWriter {
             }
             CVPixelBufferUnlockBaseAddress(pixels, [])
             guard adaptor.append(pixels, withPresentationTime: CMTime(value: Int64(index), timescale: Int32(fps))) else {
-                throw writer.error ?? Failure(text: "MP4: frame \(index) rejected")
+                throw writer.error ?? Failure(text: t("MP4: Bild \(index) nicht angenommen.", "MP4: frame \(index) rejected."))
             }
         }
         input.markAsFinished()
         await writer.finishWriting()
-        guard writer.status == .completed else { throw writer.error ?? Failure(text: "MP4: not completed") }
+        guard writer.status == .completed else { throw writer.error ?? Failure(text: t("MP4: Datei nicht fertig geschrieben.", "MP4: file not completed.")) }
     }
 }

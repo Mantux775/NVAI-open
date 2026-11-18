@@ -85,8 +85,15 @@ struct VideoJobRequest: Sendable {
         guard (12 ... 30).contains(fps) else {
             throw APIError(422, t("fps muss zwischen 12 und 30 liegen (Vorgabe 24).", "fps must be between 12 and 30 (default 24)."))
         }
+        // LTX-2 rechnet Bewegung und Tonlänge fest mit 24 fps; mit anderer Bildrate liefen Bild und Ton auseinander
+        // (30 fps, 97 Bilder: Bild 3,2 s, Ton 4,0 s), seit 0.5.9 abgelehnt
+        if model.isLTX2 && fps != 24 {
+            throw APIError(422, t("\(model.name) rechnet mit 24 fps.", "\(model.name) runs at 24 fps."))
+        }
         let seed = o["seed"]?.intValue
-        if let seed, seed < 0 { throw APIError(422, t("seed darf nicht negativ sein.", "seed must not be negative.")) }
+        if let seed, !(0...APIError.maxSeed).contains(seed) {
+            throw APIError(422, t("seed muss zwischen 0 und \(APIError.maxSeed) liegen.", "seed must be between 0 and \(APIError.maxSeed)."))
+        }
         return VideoJobRequest(prompt: prompt, model: model, imageAssetID: image, width: width, height: height, frames: frames, fps: fps,
                                seed: seed.map { UInt64($0) }, params: body)
     }

@@ -19,6 +19,11 @@ struct GenerateView: View {
     @State private var outpaintOn = false
     @State private var edges = [0, 0, 0, 0]
     @State private var lastJobID: String?
+    /// Ein Absenden zur Zeit (seit 0.5.9): Zwei schnelle Klicks oder zweimal ⌘↩ gaben zwei gleiche Aufträge.
+    @State private var submitting = false
+    /// Vorgaben (Format auf 8-GB-Macs, Schritte, CFG) nur beim ersten Erscheinen setzen (seit 0.5.9): Vorher setzte
+    /// jeder Reiterwechsel zurück, was man eingestellt hatte.
+    @State private var didAppear = false
     @State private var message: String?
     @State private var negative = ""
     @State private var guidance = 7.5
@@ -110,17 +115,24 @@ struct GenerateView: View {
             results.frame(minWidth: 380)
         }
         .onAppear {
-            // Auf 8-GB-Macs ist 512 × 512 die einzige flüssige Größe.
-            if SystemInfo.memoryGB < 16, let small = sizes.firstIndex(where: { $0.w == 512 }) { sizeIndex = small }
-            applyDefaults()
+            if !didAppear {
+                didAppear = true
+                // Auf 8-GB-Macs ist 512 × 512 die einzige flüssige Größe.
+                if SystemInfo.memoryGB < 16, let small = sizes.firstIndex(where: { $0.w == 512 }) { sizeIndex = small }
+                applyDefaults()
+            }
             if state.showRestore { formMode = .restore }
             if state.showAudio { formMode = .audio }
             if state.showVideo { formMode = .video }
+            if state.showSpeech { formMode = .speech }
+            if let start = state.generateStartPreset { startID = start }
         }
         .onChange(of: state.activeModelID) { _, _ in applyDefaults() }
+        .onChange(of: state.images.count + state.uploads.count) { _, _ in pruneSelection() }
         .onChange(of: state.showRestore) { _, show in if show { formMode = .restore } }
         .onChange(of: state.showAudio) { _, show in if show { formMode = .audio } }
         .onChange(of: state.showVideo) { _, show in if show { formMode = .video } }
+        .onChange(of: state.showSpeech) { _, show in if show { formMode = .speech } }
         .sheet(item: $preview) { asset in
             let list = jobAssets.contains(asset) ? jobAssets : [asset]
             PreviewSheet(assets: list, index: list.firstIndex(of: asset) ?? 0,
@@ -328,18 +340,23 @@ struct GenerateView: View {
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)
             .disabled(!state.audioInstalled || audioPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if let job = currentJob, !job.isFinished {
+            if let job = runningJob(kinds: ["txt2audio"]) {
                 Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
             }
         }
         if let message { Text(message).foregroundStyle(.red).font(.callout) }
-        if !state.audios.isEmpty {
+        // nur Musik und Klänge (seit 0.5.9): Die Sätze der Sprecherstimme stehen unter „Sprache“ und standen hier mit dazwischen
+        let sounds = state.audios.filter { $0.meta["speech"]?.boolValue != true }
+        if !sounds.isEmpty {
             Text(t("Zuletzt erzeugt", "Recently generated")).font(.subheadline.bold()).padding(.top, 6)
-            ForEach(state.audios.prefix(20)) { asset in AudioRow(asset: asset) }
+            ForEach(sounds.prefix(20)) { asset in AudioRow(asset: asset) }
         }
     }
 
     private func submitAudio() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
         message = nil
         var body: [String: JSONValue] = [
             "prompt": .string(audioPrompt.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -507,6 +524,25 @@ struct GenerateView: View {
         .onChange(of: videoSizeIndex) { _, _ in
             if !videoFrameChoices.contains(videoFrames) { videoFrames = videoFrameChoices.last ?? 49 }
         }
+        .onChange(of: videoModelID) { old, _ in
+            // Anderes Modell, andere Formate und Grenzen (seit 0.5.9): dasselbe Format, sonst das mit dem nächsten
+            // Seitenverhältnis, dann die Länge in die neuen Grenzen. Vorher meinte derselbe Index ein anderes Format
+            // (2B 512 × 320, LTX-2 576 × 1024), und eine zu große Länge ließ die Auswahl leer.
+            let before = (VideoCatalog.model(old) ?? .ltxv2B).sizes.map { ($0["w"] as? Int ?? 0, $0["h"] as? Int ?? 0) }
+            if before.indices.contains(videoSizeIndex) {
+                let was = before[videoSizeIndex]
+                if let same = videoSizes.firstIndex(where: { $0.w == was.0 && $0.h == was.1 }) {
+                    videoSizeIndex = same
+                } else {
+                    let ratio = Double(was.0) / Double(max(1, was.1))
+                    func distance(_ i: Int) -> Double { abs(log(Double(videoSizes[i].w) / Double(max(1, videoSizes[i].h)) / ratio)) }
+                    videoSizeIndex = videoSizes.indices.min { distance($0) < distance($1) } ?? 0
+                }
+            } else {
+                videoSizeIndex = 0
+            }
+            if !videoFrameChoices.contains(videoFrames) { videoFrames = videoFrameChoices.last ?? 49 }
+        }
         Text(videoDuration).font(.caption).foregroundStyle(.secondary)
         HStack {
             Text("Seed")
@@ -521,7 +557,7 @@ struct GenerateView: View {
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)
             .disabled(!state.videoInstalled || videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if let job = currentJob, !job.isFinished {
+            if let job = runningJob(kinds: ["txt2video", "img2video"]) {
                 Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
             }
         }
@@ -535,6 +571,9 @@ struct GenerateView: View {
     }
 
     private func submitVideo() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
         message = nil
         var body: [String: JSONValue] = [
             "prompt": .string(videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -656,7 +695,7 @@ struct GenerateView: View {
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)
             .disabled(photoID == nil || !(repairOn || colorizeOn || sharpenOn))
-            if let job = currentJob, !job.isFinished {
+            if let job = runningJob(kinds: ["restore"]) {
                 Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
             }
         }
@@ -715,7 +754,11 @@ struct GenerateView: View {
     }
 
     private func submitRestore() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
         message = nil
+        pruneSelection()
         guard let photoID else { return }
         var body: [String: JSONValue] = [
             "image_asset_id": .string(photoID),
@@ -785,7 +828,13 @@ struct GenerateView: View {
             VStack(alignment: .leading, spacing: 8) {
                 strip(single($startID))
                 if let size = pixelSize(startID) {
-                    Text("\(size.width) × \(size.height) px").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    let target = fixedSize.map { (label: "", w: $0, h: $0) } ?? sizes[min(sizeIndex, sizes.count - 1)]
+                    let off = abs((Double(size.width) / Double(size.height)) / (Double(target.w) / Double(target.h)) - 1) > 0.02
+                    // seit 0.5.8 mittig zugeschnitten statt gestreckt (ImageFiles.filled), wie unter Windows
+                    Text("\(size.width) × \(size.height) px" + (off && !outpaintOn && maskID == nil && isFlux
+                        ? " · " + t("wird mittig auf \(target.w) × \(target.h) zugeschnitten", "cropped to \(target.w) × \(target.h) around the center")
+                        : ""))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 if startID != nil && !isCoreML {
                     Toggle(t("Über den Rand hinaus erweitern (Outpainting)", "Extend beyond the edges (outpainting)"),
@@ -805,6 +854,24 @@ struct GenerateView: View {
                          : t("0,3 behutsam, 0,5 deutlich, 1,0 nur noch als Vorlage.",
                              "0.3 subtle, 0.5 clear, 1.0 uses it only as a reference."))
                         .font(.caption).foregroundStyle(.secondary)
+                    if maskID == nil, maxReferences > 0 {
+                        // Gesichtstausch (Nutzer 18.11.): Als Ausgangsbild bleibt die Bildaufteilung des Fotos; eine Person in
+                        // einer neuen Szene geht nur über die Referenz (gemessen am Mac mini, notizen/mac.md)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(t("Gesicht in eine neue Szene setzen? Das geht über „Referenzbilder“; als Ausgangsbild bleibt die Bildaufteilung des Fotos.",
+                                   "Put a face into a new scene? That works through \"Reference images\"; as a start image the photo keeps its layout."))
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Button(t("Als Referenz für Gesichtstausch", "Use as reference for a face swap")) {
+                                if let id = startID {
+                                    referenceIDs.removeAll { $0 == id }
+                                    referenceIDs.insert(id, at: 0)
+                                    if referenceIDs.count > maxReferences { referenceIDs.removeLast(referenceIDs.count - maxReferences) }
+                                }
+                                startID = nil
+                            }
+                            .controlSize(.small)
+                        }
+                    }
                     if !isCoreML {
                         Text(t("Maske (optional, weiß = neu)", "Mask (optional, white = new)")).font(.caption.bold())
                         strip(single($maskID))
@@ -825,6 +892,15 @@ struct GenerateView: View {
                            "Refer to them in the prompt as \"the first image\", \"the second image\", in the order of the "
                            + "numbers. With one image you edit it: say what changes and what stays the same."))
                         .font(.caption).foregroundStyle(.secondary)
+                    // Gesichtstausch (gemessen 18.11., notizen/mac.md): Ohne Geschlecht wurde aus einer Frau ein Mann; „keep …
+                    // exactly as in the first image“ übernahm Pulli und Selfie-Ausschnitt des Fotos
+                    Text(t("Gesichtstausch: sagen, wer es ist (Frau oder Mann, Alter, Haare), und die neue Szene beschreiben, z. B. "
+                           + "„The woman from the first image, in her forties with curly red hair, now a pirate on the deck of a ship“. "
+                           + "Mit „keep … exactly as in the first image“ bleiben Kleidung und Ausschnitt des Fotos.",
+                           "Face swap: say who it is (woman or man, age, hair) and describe the new scene, e.g. "
+                           + "\"The woman from the first image, in her forties with curly red hair, now a pirate on the deck of a ship\". "
+                           + "With \"keep … exactly as in the first image\" the photo's clothes and framing stay."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(4)
             }
@@ -839,7 +915,7 @@ struct GenerateView: View {
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)
             .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if let job = currentJob, !job.isFinished {
+            if let job = runningJob(kinds: ["txt2img", "img2img"]) {
                 Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
             }
         }
@@ -868,7 +944,7 @@ struct GenerateView: View {
         if let source = pixelSize(startID) {
             let e = Outpaint.Edges(left: edges[0], top: edges[1], right: edges[2], bottom: edges[3])
             let size = Outpaint.size(width: source.width, height: source.height, e)
-            Text("\(source.width) × \(source.height) → \(size.width) × \(size.height)").font(.callout.monospacedDigit())
+            Text(verbatim: "\(source.width) × \(source.height) → \(size.width) × \(size.height)").font(.callout.monospacedDigit())
         }
         Text(t("Das Bild bleibt, nur der neue Rand wird gemalt; das Format ergibt sich aus Bild und Rand. "
                + "Der Prompt beschreibt das ganze erweiterte Bild.",
@@ -899,12 +975,16 @@ struct GenerateView: View {
     /// Ein Bild aus der Auswahl löschen (auch aus dem Verlauf, wie „Dieses Quellbild löschen“ unter Windows).
     private func removeAsset(_ asset: AssetRecord) {
         let id = asset.id
-        if startID == id { startID = nil }
-        if maskID == id { maskID = nil }
-        if photoID == id { photoID = nil }
-        referenceIDs.removeAll { $0 == id }
         Task {
-            await AssetStore.shared.delete(id)
+            // Liegt es als Clip im Schnitt eines Projekts, bleibt es (und bleibt gewählt), seit 0.5.9
+            if let notice = await AssetDeletion.deleteWithNotice(id) {
+                message = notice
+                return
+            }
+            if startID == id { startID = nil }
+            if maskID == id { maskID = nil }
+            if photoID == id { photoID = nil }
+            referenceIDs.removeAll { $0 == id }
             await state.refresh()
         }
     }
@@ -914,6 +994,23 @@ struct GenerateView: View {
     private var currentJob: JobRecord? {
         guard let lastJobID else { return nil }
         return state.jobs.first { $0.id == lastJobID }
+    }
+
+    /// Gelöschte Bilder abwählen (seit 0.5.9): Im Verlauf oder Studio gelöscht, blieb die ID gewählt, die Überschrift
+    /// sagte „1 gewählt“, und der Auftrag scheiterte mit „nicht gefunden“.
+    private func pruneSelection() {
+        func exists(_ id: String) -> Bool { AssetSnapshot.shared.get(id) != nil }
+        if let id = startID, !exists(id) { startID = nil }
+        if let id = maskID, !exists(id) { maskID = nil }
+        if let id = photoID, !exists(id) { photoID = nil }
+        referenceIDs.removeAll { !exists($0) }
+    }
+
+    /// Der laufende Auftrag dieses Formulars (seit 0.5.9; vorher zeigte das Musik-Formular „Abbrechen“ auch für ein
+    /// laufendes Video und brach es ab).
+    private func runningJob(kinds: Set<String>) -> JobRecord? {
+        guard let job = currentJob, !job.isFinished, kinds.contains(job.kind) else { return nil }
+        return job
     }
 
     private var jobAssets: [AssetRecord] {
@@ -946,9 +1043,11 @@ struct GenerateView: View {
                             }
                             .contextMenu {
                                 Button(t("Große Vorschau", "Large preview")) { preview = asset }
-                                Button(t("Als Ausgangsbild verwenden", "Use as start image")) {
-                                    formMode = .generate
-                                    startID = asset.id
+                                if takesImages {
+                                    Button(t("Als Ausgangsbild verwenden", "Use as start image")) {
+                                        formMode = .generate
+                                        startID = asset.id
+                                    }
                                 }
                                 AssetMenuItems(asset: asset)
                             }
@@ -985,7 +1084,11 @@ struct GenerateView: View {
     // MARK: Auftrag
 
     private func submit() async {
+        guard !submitting else { return }
+        submitting = true
+        defer { submitting = false }
         message = nil
+        pruneSelection()
         let size = fixedSize.map { (label: "", w: $0, h: $0) } ?? sizes[min(sizeIndex, sizes.count - 1)]
         var body: [String: JSONValue] = [
             "prompt": .string(prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
@@ -998,12 +1101,16 @@ struct GenerateView: View {
             body["negative_prompt"] = .string(negative)
             body["cfg"] = .double(guidance)
         }
-        let extending = outpaintOn && !isCoreML && edges.contains { $0 > 0 }
-        if let startID, extending {
-            body["image_asset_id"] = .string(startID)
+        // Ausgangsbild nur, wenn das Modell es nimmt; Erweitern nur mit Ausgangsbild (seit 0.5.9: Mit Z-Image war über
+        // Vorschau oder Kontextmenü eins gewählt, die Box aber ausgeblendet, und jeder Auftrag scheiterte; ein Schalter
+        // „Erweitern“, der nach dem Abwählen des Ausgangsbilds an blieb, verwarf still die Referenzbilder)
+        let start = takesImages ? startID : nil
+        let extending = start != nil && outpaintOn && !isCoreML && edges.contains { $0 > 0 }
+        if let start, extending {
+            body["image_asset_id"] = .string(start)
             body["outpaint"] = .array(edges.map { .int(max(0, min(Outpaint.maxEdge, $0))) })
-        } else if let startID {
-            body["image_asset_id"] = .string(startID)
+        } else if let start {
+            body["image_asset_id"] = .string(start)
             body["denoise"] = .double(maskID != nil ? 1.0 : strength)
             if let maskID, !isCoreML { body["mask_asset_id"] = .string(maskID) }
         }
