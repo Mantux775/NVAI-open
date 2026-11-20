@@ -83,6 +83,11 @@ microphones and radio channels, for example from a voyage data recorder.
   note also goes into the exports. The translation is a draft and does not replace a certified translation.
 - **Export:** audio as WAV (bit-exact when nothing was changed), the video with the chosen tracks as its sound, a
   situation video with all views, speech as text, CSV, SRT or VTT, notes as text or CSV.
+- **Subtitles in the video:** with "burn into the picture" the original or the translation is written into the exported
+  video, so every player shows it; the picture is re-encoded for that (NVENC, otherwise x264; in the review app the
+  browser's encoder). Without it the picture stays unchanged, and the subtitles come as an SRT next to it. Subtitles
+  have at most two lines of 42 characters; a long block is spread over several in a row. The Windows Media Player
+  rejects a whole SRT file as soon as one line reaches 1024 characters, which long translations did before.
 
 ## Review package and review app
 
@@ -90,7 +95,7 @@ For people who should check a case without NVAI-open, a law firm for example: "E
 folder with the case, the original audio as bit-exact WAV, optionally the video and images, a checksum for every file
 (PRUEFSUMMEN.sha256) and the review app NVAI-Pruefer.html. The app runs in Microsoft Edge or Google Chrome, without
 installation, internet or AI: listen to every track, watch the video, check and correct blocks, set notes, export WAV,
-video with sound and subtitles. Changes go into the subfolder "bearbeitung" together with a review log in which every
+video with sound and subtitles (burned in or as SRT). Changes go into the subfolder "bearbeitung" together with a review log in which every
 line is chained to the one before by SHA-256; the delivered files stay unchanged. The reviewer's name sits at the top
 right and can be changed at any time; the change goes into the log too. The review app is also attached to every
 release as a single file.

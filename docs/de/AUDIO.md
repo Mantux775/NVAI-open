@@ -86,6 +86,11 @@ Aufnahmen mit mehreren Mikrofonen und Funkkanälen, etwa aus einem Schiffsdatens
   beeidigte Übersetzung.
 - **Export:** Ton als WAV (bitgenau, wenn nichts verändert wurde), das Video mit den gewählten Spuren als Ton, ein
   Lagebild-Video mit allen Ansichten, Sprache als Text, CSV, SRT oder VTT, Notizen als Text oder CSV.
+- **Untertitel im Video:** Mit „ins Bild einbrennen“ stehen Original oder Übersetzung fest im exportierten Video, dann
+  zeigt sie jeder Player; das Bild wird dafür neu kodiert (NVENC, sonst x264; in der Prüf-App der Kodierer des
+  Browsers). Ohne den Haken bleibt das Bild unverändert, und die Untertitel kommen als SRT daneben. Untertitel haben
+  höchstens zwei Zeilen zu 42 Zeichen; ein langer Block wird auf mehrere hintereinander verteilt. Der Windows Media
+  Player lehnt eine ganze SRT-Datei ab, sobald eine Zeile 1024 Zeichen erreicht, was lange Übersetzungen vorher taten.
 
 ## Prüfpaket und Prüf-App
 
@@ -93,7 +98,7 @@ Für Menschen, die einen Fall ohne NVAI-open prüfen sollen, etwa eine Kanzlei: 
 Ordner mit dem Fall, dem Originalton als bitgenaue WAV, wahlweise Video und Bildern, einer Prüfsumme für jede Datei
 (PRUEFSUMMEN.sha256) und der Prüf-App NVAI-Pruefer.html. Sie läuft in Microsoft Edge oder Google Chrome, ohne
 Installation, Internet und KI: jede Spur anhören, das Video ansehen, Blöcke prüfen und korrigieren, Notizen setzen,
-WAV, Video mit Ton und Untertitel exportieren. Änderungen kommen in den Unterordner „bearbeitung“, zusammen mit einem
+WAV, Video mit Ton und Untertitel exportieren (eingebrannt oder als SRT). Änderungen kommen in den Unterordner „bearbeitung“, zusammen mit einem
 Prüfprotokoll, in dem jede Zeile per SHA-256 an die vorige gekettet ist; die gelieferten Dateien bleiben unverändert.
 Der Name des Bearbeiters steht oben rechts und lässt sich jederzeit ändern; auch der Wechsel kommt ins Protokoll. Die
 Prüf-App hängt außerdem als einzelne Datei an jedem Release.

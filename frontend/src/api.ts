@@ -1232,7 +1232,7 @@ export const api = {
   audioHash: (id: string) => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/hash`, { method: 'POST' }),
   audioVideoLink: (id: string, path: string, method: 'clock' | 'audio' = 'clock') =>
     req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/video`, { method: 'POST', body: JSON.stringify({ path, method }) }),
-  audioVideoExport: (id: string, o: { tracks: { id: string; gain_db: number; mute?: boolean }[]; region: [number, number] | null; subtitles: 'none' | 'original' | 'translation'; mono: boolean; name?: string; dest_dir?: string | null }) =>
+  audioVideoExport: (id: string, o: { tracks: { id: string; gain_db: number; mute?: boolean }[]; region: [number, number] | null; subtitles: 'none' | 'original' | 'translation'; burn?: boolean; mono: boolean; name?: string; dest_dir?: string | null }) =>
     req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/video/export`, { method: 'POST', body: JSON.stringify(o) }),
   audioRenderVideo: (id: string, o: { panels: string[]; tracks: { id: string; gain_db: number; view: string }[]; region: [number, number] | null; fps: number; mono: boolean; lang: string; spec: { lo: number; hi: number; fmax: number }; dest_dir?: string | null }) =>
     req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/render`, { method: 'POST', body: JSON.stringify(o) }),

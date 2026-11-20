@@ -24,13 +24,27 @@ enum APIRouter {
     /// Körper von POST /api/loras/upload gleich beim Empfang in eine Teildatei im Ordner loras/ (HTTPServer), nie ganz
     /// in den Speicher. Falsche Angaben, fremde Herkunft und fehlender Platz scheitern, bevor die Datei kommt.
     static func bodyHandling(_ head: HTTPParser.Head) -> HTTPServer.BodyHandling {
-        guard head.method == "POST", head.path == "/api/loras/upload" else { return .buffer }
+        guard head.method == "POST" else { return .buffer }
+        // Uploads und Studio-Pakete ab 16 MB ebenso in eine Datei (seit 0.5.10; vorher gepuffert und bei 64 MB Schluss)
+        let form = ["/api/upload", "/api/studio/import"].contains(head.path) && head.contentLength > FormBody.streamFrom
+        guard form || head.path == "/api/loras/upload" else { return .buffer }
         let lang = Lang.from(acceptLanguage: head.headers["accept-language"])
         return Lang.$request.withValue(lang) {
             let probe = head.request(body: Data())
             guard isLocal(probe) else {
                 return .reject(.error(403, t("NVAI-open für Mac nimmt nur Anfragen von diesem Mac an.",
                                              "NVAI-open for Mac only accepts requests from this Mac.")))
+            }
+            if form {
+                // Platz für den Körper und die herausgeschriebene Datei, beide im Ablageordner
+                do {
+                    try FormBody.checkSpace(Int64(head.contentLength))
+                } catch let error as APIError {
+                    return .reject(.error(error.status, error.detail))
+                } catch {
+                    return .reject(.error(400, error.localizedDescription))
+                }
+                return .stream(to: FormBody.newPart())
             }
             do {
                 _ = try LoRAUploads.checkRequest(fileName: head.query["file_name"] ?? "", family: head.query["family"] ?? "",
@@ -170,8 +184,19 @@ enum APIRouter {
                 if let job = await JobQueue.shared.job(c[0]), job.status == "queued" {
                     return .json(try await JobQueue.shared.cancel(c[0]).json)
                 }
-                try await JobQueue.shared.delete(c[0])
-                return .json(["deleted": true, "id": c[0]])
+                // Mit den erzeugten Dateien wie unter Windows (seit 0.5.10); was ein Studio-Projekt nutzt, bleibt
+                guard let result = try await AssetDeletion.deleteJob(c[0]) else {
+                    throw APIError(404, t("Unbekannter Auftrag: \(c[0])", "Unknown job: \(c[0])"))
+                }
+                return .json(["ok": true, "assets": result.assets, "kept": result.kept,
+                              "freed_mb": (Double(result.bytes) / 1_048_576 * 100).rounded() / 100,
+                              "deleted": true, "id": c[0]])
+            }
+            if route("DELETE", "/api/history") != nil {
+                // Verlauf leeren wie unter Windows (seit 0.5.10), `kind` = image, video oder audio
+                let kind = req.query["kind"].flatMap { $0.isEmpty ? nil : $0 }
+                let cleared = try await AssetDeletion.clearHistory(kind: kind)
+                return .json(["ok": true, "jobs": cleared.jobs, "assets": cleared.assets, "freed_mb": cleared.freedMB])
             }
             if let c = route("GET", "/api/jobs/:id/assets") {
                 let known = await JobQueue.shared.job(c[0]) != nil
@@ -206,6 +231,34 @@ enum APIRouter {
                 }
             }
             if route("POST", "/api/upload") != nil { return try await upload(req) }
+            // Hugging-Face-Token wie unter Windows (seit 0.5.10): Stand, prüfen und speichern, entfernen. Nur lokal
+            // (isLocal oben); das Token selbst gibt der Server nie heraus.
+            if route("GET", "/api/settings/hf-token") != nil {
+                guard let token = Settings.hfToken else { return .json(["logged_in": false, "name": NSNull()]) }
+                if case .valid(let name, _, let gated) = await HFTokenCheck.check(token) {
+                    return .json(["logged_in": true, "name": name, "gated_access": gated.map { [HFTokenCheck.gatedRepo: $0] } ?? [:]])
+                }
+                return .json(["logged_in": true, "name": NSNull()])
+            }
+            if route("POST", "/api/settings/hf-token") != nil {
+                let token = (req.json?["token"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let outcome = token.isEmpty ? HFTokenCheck.Outcome.rejected : await HFTokenCheck.check(token)
+                switch outcome {
+                case .valid(let name, _, let gated):
+                    Settings.hfToken = token
+                    Task { @MainActor in AppState.shared.refreshModels() }
+                    return .json(["logged_in": true, "name": name, "detail": HFTokenCheck.message(outcome, saving: true),
+                                  "gated_access": gated.map { [HFTokenCheck.gatedRepo: $0] } ?? [:]])
+                case .rejected:
+                    throw APIError(400, HFTokenCheck.message(outcome, saving: true))
+                case .unreachable:
+                    throw APIError(503, HFTokenCheck.message(outcome, saving: true))
+                }
+            }
+            if route("DELETE", "/api/settings/hf-token") != nil {
+                Settings.hfToken = nil
+                return .json(["logged_in": false, "name": NSNull()])
+            }
             if parts.count >= 2, parts[0] == "api", parts[1] == "studio",
                let response = try await StudioRoutes.handle(req, parts) { return response }
             if let c = route("GET", "/files/:name") { return try file(c[0]) }
@@ -480,39 +533,45 @@ enum APIRouter {
     }
 
     static func upload(_ req: HTTPRequest) async throws -> HTTPResponse {
-        guard let boundary = Multipart.boundary(from: req.headers["content-type"]) else {
-            throw APIError(422, t("Erwartet wird multipart/form-data mit dem Feld file.", "Expected multipart/form-data with the field file."))
-        }
-        let parts = Multipart.parts(req.body, boundary: boundary)
-        guard let part = parts.first(where: { $0.name == "file" }), !part.data.isEmpty else {
+        // Gepuffert oder ab 16 MB gestreamt und eingeblendet (seit 0.5.10, vorher bei 64 MB Schluss)
+        let form = try FormBody(req)
+        guard let part = form.span("file"), !part.isEmpty else {
             throw APIError(422, t("Das Feld file fehlt oder ist leer.", "The field file is missing or empty."))
         }
         // folder wie unter Windows (seit 0.5.9): „Studio/<Projekt>“ ordnet das Material dem Projekt zu, unbekannt 404.
         // Vorher wurde das Feld still übergangen.
-        let folder = parts.first(where: { $0.name == "folder" }).flatMap { String(data: $0.data, encoding: .utf8) }?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let folder = form.text("folder")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let project = folder.isEmpty ? nil : try await projectForFolder(folder)
         let name = part.filename ?? "upload.png"
         let ext = (name as NSString).pathExtension.lowercased()
+        let unreadable = APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
         let asset: AssetRecord
         if AssetStore.mediaSuffixes.contains(ext) {
-            // Video und Ton fürs Studio: was AVFoundation nicht liest, fliegt wieder raus.
-            asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
+            // Video und Ton fürs Studio: blockweise in die Ablage, was AVFoundation nicht liest, fliegt wieder raus.
+            let file = FormBody.newFile(ext: ext)
+            try form.write(part, to: file)
+            do {
+                asset = try await AssetStore.shared.addUpload(moving: file, originalName: name)
+            } catch {
+                try? FileManager.default.removeItem(at: file)
+                throw error
+            }
             do {
                 StudioMediaCache.shared.set(asset.id, try await StudioMediaProbe.probe(url: AssetStore.shared.fileURL(asset.filename)))
             } catch {
                 await AssetStore.shared.delete(asset.id)
-                throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+                throw unreadable
             }
         } else {
             // Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage (seit 0.5.9 als 422 statt 500,
             // vorher kam „Bild nicht lesbar“ als Serverfehler zurück)
+            let data = form.bytes(part)
             do {
-                _ = try ImageFiles.load(part.data)
+                _ = try ImageFiles.load(data)
             } catch {
-                throw APIError(422, t("Diese Datei kann NVAI-open für Mac nicht lesen: \(name)", "NVAI-open for Mac cannot read this file: \(name)"))
+                throw unreadable
             }
-            asset = try await AssetStore.shared.addUpload(data: part.data, originalName: name)
+            asset = try await AssetStore.shared.addUpload(data: data, originalName: name)
         }
         if let project {
             await AssetStore.shared.tag([asset.id], project: project)

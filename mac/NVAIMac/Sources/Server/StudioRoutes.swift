@@ -26,15 +26,15 @@ enum StudioRoutes {
                                                          "codec": $0.codec == .hevc ? "hevc" : $0.codec == .proRes4444 ? "prores" : "h264",
                                                          "ext": $0.ext] })
             case ("POST", 1, "import"):
-                // Studio-Paket (.zip) oder Projektdatei (.json) als multipart/form-data, Feld file
-                guard let boundary = Multipart.boundary(from: req.headers["content-type"]),
-                      let part = Multipart.parts(req.body, boundary: boundary).first(where: { $0.name == "file" }), !part.data.isEmpty else {
+                // Studio-Paket (.zip) oder Projektdatei (.json) als multipart/form-data, Feld file; ab 16 MB gestreamt
+                // (seit 0.5.10, vorher bei 64 MB Schluss)
+                guard let form = try? FormBody(req), let part = form.span("file"), !part.isEmpty else {
                     return .error(422, t("Erwartet wird multipart/form-data mit dem Feld file.", "Expected multipart/form-data with the field file."))
                 }
                 // nur die Endung des Client-Dateinamens (seit 0.5.9; ein „/“ darin gab vorher einen Serverfehler 500)
                 let ext = ((part.filename ?? "paket.zip") as NSString).pathExtension.lowercased()
-                let temp = FileManager.default.temporaryDirectory.appendingPathComponent("import-\(UUID().uuidString).\(ext.isEmpty ? "zip" : ext)")
-                try part.data.write(to: temp)
+                let temp = FormBody.newFile(ext: ext.isEmpty || ext.count > 8 ? "zip" : ext)
+                try form.write(part, to: temp)
                 defer { try? FileManager.default.removeItem(at: temp) }
                 let p = try await StudioPackage.importFile(temp, store: store)
                 Task { @MainActor in await AppState.shared.refresh() }

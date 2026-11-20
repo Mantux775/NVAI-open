@@ -102,6 +102,7 @@ final class AppState: ObservableObject {
         ensureServer()
         Flux2Engine.configureModelsDirectory(modelsDirectory)
         LoRAUploads.removeStaleParts()  // Reste eines Uploads, während dessen die App beendet wurde
+        FormBody.removeStaleParts()  // ebenso große Uploads und Studio-Pakete (seit 0.5.10)
         await AssetStore.shared.load()
         let notify: @Sendable () -> Void = { Task { @MainActor in AppState.shared.scheduleRefresh() } }
         await AssetStore.shared.setOnChange(notify)

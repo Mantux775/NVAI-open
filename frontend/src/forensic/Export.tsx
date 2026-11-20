@@ -80,6 +80,10 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
   const [mono, setMono] = useState(false)
   const [name, setName] = useState('')
   const [subs, setSubs] = useState<'none' | 'original' | 'translation'>(doc.segments.length ? 'translation' : 'none')
+  // Untertitel ins Bild einbrennen (Nutzer 20.11.2026: „die untertitel werden nicht in das video eingebaut“); ohne Haken
+  // bleibt das Bild bytegleich und die Untertitel liegen als SRT daneben
+  const [burn, setBurn] = useState(true)
+  const burnNow = burn && subs !== 'none'
   const [checkedOnly, setCheckedOnly] = useState(false)
   const [panels, setPanels] = useState<string[]>(() => ['tracks', 'text', ...(imageSources[0] ? [`img:${imageSources[0].id}`] : []), ...(isVdr ? ['conning'] : [])])
   // Was sich zeigen lässt: Spuren, Mitlesen, je Bildquelle ein Kästchen, Fahrstand, Karte, Ereignisse, Live-Player-Bild
@@ -214,16 +218,21 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
     setVBusy(0)
     setSrtReady(null)
     try {
-      const r = await videoWithSound({ video, fit, tracks: files as { file: Blob; gainDb: number }[], region: [a, b], mono, sink: out, progress: (f) => setVBusy(f), signal: ctl.signal })
+      const r = await videoWithSound({ video, fit, tracks: files as { file: Blob; gainDb: number }[], region: [a, b], mono, sink: out, progress: (f) => setVBusy(f), signal: ctl.signal,
+        burn: burnNow ? { segments: doc.segments, mode: subs, lang: doc.target_lang || 'de' } : undefined })
       await out.close()
       await logEntry(pkg, 'export_video', { datei: out.name, spuren: wavTracks.map((x) => x.id), von: a, bis: b, video_start: r.videoStart, video_ende: r.videoEnd,
-        aufnahme_start: r.recordStart, bilder: r.packets, spitze: r.peak, bytes: r.bytes, vorlauf: r.priming })
+        aufnahme_start: r.recordStart, bilder: r.packets, spitze: r.peak, bytes: r.bytes, vorlauf: r.priming, untertitel: subs,
+        eingebrannt: r.burned ? { kodierer: r.burned } : null })
       if (subs !== 'none') {
         const s = srtForVideo(doc.segments, subs, doc.target_lang || 'de', fit, r.videoStart, r.videoEnd)
         setSrtReady({ ...s, name: `${base}.srt` })
       }
-      onNotice(t(`Video gespeichert: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, Bild unverändert ab ${clockAt(r.recordStart, origin)}).`,
-        `Video saved: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, picture unchanged from ${clockAt(r.recordStart, origin)}).`))
+      onNotice(r.burned
+        ? t(`Video gespeichert: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, Untertitel eingebrannt, ab ${clockAt(r.recordStart, origin)}).`,
+          `Video saved: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, subtitles burned in, from ${clockAt(r.recordStart, origin)}).`)
+        : t(`Video gespeichert: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, Bild unverändert ab ${clockAt(r.recordStart, origin)}).`,
+          `Video saved: ${out.name} (${(r.bytes / 1024 ** 2).toFixed(0)} MB, picture unchanged from ${clockAt(r.recordStart, origin)}).`))
     } catch (e) {
       await out.abort().catch(() => undefined)
       throw e
@@ -269,8 +278,8 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
       )}
       {sec === 'video' && !review && (
         <div className="au-tool">
-          <p className="hint small">{t('Das zugeordnete Video (z. B. die Live-Player-Aufnahme) mit neuem Ton aus den angekreuzten Spuren; das Bild bleibt unverändert, Untertitel als SRT daneben.',
-            'The linked video (e.g. the Live Player recording) with new sound from the ticked tracks; the picture stays unchanged, subtitles as SRT next to it.')}</p>
+          <p className="hint small">{t('Das zugeordnete Video (z. B. die Live-Player-Aufnahme) mit neuem Ton aus den angekreuzten Spuren. Untertitel kommen als SRT daneben; „ins Bild einbrennen“ schreibt sie fest ins Video, dann zeigt sie jeder Player, und das Bild wird dafür neu kodiert. Ohne Einbrennen bleibt das Bild unverändert.',
+            'The linked video (e.g. the Live Player recording) with new sound from the ticked tracks. Subtitles come as an SRT next to it; “burn into the picture” writes them into the video itself, so every player shows them, and the picture is re-encoded for that. Without burning in, the picture stays unchanged.')}</p>
           {!proj.video && <p className="hint small warn">{t('Erst ein Video zuordnen (Reiter „Videoabgleich“ rechts).', 'Link a video first (“Video sync” tab on the right).')}</p>}
           <h4>{t('Spuren', 'Tracks')}</h4>
           {trackPick}
@@ -279,14 +288,16 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
           <div className="lt-toolbar">
             <select value={subs} onChange={(e) => setSubs(e.target.value as 'none' | 'original' | 'translation')}>
               <option value="none">{t('ohne Untertitel', 'no subtitles')}</option>
-              <option value="original">{t('Untertitel: Original (SRT)', 'subtitles: original (SRT)')}</option>
-              <option value="translation">{t('Untertitel: Übersetzung (SRT)', 'subtitles: translation (SRT)')}</option>
+              <option value="original">{t('Untertitel: Original', 'subtitles: original')}</option>
+              <option value="translation">{t('Untertitel: Übersetzung', 'subtitles: translation')}</option>
             </select>
+            {subs !== 'none' && <label className="check small" title={t('Fest im Bild, in jedem Player sichtbar; das Bild wird neu kodiert. Die SRT kommt trotzdem daneben.', 'Fixed in the picture, visible in every player; the picture is re-encoded. The SRT still comes next to it.')}>
+              <input type="checkbox" checked={burn} onChange={(e) => setBurn(e.target.checked)} />{t('ins Bild einbrennen', 'burn into the picture')}</label>}
             <label className="check small"><input type="checkbox" checked={mono} onChange={(e) => setMono(e.target.checked)} />{t('Ton mono', 'mono sound')}</label>
           </div>
           {destPick}
           <button className="btn primary" disabled={!proj.video || !chosen.length || busy('audio_vexport') || destMissing}
-            onClick={() => api.audioVideoExport(proj.id, { tracks: chosenTracks.map((x) => ({ id: x.id, gain_db: x.gain_db })), region, subtitles: subs, mono, dest_dir: dest })
+            onClick={() => api.audioVideoExport(proj.id, { tracks: chosenTracks.map((x) => ({ id: x.id, gain_db: x.gain_db })), region, subtitles: subs, burn: burnNow, mono, dest_dir: dest })
               .then(() => { onNotice(t(`Video wird exportiert, ${where}.`, `Exporting the video ${where}.`)); onReload() })
               .catch((e) => onError(String(e.message ?? e)))}>{t('Video mit Ton exportieren', 'Export video with sound')}</button>
         </div>
@@ -345,8 +356,8 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
       )}
       {sec === 'video' && review && (
         <div className="au-tool">
-          <p className="hint small">{t('Das Video aus dem Paket mit neuem Ton aus dem Originalton der angekreuzten Spuren. Das Bild bleibt unverändert (ab dem Schlüsselbild vor dem Anfang), der Ton liegt über die Zuordnung zeitgenau darauf (AAC). Gespeichert wird über „Speichern unter“, die Untertitel danach als SRT daneben.',
-            'The video from the package with new sound from the original audio of the ticked tracks. The picture stays unchanged (from the key frame before the start), the sound is placed exactly via the sync (AAC). Saved via “Save as”, the subtitles afterwards as SRT next to it.')}</p>
+          <p className="hint small">{t('Das Video aus dem Paket mit neuem Ton aus dem Originalton der angekreuzten Spuren; der Ton liegt über die Zuordnung zeitgenau darauf (AAC). „Ins Bild einbrennen“ schreibt die Untertitel fest ins Video, dann zeigt sie jeder Player, und das Bild wird dafür neu kodiert. Ohne Einbrennen bleibt das Bild unverändert (ab dem Schlüsselbild vor dem Anfang). Gespeichert wird über „Speichern unter“, die Untertitel danach auch als SRT daneben.',
+            'The video from the package with new sound from the original audio of the ticked tracks; the sound is placed exactly via the sync (AAC). “Burn into the picture” writes the subtitles into the video itself, so every player shows them, and the picture is re-encoded for that. Without burning in, the picture stays unchanged (from the key frame before the start). Saved via “Save as”, the subtitles afterwards also as an SRT next to it.')}</p>
           {Object.keys(originals).length === 0 && <p className="hint small warn">{t('Dieses Paket enthält keinen Originalton; beim Exportieren des Prüfpakets in NVAI-open „Originalton als WAV“ für die gewünschten Spuren ankreuzen.',
             'This package contains no original audio; when exporting the review package in NVAI-open, tick “original audio as WAV” for the tracks you need.')}</p>}
           <h4>{t('Spuren', 'Tracks')}</h4>
@@ -357,9 +368,11 @@ export function ExportPanel({ proj, tracks, doc, markers, selection, view, lanes
           <div className="lt-toolbar">
             <select value={subs} onChange={(e) => setSubs(e.target.value as 'none' | 'original' | 'translation')}>
               <option value="none">{t('ohne Untertitel', 'no subtitles')}</option>
-              <option value="original">{t('Untertitel: Original (SRT)', 'subtitles: original (SRT)')}</option>
-              <option value="translation">{t('Untertitel: Übersetzung (SRT)', 'subtitles: translation (SRT)')}</option>
+              <option value="original">{t('Untertitel: Original', 'subtitles: original')}</option>
+              <option value="translation">{t('Untertitel: Übersetzung', 'subtitles: translation')}</option>
             </select>
+            {subs !== 'none' && <label className="check small" title={t('Fest im Bild, in jedem Player sichtbar; das Bild wird neu kodiert. Die SRT gibt es trotzdem.', 'Fixed in the picture, visible in every player; the picture is re-encoded. The SRT is still offered.')}>
+              <input type="checkbox" checked={burn} onChange={(e) => setBurn(e.target.checked)} />{t('ins Bild einbrennen', 'burn into the picture')}</label>}
             <label className="check small"><input type="checkbox" checked={mono} onChange={(e) => setMono(e.target.checked)} />{t('Ton mono', 'mono sound')}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Dateiname (optional)', 'file name (optional)')} />
           </div>

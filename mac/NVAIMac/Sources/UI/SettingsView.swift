@@ -15,6 +15,10 @@ struct SettingsView: View {
     /// nicht gab). Das Feld zeigt den gespeicherten Wert nie an.
     @State private var hfToken = ""
     @State private var hfSaved = Settings.hfToken != nil
+    /// Prüfung bei Hugging Face (seit 0.5.10): läuft, Ergebnis, und ob sie am Netz scheiterte (dann „ohne Prüfung speichern“)
+    @State private var hfChecking = false
+    @State private var hfResult: (ok: Bool, text: String)?
+    @State private var hfOffline = false
 
     var body: some View {
         Form {
@@ -69,29 +73,54 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Hugging Face") {
-                SecureField(t("Token", "Token"), text: $hfToken, prompt: Text(verbatim: "hf_…"))
+                // Eigene Zeile, links und breit (seit 0.5.10): Als Formularzeile mit Beschriftung stand das Feld ganz
+                // rechts, nur „hf_…“ darin (Nutzer 20.11.2026: „sehr weit nach rechts gewandert … komischen platzhalter“)
+                HStack(spacing: 8) {
+                    Image(systemName: "key").foregroundStyle(.secondary)
+                    SecureField("", text: $hfToken,
+                                prompt: Text(t("Token hier einfügen (beginnt mit hf_)", "Paste the token here (starts with hf_)")))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 460)
+                        .onSubmit { checkToken(save: true) }
+                        .onChange(of: hfToken) { _, _ in hfOffline = false }
+                    Spacer(minLength: 0)
+                }
                 HStack {
-                    Button(t("Speichern", "Save")) {
-                        let token = hfToken.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Settings.hfToken = token.isEmpty ? nil : token
-                        hfToken = ""
-                        hfSaved = Settings.hfToken != nil
+                    Button(t("Prüfen", "Check")) { checkToken(save: false) }
+                        .disabled(hfChecking || (hfDraft.isEmpty && !hfSaved))
+                        .help(t("Fragt Hugging Face, ob das eingegebene (sonst das gespeicherte) Token gilt und LTX-2.5 lesen darf.",
+                                "Asks Hugging Face whether the entered (otherwise the saved) token is valid and may read LTX-2.5."))
+                    Button(t("Prüfen und speichern", "Check and save")) { checkToken(save: true) }
+                        .disabled(hfChecking || hfDraft.isEmpty)
+                    if hfOffline {
+                        Button(t("Ohne Prüfung speichern", "Save without checking")) { saveToken(hfDraft) }
                     }
-                    .disabled(hfToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if hfSaved {
                         Button(t("Token entfernen", "Remove token")) {
                             Settings.hfToken = nil
                             hfSaved = false
+                            hfResult = nil
                         }
                     }
                     Link(t("Token anlegen …", "Create a token …"), destination: URL(string: "https://huggingface.co/settings/tokens")!)
+                    if hfChecking { ProgressView().controlSize(.small) }
                 }
-                Text(hfSaved ? t("Ein Token ist gespeichert.", "A token is saved.") : t("Kein Token gespeichert.", "No token saved."))
-                    .font(.caption)
+                if let result = hfResult {
+                    Label(result.text, systemImage: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(result.ok ? Color.green : Color.orange)
+                        .font(.caption)
+                        .textSelection(.enabled)
+                } else {
+                    Text(hfSaved ? t("Ein Token ist gespeichert.", "A token is saved.") : t("Kein Token gespeichert.", "No token saved."))
+                        .font(.caption)
+                }
                 Text(t("Nur für gesperrte Modelle nötig (LTX-2.5): auf Hugging Face die Lizenz des Modells annehmen, ein Token "
-                       + "mit Leserecht anlegen und hier eintragen. Es bleibt auf diesem Mac.",
+                       + "mit Leserecht anlegen und hier eintragen. Beim Speichern prüft NVAI-open es bei Hugging Face; es bleibt "
+                       + "auf diesem Mac.",
                        "Only needed for gated models (LTX-2.5): accept the model's license on Hugging Face, create a token "
-                       + "with read access and enter it here. It stays on this Mac."))
+                       + "with read access and enter it here. NVAI-open checks it with Hugging Face when saving; it stays on "
+                       + "this Mac."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section(t("Erzeugte Dateien", "Generated files")) {
@@ -164,6 +193,43 @@ struct SettingsView: View {
     }
 
     /// Ablage wechseln: fragt, ob die bisherigen Dateien mitkommen (sind keine da, gleich).
+    private var hfDraft: String { hfToken.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Prüft das eingegebene Token (ohne Eingabe das gespeicherte) bei Hugging Face; `save` speichert es, wenn es gilt.
+    private func checkToken(save: Bool) {
+        let draft = hfDraft
+        guard !hfChecking, let token = draft.isEmpty ? (save ? nil : Settings.hfToken) : draft else { return }
+        hfChecking = true
+        hfResult = nil
+        hfOffline = false
+        Task {
+            let outcome = await HFTokenCheck.check(token)
+            hfChecking = false
+            let saving = save && !draft.isEmpty
+            switch outcome {
+            case .valid:
+                if saving { saveToken(draft) }
+                hfResult = (true, HFTokenCheck.message(outcome, saving: saving))
+            case .rejected:
+                hfResult = (false, HFTokenCheck.message(outcome, saving: saving))
+            case .unreachable:
+                hfOffline = saving
+                hfResult = (false, HFTokenCheck.message(outcome, saving: saving))
+            }
+        }
+    }
+
+    private func saveToken(_ token: String) {
+        guard !token.isEmpty else { return }
+        Settings.hfToken = token
+        hfToken = ""
+        hfSaved = true
+        if hfOffline {
+            hfOffline = false
+            hfResult = (true, t("Gespeichert, ohne Prüfung.", "Saved without checking."))
+        }
+    }
+
     private func switchAssets(to url: URL) {
         Task {
             let summary = await AssetStore.shared.summary()

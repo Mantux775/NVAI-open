@@ -337,6 +337,12 @@ recorder (VR-7000 format) are read under `/api/audio/vdr/*`. Every block is a dr
 present the translation as certified. Measured on a 95-second demo case: spectrogram 2 s, translation track with 15
 blocks 34 s, review package 2 s.
 
+`POST …/video/export {tracks, region, subtitles: "original"|"translation", burn}` puts the linked video together with
+new sound; `burn: true` writes the subtitles into the picture (re-encoded, NVENC), otherwise the picture stays
+bit-identical and the subtitles come as an SRT next to it. For the Windows Media Player burn them in: it shows no
+subtitle track from an MP4 and rejects a whole SRT file when one line reaches 1024 characters, so subtitles are written
+with at most two lines of 42 characters.
+
 ### Narrator voice (since 0.5.21)
 
 `generate_speech(text, voice=…)` speaks a text with **Qwen3-TTS 1.7B** (Apache-2.0, 10 languages including English

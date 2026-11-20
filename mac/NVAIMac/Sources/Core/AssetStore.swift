@@ -204,6 +204,15 @@ actor AssetStore {
     }
 
     func addUpload(data: Data, originalName: String) throws -> AssetRecord {
+        try addUpload(originalName: originalName) { try data.write(to: $0, options: .atomic) }
+    }
+
+    /// Eine schon geschriebene Datei (großer, gestreamter Upload, seit 0.5.10) in die Ablage verschieben.
+    func addUpload(moving file: URL, originalName: String) throws -> AssetRecord {
+        try addUpload(originalName: originalName) { try FileManager.default.moveItem(at: file, to: $0) }
+    }
+
+    private func addUpload(originalName: String, store: (URL) throws -> Void) throws -> AssetRecord {
         load()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let ext = (originalName as NSString).pathExtension.lowercased()
@@ -211,7 +220,7 @@ actor AssetStore {
         let suffix = (Self.imageSuffixes + Self.mediaSuffixes).contains(ext) ? ext : "png"
         let id = Self.newID("ast")
         let filename = "upl_\(id.dropFirst(4)).\(suffix)"
-        try data.write(to: fileURL(filename), options: .atomic)
+        try store(fileURL(filename))
         let record = AssetRecord(id: id, jobID: nil, kind: "upload", filename: filename, prompt: "",
                                  modelID: "", meta: ["original_name": .string(originalName)],
                                  createdAt: Date().timeIntervalSince1970)
@@ -278,6 +287,53 @@ actor AssetStore {
         save()
         AssetSnapshot.shared.markDeleted(id)
         return true
+    }
+
+    /// Mehrere Assets samt Dateien löschen, ein Speichern für alle. Gibt Anzahl und freigewordene Bytes zurück.
+    private func remove(_ ids: Set<String>) -> (count: Int, bytes: Int64) {
+        guard !ids.isEmpty else { return (0, 0) }
+        let fm = FileManager.default
+        var removed: [String] = []
+        var bytes: Int64 = 0
+        assets.removeAll { r in
+            guard ids.contains(r.id) else { return false }
+            let url = fileURL(r.filename)
+            bytes += ((try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+            try? fm.removeItem(at: url)
+            removed.append(r.id)
+            return true
+        }
+        guard !removed.isEmpty else { return (0, 0) }
+        save()
+        for id in removed { AssetSnapshot.shared.markDeleted(id) }
+        return (removed.count, bytes)
+    }
+
+    /// Verlauf leeren wie DELETE /api/history unter Windows (seit 0.5.10): ohne `kind` alles, sonst nur diese Art
+    /// (image, video, audio). Es bleiben: was einem Studio-Projekt gehört (`studio_project`, unter Windows der
+    /// Projektordner), was ein Projekt nutzt (`keep`) und was ein wartender oder laufender Auftrag als Quelle nennt
+    /// (`busy`). Uploads gehen nur beim Leeren von allem mit, wie die Uploads ohne Auftrag unter Windows.
+    func clearHistory(kind: String?, keep: Set<String>, busy: Set<String>) -> (count: Int, bytes: Int64, jobs: Set<String>) {
+        load()
+        guard loaded else { return (0, 0, []) }  // Verlauf nicht gelesen (Laufwerk fehlt): nichts anfassen
+        let doomed = assets.filter { r in
+            guard !keep.contains(r.id), !busy.contains(r.id), r.meta["studio_project"] == nil else { return false }
+            // nach Art nur Ergebnisse von Aufträgen; Uploads haben keinen, wie unter Windows
+            if let kind { return r.kind == kind && r.jobID != nil }
+            return true
+        }
+        let result = remove(Set(doomed.map(\.id)))
+        return (result.count, result.bytes, Set(doomed.compactMap(\.jobID)))
+    }
+
+    /// Die Ergebnisse eines Auftrags löschen, außer was ein Studio-Projekt nutzt (wie DELETE /api/jobs/{id} unter
+    /// Windows, seit 0.5.10; vorher blieben die Dateien). Gibt Anzahl, Bytes und die Zahl der behaltenen zurück.
+    func deleteResults(ofJob jobID: String, keep: Set<String>) -> (count: Int, bytes: Int64, kept: Int) {
+        load()
+        let results = assets.filter { $0.jobID == jobID }
+        let doomed = Set(results.map(\.id)).subtracting(keep)
+        let result = remove(doomed)
+        return (result.count, result.bytes, results.count - doomed.count)
     }
 
     // MARK: Ablageordner wechseln (seit 0.4.8)

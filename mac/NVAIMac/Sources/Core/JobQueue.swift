@@ -344,9 +344,12 @@ actor JobQueue {
         return try? cancel(id)
     }
 
-    /// Aus dem Verlauf entfernen (fertige) bzw. abbrechen (wartende).
-    func delete(_ id: String) throws {
-        guard let job = jobs[id] else { throw APIError(404, t("Unbekannter Auftrag: \(id)", "Unknown job: \(id)")) }
+    /// Aus dem Verlauf entfernen (fertige) bzw. abbrechen (wartende). Die Dateien löscht DELETE /api/jobs/{id} danach
+    /// über `AssetStore.deleteResults` (seit 0.5.10). `known` = der Auftrag stand noch in der Liste; nach einem Neustart
+    /// stehen nur noch seine Ergebnisse im Verlauf.
+    @discardableResult
+    func delete(_ id: String) throws -> Bool {
+        guard let job = jobs[id] else { return false }
         if job.status == "running" {
             throw APIError(409, t("Der Auftrag läuft gerade. Abbrechen über POST /api/jobs/current/cancel; "
                                   + "er endet dann nach dem aktuellen Rechenschritt.",
@@ -356,6 +359,35 @@ actor JobQueue {
         jobs[id] = nil
         order.removeAll { $0 == id }
         changed()
+        return true
+    }
+
+    /// Läuft gerade ein Rechenauftrag (kein Download)? „Verlauf leeren“ wartet dann, wie unter Windows.
+    var generating: Bool { jobs.values.contains { $0.status == "running" && $0.kind != "download" } }
+
+    /// Assets, die ein wartender oder laufender Auftrag als Quelle nennt (Ausgangsbild, Maske, Referenzen, Stimme,
+    /// Endbild): „Verlauf leeren“ lässt sie stehen, wie unter Windows (seit 0.5.10).
+    func busyAssetIDs() -> Set<String> {
+        var ids = Set<String>()
+        for job in jobs.values where !job.isFinished {
+            for (key, value) in job.params.objectValue ?? [:] {
+                if key.hasSuffix("asset_id"), let s = value.stringValue, !s.isEmpty { ids.insert(s) }
+                if key.hasSuffix("asset_ids") { ids.formUnion((value.arrayValue ?? []).compactMap(\.stringValue)) }
+            }
+        }
+        return ids
+    }
+
+    /// Fertige Einträge aus der Liste nehmen: nach „Verlauf leeren“ alle (`all`, wie unter Windows auch fehlgeschlagene
+    /// und abgebrochene), nach Art nur die, deren Ergebnisse gelöscht wurden. Downloads bleiben. Gibt ihre IDs zurück.
+    @discardableResult
+    func forget(_ ids: Set<String>, all: Bool) -> Set<String> {
+        let gone = Set(jobs.values.filter { $0.isFinished && $0.kind != "download" && (all || ids.contains($0.id)) }.map(\.id))
+        guard !gone.isEmpty else { return [] }
+        for id in gone { jobs[id] = nil }
+        order.removeAll { gone.contains($0) }
+        changed()
+        return gone
     }
 
     // MARK: Abarbeiten

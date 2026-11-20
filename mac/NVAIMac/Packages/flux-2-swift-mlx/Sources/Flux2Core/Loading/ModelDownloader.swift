@@ -16,6 +16,12 @@ public class Flux2ModelDownloader: @unchecked Sendable {
     /// URLSession for downloads
     private let session: URLSession
 
+    /// Optional file loader installed by the host app (NVAI-open: resumable downloads with HTTP Range). It receives
+    /// the URL, the request headers, the destination and a byte progress callback (done, total), and must leave the
+    /// complete file at the destination. Without it, each file is fetched with `URLSession.download` as before.
+    nonisolated(unsafe) public static var fileLoader:
+        (@Sendable (URL, [String: String], URL, @escaping @Sendable (Int64, Int64) -> Void) async throws -> Void)?
+
     public init(hfToken: String? = nil) {
         self.hfToken = hfToken
         if let token = hfToken {
@@ -324,11 +330,23 @@ public class Flux2ModelDownloader: @unchecked Sendable {
             let fileName = URL(fileURLWithPath: file).lastPathComponent
             progress?(Double(index) / Double(totalFiles), "Downloading \(fileName)...")
 
+            // A weight file is only ever moved into place complete, so one left by an interrupted earlier attempt is
+            // kept instead of fetched again (NVAI-open).
+            let target = destDir.appendingPathComponent(fileName)
+            if Self.fileLoader != nil, fileName.hasSuffix(".safetensors"), FileManager.default.fileExists(atPath: target.path) {
+                if let size = (try? FileManager.default.attributesOfItem(atPath: target.path))?[.size] as? Int64 {
+                    downloadedBytes += size
+                }
+                continue
+            }
             let fileURL = try await downloadFile(
                 repoId: repoId,
                 filePath: file,
-                to: destDir.appendingPathComponent(fileName)
-            )
+                to: target
+            ) { done, total in
+                guard total > 0 else { return }
+                progress?((Double(index) + Double(done) / Double(total)) / Double(totalFiles), "Downloading \(fileName)...")
+            }
 
             if let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
                let size = attrs[.size] as? Int64 {
@@ -409,11 +427,19 @@ public class Flux2ModelDownloader: @unchecked Sendable {
     }
 
     /// Download a single file from HuggingFace
-    private func downloadFile(repoId: String, filePath: String, to destination: URL) async throws -> URL {
+    private func downloadFile(repoId: String, filePath: String, to destination: URL,
+                              bytes: (@Sendable (Int64, Int64) -> Void)? = nil) async throws -> URL {
         let urlString = "https://huggingface.co/\(repoId)/resolve/main/\(filePath)"
 
         guard let url = URL(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString) else {
             throw Flux2DownloadError.downloadFailed("Invalid URL: \(urlString)")
+        }
+
+        if let loader = Self.fileLoader {
+            var headers: [String: String] = [:]
+            if let token = hfToken { headers["Authorization"] = "Bearer \(token)" }
+            try await loader(url, headers, destination) { done, total in bytes?(done, total) }
+            return destination
         }
 
         var request = URLRequest(url: url)

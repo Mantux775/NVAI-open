@@ -605,11 +605,152 @@ def cmd_clockalign(s: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# ----------------------------------------------------------------------------------------- Untertitel
+
+# Wie frontend/src/forensic/subtitles.ts (Nutzer 20.11.2026: Windows Media Player lehnte die SRT ab). Der Untertitel-Parser
+# von Windows verwirft die ganze Datei, sobald eine Zeile 1024 Zeichen erreicht (DataFormatError 0xC00D36B1); Übersetzungen
+# standen bis dahin in einer Zeile und erreichten 2983 Zeichen. Deshalb höchstens zwei Zeilen zu 42 Zeichen je Block,
+# längere Texte auf aufeinanderfolgende Blöcke verteilt (Zeit nach Textlänge), sortiert, CRLF.
+SUB_LINE = 42
+SUB_LINES = 2
+
+
+def sub_wrap(text: str, width: int = SUB_LINE) -> list[str]:
+    lines: list[str] = []
+    cur = ""
+    for w in str(text).split():
+        while len(w) > width:
+            if cur:
+                lines.append(cur)
+                cur = ""
+            lines.append(w[:width])
+            w = w[width:]
+        if not w:
+            continue
+        if not cur:
+            cur = w
+        elif len(cur) + 1 + len(w) <= width:
+            cur += " " + w
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def sub_layout(cues: list[dict[str, Any]], clip: tuple[float, float] | None = None) -> list[dict[str, Any]]:
+    """[{start, end, text}] → [{start, end, lines}]: umbrochen, lange Blöcke aufgeteilt, auf clip beschnitten, sortiert."""
+    out: list[tuple[float, int, dict[str, Any]]] = []
+    for c in cues:
+        lines = sub_wrap(c["text"])
+        if not lines:
+            continue
+        chunks = [lines[i:i + SUB_LINES] for i in range(0, len(lines), SUB_LINES)]
+        weights = [len(" ".join(ch)) for ch in chunks]
+        total = sum(weights) or 1
+        start, end = float(c["start"]), float(c["end"])
+        dur = max(0.0, end - start)
+        t0, acc = start, 0
+        for i, ch in enumerate(chunks):
+            acc += weights[i]
+            t1 = max(start, end) if i == len(chunks) - 1 else start + dur * acc / total
+            a, b = (max(clip[0], t0), min(clip[1], t1)) if clip else (t0, t1)
+            if not clip or b > a or (t1 == t0 and clip[0] <= t0 < clip[1]):
+                out.append((a, len(out), {"start": a, "end": b, "lines": ch}))
+            t0 = t1
+    out.sort(key=lambda x: (x[0], x[1]))
+    return [x[2] for x in out]
+
+
+def sub_time(x: float, sep: str = ",") -> str:
+    ms = int(round(max(0.0, x) * 1000))
+    return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d}{sep}{ms % 1000:03d}"
+
+
+def srt_text(laid: list[dict[str, Any]]) -> str:
+    return "\r\n".join(f"{i + 1}\r\n{sub_time(c['start'])} --> {sub_time(c['end'])}\r\n" + "\r\n".join(c["lines"]) + "\r\n"
+                       for i, c in enumerate(laid))
+
+
+class SubBurner:
+    """Untertitel ins dekodierte Bild mischen, direkt in Y, U und V (weiße Schrift auf halbdurchsichtigem Schwarz, wie
+    drawSubtitles in subtitles.ts). Nur die Zeilen mit Untertitel werden angefasst; alle anderen Bildpunkte bleiben, wie
+    der Dekoder sie liefert, und es gibt keinen Umweg über RGB (keine Farbverschiebung)."""
+
+    def __init__(self, w: int, h: int, laid: list[dict[str, Any]]):
+        self.w, self.h, self.laid = w, h, laid
+        self.size = max(14, round(h * 0.045))
+        self.font = _font(self.size, bold=True)
+        self.key: tuple[int, ...] | None = None
+        self.masks: tuple[int, Any, Any] | None = None
+
+    def active(self, t: float) -> list[int]:
+        on = [i for i, c in enumerate(self.laid) if c["start"] <= t < c["end"]]
+        return on[-3:]
+
+    def _render(self, idx: list[int]) -> tuple[int, Any, Any] | None:
+        from PIL import Image, ImageDraw
+        w, h, size = self.w, self.h, self.size
+        lh = round(size * 1.3)
+        pad = round(size * 0.4)
+        gap = round(size * 0.35)
+        box = Image.new("L", (w, h), 0)
+        txt = Image.new("L", (w, h), 0)
+        db, dt = ImageDraw.Draw(box), ImageDraw.Draw(txt)
+        y = h - round(h * 0.06)
+        for i in reversed(idx):
+            for line in reversed(self.laid[i]["lines"]):
+                tw = min(w - 8, dt.textlength(line, font=self.font))
+                db.rectangle([round(w / 2 - tw / 2 - pad), y - lh, round(w / 2 + tw / 2 + pad) - 1, y - 1], fill=158)  # 0,62
+                dt.text((w / 2, y - lh / 2), line, font=self.font, fill=255, anchor="mm")
+                y -= lh
+            y -= gap
+        top = max(0, (y - 2) & ~1)
+        a_box = np.asarray(box, np.float32)[top:] / 255.0
+        a_txt = np.asarray(txt, np.float32)[top:] / 255.0
+        return top, a_box, a_txt
+
+    def apply(self, frame: Any, t: float) -> Any:
+        import av
+        idx = self.active(t)
+        if not idx:
+            return frame
+        if tuple(idx) != self.key:
+            self.key = tuple(idx)
+            self.masks = self._render(idx)
+        if self.masks is None:
+            return frame
+        top, a_box, a_txt = self.masks
+        fmt = frame.format.name
+        if fmt not in ("yuv420p", "yuvj420p"):
+            frame = frame.reformat(format="yuv420p")
+            fmt = "yuv420p"
+        full = fmt == "yuvj420p"
+        lo, hi = (0.0, 255.0) if full else (16.0, 235.0)
+        arr = frame.to_ndarray()  # Y (h Zeilen), dann U und V (je h/4 Zeilen zu w Spalten)
+        w, h = self.w, self.h
+        y = arr[top:h].astype(np.float32)
+        y = y * (1 - a_box) + lo * a_box
+        y = y * (1 - a_txt) + hi * a_txt
+        arr[top:h] = np.clip(np.rint(y), 0, 255).astype(np.uint8)
+        # Farbe: Alpha auf halbe Auflösung, Grau = 128 (Schwarz und Weiß haben keine Farbe)
+        keep = (1 - a_box) * (1 - a_txt)
+        keep_c = keep.reshape(keep.shape[0] // 2, 2, w // 2, 2).mean(axis=(1, 3))
+        uv = arr[h:].reshape(2, h // 2, w // 2)
+        part = uv[:, top // 2:].astype(np.float32)
+        uv[:, top // 2:] = np.clip(np.rint(128 + (part - 128) * keep_c), 0, 255).astype(np.uint8)
+        out = av.VideoFrame.from_ndarray(arr, format=fmt)
+        out.pts, out.time_base = frame.pts, frame.time_base
+        return out
+
+
 def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
     """Video mit neuem Ton: Bild unverändert kopiert (ab dem Schlüsselbild vor dem Anfang), Ton aus den Spuren der
     Aufnahme gemischt und über die Ausrichtung (video_t = a·t + b) auf die Video-Zeit gelegt, AAC. Untertitel als
-    SRT daneben. s: video, fit {a, b}, tracks [{file, gain_db}], region [t0, t1] (Aufnahme-Zeit) oder None, out,
-    kbps, mono, srt (Liste {start, end, text} in Aufnahme-Zeit) oder None."""
+    SRT daneben; mit burn zusätzlich ins Bild gebrannt (Bild neu kodiert, NVENC, sonst x264). s: video, fit {a, b},
+    tracks [{file, gain_db}], region [t0, t1] (Aufnahme-Zeit) oder None, out, kbps, mono, srt (Liste {start, end, text}
+    in Aufnahme-Zeit) oder None, burn."""
     import av
     from scipy.signal import resample_poly
     a_, b_ = float(s["fit"]["a"]), float(s["fit"]["b"])
@@ -631,7 +772,22 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.stem + ".part" + out.suffix)
     c = av.open(str(tmp), "w", format="mp4", options={"movflags": "+faststart"})
-    vout = c.add_stream_from_template(vs)
+    burn = bool(s.get("burn") and s.get("srt"))
+    vw, vh = int(vs.codec_context.width) & ~1, int(vs.codec_context.height) & ~1
+    vfps = vs.average_rate or vs.guessed_rate or 30
+    enc = ""
+    if burn:
+        enc = _pick_h264(vw, vh, max(1, round(float(vfps))))
+        vout = c.add_stream(enc, rate=vfps)
+        vout.width, vout.height, vout.pix_fmt = vw, vh, "yuv420p"
+        vout.bit_rate = int(min(40e6, max(2e6, vw * vh * float(vfps) * 0.16)))
+        vout.codec_context.gop_size = max(1, round(2 * float(vfps)))
+        if enc.endswith("_nvenc"):
+            vout.options = {"preset": "p5", "rc": "vbr", "cq": "20"}
+        elif enc == "libx264":
+            vout.options = {"preset": "veryfast", "crf": "18"}
+    else:
+        vout = c.add_stream_from_template(vs)
     st_a = c.add_stream("aac", rate=48000)
     st_a.layout = "mono" if s.get("mono") else "stereo"
     st_a.bit_rate = int(s.get("kbps") or 192) * 1000
@@ -696,35 +852,62 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
             c.mux(p)
     for p in st_a.encode(None):
         c.mux(p)
-    for i, packet in enumerate(packets):
-        packet.pts -= first
-        packet.dts -= first
-        packet.stream = vout
-        c.mux(packet)
-        count += 1
-        if i % 500 == 0:
-            progress(0.6 + 0.4 * i / max(1, len(packets)), "Bild übernehmen")
+    # Untertitel in Video-Zeit ab dem ersten Bild, umbrochen und auf das Video beschnitten (für SRT und Einbrennen gleich)
+    laid: list[dict[str, Any]] = []
+    if s.get("srt"):
+        cues = [{"start": a_ * float(x["start"]) + b_ - kf, "end": a_ * float(x["end"]) + b_ - kf, "text": x["text"]}
+                for x in s["srt"] if str(x.get("text") or "").strip()]
+        laid = sub_layout([x for x in cues if x["end"] > 0 and x["start"] < total], clip=(0.0, total))
+    if burn:
+        from fractions import Fraction
+        burner = SubBurner(vw, vh, laid)
+        dec = vs.codec_context
+        tb_out = Fraction(1, 1) / Fraction(vfps)
+        last = -1
+
+        def put(frame: Any) -> None:
+            nonlocal count, last
+            if frame.pts is None or frame.pts < first:
+                return  # vor dem Schlüsselbild (offene Bildgruppe)
+            rel = float((frame.pts - first) * vs.time_base)
+            if rel > total + 1e-6:
+                return
+            if (frame.width, frame.height) != (vw, vh):
+                frame = frame.reformat(width=vw, height=vh)
+            f2 = burner.apply(frame, rel)
+            f2.pts = max(last + 1, int(round(rel / float(tb_out))))
+            f2.time_base = tb_out
+            last = f2.pts
+            for pk in vout.encode(f2):
+                c.mux(pk)
+            count += 1
+        for i, packet in enumerate(packets):
+            for frame in dec.decode(packet):
+                put(frame)
+            if i % 100 == 0:
+                progress(0.6 + 0.4 * i / max(1, len(packets)), "Untertitel einbrennen")
+        for frame in dec.decode(None):
+            put(frame)
+        for pk in vout.encode(None):
+            c.mux(pk)
+    else:
+        for i, packet in enumerate(packets):
+            packet.pts -= first
+            packet.dts -= first
+            packet.stream = vout
+            c.mux(packet)
+            count += 1
+            if i % 500 == 0:
+                progress(0.6 + 0.4 * i / max(1, len(packets)), "Bild übernehmen")
     c.close()
     vin.close()
     os.replace(tmp, out)
     srt = None
     if s.get("srt"):
-        lines = []
-        n = 0
-        for cue in s["srt"]:
-            a0 = a_ * float(cue["start"]) + b_ - kf
-            b0 = a_ * float(cue["end"]) + b_ - kf
-            if b0 <= 0 or a0 >= total:
-                continue
-            n += 1
-
-            def ts(x: float) -> str:
-                ms = int(round(max(0.0, x) * 1000))
-                return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
-            lines.append(f"{n}\n{ts(a0)} --> {ts(b0)}\n{cue['text']}\n")
         srt = out.with_suffix(".srt")
-        srt.write_text("\n".join(lines), encoding="utf-8-sig")
-    return {"file": str(out), "srt": str(srt) if srt else None, "video_start": round(kf, 3), "video_end": round(tau1, 3),
+        srt.write_text(srt_text(laid), encoding="utf-8-sig", newline="")
+    return {"file": str(out), "srt": str(srt) if srt else None, "cues": len(laid), "burned": enc or None,
+            "video_start": round(kf, 3), "video_end": round(tau1, 3),
             "record_start": round((kf - b_) / a_, 3), "packets": count, "peak": round(peak, 4),
             "size_mb": round(out.stat().st_size / 1024 ** 2, 1)}
 

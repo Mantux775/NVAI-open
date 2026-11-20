@@ -60,6 +60,13 @@ actor Flux2Engine {
         ModelRegistry.customModelsDirectory = url
         TextEncoderModelDownloader.customModelsDirectory = url
         TextEncoderModelDownloader.reconfigureHubApi()
+        // Gewichte über den fortsetzbaren Downloader (seit 0.5.10, Paketänderung in NVAI-OPEN-CHANGES.md): Ein
+        // abgebrochener Download von FLUX.2 Klein (mehrere GB) setzt fort, statt bei null anzufangen
+        Flux2ModelDownloader.fileLoader = { url, headers, destination, bytes in
+            let tmp = try await Downloader().lade(url, headers: headers) { stand in bytes(stand.geladen, stand.gesamt) }
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: tmp, to: destination)
+        }
     }
 
     func currentModelID() -> String? { loadedModelID }

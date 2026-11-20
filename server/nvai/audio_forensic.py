@@ -610,7 +610,8 @@ async def submit_vexport(pid: str, req: dict[str, Any]) -> Job:
     if len(rates) > 1:
         raise al.AudioError(t("Die hörbaren Spuren haben verschiedene Abtastraten.", "The audible tracks have different sample rates."))
     return await jobs.submit("audio_vexport", {"project_id": pid, "tracks": chosen, "region": req.get("region"),
-                                               "subtitles": req.get("subtitles") or "none", "mono": bool(req.get("mono")),
+                                               "subtitles": req.get("subtitles") or "none", "burn": bool(req.get("burn")),
+                                               "mono": bool(req.get("mono")),
                                                "name": str(req.get("name") or "")[:80],
                                                "dest_dir": al.check_dest_dir(req.get("dest_dir"))})
 
@@ -638,18 +639,22 @@ async def _vexport(job: Job, ctx: jobs.JobContext) -> list[str]:
                                              "tracks": [{"file": al._track_paths(pid, x["id"])["flac"], "gain_db": x["gain_db"]}
                                                         for x in job.params["tracks"]],
                                              "region": job.params.get("region"), "out": str(dest), "mono": job.params.get("mono"),
-                                             "srt": srt}, ctx, 0, 1, t("Video mit Ton", "video with sound"), tool=TOOL)
+                                             "srt": srt, "burn": bool(job.params.get("burn") and srt)},
+                             ctx, 0, 1, t("Video mit Ton", "video with sound"), tool=TOOL)
     if not as_asset:
         al.update(pid, lambda q: q["history"].append({"time": time.time(), "op": "export", "format": "mp4", "path": str(dest),
-                                                       "file": out_name, "srt": Path(res["srt"]).name if res.get("srt") else None}))
+                                                       "file": out_name, "srt": Path(res["srt"]).name if res.get("srt") else None,
+                                                       "burned": res.get("burned")}))
         return []
     asset = db.create_asset(kind="video", filename=out_name, job_id=job.id, prompt=p["name"], model_id="audio-forensic",
                             meta={"audio_project": pid, "tracks": job.params["tracks"], "region": job.params.get("region"),
                                   "subtitles": mode, "srt": Path(res["srt"]).name if res.get("srt") else None,
+                                  "burned": res.get("burned"),
                                   "video_start": res.get("video_start"), "record_start": res.get("record_start"),
                                   "size_mb": res.get("size_mb")})
     al.update(pid, lambda q: q["history"].append({"time": time.time(), "op": "export", "format": "mp4", "asset_id": asset.id,
-                                                   "file": out_name, "srt": Path(res["srt"]).name if res.get("srt") else None}))
+                                                   "file": out_name, "srt": Path(res["srt"]).name if res.get("srt") else None,
+                                                   "burned": res.get("burned")}))
     jobs.publish({"type": "assets.changed"})
     return [asset.id]
 
@@ -1050,6 +1055,8 @@ class VideoExportRequest(BaseModel):
     tracks: list[dict[str, Any]] = Field(..., max_length=32)
     region: list[float] | None = None
     subtitles: str = Field("none", max_length=20)
+    # Untertitel ins Bild einbrennen (Bild neu kodiert); ohne bleibt das Bild bytegleich, die SRT kommt daneben
+    burn: bool = False
     mono: bool = False
     name: str = Field("", max_length=80)
     dest_dir: str | None = Field(None, max_length=500)

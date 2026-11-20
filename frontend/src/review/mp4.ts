@@ -349,6 +349,23 @@ export class Mp4Writer {
     if (o.presentation != null) t.presentation = o.presentation
   }
 
+  /** Negative Kompositionsversätze (B-Frames eines neuen Kodierers) aufheben: alle um D anheben, die Schnittliste
+   * beginnt D später. Manche Abspieler lesen ctts nur ohne Vorzeichen. */
+  liftCto(k: number): void {
+    const t = this.tracks[k]
+    if (!t.ctos) return
+    let low = 0
+    for (const c of t.ctos) if (c < low) low = c
+    if (low >= 0) return
+    for (let i = 0; i < t.ctos.length; i++) t.ctos[i] -= low
+    t.shift -= low
+  }
+
+  /** Zahl der Proben einer Spur */
+  count(k: number): number {
+    return this.tracks[k].sizes.length
+  }
+
   async start(brands: string[] = []): Promise<void> {
     const ftyp = box('ftyp', str('isom'), u32(0x200), ...['isom', 'iso2', ...brands, 'mp41'].map(str))
     this.mdat = ftyp.length
@@ -448,6 +465,31 @@ export class Mp4Writer {
 }
 
 /** stsd für AAC-LC (mp4a mit esds) */
+/** stsd für neu kodiertes H.264 (eingebrannte Untertitel): avc1 mit dem avcC des Kodierers */
+export function avcStsd(width: number, height: number, avcC: Uint8Array): Uint8Array {
+  const name = zeros(32)
+  const label = str('NVAI-open')
+  name[0] = label.length
+  name.set(label, 1)
+  const avc1 = box('avc1', zeros(6), u16(1), u16(0), u16(0), zeros(12), u16(width), u16(height), u32(0x00480000), u32(0x00480000),
+    u32(0), u16(1), name, u16(0x0018), u16(0xffff), box('avcC', avcC))
+  return full('stsd', 0, 0, u32(1), avc1)
+}
+
+/** Inhalt des avcC- bzw. hvcC-Kastens aus einem stsd (für VideoDecoder.configure) und der Codec-Text dazu */
+export function videoConfig(stsd: Uint8Array): { codec: string; description: Uint8Array } | null {
+  for (let i = 4; i + 4 <= stsd.length; i++) {
+    const tag = String.fromCharCode(stsd[i], stsd[i + 1], stsd[i + 2], stsd[i + 3])
+    if (tag !== 'avcC') continue
+    const size = new DataView(stsd.buffer, stsd.byteOffset + i - 4, 4).getUint32(0)
+    const body = stsd.slice(i + 4, i - 4 + size)
+    if (body.length < 4) return null
+    const hex = (x: number) => x.toString(16).padStart(2, '0')
+    return { codec: `avc1.${hex(body[1])}${hex(body[2])}${hex(body[3])}`, description: body }
+  }
+  return null
+}
+
 export function aacStsd(sampleRate: number, channels: number, asc: Uint8Array, bitrate: number): Uint8Array {
   const desc = (tag: number, body: Uint8Array) => cat([u8(tag), u8(body.length), body])
   const dcd = desc(0x04, cat([u8(0x40), u8(0x15), u24(0), u32(bitrate), u32(bitrate), desc(0x05, asc)]))

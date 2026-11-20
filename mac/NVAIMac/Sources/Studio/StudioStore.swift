@@ -57,6 +57,19 @@ actor StudioStore {
         return nil
     }
 
+    /// Alles, was ein Projekt nutzt (Clips, Takes, Start- und Endbilder, Referenzen, Stimmen), wie studio.used_asset_ids
+    /// unter Windows: „Verlauf leeren“ und das Löschen eines Auftrags lassen es stehen (seit 0.5.10).
+    func usedAssetIDs() -> Set<String> {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        var ids = Set<String>()
+        for url in files where url.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: url),
+                  let p = try? JSONDecoder().decode(StudioProject.self, from: data) else { continue }
+            ids.formUnion(StudioPackage.usedAssets(p))
+        }
+        return ids
+    }
+
     func load(_ id: String) throws -> StudioProject {
         let url = try path(id)
         guard let data = try? Data(contentsOf: url) else {
@@ -221,5 +234,35 @@ enum AssetDeletion {
     static func deleteWithNotice(_ id: String) async -> String? {
         if case .inEdit(let project) = await delete(id) { return inEditMessage(project) }
         return nil
+    }
+
+    struct Cleared: Sendable {
+        let jobs: Int
+        let assets: Int
+        let bytes: Int64
+        var freedMB: Double { (Double(bytes) / 1_048_576 * 100).rounded() / 100 }
+    }
+
+    /// „Verlauf leeren“ (Oberfläche und DELETE /api/history, seit 0.5.10), alles oder nur eine Art. Solange ein
+    /// Rechenauftrag läuft, 409 wie unter Windows; Downloads, Projektmaterial und Quellen wartender Aufträge bleiben.
+    static func clearHistory(kind: String?) async throws -> Cleared {
+        if await JobQueue.shared.generating {
+            throw APIError(409, t("Es läuft gerade eine Generierung – bitte abwarten.", "A generation is running – please wait."))
+        }
+        let keep = await StudioStore.shared.usedAssetIDs()
+        let busy = await JobQueue.shared.busyAssetIDs()
+        let result = await AssetStore.shared.clearHistory(kind: kind, keep: keep, busy: busy)
+        let forgotten = await JobQueue.shared.forget(result.jobs, all: kind == nil)
+        return Cleared(jobs: result.jobs.union(forgotten).count, assets: result.count, bytes: result.bytes)
+    }
+
+    /// Einen Auftrag samt Ergebnissen löschen (DELETE /api/jobs/{id}, seit 0.5.10 wie unter Windows mit den Dateien);
+    /// was ein Projekt nutzt, bleibt. nil = weder Auftrag noch Ergebnisse bekannt.
+    static func deleteJob(_ id: String) async throws -> (assets: Int, bytes: Int64, kept: Int)? {
+        let known = try await JobQueue.shared.delete(id)
+        let keep = await StudioStore.shared.usedAssetIDs()
+        let result = await AssetStore.shared.deleteResults(ofJob: id, keep: keep)
+        guard known || result.count + result.kept > 0 else { return nil }
+        return (result.count, result.bytes, result.kept)
     }
 }

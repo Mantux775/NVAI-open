@@ -23,6 +23,10 @@ Changed (0.5.9): `Flux2RoPE.cacheKey` hashes the position IDs instead of using o
 the same number of tokens (512 × 288 and 384 × 384, or 1024 × 576 and 768 × 768) shared one cache entry, and the
 second image came out torn into bands.
 
+Added (0.5.10): `Flux2ModelDownloader.fileLoader`, an optional file loader the host app installs. NVAI-open uses it
+for resumable downloads with HTTP Range (an interrupted multi-gigabyte download continues instead of starting over),
+gets byte progress within a file, and keeps weight files that an earlier attempt already moved into place.
+
 Kopie von flux-2-swift-mlx 3.1.0 (MIT). Geändert: Nach jedem Denoising-Schritt prüft
 `Flux2Pipeline.swift` auf Abbruch, damit NVAI-open ein laufendes Bild innerhalb eines Schritts
 abbrechen kann statt erst nach dem ganzen Bild.
@@ -38,3 +42,7 @@ NVAI-open nimmt seither LoRA-Dateien vom Rechner an, und eine LoRA für eine and
 Geändert (0.5.9): `Flux2RoPE.cacheKey` bildet den Schlüssel aus den Positionswerten statt nur aus ihrer Anzahl. Zwei
 Größen mit gleich vielen Token (512 × 288 und 384 × 384, oder 1024 × 576 und 768 × 768) teilten sich einen Eintrag,
 und das zweite Bild kam in Streifen zerrissen heraus.
+Ergänzt (0.5.10): `Flux2ModelDownloader.fileLoader`, ein optionaler Datei-Lader, den die App einsetzt. NVAI-open
+lädt darüber fortsetzbar mit HTTP-Range (ein abgebrochener Download von mehreren GB setzt fort, statt bei null
+anzufangen), bekommt den Fortschritt innerhalb einer Datei und behält Gewichte, die ein früherer Versuch schon
+abgelegt hat.

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AudioProject, AudioTrack, TranscriptCredits, TranscriptDoc, TranscriptSegment } from '../api'
 import { t } from '../i18n'
 import { clockAt } from './Lanes'
+import { toSrt, toVtt } from './subtitles'
 
 // Übersetzer-Spur der Ton-Forensik: Liste aller Blöcke zweispaltig (Original | Übersetzung) wie in Gerichts-
 // Transkripten, Bearbeiten eines Blocks, Blöcke aus der Auswahl anlegen, Export als Text, SRT/VTT und CSV.
@@ -28,12 +29,6 @@ function noteText(note: string): string {
     second_unusable: t('Zweitmeinung unbrauchbar', 'second opinion unusable'),
   }
   return note.split(',').map((x) => x.trim()).filter((x) => x && !HIDDEN_NOTES.has(x)).map((x) => map[x] ?? x).join(' · ')
-}
-
-function srtTime(s: number, sep = ','): string {
-  const ms = Math.round(s * 1000)
-  const p = (n: number, w = 2) => String(n).padStart(w, '0')
-  return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)}${sep}${p(ms % 1000, 3)}`
 }
 
 export async function download(name: string, text: string, type = 'text/plain'): Promise<void> {
@@ -99,10 +94,14 @@ export function exportTranscript(proj: AudioProject, tracks: AudioTrack[], doc: 
     && (!opts.region || (s.end > opts.region[0] && s.start < opts.region[1])))
   const rel = (x: number) => (opts.region ? x - opts.region[0] : x)
   if (fmt === 'srt') {
-    download(`${base}_${useTr ? tl : 'original'}.srt`, lines.map((s, i) => `${i + 1}\n${srtTime(Math.max(0, rel(s.start)))} --> ${srtTime(Math.max(0, rel(s.end)))}\n${s.speaker ? `${s.speaker}: ` : ''}${text(s)}\n`).join('\n'))
+    // höchstens zwei Zeilen zu 42 Zeichen je Block, lange Blöcke aufgeteilt (subtitles.ts): Eine Zeile ab 1024 Zeichen
+    // ließ den Windows Media Player die ganze Datei ablehnen; leere Blöcke (nicht übersetzt) fallen weg
+    download(`${base}_${useTr ? tl : 'original'}.srt`, toSrt(lines.filter((s) => text(s).trim() && text(s) !== '[]')
+      .map((s) => ({ start: rel(s.start), end: rel(s.end), text: `${s.speaker ? `${s.speaker}: ` : ''}${text(s)}` }))).text)
   } else if (fmt === 'vtt') {
     const note = creditsLines(doc.credits)
-    download(`${base}_${useTr ? tl : 'original'}.vtt`, `WEBVTT\n\n${note.length ? `NOTE\n${note.join('\n').replace(/-->/g, '->')}\n\n` : ''}${lines.map((s) => `${srtTime(Math.max(0, rel(s.start)), '.')} --> ${srtTime(Math.max(0, rel(s.end)), '.')}\n${s.speaker ? `<v ${s.speaker}>` : ''}${text(s)}\n`).join('\n')}`, 'text/vtt')
+    download(`${base}_${useTr ? tl : 'original'}.vtt`, toVtt(lines.filter((s) => text(s).trim() && text(s) !== '[]')
+      .map((s) => ({ start: rel(s.start), end: rel(s.end), text: text(s), voice: s.speaker || undefined })), note), 'text/vtt')
   } else if (fmt === 'csv') {
     const q = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
     download(`${base}_transkript.csv`, ['nr;start_s;end_s;time;channel;speaker;kind;status;confidence;original;translation_en;translation;second_opinion;note',
