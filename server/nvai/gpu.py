@@ -120,6 +120,43 @@ AMD_TARGETS: list[tuple[str, str]] = [
 ]
 
 
+# Radeons, die AMDs PyTorch fuer Windows (ROCm) nicht kennt: RX 5000 (RDNA1, gfx101x), Vega und Radeon VII (gfx90x),
+# Polaris (RX 400/500, gfx80x) und aeltere GCN-Karten. Auf ihnen rechnet kein ROCm-Bau; eine RX 5700 XT stuerzte beim
+# Pruefen der Karte sogar ab (access violation in torch.cuda.is_available, GitHub-Issue #3, 17.11.2026). NVAI-open
+# rechnet dann auf dem Prozessor (cpu_mode). Dieselbe Liste steht in packaging\windows\install-runtime.ps1.
+# „R9 390“ braucht das Leerzeichen: R9700 (Radeon AI PRO, RDNA4) gehoert nicht dazu.
+AMD_UNSUPPORTED: tuple[str, ...] = (r"RX\s*5\d{3}", r"\bW5\d{3}\b", r"Vega", r"Radeon\s*(Pro\s*)?VII", r"RX\s*[45]\d0\b",
+                                    r"\bR[579]\s+(\d{3}|Fury|Nano)", r"\bHD\s*[5-8]\d{3}")
+# Umgebung fuer Prozesse ohne Grafikkarte: die Karte vor ROCm/CUDA verbergen, damit torch sie gar nicht erst anfasst.
+CPU_ENV = {"HIP_VISIBLE_DEVICES": "-1", "CUDA_VISIBLE_DEVICES": "-1"}
+
+
+def amd_unsupported(name: str) -> bool:
+    """Kennt AMDs PyTorch fuer Windows diese Radeon nicht (RX 5000, Vega, Polaris und aelter)?"""
+    import re
+    return any(re.search(p, name or "", re.IGNORECASE) for p in AMD_UNSUPPORTED)
+
+
+def cpu_mode() -> dict[str, Any] | None:
+    """Rechnet ComfyUI auf dem Prozessor? {"reason", "cards"} oder None. reason "amd_unsupported": alle eigenen Radeons
+    (ohne eigene: alle) sind ohne ROCm unter Windows und es steckt keine NVIDIA im Rechner; "no_gpu_compute": das Setup
+    fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json)."""
+    cards = list_gpus()
+    if cards and all(c.get("vendor") == "amd" for c in cards):
+        names = [str(c.get("name") or "") for c in cards]
+        own = [n for n in names if _is_discrete(n)] or names
+        if all(amd_unsupported(n) for n in own):
+            return {"reason": "amd_unsupported", "cards": own}
+    try:
+        saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    if isinstance(saved, dict) and saved.get("mode") == "cpu":
+        return {"reason": str(saved.get("reason") or "no_gpu_compute"),
+                "cards": [str(c) for c in saved.get("cards") or [c.get("name") for c in cards] if c]}
+    return None
+
+
 def amd_arch(name: str) -> str | None:
     """gfx-Ziel einer Radeon nach ihrem Namen, etwa "gfx1201" fuer die RX 9070 XT; None = unbekannt."""
     import re
@@ -224,7 +261,8 @@ def hip_devices(python: str | None = None) -> dict[str, Any] | None:
     kein venv, Abfrage fehlgeschlagen). Der Import von torch mit ROCm dauert einige Sekunden; das Ergebnis gilt,
     solange Treiber und Karten gleich bleiben."""
     global _hip_cache
-    if vendor() != "amd" or os.getenv("NVAI_SIMULATE_AMD"):
+    if vendor() != "amd" or os.getenv("NVAI_SIMULATE_AMD") or cpu_mode():
+        # ohne nutzbare Karte ROCm gar nicht erst fragen (auf einer RX 5700 XT stuerzte schon die Abfrage ab)
         return None
     if _hip_cache is not None:
         return _hip_cache

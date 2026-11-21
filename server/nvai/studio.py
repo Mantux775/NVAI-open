@@ -793,17 +793,36 @@ def _batch(p: dict[str, Any], a: dict[str, Any]) -> dict[str, list[Any]]:
     return {"results": results}
 
 
+# Vorwahl für Szenen, die der Nutzer von Hand anlegt (seit 0.5.30; Nutzer 21.11.2026: „auch logik für den user im
+# studio, wenn er manuell szenen erstellt“): je Bahn die Familie, die dort gemessen am besten ist und mit der auch der
+# Assistent arbeitet. Ist sie nicht geladen, bleibt es beim aktiven Modell.
+BEST_FAMILY = {("video", "video"): ("video", "ltx25"), ("voice", "audio"): ("speech", "qwen3_tts"),
+               ("music", "audio"): ("audio", "stable_audio3"), ("sfx", "audio"): ("audio", "stable_audio")}
+
+
+def _best_model(lane: str, kind: str) -> str | None:
+    """Die für diese Karte empfohlene geladene Fassung der besten Familie der Bahn (NVFP4 auf RTX 50, sonst INT8 …)."""
+    want = BEST_FAMILY.get((lane, kind))
+    if not want:
+        return None
+    cands = [m for m in registry.list_models(want[0]) if m.family == want[1] and m.installed and m.runnable]
+    best = next((m for m in cands if m.recommended), None) or (cands[0] if cands else None)
+    return best.id if best else None
+
+
 @command("scene.add", "Szene anlegen: lane (video|voice|music|sfx), prompt, title, kind (video|image|audio), "
-         "model_id, start/start_s (sonst hinten an der Bahn), duration/duration_s (Vorgabe 5 s), params; takes und "
-         "take übernehmen vorhandenes Material (Einfügen einer kopierten Szene). Bahn voice: prompt ist der "
-         "gesprochene Text, params voice (Beschreibung der Stimme), voice_from (Szenen-ID: gleiche Stimme wie "
-         "deren Take), voice_asset_id und voice_text (Stimme aus einer Aufnahme), language (auto|de|en|...), "
-         "seed; die Länge folgt dem Take")
+         "model_id (ohne Angabe die beste geladene Fassung der Bahn: LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio "
+         "Open; sonst das aktive Modell), start/start_s (sonst hinten an der Bahn), duration/duration_s (Vorgabe 5 s, "
+         "Musik so lang wie der Film, mindestens 10 s, Geräusche 4 s), params; takes und take übernehmen vorhandenes "
+         "Material (Einfügen einer kopierten Szene). Bahn voice: prompt ist der gesprochene Text, params voice "
+         "(Beschreibung der Stimme), voice_from (Szenen-ID: gleiche Stimme wie deren Take), voice_asset_id und "
+         "voice_text (Stimme aus einer Aufnahme), language (auto|de|en|...), seed; die Länge folgt dem Take")
 def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     lane = a.get("lane", "video")
     if lane not in LANES:
         raise StudioError(t(f"Bahn {lane} gibt es nicht ({', '.join(LANES)}).", f"No lane {lane} ({', '.join(LANES)})."))
-    duration = _time(a, "duration", ticks(5))
+    default = {"music": max(ticks(10), composition_duration(p)), "sfx": ticks(4)}.get(lane, ticks(5))
+    duration = _time(a, "duration", default)
     if duration <= 0:
         raise StudioError(t("Die Dauer muss größer als 0 sein.", "The duration must be greater than 0."))
     start = _time(a, "start", _lane_end(p, lane))
@@ -814,9 +833,12 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     for asset_id in takes:
         _media(p, asset_id)
     take = a.get("take") if a.get("take") in takes else (takes[-1] if takes else None)
+    # Ohne Angabe (von Hand angelegt): das beste geladene Modell der Bahn wie im Assistenten; eine eingefügte Szene und
+    # der Assistent nennen model_id selbst (auch null = aktives Modell)
+    model_id = a["model_id"] if "model_id" in a else _best_model(lane, kind)
     scene = {"id": db.new_id("sc"), "lane": lane, "start": max(0, start), "duration": duration,
              "title": str(a.get("title", "")), "prompt": str(a.get("prompt", "")), "kind": kind,
-             "model_id": a.get("model_id"), "lyrics": str(a.get("lyrics", "")), "params": dict(a.get("params") or {}),
+             "model_id": model_id, "lyrics": str(a.get("lyrics", "")), "params": dict(a.get("params") or {}),
              "chain_from": a.get("chain_from"), "takes": takes, "take": take, "jobs": [], "error": None}
     p["scenes"].append(scene)
     p["scenes"].sort(key=lambda s: (LANES.index(s["lane"]), s["start"]))
@@ -2421,14 +2443,144 @@ def _import_extras(z: zipfile.ZipFile, members: set[str], a: dict[str, Any], exi
         db.update_asset_meta(existing.id, changes)
 
 
+# --------------------------------------------------------------------------------------- Hinweise je Szene
+
+# Was der Assistent von selbst richtig setzt und bei Szenen von Hand leicht fehlt (seit 0.5.30): Die Oberfläche zeigt
+# die Hinweise unter den Eigenschaften der Szene, MCP in summary(). Sprache wie NON_EN im Assistenten (Wizard.tsx).
+NON_EN = re.compile(r"[äöüßÄÖÜ]|\b(der|das|und|ein|eine|einen|eines|einem|einer|mit|auf|bei|vom|zum|zur|dem|des|ist|"
+                    r"sind|nicht|sich|unter|hinter|nach|aus|wird|steht|geht|zieht|hebt|langsam|seine|ihre|alten|alte|"
+                    r"kleine|kleiner|große|großen|hellem|dunklen)\b", re.IGNORECASE)
+SOUND_FAMILIES = ("ltx25", "ltx23", "kandinsky6")  # Videomodelle mit eigenem Ton (wie wizard.SOUND_FAMILIES)
+
+
+def _vram_gb() -> float | None:
+    try:
+        from . import hardware
+        return hardware.profile().get("vram_gb")
+    except Exception:  # noqa: BLE001 - ohne Karte keine Hinweise zum Grafikspeicher
+        return None
+
+
+def _hints(p: dict[str, Any], s: dict[str, Any], vram: float | None) -> list[str]:
+    out: list[str] = []
+    if s["lane"] == "voice":  # der Text eines Sprechersatzes bleibt in seiner Sprache
+        return out
+    params = s.get("params") or {}
+    text = s.get("prompt") or ""
+    if text.strip() and NON_EN.search(text):
+        out.append(t("Der Prompt ist nicht englisch. Die Modelle verstehen ganze englische Sätze am besten: „Prompt "
+                     "ausbauen“ übersetzt und ergänzt ihn.",
+                     "The prompt is not in English. The models understand whole English sentences best: “Expand "
+                     "prompt” translates and completes it."))
+    if s["lane"] != "video" or s.get("kind") != "video":
+        return out
+    model_id = _known_model(s.get("model_id"), "video")
+    family = str((registry.get_entry(model_id) or {}).get("family") or "") if model_id else ""
+    size = _video_size(model_id, p, params)
+    full_hd = family.startswith("ltx") and max(size["width"], size["height"]) >= 1900
+    if full_hd and vram and vram <= 16.5 and seconds(s["duration"]) > 6.05:
+        # gemessen auf 16 GB: 6 s DFR in 1920 × 1088 21–25 min, 8 s in 1920 × 832 über eine Stunde
+        out.append(t("Länger als 6 s in 1080p: Auf Karten bis 16 GB kann LTX-2.5 daran über eine Stunde rechnen. Besser "
+                     "in Szenen bis 6 s teilen und mit „Anschluss an“ verbinden.",
+                     "Longer than 6 s at 1080p: on cards with up to 16 GB, LTX-2.5 can take over an hour for this. "
+                     "Better split it into scenes of up to 6 s and link them with “Chain to”."))
+    if full_hd and vram and vram < 15:
+        out.append(t("Diese Karte hat weniger als 15 GB: Für 1080p lädt LTX-2.5 während des Rechnens nach, das dauert "
+                     "deutlich länger. Der Assistent nimmt hier 1280 × 704 (Projekt auf 1280 × 720 stellen).",
+                     "This card has less than 15 GB: at 1080p LTX-2.5 reloads while it renders, which takes much "
+                     "longer. The assistant uses 1280 × 704 here (set the project to 1280 × 720)."))
+    chained = s.get("chain_from") or s.get("chain_marker")
+    if params.get("characters") and not params.get("image_asset_id") and not chained:
+        out.append(t("Figur ohne Startbild: Das Videomodell erfindet dann ein Gesicht. „Startbild erzeugen“ oder ein "
+                     "Bild aus dem Material auf „Startbild“ ziehen.",
+                     "Character without a start image: the video model then invents a face. Use “Generate start "
+                     "image” or drag a picture from the media onto “Start image”."))
+    if family in SOUND_FAMILIES and not params.get("audio_from") and "no speech" not in text.lower():
+        end = s["start"] + s["duration"]
+        if any(v["lane"] == "voice" and v["start"] < end and v["start"] + v["duration"] > s["start"]
+               for v in p["scenes"]):
+            out.append(t("Unter dieser Szene liegt ein Sprechersatz, und das Videomodell macht eigenen Ton, auch "
+                         "Stimmen. Für Erzählung „Quiet ambient sound, no speech.“ in den Prompt schreiben; spricht die "
+                         "Figur im Bild, unter „Ton aus Sprecher-Szene“ den Satz wählen.",
+                         "A spoken line lies under this scene, and the video model makes its own sound, voices "
+                         "included. For narration add “Quiet ambient sound, no speech.” to the prompt; if the character "
+                         "speaks on screen, choose the line under “Sound from voice scene”."))
+    return out
+
+
+# ------------------------------------------------------------------------------------ Startbild erzeugen
+
+START_IMAGE_FAMILIES = ("flux3", "qwenimage", "krea2", "moss_image")  # Reihenfolge wie wizard.ROLES["image"]
+FULL_FRAME = "The picture fills the whole frame from edge to edge."
+_SOUND_WORDS = re.compile(r"\b(sound\w*|audio|hear\w*|voices?|says|said|say|speaks?|speaking|talks?|tells|music\w*|"
+                          r"nois\w*|silen\w*|quiet\w*|loud\w*|whisper\w*|shout\w*|sings?|singing|murmur\w*|rumbl\w*|"
+                          r"ambient|narrat\w*|speech)\b", re.IGNORECASE)
+
+
+def _still_prompt(text: str) -> str:
+    """Video-Prompt als Bildbeschreibung: ohne die Sätze über Ton, Stimmen und Gesprochenes (Anführungszeichen landen
+    sonst als Schrift im Bild), dazu der Satz gegen schwarze Balken wie in den Startbildern des Assistenten."""
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    kept = [x for x in sentences if x and not _SOUND_WORDS.search(x) and not re.search(r"[\"“”„]", x)]
+    out = " ".join(kept) or text.strip()
+    return out if FULL_FRAME in out else f"{out} {FULL_FRAME}"
+
+
+def _start_image_model(p: dict[str, Any], s: dict[str, Any]) -> str | None:
+    """Bildmodell für ein Startbild: die empfohlene geladene Fassung der ersten Familie des Assistenten (FLUX 3,
+    Qwen-Image-2512, Krea 2, MOSS-Image); haben die Figuren der Szene LoRAs, die, zu der die meisten davon passen."""
+    chars = characters(p)
+    refs = [r["model_id"] for cid in (s.get("params") or {}).get("characters") or []
+            for r in (chars.get(cid) or {}).get("loras") or []]
+    loras = [x for x in (registry.get_entry(r) for r in refs) if x is not None and registry.is_installed(x)]
+    best, best_fit = None, -1
+    models = registry.list_models("image")
+    for family in START_IMAGE_FAMILIES:
+        cands = [m for m in models if m.family == family and m.installed and m.runnable
+                 and not m.id.startswith(("flux3-klein-base", "qwen-image-2512-lightning"))]
+        m = next((x for x in cands if x.recommended), None) or (cands[0] if cands else None)
+        if m is None:
+            continue
+        entry = registry.get_entry(m.id)
+        fit = sum(1 for lo in loras if entry is not None and lora_fits(lo, entry))
+        if fit > best_fit:
+            best, best_fit = m.id, fit
+        if fit == len(loras):  # ohne LoRAs: das erste geladene
+            break
+    return best or registry.get_active_model("image")
+
+
+async def submit_start_image(pid: str, sid: str) -> Job:
+    """„Startbild erzeugen“ (seit 0.5.30): zwei Varianten für eine Videoszene, wie die Startbilder des Assistenten, im
+    Projektordner; Figuren der Szene mit ihren LoRAs und Trigger-Wörtern. Die Oberfläche setzt die erste als Startbild,
+    die zweite liegt im Material."""
+    p = load(pid)
+    s = _find(p["scenes"], sid, t("Szene", "scene"))
+    if s["lane"] != "video" or s.get("kind") != "video":
+        raise StudioError(t("Ein Startbild gibt es nur für Videoszenen.", "Only video scenes have a start image."))
+    if not s.get("prompt", "").strip():
+        raise StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet."))
+    model_id = _start_image_model(p, s)
+    if not model_id:
+        raise StudioError(t("Kein Bildmodell geladen (Modelle → Bild).",
+                            "No image model is downloaded (Models → Image)."))
+    params = dict(s.get("params") or {})
+    look, prompt = _character_look(p, {**s, "prompt": _still_prompt(s["prompt"])}, model_id, params)
+    req = GenerateImageRequest(prompt=prompt, model_id=model_id, **_image_size(p, {}, model_id), loras=look,
+                               batch_size=2)
+    return await jobs.submit("txt2img", {**req.model_dump(), "studio_project": p["id"]})
+
+
 # --------------------------------------------------------------------------------------- Für die API
 
 def view(p: dict[str, Any]) -> dict[str, Any]:
     """Projekt plus abgeleitete Angaben für Oberfläche und MCP."""
     out = copy.deepcopy(p)
     _resolve_chain_markers(out)  # Anschluss aus Markern anzeigen (chain_marker), ohne ihn zu speichern
+    vram = _vram_gb()
     for s in out["scenes"]:
         s["status"] = scene_status(s)
+        s["hints"] = _hints(out, s, vram)
     out["tps"] = TICKS_PER_SECOND
     out["edit_duration"] = edit_duration(p)
     out["composition_duration"] = composition_duration(p)
@@ -2458,6 +2610,7 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
     """Kompakt für MCP: Zeiten in Sekunden, ohne Medien-Cache."""
     p = copy.deepcopy(p)
     _resolve_chain_markers(p)
+    vram = _vram_gb()
     return {
         "id": p["id"], "name": p["name"], "settings": p["settings"],
         "folder": str(config.ASSET_DIR / p["folder"]) if p.get("folder") else None,
@@ -2468,7 +2621,9 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                     "takes": len(s["takes"]), "error": s.get("error"),
                     # Figuren (seit 0.5.24): wer zu sehen ist, wer spricht, welcher Satz der Ton eines Videos ist
                     **{k: (s.get("params") or {})[k] for k in ("characters", "character", "audio_from")
-                       if (s.get("params") or {}).get(k)}} for s in p["scenes"]],
+                       if (s.get("params") or {}).get(k)},
+                    # Hinweise wie in der Oberfläche (seit 0.5.30): zu lang für die Karte, Figur ohne Startbild …
+                    **({"hints": h} if (h := _hints(p, s, vram)) else {})} for s in p["scenes"]],
         "characters": p.get("characters") or [],
         "markers": [{"id": m["id"], "at_s": round(seconds(m["at"]), 3), "kind": m["kind"], "name": m["name"],
                      "comment": m["comment"], "params": m["params"], "done": m["done"]} for m in p["markers"]],

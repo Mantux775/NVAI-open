@@ -7,14 +7,35 @@ import WebKit
 /// alle Spuren und das Video abspielen, die Übersetzer-Spur prüfen und korrigieren, Notizen setzen und exportieren (WAV,
 /// Video mit Ton, Untertitel, Text). Angezeigt wird dieselbe Prüf-App wie im Paket (NVAI-Pruefer.html aus dem Bundle),
 /// über den eigenen Server auf 127.0.0.1 (`ReviewRoutes`); Ordner- und Speichern-Dialog kommen von der App
-/// (`ReviewBridge`), weil WebKit kein File System Access hat. Spracherkennung und Übersetzung auf dem Mac folgen (Stufe 2).
+/// (`ReviewBridge`), weil WebKit kein File System Access hat. Seit 0.5.11 (Stufe 2) legt der Mac selbst Fälle an
+/// (`ForensicHome`, `ForensicImport`); Spracherkennung und Übersetzung folgen.
 struct ForensicView: View {
     @EnvironmentObject var state: AppState
+    @ObservedObject private var store = ForensicStore.shared
 
     var body: some View {
         switch state.serverState {
         case .listening(let port):
-            ReviewWebView(port: port)
+            if store.openCase != nil {
+                ReviewWebView(port: port)
+            } else {
+                ForensicHome(store: store)
+                    .onAppear {
+                        // Prüfstand: Paket gleich öffnen bzw. Fall ohne Dialog anlegen (danach öffnet er sich)
+                        guard !ReviewTest.opened else { return }
+                        if let path = ReviewTest.package {
+                            ReviewTest.opened = true
+                            store.open(URL(fileURLWithPath: path))
+                        } else if let files = ReviewTest.newCase {
+                            ReviewTest.opened = true
+                            store.create(.init(files: files.map { URL(fileURLWithPath: $0) }, name: ReviewTest.caseName ?? "Prüfstand"))
+                        } else if let folder = ReviewTest.newVDR {
+                            ReviewTest.opened = true
+                            let url = URL(fileURLWithPath: folder)
+                            store.create(.init(files: [url], name: ReviewTest.caseName ?? "Prüfstand VDR", vdr: try? VDRPreview(url)))
+                        }
+                    }
+            }
         default:
             VStack(spacing: 10) {
                 ProgressView()
@@ -51,11 +72,17 @@ enum ReviewTest {
     }
 
     static var package: String? { value("--review-package") }
+    /// `--forensic-new <datei>[|<datei> …]`: neuen Fall ohne Dialog anlegen (absolute Pfade), `--forensic-name` sein Name
+    static var newCase: [String]? { value("--forensic-new").map { $0.components(separatedBy: "|") } }
+    static var caseName: String? { value("--forensic-name") }
+    /// `--forensic-vdr <ordner>`: neuen Fall aus einem VDR-Export ohne Dialog anlegen (mit derselben Vorschau)
+    static var newVDR: String? { value("--forensic-vdr") }
     static var script: String? { value("--review-script") }
     static var saveDir: String? { value("--review-save-dir") }
     static var shot: String? { value("--review-shot") }
-    static var active: Bool { package != nil }
+    static var active: Bool { package != nil || newCase != nil || newVDR != nil }
     @MainActor static var finished = false
+    @MainActor static var opened = false
 }
 
 @MainActor
@@ -63,16 +90,26 @@ final class ReviewBridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMes
     static let shared = ReviewBridge()
 
     private var webView: WKWebView?
-    private var loadedPort: UInt16 = 0
+    private var loadedKey = ""
     private var testRan = false
+    /// Der Fall, den die Prüf-App zeigen soll (Startseite `ForensicHome` setzt ihn)
+    var target: URL?
 
     func view(port: UInt16) -> WKWebView {
         let view = webView ?? makeView()
-        if loadedPort != port {
-            loadedPort = port
+        let key = "\(port)|\(target?.path ?? "")"
+        if loadedKey != key {
+            loadedKey = key
             load(view, port: port)
         }
         return view
+    }
+
+    /// Fall geschlossen: Seite leeren (Ton und Video halten sonst Dateien und Verbindungen offen).
+    func unload() {
+        target = nil
+        loadedKey = ""
+        webView?.load(URLRequest(url: URL(string: "about:blank")!))
     }
 
     private func makeView() -> WKWebView {
@@ -106,12 +143,12 @@ final class ReviewBridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMes
 
     private func load(_ view: WKWebView, port: UInt16) {
         let base = "http://127.0.0.1:\(port)/review/app"
-        guard let path = ReviewTest.package else {
+        guard let folder = target else {
             view.load(URLRequest(url: URL(string: base)!))
             return
         }
         Task { @MainActor in
-            let token = await ReviewPackages.shared.register(URL(fileURLWithPath: path))
+            let token = await ReviewPackages.shared.register(folder)
             view.load(URLRequest(url: URL(string: "\(base)?paket=/review/pkg/\(token)/&schreiben=1")!))
         }
     }
@@ -135,6 +172,10 @@ final class ReviewBridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMes
     private func answer(_ body: [String: Any], window: NSWindow?) async -> [String: Any] {
         switch body["op"] as? String {
         case "open": return await openPackage(window: window)
+        case "close":
+            // ← in der Prüf-App: zurück zur Fallliste (seit 0.5.11)
+            ForensicStore.shared.close()
+            return [:]
         case "save": return await saveTarget(name: body["name"] as? String ?? "export", ext: body["ext"] as? String ?? "", window: window)
         default: return ["error": "unknown op"]
         }

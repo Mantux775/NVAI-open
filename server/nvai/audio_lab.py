@@ -95,6 +95,9 @@ def _tool_env() -> dict[str, str]:
            "NVAI_AUDIO_TORCH_SITE": str(_site_packages(config.COMFY_ROOT / ".venv"))}
     for key in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"):
         env.pop(key, None)
+    from . import gpu
+    if gpu.cpu_mode():
+        env.update(gpu.CPU_ENV)   # ohne nutzbare Karte auf dem Prozessor (die Werkzeuge pruefen torch.cuda selbst)
     return env
 
 

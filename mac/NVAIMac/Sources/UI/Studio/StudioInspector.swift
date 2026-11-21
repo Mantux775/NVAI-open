@@ -264,6 +264,13 @@ private struct SceneInspector: View {
                 }
             }
             if let error = scene.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+            // Hinweise wie unter Windows (.st-hint, seit Mac 0.5.11): was bei Szenen von Hand leicht fehlt
+            ForEach(StudioGenerator.hints(project, scene, model.store.env), id: \.self) { hint in
+                Text(hint).font(.caption).fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 8).padding(.vertical, 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.orange).frame(width: 3) }
+            }
             if let w = scene.waitingFor, let source = project.scenes.first(where: { $0.id == w }) {
                 let name = source.title.isEmpty ? t("Szene", "Scene") : source.title
                 Text(scene.lane == "voice"
@@ -282,6 +289,7 @@ private struct SceneInspector: View {
                          : t("z. B. „Ruhiges Klavier mit weichen Flächen. BPM: 80.“", "e.g. \"Calm piano with soft pads. BPM: 80.\"")) {
                 update(["prompt": .string($0)])
             }
+            if scene.lane != "voice" { SceneExpandPrompt(model: model, scene: scene) }
             Picker(t("Bahn", "Lane"), selection: Binding(get: { scene.lane }, set: { lane in
                 update(["lane": .string(lane), "kind": .string(lane == "video" ? "video" : "audio")])
             })) {
@@ -338,16 +346,22 @@ private struct SceneInspector: View {
     }
 
     @ViewBuilder private var modelPicker: some View {
+        // Ein Modell, das hier nicht zur Wahl steht (etwa die Vorwahl einer Videoszene, die dann Standbild wurde), zeigt
+        // „aktives Modell“: damit rechnet die Szene dann auch
         if scene.kind == "image" {
-            Picker(t("Modell", "Model"), selection: Binding(get: { scene.modelID ?? "" }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
+            let installed = Models.all.filter { $0.installed }
+            let current = installed.contains { $0.id == scene.modelID } ? scene.modelID ?? "" : ""
+            Picker(t("Modell", "Model"), selection: Binding(get: { current }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
                 Text(t("aktives Modell", "active model")).tag("")
-                ForEach(Models.all.filter { $0.installed }, id: \.id) { m in Text(m.name).tag(m.id) }
+                ForEach(installed, id: \.id) { m in Text(m.name).tag(m.id) }
             }
         } else if scene.lane == "video" && VideoCatalog.installedModels.count > 1 {
             // mehrere Videomodelle geladen (2B, 13B): je Szene wählbar, ohne Wahl das aktive
-            Picker(t("Modell", "Model"), selection: Binding(get: { scene.modelID ?? "" }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
+            let installed = VideoCatalog.installedModels
+            let current = installed.contains { $0.id == scene.modelID } ? scene.modelID ?? "" : ""
+            Picker(t("Modell", "Model"), selection: Binding(get: { current }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
                 Text(t("aktives Modell", "active model")).tag("")
-                ForEach(VideoCatalog.installedModels) { m in Text(m.name).tag(m.id) }
+                ForEach(installed) { m in Text(m.name).tag(m.id) }
             }
         } else {
             LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? VideoCatalog.active.name
@@ -386,6 +400,65 @@ private struct SceneInspector: View {
                     }
                 }
             }
+        }
+    }
+}
+
+/// „Prompt ausbauen“ in den Eigenschaften einer Szene (seit Mac 0.5.11, wie ExpandPrompt in Inspector.tsx unter Windows
+/// seit 0.5.30): Videoclips mit dem Ziel Video, Standbilder mit dem Ziel Bild; Musik und Klang nur ins Englische
+/// übertragen (zum Ausbauen hat der Mac dafür kein Ziel). Ersetzt den Prompt, ⌘Z holt den alten zurück.
+private struct SceneExpandPrompt: View {
+    @ObservedObject var model: StudioModel
+    let scene: StudioScene
+    @State private var busy = false
+    @State private var error: String?
+
+    private var target: PromptTarget { scene.lane != "video" ? .translate : scene.kind == "image" ? .image : .video }
+
+    var body: some View {
+        let translate = target == .translate
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button(busy ? (translate ? t("Überträgt …", "Translating …") : t("Baut aus …", "Expanding …"))
+                       : (translate ? t("Ins Englische übertragen", "Translate into English") : t("Prompt ausbauen", "Expand prompt"))) {
+                    Task { await expand() }
+                }
+                .disabled(busy || Models.expansionModel == nil)
+                .help(translate
+                      ? t("Überträgt den Prompt treu ins Englische (Qwen3 aus FLUX.2 Klein); ⌘Z holt den alten zurück.",
+                          "Translates the prompt faithfully into English (Qwen3 from FLUX.2 Klein); ⌘Z brings back the old one.")
+                      : t("Baut den Prompt zur vollen Beschreibung aus und überträgt ihn ins Englische (Qwen3 aus FLUX.2 Klein). Danach lesen und Erfundenes streichen; ⌘Z holt den alten zurück.",
+                          "Expands the prompt into a full description and translates it into English (Qwen3 from FLUX.2 Klein). Read it afterwards and remove anything invented; ⌘Z brings back the old one."))
+                if busy { ProgressView().controlSize(.small) }
+            }
+            .font(.callout)
+            if Models.expansionModel == nil {
+                Text(t("Prompt ausbauen braucht FLUX.2 Klein (unter „Modelle“).", "Expand prompt needs FLUX.2 Klein (under \"Models\")."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+        }
+    }
+
+    private func expand() async {
+        busy = true
+        error = nil
+        defer { busy = false }
+        await model.commitEdits()  // ein eben getippter Prompt zuerst
+        let id = scene.id
+        let target = target
+        guard let prompt = model.project?.scenes.first(where: { $0.id == id })?.prompt.trimmingCharacters(in: .whitespacesAndNewlines),
+              !prompt.isEmpty else {
+            error = t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet.")
+            return
+        }
+        do {
+            let text = try await JobQueue.expandAndWait(prompt, target: target).expanded.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty, model.project?.scenes.contains(where: { $0.id == id }) == true {
+                await model.run("scene.update", ["id": .string(id), "prompt": .string(text)])
+            }
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }
@@ -439,6 +512,10 @@ private struct SceneStartImageView: View {
     @State private var asset: AssetRecord?
     @State private var choices: [AssetRecord] = []
     @State private var hover = false
+    /// „Startbild erzeugen“: die zwei Varianten des letzten Laufs zum Umschalten
+    @State private var variants: [AssetRecord] = []
+    @State private var generating = false
+    @State private var generateError: String?
 
     private var assetID: String? { scene.params["image_asset_id"]?.stringValue }
 
@@ -486,12 +563,49 @@ private struct SceneStartImageView: View {
                     }
                 }
                 .font(.callout)
+                // „Startbild erzeugen“ (seit Mac 0.5.11, wie unter Windows seit 0.5.30): zwei Varianten wie im Assistenten
+                HStack(spacing: 6) {
+                    Button(generating ? t("Erzeugt zwei Varianten …", "Generating two variants …") : t("Startbild erzeugen", "Generate start image")) {
+                        Task { await generate() }
+                    }
+                    .disabled(generating)
+                    .help(t("Zwei Varianten aus dem Prompt der Szene, wie die Startbilder des Assistenten: mit den Figuren der Szene (ihre LoRAs), ohne die Sätze über Ton, ohne schwarze Balken. Beide landen im Projektordner; die erste wird das Startbild.",
+                            "Two variants from the scene prompt, like the start images of the assistant: with the characters of the scene (their LoRAs), without the sentences about sound, without black bars. Both go into the project folder; the first becomes the start image."))
+                    if generating { ProgressView().controlSize(.small) }
+                }
+                .font(.callout)
+                if let generateError { Text(generateError).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+                if variants.count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(variants, id: \.id) { a in
+                            Button { Task { await use(a.id) } } label: {
+                                AssetThumbnail(asset: a, maxSide: 240)
+                                    .overlay(RoundedRectangle(cornerRadius: 4)
+                                        .stroke(a.id == assetID ? Color.accentColor : .clear, lineWidth: 2))
+                                    .frame(maxWidth: .infinity, maxHeight: 90)
+                            }
+                            .buttonStyle(.plain)
+                            .help(a.prompt)
+                        }
+                    }
+                }
                 Text(t("Der Clip beginnt mit diesem Bild; mit einer Figur sieht sie so in jeder Szene gleich aus.",
                        "The clip begins with this picture; with a character, it looks the same in every scene."))
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .task(id: (assetID ?? "") + "|" + project.id) { await load() }
+    }
+
+    private func generate() async {
+        generating = true
+        generateError = nil
+        defer { generating = false }
+        do {
+            variants = try await model.generateStartImage(scene.id)
+        } catch {
+            generateError = error.localizedDescription
+        }
     }
 
     private func load() async {

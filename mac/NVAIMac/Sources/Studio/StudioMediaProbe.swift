@@ -47,7 +47,18 @@ enum StudioMediaProbe {
             return VideoCatalog.model(id) != nil ? [] : nil
         },
         // Kein Videomodell der Mac-Fassung nimmt einen vorgegebenen Ton (LTX-Video ohne Ton, LTX-2 ohne Toneingang)
-        takesAudio: { _ in false })
+        takesAudio: { _ in false },
+        // Vorwahl für Szenen von Hand (seit Mac 0.5.11): Video das Modell, das der Assistent für diesen Mac empfiehlt
+        // (nach Arbeitsspeicher), Sprecher Qwen3-TTS, Musik und Klang Stable Audio 3, jeweils nur, wenn geladen;
+        // Standbilder und alles andere bleiben beim aktiven Modell
+        bestModel: { lane, kind in
+            switch (lane, kind) {
+            case ("video", "video"): return VideoCatalog.recommended.installed ? VideoCatalog.recommended.id : nil
+            case ("voice", "audio"): return SpeechCatalog.installed ? SpeechCatalog.id : nil
+            case ("music", "audio"), ("sfx", "audio"): return AudioCatalog.installed ? AudioCatalog.id : nil
+            default: return nil
+            }
+        })
 
     /// Medieninfo der genannten Assets lesen, soweit noch nicht bekannt. Unbekannte oder unlesbare bleiben weg; der
     /// Befehl meldet sie dann selbst.

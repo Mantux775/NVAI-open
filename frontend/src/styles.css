@@ -855,6 +855,11 @@ kbd {
   border-left: 3px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0;
 }
 .model-tip strong { color: var(--accent); }
+/* Hinweise je Szene im Studio (seit 0.5.30): wie der Tipp, aber in Warnfarbe */
+.st-hint {
+  margin: 4px 0 6px; padding: 5px 9px; line-height: 1.4;
+  border-left: 3px solid #ffab6b; background: var(--panel); border-radius: 0 6px 6px 0;
+}
 /* Beschleuniger (MiniMax H3): Sparse Attention und INT8-Attention in einer Zeile */
 .accel-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .accel-row select { width: auto; }
@@ -1802,3 +1807,15 @@ kbd {
 .rv-name { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
 .rv-name input { width: 160px; padding: 2px 6px; font-size: 12.5px; }
 .rv-name input:placeholder-shown { border-color: #ffd166; }
+
+/* Warnung in der Kopfleiste: NVAI-open rechnet auf dem Prozessor (gpu.cpu_mode); Erklärung im Tooltip */
+.topbar .cpu-mode {
+  color: #ffd166;
+  border: 1px solid #8a6d1f;
+  background: rgba(255, 209, 102, 0.08);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: help;
+}

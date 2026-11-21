@@ -146,7 +146,9 @@ class MeshWorker:
         env[f"{self.env_prefix}_ROOT"] = str(self.repo_root)
         env[f"{self.env_prefix}_MODEL"] = str(model_dir)
         env[f"{self.env_prefix}_PORT"] = str(self.port)
-        if gpu.multi_gpu():
+        if gpu.cpu_mode():
+            env.update(gpu.CPU_ENV)   # keine nutzbare Karte: der Worker meldet das selbst (Qwen3-TTS: 503)
+        elif gpu.multi_gpu():
             # Mehrere Karten (experimentell seit 0.5): der Worker sieht nur seine.
             env["CUDA_VISIBLE_DEVICES"] = str(gpu.device_for(self.role))
         if self.extra_env is not None:

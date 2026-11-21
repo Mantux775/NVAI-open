@@ -2,10 +2,3312 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.29",
+  "version": "0.5.30",
   "x-api-version": 1
  },
  "paths": {
+  "/api/lora-train/status": {
+   "get": {
+    "summary": "Api Status",
+    "operationId": "api_status_api_lora_train_status_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Status Api Lora Train Status Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/setup": {
+   "post": {
+    "summary": "Api Setup",
+    "operationId": "api_setup_api_lora_train_setup_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/nvai__lora_train__SetupRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets": {
+   "post": {
+    "summary": "Api Create",
+    "operationId": "api_create_api_lora_train_datasets_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DatasetCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Create Api Lora Train Datasets Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}": {
+   "get": {
+    "summary": "Api Dataset",
+    "operationId": "api_dataset_api_lora_train_datasets__ds_id__get",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Dataset Api Lora Train Datasets  Ds Id  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Api Update",
+    "operationId": "api_update_api_lora_train_datasets__ds_id__put",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DatasetUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Update Api Lora Train Datasets  Ds Id  Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Delete",
+    "operationId": "api_delete_api_lora_train_datasets__ds_id__delete",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Delete Api Lora Train Datasets  Ds Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/assets": {
+   "post": {
+    "summary": "Api Add Assets",
+    "operationId": "api_add_assets_api_lora_train_datasets__ds_id__assets_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AssetsAdd"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Add Assets Api Lora Train Datasets  Ds Id  Assets Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/folder": {
+   "post": {
+    "summary": "Api Add Folder",
+    "operationId": "api_add_folder_api_lora_train_datasets__ds_id__folder_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FolderAdd"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Add Folder Api Lora Train Datasets  Ds Id  Folder Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/template": {
+   "post": {
+    "summary": "Api Template",
+    "operationId": "api_template_api_lora_train_datasets__ds_id__template_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TemplateSet"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Template Api Lora Train Datasets  Ds Id  Template Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/sketch": {
+   "post": {
+    "summary": "Api Sketch",
+    "operationId": "api_sketch_api_lora_train_datasets__ds_id__sketch_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SketchSet"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Sketch Api Lora Train Datasets  Ds Id  Sketch Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/drafts": {
+   "post": {
+    "summary": "Api Drafts",
+    "operationId": "api_drafts_api_lora_train_datasets__ds_id__drafts_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DraftsRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Drafts Clear",
+    "operationId": "api_drafts_clear_api_lora_train_datasets__ds_id__drafts_delete",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     },
+     {
+      "name": "keep",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Keep"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Drafts Clear Api Lora Train Datasets  Ds Id  Drafts Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/template/pick": {
+   "post": {
+    "summary": "Api Template Pick",
+    "operationId": "api_template_pick_api_lora_train_datasets__ds_id__template_pick_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TemplatePick"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Template Pick Api Lora Train Datasets  Ds Id  Template Pick Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/generate": {
+   "post": {
+    "summary": "Api Generate",
+    "operationId": "api_generate_api_lora_train_datasets__ds_id__generate_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TemplateGenerate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/images/{file}": {
+   "put": {
+    "summary": "Api Image",
+    "operationId": "api_image_api_lora_train_datasets__ds_id__images__file__put",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     },
+     {
+      "name": "file",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "File"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ImageUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Image Api Lora Train Datasets  Ds Id  Images  File  Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Image Delete",
+    "operationId": "api_image_delete_api_lora_train_datasets__ds_id__images__file__delete",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     },
+     {
+      "name": "file",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "File"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Image Delete Api Lora Train Datasets  Ds Id  Images  File  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/datasets/{ds_id}/train": {
+   "post": {
+    "summary": "Api Train",
+    "description": "Sofort: der Auftrag (Job). Mit start_at: der vorgemerkte Lauf mit scheduled=true.",
+    "operationId": "api_train_api_lora_train_datasets__ds_id__train_post",
+    "parameters": [
+     {
+      "name": "ds_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Ds Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TrainRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "title": "Response Api Train Api Lora Train Datasets  Ds Id  Train Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}": {
+   "get": {
+    "summary": "Api Run",
+    "operationId": "api_run_api_lora_train_runs__run_id__get",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Run Api Lora Train Runs  Run Id  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Run Delete",
+    "operationId": "api_run_delete_api_lora_train_runs__run_id__delete",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Run Delete Api Lora Train Runs  Run Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/test": {
+   "post": {
+    "summary": "Api Test",
+    "operationId": "api_test_api_lora_train_runs__run_id__test_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TestRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/quicktest": {
+   "post": {
+    "summary": "Api Quicktest",
+    "operationId": "api_quicktest_api_lora_train_runs__run_id__quicktest_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuickTest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/pause": {
+   "post": {
+    "summary": "Api Pause",
+    "operationId": "api_pause_api_lora_train_runs__run_id__pause_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PauseRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Pause Api Lora Train Runs  Run Id  Pause Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/resume": {
+   "post": {
+    "summary": "Api Resume",
+    "operationId": "api_resume_api_lora_train_runs__run_id__resume_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResumeRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Resume Api Lora Train Runs  Run Id  Resume Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/branch": {
+   "post": {
+    "summary": "Api Branch",
+    "operationId": "api_branch_api_lora_train_runs__run_id__branch_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BranchRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Branch Api Lora Train Runs  Run Id  Branch Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/state": {
+   "delete": {
+    "summary": "Api State Delete",
+    "operationId": "api_state_delete_api_lora_train_runs__run_id__state_delete",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api State Delete Api Lora Train Runs  Run Id  State Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/log": {
+   "get": {
+    "summary": "Api Log",
+    "operationId": "api_log_api_lora_train_runs__run_id__log_get",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     },
+     {
+      "name": "lines",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "default": 80,
+       "title": "Lines"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Log Api Lora Train Runs  Run Id  Log Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/runs/{run_id}/adopt": {
+   "post": {
+    "summary": "Api Adopt",
+    "operationId": "api_adopt_api_lora_train_runs__run_id__adopt_post",
+    "parameters": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Run Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AdoptRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Adopt Api Lora Train Runs  Run Id  Adopt Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/lora-train/files/{area}/{item}/{name}": {
+   "get": {
+    "summary": "Api File",
+    "description": "Bilder eines Datensatzes (datasets/<id>/<datei>) oder Probebilder eines Trainings (runs/<id>/test/<datei>).",
+    "operationId": "api_file_api_lora_train_files__area___item___name__get",
+    "parameters": [
+     {
+      "name": "area",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Area"
+      }
+     },
+     {
+      "name": "item",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Item"
+      }
+     },
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Name"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/status": {
+   "get": {
+    "summary": "Api Status",
+    "operationId": "api_status_api_audio_status_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Status Api Audio Status Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/setup": {
+   "post": {
+    "summary": "Api Setup",
+    "operationId": "api_setup_api_audio_setup_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/nvai__audio_lab__SetupRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/models/{model_id}": {
+   "delete": {
+    "summary": "Api Model Delete",
+    "operationId": "api_model_delete_api_audio_models__model_id__delete",
+    "parameters": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Model Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Model Delete Api Audio Models  Model Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects": {
+   "post": {
+    "summary": "Api Create",
+    "operationId": "api_create_api_audio_projects_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProjectCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Create Api Audio Projects Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}": {
+   "get": {
+    "summary": "Api Project",
+    "operationId": "api_project_api_audio_projects__pid__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Project Api Audio Projects  Pid  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Api Project Update",
+    "operationId": "api_project_update_api_audio_projects__pid__put",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProjectUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Project Update Api Audio Projects  Pid  Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Project Delete",
+    "operationId": "api_project_delete_api_audio_projects__pid__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Project Delete Api Audio Projects  Pid  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/trash": {
+   "get": {
+    "summary": "Api Trash",
+    "operationId": "api_trash_api_audio_trash_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "additionalProperties": true,
+          "type": "object"
+         },
+         "type": "array",
+         "title": "Response Api Trash Api Audio Trash Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Trash Empty",
+    "operationId": "api_trash_empty_api_audio_trash_delete",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Trash Empty Api Audio Trash Delete"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/trash/{entry}/restore": {
+   "post": {
+    "summary": "Api Trash Restore",
+    "operationId": "api_trash_restore_api_audio_trash__entry__restore_post",
+    "parameters": [
+     {
+      "name": "entry",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Entry"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Trash Restore Api Audio Trash  Entry  Restore Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/trash/{entry}": {
+   "delete": {
+    "summary": "Api Trash Purge",
+    "operationId": "api_trash_purge_api_audio_trash__entry__delete",
+    "parameters": [
+     {
+      "name": "entry",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Entry"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Trash Purge Api Audio Trash  Entry  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/tracks/{tid}": {
+   "put": {
+    "summary": "Api Track",
+    "operationId": "api_track_api_audio_projects__pid__tracks__tid__put",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TrackUpdate"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Track Api Audio Projects  Pid  Tracks  Tid  Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "delete": {
+    "summary": "Api Track Delete",
+    "operationId": "api_track_delete_api_audio_projects__pid__tracks__tid__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Track Delete Api Audio Projects  Pid  Tracks  Tid  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/markers": {
+   "put": {
+    "summary": "Api Markers",
+    "operationId": "api_markers_api_audio_projects__pid__markers_put",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Markers"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Markers Api Audio Projects  Pid  Markers Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/ops": {
+   "post": {
+    "summary": "Api Op",
+    "operationId": "api_op_api_audio_projects__pid__ops_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/OpRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/export": {
+   "post": {
+    "summary": "Api Export",
+    "operationId": "api_export_api_audio_projects__pid__export_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExportRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/reveal/{index}": {
+   "post": {
+    "summary": "Api Reveal",
+    "description": "Eine in einen Ordner exportierte Datei im Explorer zeigen. Der Pfad kommt aus dem Protokoll des Falls, nie aus\nder Anfrage.",
+    "operationId": "api_reveal_api_audio_projects__pid__reveal__index__post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "index",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Index"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Reveal Api Audio Projects  Pid  Reveal  Index  Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/learn": {
+   "post": {
+    "summary": "Api Learn",
+    "operationId": "api_learn_api_audio_projects__pid__learn_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LearnRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/scan": {
+   "post": {
+    "summary": "Api Scan",
+    "operationId": "api_scan_api_audio_projects__pid__scan_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "track",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string",
+       "default": "t_orig",
+       "title": "Track"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/profiles/{prof_id}": {
+   "delete": {
+    "summary": "Api Profile Delete",
+    "operationId": "api_profile_delete_api_audio_projects__pid__profiles__prof_id__delete",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "prof_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Prof Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Profile Delete Api Audio Projects  Pid  Profiles  Prof Id  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/files/{area}/{name}": {
+   "get": {
+    "summary": "Api File",
+    "operationId": "api_file_api_audio_projects__pid__files__area___name__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "area",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Area"
+      }
+     },
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Name"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/tracks/{tid}/spectro": {
+   "post": {
+    "summary": "Api Spectro",
+    "operationId": "api_spectro_api_audio_projects__pid__tracks__tid__spectro_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/spec/{tid}/{level}": {
+   "get": {
+    "summary": "Api Spec File",
+    "operationId": "api_spec_file_api_audio_projects__pid__spec__tid___level__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     },
+     {
+      "name": "level",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Level"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/source": {
+   "get": {
+    "summary": "Api Source",
+    "operationId": "api_source_api_audio_projects__pid__source_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/activity/{tid}": {
+   "get": {
+    "summary": "Api Activity",
+    "operationId": "api_activity_api_audio_projects__pid__activity__tid__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Activity Api Audio Projects  Pid  Activity  Tid  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/transcript": {
+   "get": {
+    "summary": "Api Transcript",
+    "operationId": "api_transcript_api_audio_projects__pid__transcript_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Transcript Api Audio Projects  Pid  Transcript Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Api Transcript Save",
+    "operationId": "api_transcript_save_api_audio_projects__pid__transcript_put",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TranscriptDoc"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Transcript Save Api Audio Projects  Pid  Transcript Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/transcribe": {
+   "post": {
+    "summary": "Api Transcribe",
+    "operationId": "api_transcribe_api_audio_projects__pid__transcribe_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TranscribeRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/vad": {
+   "post": {
+    "summary": "Api Vad",
+    "operationId": "api_vad_api_audio_projects__pid__vad_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TracksRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/video": {
+   "post": {
+    "summary": "Api Video Link",
+    "operationId": "api_video_link_api_audio_projects__pid__video_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VideoLink"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   },
+   "get": {
+    "summary": "Api Video File",
+    "operationId": "api_video_file_api_audio_projects__pid__video_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/video/export": {
+   "post": {
+    "summary": "Api Video Export",
+    "operationId": "api_video_export_api_audio_projects__pid__video_export_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VideoExportRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/render": {
+   "post": {
+    "summary": "Api Render",
+    "operationId": "api_render_api_audio_projects__pid__render_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RenderRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/automix": {
+   "post": {
+    "summary": "Api Automix",
+    "operationId": "api_automix_api_audio_projects__pid__automix_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AutomixRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/automix/{tid}": {
+   "get": {
+    "summary": "Api Automix Decisions",
+    "operationId": "api_automix_decisions_api_audio_projects__pid__automix__tid__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "tid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Tid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Automix Decisions Api Audio Projects  Pid  Automix  Tid  Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/hash": {
+   "post": {
+    "summary": "Api Hash",
+    "operationId": "api_hash_api_audio_projects__pid__hash_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/vdr/inspect": {
+   "post": {
+    "summary": "Api Vdr Inspect",
+    "operationId": "api_vdr_inspect_api_audio_vdr_inspect_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VdrPath"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Vdr Inspect Api Audio Vdr Inspect Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/vdr/projects": {
+   "post": {
+    "summary": "Api Vdr Create",
+    "operationId": "api_vdr_create_api_audio_vdr_projects_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VdrCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Api Vdr Create Api Audio Vdr Projects Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/vdr/import": {
+   "post": {
+    "summary": "Api Vdr Import",
+    "operationId": "api_vdr_import_api_audio_projects__pid__vdr_import_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/VdrImport"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Req"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/vdr/verify": {
+   "post": {
+    "summary": "Api Vdr Verify",
+    "operationId": "api_vdr_verify_api_audio_projects__pid__vdr_verify_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/vdr/image/{source}/{index}": {
+   "get": {
+    "summary": "Api Vdr Image",
+    "operationId": "api_vdr_image_api_audio_projects__pid__vdr_image__source___index__get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "source",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Source"
+      }
+     },
+     {
+      "name": "index",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Index"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/vdr/raw": {
+   "get": {
+    "summary": "Api Vdr Raw",
+    "operationId": "api_vdr_raw_api_audio_projects__pid__vdr_raw_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "t",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "number",
+       "description": "Sekunden ab Aufnahmebeginn",
+       "default": 0.0,
+       "title": "T"
+      },
+      "description": "Sekunden ab Aufnahmebeginn"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Vdr Raw Api Audio Projects  Pid  Vdr Raw Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/package/estimate": {
+   "get": {
+    "tags": [
+     "audio"
+    ],
+    "summary": "Api Package Estimate",
+    "operationId": "api_package_estimate_api_audio_projects__pid__package_estimate_get",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Api Package Estimate Api Audio Projects  Pid  Package Estimate Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/package": {
+   "post": {
+    "tags": [
+     "audio"
+    ],
+    "summary": "Api Package",
+    "operationId": "api_package_api_audio_projects__pid__package_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PackageRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/version": {
    "get": {
     "summary": "Version",
@@ -2829,6 +6131,55 @@
     }
    }
   },
+  "/api/studio/projects/{pid}/scenes/{sid}/start-image": {
+   "post": {
+    "summary": "Studio Start Image",
+    "description": "„Startbild erzeugen“ für eine Videoszene (seit 0.5.30): zwei Varianten im Projektordner, wie die Startbilder\ndes Assistenten (Bildmodell nach den LoRAs der Figuren, Sätze über Ton weggelassen, Satz gegen Balken).",
+    "operationId": "studio_start_image_api_studio_projects__pid__scenes__sid__start_image_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     },
+     {
+      "name": "sid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Sid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/studio/projects/{pid}/cancel": {
    "post": {
     "summary": "Studio Cancel",
@@ -3296,6 +6647,25 @@
  },
  "components": {
   "schemas": {
+   "AdoptRequest": {
+    "properties": {
+     "checkpoint": {
+      "type": "string",
+      "title": "Checkpoint"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Name",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "checkpoint"
+    ],
+    "title": "AdoptRequest"
+   },
    "Asset": {
     "properties": {
      "id": {
@@ -3380,6 +6750,47 @@
     ],
     "title": "Asset"
    },
+   "AssetsAdd": {
+    "properties": {
+     "asset_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 200,
+      "title": "Asset Ids"
+     },
+     "caption": {
+      "type": "string",
+      "maxLength": 600,
+      "title": "Caption",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_ids"
+    ],
+    "title": "AssetsAdd"
+   },
+   "AutomixRequest": {
+    "properties": {
+     "tracks": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 16,
+      "minItems": 2,
+      "title": "Tracks"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tracks"
+    ],
+    "title": "AutomixRequest"
+   },
    "Body_studio_import_api_studio_import_post": {
     "properties": {
      "file": {
@@ -3412,6 +6823,157 @@
      "file"
     ],
     "title": "Body_upload_api_upload_post"
+   },
+   "BranchRequest": {
+    "properties": {
+     "checkpoint": {
+      "type": "string",
+      "maxLength": 120,
+      "title": "Checkpoint"
+     },
+     "epochs": {
+      "type": "integer",
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Epochs",
+      "description": "weitere Epochen ab dem Zwischenstand",
+      "default": 10
+     },
+     "lr": {
+      "type": "string",
+      "maxLength": 12,
+      "title": "Lr",
+      "default": "2e-4"
+     },
+     "save_every": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 100.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Save Every"
+     },
+     "test": {
+      "type": "boolean",
+      "title": "Test",
+      "default": true
+     },
+     "prompts": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 4,
+      "title": "Prompts"
+     },
+     "start_at": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start At"
+     }
+    },
+    "type": "object",
+    "required": [
+     "checkpoint"
+    ],
+    "title": "BranchRequest"
+   },
+   "DatasetCreate": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Name",
+      "default": ""
+     },
+     "trigger": {
+      "type": "string",
+      "maxLength": 40,
+      "title": "Trigger"
+     },
+     "class_word": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Class Word",
+      "default": ""
+     },
+     "notes": {
+      "type": "string",
+      "maxLength": 1000,
+      "title": "Notes",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "trigger"
+    ],
+    "title": "DatasetCreate"
+   },
+   "DatasetUpdate": {
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 80
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "trigger": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 40
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Trigger"
+     },
+     "class_word": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 80
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Class Word"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Notes"
+     }
+    },
+    "type": "object",
+    "title": "DatasetUpdate"
    },
    "DeleteResult": {
     "properties": {
@@ -3583,6 +7145,42 @@
     "type": "object",
     "title": "DownloadRequest"
    },
+   "DraftsRequest": {
+    "properties": {
+     "count": {
+      "type": "integer",
+      "maximum": 12.0,
+      "minimum": 1.0,
+      "title": "Count",
+      "default": 4
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Notes"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     }
+    },
+    "type": "object",
+    "title": "DraftsRequest"
+   },
    "ExpandPromptRequest": {
     "properties": {
      "prompt": {
@@ -3667,6 +7265,87 @@
      "seconds"
     ],
     "title": "ExpandPromptResult"
+   },
+   "ExportRequest": {
+    "properties": {
+     "tracks": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Tracks"
+     },
+     "format": {
+      "type": "string",
+      "title": "Format",
+      "default": "wav"
+     },
+     "into_video": {
+      "type": "boolean",
+      "title": "Into Video",
+      "default": false
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Name",
+      "default": ""
+     },
+     "mono": {
+      "type": "boolean",
+      "title": "Mono",
+      "default": false
+     },
+     "region": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Region",
+      "description": "[Anfang, Ende] in Sekunden; nur dieser Ausschnitt"
+     },
+     "dest_dir": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dest Dir",
+      "description": "Zielordner auf diesem Rechner; leer = Verlauf"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tracks"
+    ],
+    "title": "ExportRequest"
+   },
+   "FolderAdd": {
+    "properties": {
+     "path": {
+      "type": "string",
+      "maxLength": 1000,
+      "title": "Path"
+     }
+    },
+    "type": "object",
+    "required": [
+     "path"
+    ],
+    "title": "FolderAdd"
    },
    "Generate3DRequest": {
     "properties": {
@@ -4681,6 +8360,35 @@
     "type": "object",
     "title": "HTTPValidationError"
    },
+   "ImageUpdate": {
+    "properties": {
+     "caption": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 600
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Caption"
+     },
+     "status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     }
+    },
+    "type": "object",
+    "title": "ImageUpdate"
+   },
    "Job": {
     "properties": {
      "id": {
@@ -4703,7 +8411,29 @@
        "vhs",
        "vhs_clean",
        "tts",
-       "video_upscale"
+       "video_upscale",
+       "lora_train",
+       "lora_test",
+       "lora_dataset",
+       "lora_setup",
+       "audio_prepare",
+       "audio_dsp",
+       "audio_ai",
+       "audio_export",
+       "audio_setup",
+       "audio_learn",
+       "audio_scan",
+       "audio_spectro",
+       "audio_vad",
+       "audio_transcribe",
+       "audio_align",
+       "audio_hash",
+       "audio_mix",
+       "audio_vexport",
+       "audio_render",
+       "audio_package",
+       "audio_vdr_import",
+       "audio_vdr_verify"
       ],
       "title": "Kind"
      },
@@ -4788,6 +8518,30 @@
      "created_at"
     ],
     "title": "Job"
+   },
+   "LearnRequest": {
+    "properties": {
+     "name": {
+      "type": "string",
+      "maxLength": 60,
+      "title": "Name",
+      "default": ""
+     },
+     "track": {
+      "type": "string",
+      "title": "Track",
+      "default": "t_orig"
+     },
+     "steps": {
+      "type": "integer",
+      "maximum": 20000.0,
+      "minimum": 500.0,
+      "title": "Steps",
+      "default": 3000
+     }
+    },
+    "type": "object",
+    "title": "LearnRequest"
    },
    "LoraCheck": {
     "properties": {
@@ -4970,6 +8724,21 @@
      "model"
     ],
     "title": "LoraUploadResult"
+   },
+   "Markers": {
+    "properties": {
+     "markers": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 5000,
+      "title": "Markers"
+     }
+    },
+    "type": "object",
+    "title": "Markers"
    },
    "ModelFile": {
     "properties": {
@@ -5255,6 +9024,18 @@
       "title": "Uploaded",
       "default": false
      },
+     "trained": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Trained"
+     },
      "expert": {
       "type": "string",
       "title": "Expert",
@@ -5272,6 +9053,151 @@
      "commercial_ok"
     ],
     "title": "ModelInfo"
+   },
+   "OpRequest": {
+    "properties": {
+     "kind": {
+      "type": "string",
+      "title": "Kind",
+      "description": "classic oder ai"
+     },
+     "track": {
+      "type": "string",
+      "title": "Track",
+      "default": "t_orig"
+     },
+     "chain": {
+      "anyOf": [
+       {
+        "items": {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Chain"
+     },
+     "model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model"
+     },
+     "task": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Task"
+     },
+     "params": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Params"
+     },
+     "region": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Region",
+      "description": "[Anfang, Ende] in Sekunden; nur dieser Ausschnitt"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Name",
+      "default": ""
+     },
+     "profile": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Profile",
+      "description": "bei kind=learned: das gelernte Geräusch"
+     }
+    },
+    "type": "object",
+    "required": [
+     "kind"
+    ],
+    "title": "OpRequest"
+   },
+   "PackageRequest": {
+    "properties": {
+     "dest_dir": {
+      "type": "string",
+      "maxLength": 500,
+      "title": "Dest Dir"
+     },
+     "images": {
+      "type": "boolean",
+      "title": "Images",
+      "default": true
+     },
+     "video": {
+      "type": "boolean",
+      "title": "Video",
+      "default": false
+     },
+     "originals": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 64,
+      "title": "Originals"
+     }
+    },
+    "type": "object",
+    "required": [
+     "dest_dir"
+    ],
+    "title": "PackageRequest"
+   },
+   "PauseRequest": {
+    "properties": {
+     "mode": {
+      "type": "string",
+      "title": "Mode",
+      "description": "epoch: nach der laufenden Epoche, now: sofort",
+      "default": "epoch"
+     }
+    },
+    "type": "object",
+    "title": "PauseRequest"
    },
    "ProblemReport": {
     "properties": {
@@ -5369,6 +9295,175 @@
      "time"
     ],
     "title": "ProblemReportSummary"
+   },
+   "ProjectCreate": {
+    "properties": {
+     "asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Asset Id"
+     },
+     "path": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Path"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 120,
+      "title": "Name",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "title": "ProjectCreate"
+   },
+   "ProjectUpdate": {
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 120
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     }
+    },
+    "type": "object",
+    "title": "ProjectUpdate"
+   },
+   "QuickTest": {
+    "properties": {
+     "checkpoint": {
+      "type": "string",
+      "maxLength": 120,
+      "title": "Checkpoint"
+     },
+     "prompt": {
+      "type": "string",
+      "maxLength": 600,
+      "title": "Prompt"
+     },
+     "strengths": {
+      "items": {
+       "type": "number"
+      },
+      "type": "array",
+      "maxItems": 4,
+      "minItems": 1,
+      "title": "Strengths"
+     },
+     "seed": {
+      "type": "integer",
+      "title": "Seed",
+      "default": 777
+     }
+    },
+    "type": "object",
+    "required": [
+     "checkpoint",
+     "prompt"
+    ],
+    "title": "QuickTest"
+   },
+   "RenderRequest": {
+    "properties": {
+     "panels": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 16,
+      "title": "Panels"
+     },
+     "tracks": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Tracks"
+     },
+     "region": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Region"
+     },
+     "fps": {
+      "type": "integer",
+      "title": "Fps",
+      "default": 10
+     },
+     "mono": {
+      "type": "boolean",
+      "title": "Mono",
+      "default": false
+     },
+     "lang": {
+      "type": "string",
+      "maxLength": 5,
+      "title": "Lang",
+      "default": "de"
+     },
+     "spec": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "number"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Spec"
+     },
+     "dest_dir": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dest Dir"
+     }
+    },
+    "type": "object",
+    "required": [
+     "panels"
+    ],
+    "title": "RenderRequest"
    },
    "RestoreImageRequest": {
     "properties": {
@@ -5510,6 +9605,407 @@
     "title": "RestoreImageRequest",
     "description": "Foto restaurieren und einfaerben (seit 0.5.11): Schaeden entfernen, einfaerben, schaerfen --\nin dieser Reihenfolge, jeder Schritt einzeln schaltbar (jobs._restore)."
    },
+   "ResumeRequest": {
+    "properties": {
+     "epochs": {
+      "anyOf": [
+       {
+        "type": "integer",
+        "maximum": 200.0,
+        "minimum": 1.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Epochs",
+      "description": "Epochen gesamt; mehr als bisher verlängert"
+     },
+     "test": {
+      "type": "boolean",
+      "title": "Test",
+      "default": true
+     },
+     "start_at": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start At"
+     }
+    },
+    "type": "object",
+    "title": "ResumeRequest"
+   },
+   "SketchSet": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "SketchSet"
+   },
+   "TemplateGenerate": {
+    "properties": {
+     "count": {
+      "type": "integer",
+      "maximum": 48.0,
+      "minimum": 1.0,
+      "title": "Count",
+      "default": 24
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 1000
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Notes"
+     },
+     "replace": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 48,
+      "title": "Replace"
+     },
+     "sources": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 48,
+      "title": "Sources"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     }
+    },
+    "type": "object",
+    "title": "TemplateGenerate"
+   },
+   "TemplatePick": {
+    "properties": {
+     "file": {
+      "type": "string",
+      "maxLength": 120,
+      "title": "File"
+     }
+    },
+    "type": "object",
+    "required": [
+     "file"
+    ],
+    "title": "TemplatePick"
+   },
+   "TemplateSet": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "TemplateSet"
+   },
+   "TestRequest": {
+    "properties": {
+     "prompts": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 4,
+      "title": "Prompts"
+     }
+    },
+    "type": "object",
+    "title": "TestRequest"
+   },
+   "TrackUpdate": {
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 80
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "gain_db": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 24.0,
+        "minimum": -60.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gain Db"
+     },
+     "mute": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mute"
+     },
+     "solo": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Solo"
+     },
+     "color": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 16
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Color"
+     }
+    },
+    "type": "object",
+    "title": "TrackUpdate"
+   },
+   "TracksRequest": {
+    "properties": {
+     "tracks": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Tracks"
+     }
+    },
+    "type": "object",
+    "title": "TracksRequest"
+   },
+   "TrainRequest": {
+    "properties": {
+     "epochs": {
+      "type": "integer",
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Epochs",
+      "default": 20
+     },
+     "lr": {
+      "type": "string",
+      "maxLength": 12,
+      "title": "Lr",
+      "default": "2e-4"
+     },
+     "rank": {
+      "type": "integer",
+      "maximum": 128.0,
+      "minimum": 4.0,
+      "title": "Rank",
+      "default": 16
+     },
+     "alpha": {
+      "anyOf": [
+       {
+        "type": "number",
+        "maximum": 256.0,
+        "minimum": 0.5
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Alpha",
+      "description": "network_alpha; leer = Rang"
+     },
+     "save_every": {
+      "type": "integer",
+      "maximum": 100.0,
+      "minimum": 1.0,
+      "title": "Save Every",
+      "default": 5
+     },
+     "test": {
+      "type": "boolean",
+      "title": "Test",
+      "default": true
+     },
+     "prompts": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 4,
+      "title": "Prompts"
+     },
+     "start_at": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start At",
+      "description": "Startzeit (Unix-Sekunden); leer = sofort"
+     }
+    },
+    "type": "object",
+    "title": "TrainRequest"
+   },
+   "TranscribeRequest": {
+    "properties": {
+     "tracks": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Tracks"
+     },
+     "source_lang": {
+      "type": "string",
+      "maxLength": 12,
+      "title": "Source Lang",
+      "default": "tl"
+     },
+     "target_lang": {
+      "type": "string",
+      "maxLength": 12,
+      "title": "Target Lang",
+      "default": "de"
+     },
+     "region": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Region"
+     },
+     "translate": {
+      "type": "boolean",
+      "title": "Translate",
+      "default": true
+     }
+    },
+    "type": "object",
+    "required": [
+     "tracks"
+    ],
+    "title": "TranscribeRequest"
+   },
+   "TranscriptDoc": {
+    "properties": {
+     "source_lang": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 12
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Lang"
+     },
+     "target_lang": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 12
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Target Lang"
+     },
+     "speakers": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 50,
+      "title": "Speakers"
+     },
+     "segments": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 20000,
+      "title": "Segments"
+     },
+     "client": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 40
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Client"
+     }
+    },
+    "type": "object",
+    "title": "TranscriptDoc"
+   },
    "UpscaleVideoRequest": {
     "properties": {
      "asset_id": {
@@ -5607,6 +10103,57 @@
      "type"
     ],
     "title": "ValidationError"
+   },
+   "VdrCreate": {
+    "properties": {
+     "path": {
+      "type": "string",
+      "maxLength": 1000,
+      "title": "Path",
+      "description": "Ordner des VDR-Exports (oder eine Blockdatei)"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 120,
+      "title": "Name",
+      "default": ""
+     }
+    },
+    "type": "object",
+    "required": [
+     "path"
+    ],
+    "title": "VdrCreate"
+   },
+   "VdrImport": {
+    "properties": {
+     "track_ids": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Track Ids",
+      "description": "nur diese Spuren (leer = alle)"
+     }
+    },
+    "type": "object",
+    "title": "VdrImport"
+   },
+   "VdrPath": {
+    "properties": {
+     "path": {
+      "type": "string",
+      "maxLength": 1000,
+      "title": "Path",
+      "description": "Ordner des VDR-Exports (oder eine Blockdatei)"
+     }
+    },
+    "type": "object",
+    "required": [
+     "path"
+    ],
+    "title": "VdrPath"
    },
    "VersionInfo": {
     "properties": {
@@ -5944,6 +10491,139 @@
     ],
     "title": "VhsRequest",
     "description": "VHS-Video aufwerten (seit 0.5.16, vhs.py): klassisch (entflechten, beschneiden, entrauschen, Farbe,\nstabilisieren, Ton) und auf Wunsch mit KI (SeedVR2) in Abschnitten. Vorgaben aus POST /api/vhs/analyze."
+   },
+   "VideoExportRequest": {
+    "properties": {
+     "tracks": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "type": "array",
+      "maxItems": 32,
+      "title": "Tracks"
+     },
+     "region": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "number"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Region"
+     },
+     "subtitles": {
+      "type": "string",
+      "maxLength": 20,
+      "title": "Subtitles",
+      "default": "none"
+     },
+     "burn": {
+      "type": "boolean",
+      "title": "Burn",
+      "default": false
+     },
+     "mono": {
+      "type": "boolean",
+      "title": "Mono",
+      "default": false
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 80,
+      "title": "Name",
+      "default": ""
+     },
+     "dest_dir": {
+      "anyOf": [
+       {
+        "type": "string",
+        "maxLength": 500
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dest Dir"
+     }
+    },
+    "type": "object",
+    "required": [
+     "tracks"
+    ],
+    "title": "VideoExportRequest"
+   },
+   "VideoLink": {
+    "properties": {
+     "path": {
+      "type": "string",
+      "maxLength": 1000,
+      "title": "Path"
+     },
+     "method": {
+      "type": "string",
+      "maxLength": 10,
+      "title": "Method",
+      "default": "clock"
+     },
+     "box": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array",
+        "maxItems": 4
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Box"
+     }
+    },
+    "type": "object",
+    "required": [
+     "path"
+    ],
+    "title": "VideoLink"
+   },
+   "nvai__audio_lab__SetupRequest": {
+    "properties": {
+     "env": {
+      "type": "boolean",
+      "title": "Env",
+      "default": true
+     },
+     "models": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "maxItems": 20,
+      "title": "Models"
+     }
+    },
+    "type": "object",
+    "title": "SetupRequest"
+   },
+   "nvai__lora_train__SetupRequest": {
+    "properties": {
+     "parts": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array",
+      "title": "Parts"
+     }
+    },
+    "type": "object",
+    "title": "SetupRequest"
    }
   }
  }

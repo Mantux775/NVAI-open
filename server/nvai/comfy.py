@@ -176,7 +176,13 @@ class Backend:
                 "--feature-flag", "local_web_sso=false", "--feature-flag", "partner_node_token=false"]
         if config.MODEL_DIR_OVERRIDE:
             args += ["--models-directory", str(config.COMFY_MODEL_DIR)]
-        if gpu.multi_gpu():
+        env = None
+        if gpu.cpu_mode():
+            # Keine Karte, auf der PyTorch rechnet (gpu.cpu_mode, GitHub-Issue #3): ComfyUI rechnet auf dem Prozessor,
+            # und ROCm/CUDA sehen die Karte nicht (sonst stuerzte torch.cuda.is_available auf einer RX 5700 XT ab).
+            args.append("--cpu")
+            env = {**__import__("os").environ, **gpu.CPU_ENV}
+        elif gpu.multi_gpu():
             # Erst mit mehreren Karten eine feste Karte vorgeben; mit einer bleibt alles
             # wie vor 0.5. ComfyUI setzt daraus CUDA_VISIBLE_DEVICES (bzw. HIP_*).
             args += ["--cuda-device", str(gpu.device_for(self.role))]
@@ -197,6 +203,7 @@ class Backend:
             cwd=str(config.COMFY_ROOT),
             stdout=log,
             stderr=subprocess.STDOUT,
+            env=env,
             # Ohne das oeffnet sich unter pythonw (installierte Fassung) ein Konsolenfenster.
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )

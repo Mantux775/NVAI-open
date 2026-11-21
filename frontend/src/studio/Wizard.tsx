@@ -607,7 +607,9 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
     const action = dot(tx.actions[i] || tx.idea)
     const setting = dot(tx.place) ? ` Setting: ${dot(tx.place)}.` : ''
     // „Cinematic film still“ gab FLUX 3 schwarze Balken oben und unten (gemessen 14.11. ohne Figur, gleiche Seeds:
-    // 4 von 12 Startbildern, mit diesem Satz 0 von 12, Bild sonst fast gleich)
+    // 4 von 12 Startbildern, mit diesem Satz 0 von 12; 21.11. ruhigerer Prompt: 1 von 6, mit Satz 0 von 6). Der Satz
+    // gehört zum Prompt: Aufbau und Motiv bleiben meist, Einzelheiten wie einzelne Häuser können sich ändern
+    // (Vergleichsbild docs/images/wizard-full-frame.jpg: gleicher Seed, dieselbe Häuserzeile)
     const full = style === 'film' ? ' The picture fills the whole frame from edge to edge.' : ''
     if (path.photo) {
       // wie „Person aus einem Foto“ im Reiter Generieren (gemessen 24.10.: Gesicht gehalten), dazu Ausschnitt und Ort
@@ -659,6 +661,9 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
     // Was das gewählte Videomodell nicht kann, wird nicht verlangt (sonst bricht die Szene mit einer Meldung ab)
     const lips = p.models.video?.lipsync !== false
     const loop = path.photo && p.models.video?.loop !== false
+    // Karten unter 15 GB: Der Plan rechnet in 1280 × 704 (Zeitschätzung, Startbilder); die Videos auch, sonst nähme der
+    // Server für ein 1080p-Projekt 1920 × 1088 (seit 0.5.30)
+    const small = Math.max(p.width, p.height) < 1900 && (p.models.video?.family ?? '').startsWith('ltx')
     const ids: string[] = []
     let start = 0
     let firstVoice: string | null = null
@@ -666,7 +671,8 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
       const r = await cmd(pid, 'scene.add', {
         lane: 'video', kind: 'video', model_id: p.models.video?.id ?? null,
         title: `${i + 1} ${FRAMINGS[s.framing].label}`, prompt: videoPrompt(s, i, tx, lips), start_s: start, duration_s: s.seconds,
-        params: { characters: inPicture, ...(loop ? { loop: true } : {}) }, chain_from: path.chain && i > 0 ? ids[i - 1] : null,
+        params: { characters: inPicture, ...(loop ? { loop: true } : {}), ...(small ? { width: p.width, height: p.height } : {}) },
+        chain_from: path.chain && i > 0 ? ids[i - 1] : null,
       })
       ids.push(r.id)
       if (path.lines !== 'none' && s.line.trim()) {

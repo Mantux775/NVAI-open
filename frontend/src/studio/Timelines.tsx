@@ -441,7 +441,9 @@ export function Timelines({ project, playhead, zoom, selection, tool, magnet, on
 
   const addScene = async (e: RMouseEvent, lane: StudioLane) => {
     if (e.target !== e.currentTarget) return
-    const r = await onCommand('scene.add', { lane, start: snapPoint(timeAt(e.clientX), magnet || e.shiftKey), duration_s: lane === 'video' ? 5 : 10 })
+    // Musik und Geräusche ohne Länge: Der Server nimmt die Filmlänge bzw. 4 s (seit 0.5.30)
+    const duration_s = lane === 'video' ? 5 : lane === 'voice' ? 10 : undefined
+    const r = await onCommand('scene.add', { lane, start: snapPoint(timeAt(e.clientX), magnet || e.shiftKey), duration_s })
     if (r?.id) onSelect({ type: 'scene', id: r.id })
   }
   const addMarker = async (e: RMouseEvent) => {

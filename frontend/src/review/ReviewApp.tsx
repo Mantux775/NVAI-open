@@ -74,7 +74,10 @@ export function ReviewApp() {
   })
   const close = () => {
     if (pkg) closePackage(pkg)
-    location.reload()
+    // In der Mac-App führt ← zur Fallliste des Bereichs „Ton-Forensik“ (seit Mac 0.5.11); sonst Startseite neu laden
+    const bridge = nativeBridge()
+    if (bridge) void bridge.postMessage({ op: 'close' })
+    else location.reload()
   }
   // Testweg über einen Webserver: NVAI-Pruefer.html?paket=<Adresse des Paketordners> (nur lesen); in der Mac-App mit
   // &schreiben=1 (ihr Server nimmt Änderungen für „bearbeitung/“ an, Prüfstand `--review-package`)

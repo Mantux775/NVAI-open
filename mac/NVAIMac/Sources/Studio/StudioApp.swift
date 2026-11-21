@@ -39,6 +39,8 @@ enum StudioJSON {
             out["scenes"] = .array(zip(scenes, p.scenes).map { json, s in
                 guard case .object(var o) = json else { return json }
                 o["status"] = .string(status(s))
+                // Hinweise wie in den Eigenschaften (seit Mac 0.5.11, wie view() unter Windows 0.5.30)
+                o["hints"] = .array(StudioGenerator.hints(p, s, StudioMediaProbe.environment).map(JSONValue.string))
                 if let chain = chains[s.id] {
                     o["chain_from"] = .string(chain.from)
                     o["chain_marker"] = .string(chain.marker)
@@ -86,6 +88,9 @@ enum StudioJSON {
                 "error": s.error.map(JSONValue.string) ?? .null]
             // Figuren (seit 0.5.5): wer zu sehen ist, wer spricht, welcher Satz der Ton eines Videos ist
             for key in ["characters", "character", "audio_from"] where s.params.truthy(key) { o[key] = s.params[key] }
+            // Hinweise wie in den Eigenschaften (seit Mac 0.5.11): zu lang für diesen Mac, Figur ohne Startbild …
+            let hints = StudioGenerator.hints(p, s, StudioMediaProbe.environment)
+            if !hints.isEmpty { o["hints"] = .array(hints.map(JSONValue.string)) }
             return .object(o)
         }
         let markers: [JSONValue] = p.markers.map { m in

@@ -359,11 +359,9 @@ actor StudioGenerator {
         }
         // Video: das Modell der Szene, wenn geladen, sonst das aktive (2B oder 13B), 24 fps, Bilder 8n+1 aus der Länge;
         // Format im Seitenverhältnis des Projekts, so groß, wie der Speicher dieses Macs es für die Länge zulässt.
-        let video = s.modelID.flatMap(VideoCatalog.model).flatMap { $0.installed ? $0 : nil } ?? VideoCatalog.active
+        let video = videoModel(s)
         let fps = VideoCatalog.fps
-        // Aufrunden wie unter Windows seit 0.5.26 (seit 0.5.9 auch hier): Gerundet blieben bei Längen neben dem Raster
-        // bis zu 3 Bilder am Szenenende schwarz (5,5 s: 129 statt 137 Bilder); 4 s bleibt 97
-        let frames = min(257, max(9, Int((secs * Double(fps) / 8 - 1e-6).rounded(.up)) * 8 + 1))
+        let frames = videoFrames(s)
         guard let size = videoSize(p, frames: frames, maxVoxels: video.maxVoxels, step: video.sizeStep) else {
             throw StudioError(t("Die Szene ist für diesen Mac zu lang (\(frames) Bilder). Kürzer machen oder in zwei Szenen teilen.",
                                 "The scene is too long for this Mac (\(frames) frames). Shorten it or split it into two scenes."))
@@ -403,6 +401,18 @@ actor StudioGenerator {
             body["image_asset_id"] = .string(try await lastFrameAsset(take, title: source.title))
         }
         return await JobQueue.shared.submitVideo(try VideoJobRequest.parse(.object(body)))
+    }
+
+    /// Das Videomodell einer Szene: ihr eigenes, wenn es geladen ist, sonst das aktive.
+    static func videoModel(_ s: StudioScene) -> VideoModel {
+        s.modelID.flatMap(VideoCatalog.model).flatMap { $0.installed ? $0 : nil } ?? VideoCatalog.active
+    }
+
+    /// Bilder eines Videoclips aus der Länge der Szene: 8n + 1 bei 24 fps, 9 bis 257. Aufrunden wie unter Windows seit
+    /// 0.5.26 (seit 0.5.9 auch hier): Gerundet blieben bei Längen neben dem Raster bis zu 3 Bilder am Szenenende schwarz
+    /// (5,5 s: 129 statt 137 Bilder); 4 s bleibt 97
+    static func videoFrames(_ s: StudioScene) -> Int {
+        min(257, max(9, Int((Studio.seconds(s.duration) * Double(VideoCatalog.fps) / 8 - 1e-6).rounded(.up)) * 8 + 1))
     }
 
     /// Standbild: etwa 1 MP im Seitenverhältnis des Projekts (1360 × 768 bei 16:9), Kanten Vielfache von 16.
@@ -455,5 +465,147 @@ actor StudioGenerator {
         var meta: [String: JSONValue] = ["studio_last_frame_of": .string(assetID)]
         if let project = record.meta["studio_project"] { meta["studio_project"] = project }
         return try await AssetStore.shared.addStudioImage(png: png, label: label, meta: meta).id
+    }
+
+    // MARK: Hinweise je Szene
+
+    /// Nicht englisch, wie NON_EN unter Windows (studio.py, Wizard.tsx): Umlaute oder häufige deutsche Wörter.
+    static let nonEnglish = #"[äöüßÄÖÜ]|\b(der|das|und|ein|eine|einen|eines|einem|einer|mit|auf|bei|vom|zum|zur|dem|des|ist|sind|nicht|sich|unter|hinter|nach|aus|wird|steht|geht|zieht|hebt|langsam|seine|ihre|alten|alte|kleine|kleiner|große|großen|hellem|dunklen)\b"#
+
+    /// Was der Assistent von selbst richtig setzt und bei Szenen von Hand leicht fehlt (seit Mac 0.5.11, wie _hints
+    /// unter Windows seit 0.5.30); die Eigenschaften zeigen sie unter dem Fehler der Szene. Statt der zwei Hinweise zur
+    /// Grafikkarte nennt der Mac das Format, auf das sein Speicher die Szene bei dieser Länge setzt; den Hinweis zum
+    /// Sprechersatz gibt es nur bei einem Videomodell mit eigenem Ton.
+    static func hints(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) -> [String] {
+        var out: [String] = []
+        guard s.lane != "voice" else { return out }  // der Text eines Sprechersatzes bleibt in seiner Sprache
+        let text = s.prompt
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           text.range(of: nonEnglish, options: [.regularExpression, .caseInsensitive]) != nil {
+            // Musik und Klang: Zum Ausbauen gibt es auf dem Mac dafür kein Ziel, nur das Übertragen ins Englische
+            out.append(s.lane == "video"
+                ? t("Der Prompt ist nicht englisch. Die Modelle verstehen ganze englische Sätze am besten: „Prompt ausbauen“ übersetzt und ergänzt ihn.",
+                    "The prompt is not in English. The models understand whole English sentences best: “Expand prompt” translates and completes it.")
+                : t("Der Prompt ist nicht englisch. Die Modelle verstehen ganze englische Sätze am besten: „Ins Englische übertragen“ übersetzt ihn.",
+                    "The prompt is not in English. The models understand whole English sentences best: “Translate into English” translates it."))
+        }
+        guard s.lane == "video", s.kind == "video" else { return out }
+        let video = videoModel(s)
+        let frames = videoFrames(s)
+        if let size = videoSize(p, frames: frames, maxVoxels: video.maxVoxels, step: video.sizeStep) {
+            // nur, wenn die Länge Bildpunkte kostet: kleiner als das Projekt und kleiner als beim kürzesten Clip (9 Bilder)
+            let pixels = size.width * size.height
+            if let most = videoSize(p, frames: 9, maxVoxels: video.maxVoxels, step: video.sizeStep),
+               pixels < most.width * most.height, pixels < p.settings.width * p.settings.height {
+                out.append(t("Bei dieser Länge rechnet dieser Mac in \(size.width) × \(size.height) (Speicher). Kürzere Szenen bekommen mehr Bildpunkte.",
+                             "At this length this Mac renders in \(size.width) × \(size.height) (memory). Shorter scenes get more pixels."))
+            }
+        } else {
+            out.append(t("Die Szene ist für diesen Mac zu lang (\(frames) Bilder). Kürzer machen oder in zwei Szenen teilen.",
+                         "The scene is too long for this Mac (\(frames) frames). Shorten it or split it into two scenes."))
+        }
+        let chained = !(s.chainFrom ?? "").isEmpty || StudioCommands.resolvedChains(p)[s.id] != nil
+        if s.params.truthy("characters"), !s.params.truthy("image_asset_id"), !chained {
+            out.append(t("Figur ohne Startbild: Das Videomodell erfindet dann ein Gesicht. „Startbild erzeugen“ oder ein Bild aus dem Material auf „Startbild“ ziehen.",
+                         "Character without a start image: the video model then invents a face. Use “Generate start image” or drag a picture from the media onto “Start image”."))
+        }
+        // „Ton aus Sprecher-Szene“ hilft nur, wenn das Videomodell einen Ton nimmt (auf dem Mac keins); sonst spricht
+        // ein Videomodell mit eigenem Ton womöglich über den Satz
+        let lips = env.takesAudio(s.modelID) && s.params.truthy("audio_from")
+        if video.hasAudio, !lips, !text.lowercased().contains("no speech"),
+           p.scenes.contains(where: { $0.lane == "voice" && $0.start < s.end && $0.end > s.start }) {
+            out.append(t("Unter dieser Szene liegt ein Sprechersatz, und das Videomodell macht eigenen Ton, auch Stimmen. Für Erzählung „Quiet ambient sound, no speech.“ in den Prompt schreiben.",
+                         "A spoken line lies under this scene, and the video model makes its own sound, voices included. For narration add “Quiet ambient sound, no speech.” to the prompt."))
+        }
+        return out
+    }
+
+    // MARK: Startbild erzeugen
+
+    /// Der Satz gegen schwarze Balken aus den Startbildern des Assistenten (Windows: FULL_FRAME).
+    static let fullFrame = "The picture fills the whole frame from edge to edge."
+    private static let soundWords = #"\b(sound\w*|audio|hear\w*|voices?|says|said|say|speaks?|speaking|talks?|tells|music\w*|nois\w*|silen\w*|quiet\w*|loud\w*|whisper\w*|shout\w*|sings?|singing|murmur\w*|rumbl\w*|ambient|narrat\w*|speech)\b"#
+
+    /// Video-Prompt als Bildbeschreibung (wie _still_prompt unter Windows): ohne die Sätze über Ton, Stimmen und
+    /// Gesprochenes (Anführungszeichen landen sonst als Schrift im Bild), dazu der Satz gegen schwarze Balken.
+    static func stillPrompt(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Sätze wie re.split(r"(?<=[.!?])\s+"): getrennt am Leerraum nach . ! ?
+        var sentences: [String] = []
+        var current = ""
+        for c in trimmed {
+            if c.isWhitespace, let last = current.last, ".!?".contains(last) {
+                sentences.append(current)
+                current = ""
+            } else if !(c.isWhitespace && current.isEmpty) {
+                current.append(c)
+            }
+        }
+        if !current.isEmpty { sentences.append(current) }
+        let kept = sentences.filter { x in
+            x.range(of: soundWords, options: [.regularExpression, .caseInsensitive]) == nil
+                && !x.contains(where: { "\"“”„".contains($0) })
+        }
+        let out = kept.isEmpty ? trimmed : kept.joined(separator: " ")
+        return out.contains(fullFrame) ? out : out + " " + fullFrame
+    }
+
+    /// Bildmodell für ein Startbild (wie _start_image_model unter Windows): FLUX.2 Klein wie im Assistenten (die
+    /// Fassung, die er für diesen Mac empfiehlt, zuerst), sonst Z-Image Turbo, jeweils nur geladen; haben die Figuren der
+    /// Szene LoRAs, das Modell, zu dem die meisten passen (auf dem Mac nur FLUX.2 Klein). Sonst das aktive, wenn geladen.
+    static func startImageModel(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) -> String? {
+        let ram = SystemInfo.memoryGB
+        let flux = ([ModelCatalog.recommended] + ModelCatalog.all).first { ram >= $0.minRAMGB && ModelCatalog.status($0).installed }
+        let zimage = ZImageCatalog.all.first { ram >= $0.minRAMGB && $0.installed }
+        let cast = s.params["characters"]?.arrayValue?.compactMap(\.stringValue) ?? []
+        let loras = p.characters.filter { cast.contains($0.id) }.flatMap(\.loras)
+            .compactMap { env.lora($0.modelID) }.filter(\.installed)
+        var best: String?
+        var bestFit = -1
+        for id in [flux?.id, zimage?.id].compactMap({ $0 }) {
+            let bases = env.loraBases(id) ?? []
+            let fit = loras.filter { bases.contains($0.family) }.count
+            if fit > bestFit {
+                best = id
+                bestFit = fit
+            }
+            if fit == loras.count { break }  // ohne LoRAs: das erste geladene
+        }
+        if let best { return best }
+        let active = Models.active
+        return active.installed ? active.id : nil
+    }
+
+    /// Format wie die Startbilder des Assistenten: 1024 Bildpunkte an der langen Seite im Seitenverhältnis des Projekts
+    /// (1024 × 576 bei 16:9, 576 × 1024 hochkant), Kanten Vielfache von 16.
+    static func startImageSize(_ p: StudioProject) -> (width: Int, height: Int) {
+        let w = Double(p.settings.width), h = Double(p.settings.height)
+        let short = max(256, Int((1024 * min(w, h) / max(w, h) / 16).rounded()) * 16)
+        return w >= h ? (1024, short) : (short, 1024)
+    }
+
+    /// „Startbild erzeugen“ (seit Mac 0.5.11, wie submit_start_image unter Windows seit 0.5.30): zwei Varianten für eine
+    /// Videoszene wie die Startbilder des Assistenten, mit den Figuren der Szene (ihre LoRAs und Trigger-Wörter). Die
+    /// Oberfläche legt beide in den Projektordner und setzt die erste als Startbild.
+    static func submitStartImage(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) async throws -> JobRecord {
+        guard s.lane == "video", s.kind == "video" else {
+            throw StudioError(t("Ein Startbild gibt es nur für Videoszenen.", "Only video scenes have a start image."))
+        }
+        guard !s.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet."))
+        }
+        guard let modelID = startImageModel(p, s, env) else {
+            throw StudioError(t("Kein Bildmodell geladen (unter „Modelle“).", "No image model is downloaded (under \"Models\")."))
+        }
+        var still = s
+        still.prompt = stillPrompt(s.prompt)
+        still.params["loras"] = nil  // eigene LoRAs einer Videoszene gehören zum Videomodell
+        let look = StudioCommands.characterLook(p, still, modelID: modelID, env)
+        let size = startImageSize(p)
+        var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+                                         "model_id": .string(modelID), "width": .int(size.width),
+                                         "height": .int(size.height), "batch_size": .int(2)]
+        if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
+        return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
     }
 }

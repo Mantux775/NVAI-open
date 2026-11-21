@@ -1,0 +1,8 @@
+# Ohne Grafikkarte (install-runtime.ps1): Radeons, die AMDs PyTorch fuer Windows nicht kennt (RX 5000, Vega, Polaris
+# und aelter), und Karten, auf denen PyTorch beim Einrichten nicht rechnete. PyTorch 2.14.1 von PyPI ist unter Windows
+# ein reiner CPU-Bau, dieselbe Fassung wie comfyui.lock (NVIDIA). ComfyUI startet dann mit --cpu (comfy.py).
+# Installiert mit --no-deps --require-hashes; die uebrigen Abhaengigkeiten stehen in comfyui-amd-base.lock.
+torch @ https://files.pythonhosted.org/packages/ad/1a/b9648b0d228e513f69f8453ec3f90a8d436d78ff6d85a2773e539f0c07cf/torch-2.14.1-cp312-cp312-win_amd64.whl \
+    --hash=sha256:38bee9f2a2ccfc6898172a5075e4ba52522fbe143eeb099674fc67ab390e858d
+torchvision @ https://files.pythonhosted.org/packages/fa/67/c8cbf53a525ac2fba5d68e36c61636fa08297001a008b151f06c2c0c564a/torchvision-0.29.1-cp312-cp312-win_amd64.whl \
+    --hash=sha256:551c567fd39581570bf553c8df58895d567258b9997760179719f205ec5cd859

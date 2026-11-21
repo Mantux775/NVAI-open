@@ -102,8 +102,15 @@ release as a single file.
 
 ![The review app with the same demo case, reviewer at the top right](images/review-app.jpg)
 
-On the Mac, NVAI-open 0.5.7 opens review packages in its "Audio forensics" tab, with the same review app. Speech
-recognition and translation on the Mac will follow.
+On the Mac, NVAI-open opens review packages in its "Audio forensics" tab, with the same review app. Since NVAI-open
+for Mac 0.5.11 the Mac also makes cases itself: "New case …" takes audio or video files, every channel becomes a track,
+and uncompressed original audio stays bit-exact. "Import VDR export …" reads the data of a voyage data recorder
+(VR-7000) as on Windows, with heading, speed, alarms, AIS and radar and ECDIS pictures; before it starts, it shows the
+recording, its channels and the space the case will need, and it stops before the drive runs full. "Recognise speech" runs
+Whisper large-v3 (Core ML, 3.1 GB) wherever the speech finder Silero VAD hears speech, and "Translate" translates the
+blocks via English with Qwen3.5 (9B from 16 GB of memory, otherwise 4B). Everything runs on the Mac, and every block
+stays a draft until a person has checked it. A case from the Mac is a review package itself and can be passed on as a
+folder.
 
 <details>
 <summary>Measured with the demo case (95 s, three tracks, RTX 5060 Ti)</summary>

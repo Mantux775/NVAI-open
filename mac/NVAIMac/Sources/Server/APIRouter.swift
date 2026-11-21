@@ -261,6 +261,8 @@ enum APIRouter {
             }
             if parts.count >= 2, parts[0] == "api", parts[1] == "studio",
                let response = try await StudioRoutes.handle(req, parts) { return response }
+            if parts.count >= 2, parts[0] == "api", parts[1] == "forensic",
+               let response = try await ForensicRoutes.handle(req, parts) { return response }
             if let c = route("GET", "/files/:name") { return try file(c[0]) }
             // Ton-Forensik (seit 0.5.7): Prüf-App, Prüfpaket mit Range, Änderungen und Exporte
             if parts.first == "review", let response = try await ReviewRoutes.handle(req, parts) { return response }

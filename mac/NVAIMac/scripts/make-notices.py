@@ -88,6 +88,8 @@ LOCAL = [
      "Packages/ltx-video-swift-mlx"),
     ("mlx-audio-swift (Qwen3-TTS)", "0dda61b (local copy)", "https://github.com/Blaizzy/mlx-audio-swift",
      "Packages/qwen3-tts-swift"),
+    # Ogg-Vorbis-Dekoder für die VDR-Exporte (Ton-Forensik, seit 0.5.11); Lizenz nach Wahl MIT oder Public Domain
+    ("stb_vorbis", "1.25 (local copy)", "https://github.com/nothings/stb", "Packages/stb-vorbis"),
     # in der Prüf-App NVAI-Pruefer.html (Bereich Ton-Forensik, seit 0.5.7) mitgebaut; Lizenztexte aus frontend/node_modules
     ("react (in NVAI-Pruefer.html)", "19.2.8", "https://github.com/facebook/react", "Packages/web-licenses/react"),
     ("react-dom (in NVAI-Pruefer.html)", "19.2.8", "https://github.com/facebook/react", "Packages/web-licenses/react-dom"),

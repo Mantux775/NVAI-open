@@ -203,8 +203,10 @@ struct StudioTimeline: View {
     }
 
     private func newScene(_ lane: String, kind: String, at: Int) async {
-        let seconds = lane == "video" ? 5.0 : 10.0
-        if let r = await model.run("scene.add", ["lane": .string(lane), "kind": .string(kind), "start": .int(at), "duration_s": .double(seconds)]),
+        var params: StudioParams = ["lane": .string(lane), "kind": .string(kind), "start": .int(at)]
+        // Musik und Geräusche ohne Länge: Der Studio-Kern nimmt die Filmlänge bzw. 4 s (wie unter Windows seit 0.5.30)
+        if lane == "video" { params["duration_s"] = .double(5) } else if lane == "voice" { params["duration_s"] = .double(10) }
+        if let r = await model.run("scene.add", params),
            let id = r["id"]?.stringValue {
             model.select(.scene, id)
         }

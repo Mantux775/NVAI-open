@@ -76,9 +76,16 @@ still. Das Foto bleibt auf deinem Rechner.
    24 fps. Name, Format und die Qualität der Videoszenen stehen rechts in den Eigenschaften; ein Klick ins Leere zeigt
    sie.
 2. **Szenen anlegen:** Doppelklick auf eine Bahn und in den Eigenschaften den Prompt schreiben. Eine Szene verschiebst
-   du durch Ziehen, ihre Länge am rechten Rand. Eine Videoszene kann mit einem **Startbild** beginnen (seit 0.5.27, Mac
-   0.5.6): ein Bild aus dem Material auf das Feld in den Eigenschaften ziehen oder mit „Aus dem Projektordner wählen …“
-   aussuchen. So bleiben eine Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann
+   du durch Ziehen, ihre Länge am rechten Rand. Eine neue Szene beginnt wie eine aus dem Assistenten (seit 0.5.30, Mac
+   0.5.11): mit dem besten geladenen Modell ihrer Bahn (LTX-2.5 für Video, Qwen3-TTS für Stimmen, Stable Audio 3 für
+   Musik, Stable Audio Open für Geräusche), Musik so lang wie der Film, Geräusche 4 s. „Prompt ausbauen“ macht aus ein
+   paar Worten eine volle englische Beschreibung. Hinweise unter den Eigenschaften nennen, was oft schiefgeht: ein Clip
+   über 6 s in 1080p auf einer Karte mit 16 GB, eine Figur ohne Startbild, ein Prompt nicht auf Englisch, ein
+   Sprechersatz unter einem Video, das eigenen Ton macht. Eine Videoszene kann mit einem **Startbild** beginnen (seit
+   0.5.27, Mac 0.5.6): ein Bild aus dem Material auf das Feld in den Eigenschaften ziehen oder mit „Aus dem
+   Projektordner wählen …“ aussuchen. „Startbild erzeugen“ macht wie der Assistent zwei aus dem Prompt (mit den Figuren
+   der Szene, ohne schwarze Balken); das erste wird das Startbild, das andere liegt im Projektordner. So bleiben eine
+   Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann
    beginnt der Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
 3. **Marker setzen:** Doppelklick auf die Markerzeile oder M für eine Notiz am Abspielkopf.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine

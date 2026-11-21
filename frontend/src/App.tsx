@@ -165,6 +165,7 @@ export function App() {
         </nav>
 
         <div className="status">
+          {health?.cpu_mode && <CpuModeChip mode={health.cpu_mode} />}
           <span className={health?.comfy_running ? 'dot ok' : 'dot off'} />
 
           {/* Was liegt im VRAM? Wichtiger als der GPU-Name, deshalb zuerst. */}
@@ -333,5 +334,28 @@ export function App() {
         )}
       </main>
     </div>
+  )
+}
+
+/** Warnung oben in der Leiste: NVAI-open rechnet auf dem Prozessor (Nutzer 21.11.2026: „oben in der Leiste warnen, dass
+ * es auf der CPU läuft, und mouse over Hinweis, was es für ihn bedeutet und was zu machen wäre“; GitHub-Issue #3). */
+function CpuModeChip({ mode }: { mode: NonNullable<Health['cpu_mode']> }) {
+  const cards = mode.cards.length ? mode.cards.join(', ') : t('die Grafikkarte', 'the graphics card')
+  const why = mode.reason === 'amd_unsupported'
+    ? t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt. Deshalb rechnet NVAI-open auf dem Prozessor.`,
+      `${cards} is not supported by AMD's PyTorch for Windows (ROCm), so NVAI-open computes on the processor.`)
+    : t(`PyTorch konnte beim Einrichten nicht auf ${cards} rechnen. Deshalb rechnet NVAI-open auf dem Prozessor.`,
+      `PyTorch could not compute on ${cards} during setup, so NVAI-open computes on the processor.`)
+  const means = t('Was das heißt: Bilder und Videos dauern sehr lange (viele Minuten je Bild), große Modelle wie Qwen-Image, FLUX oder LTX sind kaum nutzbar, Sprecherstimme und 3D gehen nicht. Studio-Schnitt und Export laufen normal; Audio-Werkzeuge und Ton-Forensik rechnen ebenfalls auf dem Prozessor und brauchen länger.',
+    'What this means: images and videos take very long (many minutes per image), large models such as Qwen-Image, FLUX or LTX are hardly usable, the narrator voice and 3D do not work. Studio editing and export work normally; the audio tools and audio forensics also compute on the processor and take longer.')
+  const todo = mode.reason === 'amd_unsupported'
+    ? t('Was hilft: eine NVIDIA-Grafikkarte oder eine Radeon RX 7000 oder 9000 (RX 6000 experimentell), danach im Startmenü „NVAI-open reparieren“ ausführen.',
+      'What helps: an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 6000 experimental), then run "Repair NVAI-open" from the Start menu.')
+    : t('Was hilft: den aktuellen Grafiktreiber installieren (bei AMD Adrenalin 26.2.2 oder neuer), danach im Startmenü „NVAI-open reparieren“ ausführen.',
+      'What helps: install the current graphics driver (for AMD, Adrenalin 26.2.2 or newer), then run "Repair NVAI-open" from the Start menu.')
+  return (
+    <span className="cpu-mode" title={`${why}\n\n${means}\n\n${todo}`}>
+      ⚠ {t('Rechnet auf dem Prozessor', 'Running on the CPU')}
+    </span>
   )
 }

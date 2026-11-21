@@ -47,7 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// `--snapshot` fotografiert das eigene Fenster (cacheDisplay, keine Bildschirmfreigabe nötig),
 /// `--tab search` öffnet dazu die Modellsuche, `--tab restore` „Generieren“ mit „Foto restaurieren“, `--tab player`
 /// den Verlauf mit dem neuesten Video im Player; mit `--tab studio --studio-generate sc_…[,sc_…]` erzeugt das Studio
-/// diese Szenen und wartet 8 s auf den Stand neben „Übernehmen“, `--studio-cancel` bricht danach ab;
+/// diese Szenen und wartet 8 s auf den Stand neben „Übernehmen“, `--studio-cancel` bricht danach ab, `--studio-start-image
+/// sc_…` macht „Startbild erzeugen“ für diese Szene und wählt sie aus;
 /// `--report` schreibt den Messbericht. `--restore-kind` stellt jedem Foto (JPEG/PNG, auch in Unterordnern) die Frage
 /// von „Automatisch“ beim Restaurieren (`VisionEngine`) und schreibt Antwort, Wahl und Sekunden nach `--kind-out`.
 /// `--sharpen` schärft ein Bild mit SeedVR2 (`SeedVR2Engine`) und schreibt Zeit und Speicherspitze ins Protokoll.
@@ -149,6 +150,21 @@ enum LaunchOptions {
                     await StudioModel.shared.cancelGenerate()
                     AppLog.info("Studio cancel test: \(StudioModel.shared.notice ?? "-")")
                 }
+            }
+            if tab == "studio", let sid = value("--studio-start-image") {
+                // Prüfstand für „Startbild erzeugen“ (0.5.11): zwei Varianten, die erste wird das Startbild der Szene
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                let t0 = Date()
+                do {
+                    let made = try await StudioModel.shared.generateStartImage(sid)
+                    let start = StudioModel.shared.project?.scenes.first(where: { $0.id == sid })?.params["image_asset_id"]
+                    AppLog.info("Studio start image test: \(made.count) images in \(Int(Date().timeIntervalSince(t0))) s, "
+                                + "ids \(made.map(\.id).joined(separator: ",")), start image set: \(start != nil)")
+                } catch {
+                    AppLog.error("Studio start image test failed: \(error.localizedDescription)")
+                }
+                StudioModel.shared.snapshotSelect(sid)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
             if tab == "studio", let demo = WizardDemo.script {
                 // Prüfstand des Assistenten: warten, bis er durch ist, dann auf die Szenen (höchstens 90 min)

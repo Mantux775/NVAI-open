@@ -18,6 +18,9 @@ struct StudioEnvironment: Sendable {
     /// Unter Windows LTX-2.5; auf dem Mac keins. Dann bleibt params.audio_from im Projekt, wirkt aber weder beim Erzeugen
     /// noch beim Übernehmen (die Zeile kommt normal auf die Spur „Stimme“).
     var takesAudio: @Sendable (String?) -> Bool = { _ in false }
+    /// Vorwahl für Szenen, die der Nutzer von Hand anlegt (seit Mac 0.5.11, wie _best_model unter Windows seit 0.5.30):
+    /// das beste geladene Modell für Bahn und Art (lane, kind), mit dem auch der Assistent arbeitet; nil = das aktive.
+    var bestModel: @Sendable (String, String) -> String? = { _, _ in nil }
 }
 
 /// Was die Figuren von einer LoRA wissen müssen.
@@ -293,7 +296,9 @@ enum StudioCommands {
             throw StudioError(t("Bahn \(lane) gibt es nicht (\(Studio.lanes.joined(separator: ", "))).",
                                 "No lane \(lane) (\(Studio.lanes.joined(separator: ", ")))."))
         }
-        let duration = a.time("duration") ?? Studio.ticks(5)
+        // Ohne Angabe: Musik so lang wie der Film (mindestens 10 s), Geräusche 4 s, sonst 5 s (wie unter Windows seit 0.5.30)
+        let fallback = lane == "music" ? max(Studio.ticks(10), p.compositionDuration) : lane == "sfx" ? Studio.ticks(4) : Studio.ticks(5)
+        let duration = a.time("duration") ?? fallback
         guard duration > 0 else {
             throw StudioError(t("Die Dauer muss größer als 0 sein.", "The duration must be greater than 0."))
         }
@@ -308,7 +313,9 @@ enum StudioCommands {
         scene.title = a.string("title") ?? ""
         scene.prompt = a.string("prompt") ?? ""
         scene.kind = kind
-        scene.modelID = a.string("model_id")
+        // Ohne Angabe (von Hand angelegt): das beste geladene Modell der Bahn wie im Assistenten; eine eingefügte Szene und
+        // der Assistent nennen model_id selbst (auch null = aktives Modell)
+        scene.modelID = a.has("model_id") ? a.string("model_id") : env.bestModel(lane, kind)
         scene.lyrics = a.string("lyrics") ?? ""
         scene.params = a["params"]?.objectValue ?? [:]
         scene.chainFrom = a.string("chain_from")

@@ -6,22 +6,24 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.29.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-Setup-0.5.29.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.10.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.29/NVAI-open-0.5.10.dmg) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.30.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.30/NVAI-open-Setup-0.5.30.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.11.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.30/NVAI-open-0.5.11.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.29 for Windows and 0.5.10 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29))
+November 2026: NVAI-open 0.5.30 for Windows and 0.5.11 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.30))
 
-- **Audio forensics:** a long recording becomes a case; Whisper large-v3 writes down what is said, Qwen3.5-9B translates it, and every block stays a draft until a person has checked it. [Details](docs/AUDIO.md#audio-forensics)
-- **Review app:** hand a case to people without NVAI-open; it runs in Edge or Chrome without installation. [Details](docs/AUDIO.md#review-package-and-review-app)
-- **Train your own LoRA** on your own graphics card. [Details](docs/LORAS.md#training-your-own-lora)
-- **Mac 0.5.10:** the History plays music and speech, downloads continue after an interruption, and the Hugging Face token is checked when you save it.
+- **Studio, scenes by hand:** a new scene starts like one from the assistant, with the best model of its lane, "Expand prompt", "Generate start image" and notes when a clip is too long for the card or a face would be invented. [Details](docs/STUDIO.md#step-by-step)
+- **Mac 0.5.11:** audio forensics on the Mac itself: new cases from recordings and VDR exports, speech recognition with Whisper large-v3 and translation with Qwen3.5. [Details](docs/AUDIO.md#review-package-and-review-app)
+- **Older Radeons** (RX 5000, Vega, Polaris): NVAI-open no longer hangs at the start but runs on the processor and says so in the top bar. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
 
 <details><summary><kbd>&nbsp;Read more&nbsp;▾&nbsp;</kbd></summary>
 
+- **Scenes by hand in the Studio** (0.5.30, Mac 0.5.11): a new scene gets the best downloaded model of its lane (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), music as long as the film and sound effects 4 s. "Expand prompt" turns a few words into a full English description, and "Generate start image" makes two start images from the prompt as the assistant does (with the characters of the scene, without black bars). Notes under the properties warn about a clip longer than 6 s at 1080p on a card with 16 GB, a character without a start image, a prompt not in English and a voice line under a video that makes its own sound. [Details](docs/STUDIO.md#step-by-step)
+- **Mac 0.5.11, audio forensics:** "New case …" makes a case from audio or video files, "Import VDR export …" from a voyage data recorder (VR-7000) with heading, speed, alarms, AIS and radar pictures; it shows the space the case needs first and stops before the drive runs full. "Recognise speech" runs Whisper large-v3 (Core ML) where Silero VAD hears speech, "Translate" uses Qwen3.5 (9B from 16 GB of memory, otherwise 4B). Everything runs on the Mac. [Details](docs/AUDIO.md#review-package-and-review-app)
+- **Older Radeons** (0.5.30): cards that AMD's PyTorch for Windows does not support (RX 5000, Vega, Radeon VII, Polaris and older) no longer hang at the start. The setup installs PyTorch for the processor, and the top bar says that NVAI-open runs on the CPU; hovering over it explains what that means and what helps. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
 - **Mac 0.5.10:** the History also shows music, sounds and speech with a play button, and "Clear history" deletes everything at once; whatever a Studio project uses stays. The Hugging Face token is checked with Hugging Face when you save it, and "Check" also tells you whether LTX-2.5 is unlocked. Interrupted downloads continue where they stopped, and uploads over the API are no longer limited to 64 MB. The review app can burn subtitles into an exported video, and its SRT files now load in the Windows Media Player. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Mac 0.5.9:** a face from a photo now lands reliably in a new scene: put the photo under "Reference images" and say who it is (woman or man, age, hair). A start image is cropped to the format instead of stretched, and the assistant asks who is in the photo. A full bug hunt fixed, among other things: Studio projects from Windows with video now open on the Mac, FLUX.2 no longer tears an image when two sizes with the same number of pixels follow each other, Studio exports below 1080p no longer get stuck, the Hugging Face token has a field in the settings, and deleting a file no longer breaks a clip in a project. [All fixes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Audio forensics** (0.5.29): a long recording with many channels becomes a case: tracks, spectrogram, speech activity, events, notes and a translation track. Whisper large-v3 writes down what is said, Qwen3.5-9B translates it, and every block stays a draft until a person has checked it; a note says which models, under which license and on which graphics card. It also reads the data files of a voyage data recorder (VR-7000 format). [Details](docs/AUDIO.md#audio-forensics)
@@ -245,7 +247,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (2004+) or 11, 64-bit | macOS 15 or newer, Apple Silicon |
-| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 6000 experimental): driver 26.2.2+ | 16 GB RAM or more recommended (8 GB works for small images) |
+| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 6000 experimental): driver 26.2.2+; older Radeons only on the CPU, very slow | 16 GB RAM or more recommended (8 GB works for small images) |
 | Disk | about 10 GB for the program, plus 5 to 40 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
 | Internet | for setup (about 3 GB) and model downloads | for model downloads |
 
@@ -314,15 +316,17 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.29 für Windows und 0.5.10 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29))
+November 2026: NVAI-open 0.5.30 für Windows und 0.5.11 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.30))
 
-- **Ton-Forensik:** Aus einer langen Aufnahme wird ein Fall; Whisper large-v3 schreibt auf, was gesprochen wird, Qwen3.5-9B übersetzt es, und jeder Block bleibt Entwurf, bis ein Mensch ihn geprüft hat. [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
-- **Prüf-App:** einen Fall an Menschen ohne NVAI-open weitergeben; sie läuft in Edge oder Chrome ohne Installation. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
-- **Eigene LoRA trainieren** auf der eigenen Grafikkarte. [Einzelheiten](docs/de/LORAS.md#eigene-lora-trainieren)
-- **Mac 0.5.10:** Der Verlauf spielt Musik und Sprache ab, Downloads setzen nach einem Abbruch fort, und das Hugging-Face-Token wird beim Speichern geprüft.
+- **Studio, Szenen von Hand:** Eine neue Szene beginnt wie eine aus dem Assistenten, mit dem besten Modell ihrer Bahn, „Prompt ausbauen“, „Startbild erzeugen“ und Hinweisen, wenn ein Clip zu lang für die Karte ist oder ein Gesicht erfunden würde. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
+- **Mac 0.5.11:** Ton-Forensik auf dem Mac selbst: neue Fälle aus Aufnahmen und VDR-Exporten, Spracherkennung mit Whisper large-v3 und Übersetzung mit Qwen3.5. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
+- **Ältere Radeons** (RX 5000, Vega, Polaris): NVAI-open hängt nicht mehr beim Start, sondern rechnet auf dem Prozessor und sagt das oben in der Leiste. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
 
 <details><summary><kbd>&nbsp;Weiterlesen&nbsp;▾&nbsp;</kbd></summary>
 
+- **Szenen von Hand im Studio** (0.5.30, Mac 0.5.11): Eine neue Szene bekommt das beste geladene Modell ihrer Bahn (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), Musik so lang wie der Film, Geräusche 4 s. „Prompt ausbauen“ macht aus ein paar Worten eine volle englische Beschreibung, und „Startbild erzeugen“ macht wie der Assistent zwei Startbilder aus dem Prompt (mit den Figuren der Szene, ohne schwarze Balken). Hinweise unter den Eigenschaften warnen vor einem Clip über 6 s in 1080p auf einer Karte mit 16 GB, einer Figur ohne Startbild, einem Prompt nicht auf Englisch und einem Sprechersatz unter einem Video, das eigenen Ton macht. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
+- **Mac 0.5.11, Ton-Forensik:** „Neuer Fall …“ legt einen Fall aus Audio- oder Videodateien an, „VDR-Export einlesen …“ aus einem Schiffsdatenschreiber (VR-7000) mit Kurs, Geschwindigkeit, Alarmen, AIS und Radarbildern; vorher zeigt es den Platzbedarf und bricht ab, bevor der Datenträger voll ist. „Sprache erkennen“ lässt Whisper large-v3 (Core ML) dort hören, wo Silero VAD Sprache findet, „Übersetzen“ nimmt Qwen3.5 (ab 16 GB Speicher 9B, sonst 4B). Alles läuft auf dem Mac. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
+- **Ältere Radeons** (0.5.30): Karten, die AMDs PyTorch für Windows nicht kennt (RX 5000, Vega, Radeon VII, Polaris und älter), hängen nicht mehr beim Start. Das Setup installiert PyTorch für den Prozessor, und oben in der Leiste steht, dass NVAI-open auf der CPU rechnet; mit der Maus darüber steht, was das bedeutet und was hilft. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
 - **Mac 0.5.10:** Der Verlauf zeigt auch Musik, Klänge und Sprache mit Abspielknopf, und „Verlauf leeren“ löscht alles auf einmal; was ein Studio-Projekt nutzt, bleibt. Das Hugging-Face-Token wird beim Speichern bei Hugging Face geprüft, und „Prüfen“ sagt auch, ob LTX-2.5 freigeschaltet ist. Abgebrochene Downloads setzen dort fort, wo sie standen, und Uploads über die Schnittstelle sind nicht mehr auf 64 MB begrenzt. Die Prüf-App brennt Untertitel auf Wunsch ins exportierte Video, und ihre SRT-Dateien laden jetzt im Windows Media Player. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Mac 0.5.9:** Ein Gesicht aus einem Foto kommt jetzt zuverlässig in eine neue Szene: das Foto unter „Referenzbilder“ legen und sagen, wer es ist (Frau oder Mann, Alter, Haare). Ein Ausgangsbild wird aufs Format zugeschnitten statt gestreckt, und der Assistent fragt, wer auf dem Foto ist. Eine große Fehlersuche hat unter anderem behoben: Studio-Projekte von Windows mit Video öffnen jetzt auf dem Mac, FLUX.2 zerreißt kein Bild mehr, wenn zwei Formate mit gleich vielen Bildpunkten aufeinander folgen, Studio-Exporte unter 1080p bleiben nicht mehr stehen, das Hugging-Face-Token hat ein Feld in den Einstellungen, und Löschen zerstört keinen Clip in einem Projekt mehr. [Alle Korrekturen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.29)
 - **Ton-Forensik** (0.5.29): Aus einer langen Aufnahme mit vielen Kanälen wird ein Fall: Spuren, Spektrogramm, Sprachaktivität, Ereignisse, Notizen und eine Übersetzer-Spur. Whisper large-v3 schreibt auf, was gesprochen wird, Qwen3.5-9B übersetzt es, und jeder Block bleibt Entwurf, bis ein Mensch ihn geprüft hat; ein Vermerk nennt Modelle, Lizenzen und Grafikkarte. Sie liest auch die Datendateien eines Schiffsdatenschreibers (Format VR-7000). [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
@@ -533,7 +537,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (ab 2004) oder 11, 64 Bit | macOS 15 oder neuer, Apple Silicon |
-| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 6000 experimentell): Treiber ab 26.2.2 | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
+| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 6000 experimentell): Treiber ab 26.2.2; ältere Radeons nur auf dem Prozessor, sehr langsam | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
 | Platte | rund 10 GB für das Programm, dazu 5 bis 40 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
 | Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
 

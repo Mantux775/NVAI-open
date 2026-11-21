@@ -799,7 +799,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
       }
       case 'lane': {
         const add = async (kind: 'video' | 'image' | 'audio') => {
-          const r = await run('scene.add', { lane: target.lane, kind, start: target.at, duration_s: target.lane === 'video' ? 5 : 10 })
+          // Musik und Geräusche ohne Länge: Der Server nimmt die Filmlänge bzw. 4 s (seit 0.5.30)
+          const duration_s = target.lane === 'video' ? 5 : target.lane === 'voice' ? 10 : undefined
+          const r = await run('scene.add', { lane: target.lane, kind, start: target.at, duration_s })
           if (r?.id) setSelection({ type: 'scene', id: r.id })
         }
         return [

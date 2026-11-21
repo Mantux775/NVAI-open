@@ -75,6 +75,17 @@ $AmdTargets = @(
 )
 # Unknown Radeon: the kernels of the common current cards (RX 9000 and RX 7000).
 $AmdFallbackTargets = @("gfx1201", "gfx1200", "gfx1100", "gfx1101", "gfx1102")
+# Radeons that AMD's PyTorch for Windows (ROCm) does not support, the same list as AMD_UNSUPPORTED in
+# server\nvai\gpu.py: RX 5000 (RDNA1), Vega, Radeon VII, Polaris (RX 400/500) and older. No ROCm build computes on
+# them; on an RX 5700 XT PyTorch even crashed while checking the card (GitHub issue #3). NVAI-open then sets itself up
+# for the processor. "R9 390" needs the space: the R9700 (Radeon AI PRO, RDNA4) is supported.
+$AmdUnsupported = @("RX\s*5\d{3}", "\bW5\d{3}\b", "Vega", "Radeon\s*(Pro\s*)?VII", "RX\s*[45]\d0\b",
+                    "\bR[579]\s+(\d{3}|Fury|Nano)", "\bHD\s*[5-8]\d{3}")
+
+function Test-AmdUnsupported([string]$name) {
+    foreach ($p in $AmdUnsupported) { if ($name -match $p) { return $true } }
+    return $false
+}
 
 # The Radeons that count: a card of its own wins over the Radeon inside a Ryzen processor.
 function Get-AmdCards {
@@ -157,19 +168,32 @@ try {
 
     $vendor = if ($Gpu -eq "auto") { Get-GpuVendor } else { $Gpu }
     $torchChecked = $false
+    # Without a usable card NVAI-open computes on the processor; the server reads this note (gpu.cpu_mode), starts
+    # ComfyUI with --cpu and warns at the top of the window. Determined anew on every setup and repair.
+    $gpuModeFile = Join-Path $DataDir "gpu_mode.json"
+    Remove-Item $gpuModeFile -ErrorAction SilentlyContinue
+    $cpuOnly = $null
     if ($vendor -eq "amd") {
         $cards = @(Get-AmdCards)
         $targets = @($cards | ForEach-Object { Get-AmdTarget $_ } | Where-Object { $_ } | Select-Object -Unique)
         Write-Host (L "AMD-Grafikkarte erkannt: $($cards -join ', '). Noetig ist ein aktueller AMD-Treiber (Adrenalin)." `
                       "AMD graphics card detected: $($cards -join ', '). Requires a current AMD driver (Adrenalin).")
-        if ($targets.Count -eq 0) {
+        $unsupported = @($cards | Where-Object { Test-AmdUnsupported $_ })
+        if ($cards.Count -gt 0 -and $unsupported.Count -eq $cards.Count) {
+            Write-Warning (L "Diese Radeon ($($cards -join ', ')) unterstuetzt AMDs PyTorch fuer Windows (ROCm) nicht; unterstuetzt sind die Radeon RX 7000 und 9000, die RX 6000 experimentell. NVAI-open richtet sich ohne Grafikkarte ein und rechnet auf dem Prozessor: Bilder und Videos dauern dann sehr lange." `
+                             "This Radeon ($($cards -join ', ')) is not supported by AMD's PyTorch for Windows (ROCm); supported are the Radeon RX 7000 and 9000, the RX 6000 experimental. NVAI-open sets itself up without the graphics card and computes on the processor: images and videos then take very long.")
+            $cpuOnly = "amd_unsupported"
+        }
+        if ($cpuOnly) {
+            # nothing from ROCm: the card cannot compute (below, PyTorch for the processor)
+        } elseif ($targets.Count -eq 0) {
             $targets = $AmdFallbackTargets
             Write-Host (L "Kartenfamilie unbekannt - es kommen die Kernel der Radeon RX 9000 und RX 7000." `
                           "Card family unknown - installing the kernels of the Radeon RX 9000 and RX 7000.")
         }
         $comfyLocks = Join-Path $App "locks"
         $useRocm72 = $Rocm -eq "7.2"
-        if (-not $useRocm72) {
+        if (-not $useRocm72 -and -not $cpuOnly) {
             Step (L "ComfyUI mit PyTorch 2.13 fuer AMD Radeon (ROCm 10.0, $($targets -join ', '), experimentell) - der grosse Teil" `
                     "ComfyUI with PyTorch 2.13 for AMD Radeon (ROCm 10.0, $($targets -join ', '), experimental) - the big part")
             $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $comfyLocks "comfyui-amd-base.lock")
@@ -191,7 +215,7 @@ try {
                 }
             }
         }
-        if ($useRocm72) {
+        if ($useRocm72 -and -not $cpuOnly) {
             Step (L "ComfyUI mit PyTorch 2.9.1 fuer AMD Radeon (ROCm 7.2.1, experimentell)" `
                     "ComfyUI with PyTorch 2.9.1 for AMD Radeon (ROCm 7.2.1, experimental)")
             # pip sync with the base list removes the ROCm 10 packages first.
@@ -202,7 +226,21 @@ try {
             if (-not (Test-Torch $comfyPy)) {
                 Write-Warning (L "PyTorch rechnet nicht auf der Grafikkarte. Aktuellen AMD-Treiber (Adrenalin 26.2.2 oder neuer) installieren und 'NVAI-open reparieren' starten." `
                                  "PyTorch does not compute on the graphics card. Install the current AMD driver (Adrenalin 26.2.2 or newer) and run 'Repair NVAI-open'.")
+                # Option B (GitHub issue #3): NVAI-open still starts, on the processor, instead of failing at every job
+                if ($Rocm -eq "auto") { $cpuOnly = "no_gpu_compute" }
             }
+        }
+        if ($cpuOnly) {
+            Step (L "ComfyUI mit PyTorch 2.14 fuer den Prozessor (ohne Grafikkarte)" `
+                    "ComfyUI with PyTorch 2.14 for the processor (without graphics card)")
+            # pip sync with the base list removes the ROCm packages first; PyTorch from PyPI is a CPU build on Windows.
+            $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $comfyLocks "comfyui-amd-base.lock")
+            Uv pip install --python $comfyPy --require-hashes --no-deps -r (Join-Path $comfyLocks "comfyui-cpu.lock")
+            $torchChecked = $true
+            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards) } | ConvertTo-Json -Compress
+            [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
+            Write-Host (L "NVAI-open rechnet auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
+                          "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
         }
         # NVAI-open asks ROCm again at startup which card to use (gpu.hip_devices); drop the old answer.
         Remove-Item (Join-Path $DataDir "hip_devices.json") -ErrorAction SilentlyContinue

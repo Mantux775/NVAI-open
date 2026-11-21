@@ -105,8 +105,15 @@ Prüf-App hängt außerdem als einzelne Datei an jedem Release.
 
 ![Die Prüf-App mit demselben Demo-Fall, oben rechts der Bearbeiter](../images/review-app-de.jpg)
 
-Auf dem Mac öffnet NVAI-open 0.5.7 Prüfpakete im Reiter „Ton-Forensik“, mit derselben Prüf-App. Spracherkennung und
-Übersetzung auf dem Mac folgen.
+Auf dem Mac öffnet NVAI-open Prüfpakete im Reiter „Ton-Forensik“, mit derselben Prüf-App. Seit NVAI-open für Mac
+0.5.11 legt der Mac auch selbst Fälle an: „Neuer Fall …“ nimmt Audio- oder Videodateien, jeder Kanal wird eine Spur,
+unkomprimierter Originalton bleibt bitgenau. „VDR-Export einlesen …“ liest die Daten eines Schiffsdatenschreibers
+(VR-7000) wie unter Windows, mit Kurs, Geschwindigkeit, Alarmen, AIS sowie Radar- und ECDIS-Bildern; vorher zeigt es
+Aufzeichnung, Kanäle und den Platzbedarf des Falls und bricht ab, bevor der Datenträger voll ist. „Sprache erkennen“ lässt
+Whisper large-v3 (Core ML, 3,1 GB) dort hören, wo der Sprachfinder Silero VAD Sprache findet, und „Übersetzen“ übersetzt
+die Blöcke über Englisch mit Qwen3.5 (ab 16 GB Speicher 9B, sonst 4B). Alles läuft auf dem Mac, und jeder Block bleibt
+Entwurf, bis ein Mensch ihn geprüft hat. Ein Fall vom Mac ist selbst ein Prüfpaket und lässt sich als Ordner
+weitergeben.
 
 <details>
 <summary>Gemessen am Demo-Fall (95 s, drei Spuren, RTX 5060 Ti)</summary>

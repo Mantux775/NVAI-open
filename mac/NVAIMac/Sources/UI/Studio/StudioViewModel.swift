@@ -265,6 +265,32 @@ final class StudioModel: ObservableObject {
         }
     }
 
+    /// „Startbild erzeugen“ für eine Videoszene (seit Mac 0.5.11, wie StartImage unter Windows seit 0.5.30): zwei
+    /// Varianten, beide in den Projektordner; die erste wird gleich das Startbild der Szene. Gibt die Varianten zurück.
+    func generateStartImage(_ sceneID: String) async throws -> [AssetRecord] {
+        await commitEdits()  // ein eben getippter Prompt zuerst
+        guard let p = project, let s = p.scenes.first(where: { $0.id == sceneID }) else {
+            throw StudioError(t("Unbekannte Szene: \(sceneID)", "Unknown scene: \(sceneID)"), notFound: true)
+        }
+        let job = try await StudioGenerator.submitStartImage(p, s, store.env)
+        while true {
+            try await Task.sleep(for: .milliseconds(600))
+            guard let j = await JobQueue.shared.job(job.id) else {
+                throw StudioError(t("Auftrag verschwunden.", "Job disappeared."))
+            }
+            if j.status == "error" || j.status == "cancelled" { throw StudioError(j.error ?? j.status) }
+            guard j.status == "done" else { continue }
+            await AssetStore.shared.tag(j.assetIDs, project: p.id)
+            var out: [AssetRecord] = []
+            for id in j.assetIDs { if let r = await AssetStore.shared.get(id) { out.append(r) } }
+            // nur, wenn Projekt und Szene noch offen sind (sonst träfe der Befehl ein anderes Projekt)
+            if let first = out.first, project?.id == p.id, project?.scenes.contains(where: { $0.id == sceneID }) == true {
+                await run("scene.update", ["id": .string(sceneID), "params": .object(["image_asset_id": .string(first.id)])])
+            }
+            return out
+        }
+    }
+
     /// „Übernehmen ↓“: erst der Plan; nichts zu entscheiden → sofort, sonst der Dialog (wie ConformDialog.tsx).
     func conform() async {
         await commitEdits()
@@ -504,7 +530,8 @@ final class StudioModel: ObservableObject {
                     "lane": .string(s.lane), "start": .int(at + s.start - first), "duration": .int(s.duration),
                     "title": .string(s.title), "prompt": .string(s.prompt), "kind": .string(s.kind),
                     "lyrics": .string(s.lyrics), "params": .object(s.params), "takes": .array(s.takes.map(JSONValue.string))]
-                if let m = s.modelID { params["model_id"] = .string(m) }
+                // auch ohne Modell (aktives): sonst bekäme die Kopie die Vorwahl für neue Szenen (wie unter Windows)
+                params["model_id"] = s.modelID.map(JSONValue.string) ?? .null
                 if let take = s.take { params["take"] = .string(take) }
                 return ("scene.add", params)
             }

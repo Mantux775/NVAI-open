@@ -381,6 +381,9 @@ async def health() -> dict[str, Any]:
         "hf_token": registry.hf_token() is not None,
         # Alle Karten (experimentell seit 0.5): Hersteller, Speicher, wofuer sie rechnen.
         "gpus": _gpus_overview(),
+        # Keine Karte, auf der PyTorch rechnet: ComfyUI laeuft auf dem Prozessor (GitHub-Issue #3); die Oberflaeche warnt
+        # oben in der Leiste. {"reason": "amd_unsupported" | "no_gpu_compute", "cards": [...]} oder None.
+        "cpu_mode": await asyncio.to_thread(gpu_info.cpu_mode),
         "text_backend": {
             "separate": gpu_info.separate_text_backend(),
             "running": gpu_info.separate_text_backend() and await comfy.TEXT.is_running(timeout=0.5),
@@ -1325,6 +1328,13 @@ async def studio_redo(pid: str) -> dict[str, Any]:
 async def studio_generate(pid: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
     """Auftraege fuer die genannten Szenen (scene_ids), sonst fuer alle ohne Take."""
     return await studio.generate(pid, (body or {}).get("scene_ids"))
+
+
+@app.post("/api/studio/projects/{pid}/scenes/{sid}/start-image", response_model=Job)
+async def studio_start_image(pid: str, sid: str) -> Job:
+    """„Startbild erzeugen“ für eine Videoszene (seit 0.5.30): zwei Varianten im Projektordner, wie die Startbilder
+    des Assistenten (Bildmodell nach den LoRAs der Figuren, Sätze über Ton weggelassen, Satz gegen Balken)."""
+    return await studio.submit_start_image(pid, sid)
 
 
 @app.post("/api/studio/projects/{pid}/cancel")

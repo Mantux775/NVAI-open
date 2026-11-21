@@ -76,9 +76,16 @@ photo stays on your computer.
    24 fps. Name, format and the quality of the video scenes are in the properties on the right; a click into empty
    space shows them.
 2. **Add scenes:** double-click a lane and write the prompt in the properties. Drag a scene to move it, drag its right
-   edge to change its length. A video scene can begin with a **start image** (since 0.5.27, Mac 0.5.6): drag an image
-   from the media list onto the field in the properties, or pick one with "Choose from the project folder …". That keeps
-   a character or a place the same across shots. A chain comes first: then the clip begins with the end of the scene
+   edge to change its length. A new scene starts like one from the assistant (since 0.5.30, Mac 0.5.11): with the best
+   downloaded model of its lane (LTX-2.5 for video, Qwen3-TTS for voices, Stable Audio 3 for music, Stable Audio Open
+   for sound effects), music as long as the film, sound effects 4 s. "Expand prompt" turns a few words into a full
+   English description. Notes under the properties name what often goes wrong: a clip longer than 6 s at 1080p on a
+   card with 16 GB, a character without a start image, a prompt not in English, a voice line under a video that makes
+   its own sound. A video scene can begin with a **start image** (since 0.5.27, Mac 0.5.6): drag an image
+   from the media list onto the field in the properties, or pick one with "Choose from the project folder …".
+   "Generate start image" makes two from the prompt as the assistant does (with the characters of the scene, without
+   black bars); the first becomes the start image, the other waits in the project folder. That keeps a character or a
+   place the same across shots. A chain comes first: then the clip begins with the end of the scene
    before. An image dropped onto the scene itself still becomes a take.
 3. **Set markers:** double-click the marker row, or press M for a note at the playhead.
 4. **Generate scenes:** makes every scene that has no take yet. Sound and still images come first, then the videos; a

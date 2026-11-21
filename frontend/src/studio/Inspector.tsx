@@ -20,7 +20,9 @@ import {
   type StudioProject,
   type StudioScene,
   type StudioTransitionKind,
+  type ExpandTarget,
 } from '../api'
+import { ModelTip, type RecommendationMode } from '../components/Recommendations'
 import { OutputBadge, licenseBlocked } from '../components/LicenseBadge'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
@@ -280,6 +282,7 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         </span>
       </h3>
       {s.error && <p className="warn-text small">{s.error}</p>}
+      {(s.hints ?? []).map((h) => <p key={h} className="st-hint small">{h}</p>)}
       {s.status === 'waiting' && (
         <p className="muted small">
           {s.lane === 'voice'
@@ -303,6 +306,7 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         ) : undefined}
         onCommit={(v) => update({ prompt: v })}
       />
+      <ExpandPrompt p={p} s={s} models={models} active={active} update={update} />
       <div className="st-grid2">
         <label className="st-field">
           <span>{t('Bahn', 'Lane')}</span>
@@ -337,6 +341,12 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         // Harte Lizenzgrenze des gewählten Modells: Warnung sichtbar unter der Wahl, bis eine Genehmigung bestätigt ist
         const chosen = usable.find((m) => m.id === s.model_id)
         return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
+      })()}
+      {(() => {
+        // Kurzer Tipp zum gewählten Modell wie unter der Modellwahl im Reiter Generieren (seit 0.5.30)
+        const chosen = usable.find((m) => m.id === (s.model_id || active?.[modelKind]))
+        const mode: RecommendationMode = modelKind === 'speech' ? 'speech' : modelKind === 'audio' ? 'audio' : modelKind === 'image' ? 'image' : 'video'
+        return <ModelTip mode={mode} model={chosen ?? null} />
       })()}
       {s.lane === 'video' && s.kind === 'video' && <StartImage p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
@@ -476,6 +486,53 @@ function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update
  * params.image_asset_id, das erste Bild des Clips; so bleibt eine Figur in jeder Einstellung gleich. Ein Bild aus dem
  * Material hierher ziehen oder aus dem Projektordner wählen. Vorher ging das nur per MCP/REST, und ein Bild auf der Szene
  * wurde ein Take (das bleibt so). Ein Anschluss hat Vorrang: Dann beginnt der Clip mit dem Ende der Szene davor. */
+/** Videomodelle mit eigenem Ton (wie wizard.SOUND_FAMILIES) */
+const SOUND_FAMILIES = ['ltx25', 'ltx23', 'kandinsky6']
+
+/** „Prompt ausbauen“ (seit 0.5.30): wie im Reiter Generieren, das Ziel nach Art der Szene (mit Startbild nur die
+ * Bewegung); überträgt nebenbei ins Englische. Ersetzt den Prompt, Strg+Z holt den alten zurück. */
+function ExpandPrompt({ p, s, models, active, update }: {
+  p: StudioProject
+  s: StudioScene
+  models: ModelInfo[]
+  active: Props['active']
+  update: (fields: Record<string, unknown>) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (s.lane === 'voice') return null
+  const video = models.find((m) => m.id === (s.model_id || active?.video))
+  const image: string | null = s.params?.image_asset_id || null
+  const target: ExpandTarget = s.lane === 'music' ? 'music_sa3' : s.lane === 'sfx' ? 'sfx' : s.kind === 'image' ? 'image'
+    : image || s.chain_from || s.chain_marker ? 'video_start'
+      : video && SOUND_FAMILIES.includes(video.family) ? 'video_sound' : 'video'
+  const run = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const r = await api.expandPrompt({
+        prompt: s.prompt, target, width: p.settings.width, height: p.settings.height,
+        ...(image && target === 'video_start' ? { reference_asset_ids: [image] } : {}),
+      })
+      if (r.expanded.trim()) update({ prompt: r.expanded.trim() })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="st-start-actions">
+      <button className="btn small ghost" disabled={busy || !s.prompt.trim()} onClick={run}
+        title={t('Baut den Prompt zur vollen Beschreibung aus und überträgt ihn ins Englische (rund 15 s auf der Grafikkarte). Danach lesen und Erfundenes streichen; Strg+Z holt den alten zurück.',
+          'Expands the prompt into a full description and translates it into English (about 15 s on the graphics card). Read it afterwards and remove anything invented; Ctrl+Z brings back the old one.')}>
+        {busy ? t('Baut aus …', 'Expanding …') : t('Prompt ausbauen', 'Expand prompt')}
+      </button>
+      {error && <span className="warn-text small">{error}</span>}
+    </div>
+  )
+}
+
 function StartImage({ p, s, models, active, update }: {
   p: StudioProject
   s: StudioScene
@@ -498,6 +555,25 @@ function StartImage({ p, s, models, active, update }: {
     return () => { alive = false }
   }, [open, p.folder])
   const set = (v: string | null) => update({ params: { image_asset_id: v } })
+  // „Startbild erzeugen“ (seit 0.5.30): zwei Varianten wie im Assistenten, die erste wird gleich das Startbild
+  const [gen, setGen] = useState<{ busy: boolean; error: string | null; variants: Asset[] }>({ busy: false, error: null, variants: [] })
+  const generate = async () => {
+    setGen({ busy: true, error: null, variants: [] })
+    try {
+      const job = await api.studioStartImage(p.id, s.id)
+      for (;;) {
+        const j = await api.job(job.id)
+        if (j.status === 'done') break
+        if (j.status === 'error' || j.status === 'cancelled') throw new Error(j.error || j.status)
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+      const variants = await api.jobAssets(job.id)
+      if (variants[0]) set(variants[0].id)
+      setGen({ busy: false, error: null, variants })
+    } catch (e) {
+      setGen({ busy: false, error: e instanceof Error ? e.message : String(e), variants: [] })
+    }
+  }
   const accept = (e: RDragEvent) => {
     if (!e.dataTransfer.types.includes(ASSET_MIME)) return
     e.preventDefault()
@@ -532,7 +608,24 @@ function StartImage({ p, s, models, active, update }: {
           {open ? t('Auswahl schließen', 'Close the selection') : t('Aus dem Projektordner wählen …', 'Choose from the project folder …')}
         </button>
         {id && <button className="btn small ghost" onClick={() => set(null)}>{t('Entfernen', 'Remove')}</button>}
+        {use !== null && !chained && (
+          <button className="btn small ghost" disabled={gen.busy || !s.prompt.trim()} onClick={generate}
+            title={t('Zwei Varianten aus dem Prompt der Szene, wie die Startbilder des Assistenten: mit den Figuren der Szene (ihre LoRAs), ohne die Sätze über Ton, ohne schwarze Balken. Beide landen im Projektordner; die erste wird das Startbild.',
+              'Two variants from the scene prompt, like the start images of the assistant: with the characters of the scene (their LoRAs), without the sentences about sound, without black bars. Both go into the project folder; the first becomes the start image.')}>
+            {gen.busy ? t('Erzeugt zwei Varianten …', 'Generating two variants …') : t('Startbild erzeugen', 'Generate start image')}
+          </button>
+        )}
       </div>
+      {gen.error && <span className="warn-text small">{gen.error}</span>}
+      {gen.variants.length > 1 && (
+        <div className="st-takes st-start-grid">
+          {gen.variants.map((x) => (
+            <button key={x.id} className={`st-take${x.id === id ? ' st-sel' : ''}`} title={assetLabel(x)} onClick={() => set(x.id)}>
+              <img src={x.thumb_url || x.url} alt="" />
+            </button>
+          ))}
+        </div>
+      )}
       {open && (images === null
         ? <span className="small">{t('Lädt …', 'Loading …')}</span>
         : images.length === 0

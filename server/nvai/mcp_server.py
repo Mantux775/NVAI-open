@@ -175,6 +175,10 @@ server = MCPServer(
         "(e.g. one the user trained, added with add_lora) plus a voice; image/video scenes list them in "
         "params.characters, voice scenes speak with params.character, and a video scene with params.audio_from "
         "(a voice scene) speaks that line with the character's voice while LTX-2.5 moves the lips. "
+        "A scene added without model_id gets the best downloaded model of its lane (LTX-2.5, Qwen3-TTS, Stable "
+        "Audio 3, Stable Audio Open), and studio_get lists 'hints' per scene (longer than 6 s at 1080p on 16 GB, "
+        "a character without a start image, a prompt not in English, a voice line under a video with its own "
+        "sound): follow them before generating. "
         "Markers of kind 'ai' that are not done are tasks from the user: do them and mark them "
         "done. Ten minutes made only of LTX-2.5 clips take about 3 hours at 720p on an RTX 5060 Ti; still images "
         "(about 20 s each) are much cheaper for narrated explainer videos.\n\n"
@@ -1510,7 +1514,7 @@ async def studio_create(name: str, width: int = 1920, height: int = 1080, fps: i
 
 @server.tool()
 async def studio_get(project_id: str, conform_plan: bool = False) -> dict[str, Any]:
-    """A Studio project in compact form: scenes (status empty/running/done/error, take, error), markers (kind,
+    """A Studio project in compact form: scenes (status empty/running/done/error, take, error, hints), markers (kind,
     name, comment, params, done), tracks (hidden, muted), clips (track, start_s, end_s, speed, transition) and the
     edit length. Finished generation jobs are already entered as takes. Markers of kind 'ai' that are not done are
     tasks the user left for you: carry them out, then set them done with marker.update. 'folder' is the project's

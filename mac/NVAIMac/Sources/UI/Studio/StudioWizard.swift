@@ -1426,7 +1426,9 @@ struct StudioWizard: View {
                 let line = s.line.trimmingCharacters(in: .whitespacesAndNewlines)
                 if path.lines != "none", !line.isEmpty {
                     let words = Double(line.split(whereSeparator: \.isWhitespace).count)
+                    // model_id immer selbst nennen wie unter Windows (sonst die Vorwahl für Szenen von Hand)
                     var vp: [String: JSONValue] = ["lane": .string("voice"), "title": .string(t("Satz \(i + 1)", "Line \(i + 1)")),
+                                                   "model_id": chosen(.speech).map { JSONValue.string($0.id) } ?? .null,
                                                    "prompt": .string(line), "start_s": .double(start + 0.2),
                                                    "duration_s": .double(min(Double(s.seconds), 0.6 + words / 2.4))]
                     if let cid { vp["params"] = .object(["character": .string(cid)]) }
@@ -1445,6 +1447,7 @@ struct StudioWizard: View {
             }
             if music {
                 _ = await model.run("scene.add", ["lane": .string("music"), "title": .string(t("Musik", "Music")),
+                                                  "model_id": chosen(.music).map { JSONValue.string($0.id) } ?? .null,
                                                   "prompt": .string(musicPrompt), "start_s": .double(0),
                                                   "duration_s": .double(Double(totalSeconds) + 0.5)])
             }

@@ -27,6 +27,13 @@ struct JobRecord: Sendable, Identifiable {
     var video: VideoJobRequest?
     /// Export eines Studio-Projekts (Mac-Studio, seit dem Studio-Umbau 30.10.2026).
     var studioExport: StudioExportRequest?
+    /// Ton-Forensik: neuer Fall aus Audio-/Videodateien (seit 0.5.11). Ergebnis: Ordner des Falls in `resultPath`.
+    var forensic: ForensicImport.Request?
+    /// Ton-Forensik: „Sprache erkennen“ (seit 0.5.11)
+    var forensicTranscribe: ForensicTranscribe.Request?
+    /// Ton-Forensik: „Übersetzen“ (seit 0.5.11)
+    var forensicTranslate: ForensicTranslate.Request?
+    var resultPath: String?
     var downloadModelID: String?
     /// „Prompt ausbauen“: Eingabe und Ergebnis. Der Auftrag verschwindet danach wieder.
     var expandPrompt: String?
@@ -78,6 +85,10 @@ actor JobQueue {
     private var speechTask: Task<[Float], Error>?
     /// Der laufende Studio-Export, damit „Abbrechen“ ihn stoppt.
     private var exportTask: Task<StudioRender.Result, Error>?
+    /// Ton-Forensik: der laufende „Neuer Fall“ (Abbrechen wirkt nach dem aktuellen Tonblock).
+    private var forensicTask: Task<URL, Error>?
+    private var transcribeTask: Task<ForensicTranscribe.Outcome, Error>?
+    private var translateTask: Task<ForensicTranslate.Outcome, Error>?
     /// Die laufende FLUX.2-Rechnung. Das Paket prüft nach jedem Schritt auf Abbruch
     /// (Packages/flux-2-swift-mlx/NVAI-OPEN-CHANGES.md), ein Abbrechen wirkt also innerhalb eines Schritts.
     private var imageTask: Task<CGImage, Error>?
@@ -184,6 +195,59 @@ actor JobQueue {
         let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
                             params: .object(["model_id": .string(AudioCatalog.id)]),
                             createdAt: Date().timeIntervalSince1970, downloadModelID: AudioCatalog.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    /// Ton-Forensik: Fall aus Audio-/Videodateien oder einem VDR-Export anlegen. Dateinamen stehen nicht in den Parametern
+    /// (Fälle sind vertraulich; die Liste der Aufträge geht über die REST-Schnittstelle hinaus).
+    func submitForensicCase(_ request: ForensicImport.Request) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "forensic_case", status: "queued",
+                            stage: t("wartet", "queued"),
+                            params: .object(["files": .int(request.files.count), "vdr": .bool(request.vdr)]),
+                            createdAt: Date().timeIntervalSince1970, lang: Lang.ui)
+        job.forensic = request
+        add(job)
+        return job
+    }
+
+    /// Ton-Forensik: Sprache erkennen (Whisper large-v3 hinter Silero VAD) für einen Fall.
+    func submitForensicTranscribe(_ request: ForensicTranscribe.Request) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "forensic_transcribe", status: "queued",
+                            stage: t("wartet", "queued"), params: .object([:]), createdAt: Date().timeIntervalSince1970, lang: Lang.ui)
+        job.forensicTranscribe = request
+        job.resultPath = request.folder.path
+        add(job)
+        return job
+    }
+
+    /// Ton-Forensik: Übersetzer-Spur übersetzen (Qwen3.5 nach Speicher).
+    func submitForensicTranslate(_ request: ForensicTranslate.Request) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "forensic_translate", status: "queued",
+                            stage: t("wartet", "queued"), params: .object([:]), createdAt: Date().timeIntervalSince1970, lang: Lang.ui)
+        job.forensicTranslate = request
+        job.resultPath = request.folder.path
+        add(job)
+        return job
+    }
+
+    /// Übersetzungsmodell der Ton-Forensik laden (ab 16 GB Qwen3.5-9B, sonst das 4B der Restaurieren-Funktion).
+    func submitTranslatorDownload() -> JobRecord {
+        let mid = "forensic-translator"
+        if let existing = jobs.values.first(where: { $0.downloadModelID == mid && !$0.isFinished }) { return existing }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(mid)]), createdAt: Date().timeIntervalSince1970,
+                            downloadModelID: mid, lang: Lang.ui)
+        add(job)
+        return job
+    }
+
+    /// Modell der Ton-Forensik laden (Whisper large-v3, Silero VAD).
+    func submitDownload(_ model: ForensicModel) -> JobRecord {
+        if let existing = jobs.values.first(where: { $0.downloadModelID == model.id && !$0.isFinished }) { return existing }
+        let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
+                            params: .object(["model_id": .string(model.id)]), createdAt: Date().timeIntervalSince1970,
+                            downloadModelID: model.id, lang: Lang.ui)
         add(job)
         return job
     }
@@ -331,6 +395,9 @@ actor JobQueue {
             videoTask?.cancel()
             speechTask?.cancel()
             exportTask?.cancel()
+            forensicTask?.cancel()
+            transcribeTask?.cancel()
+            translateTask?.cancel()
         default:
             break
         }
@@ -447,6 +514,15 @@ actor JobQueue {
             } else if let export = job.studioExport {
                 AppLog.info("Job \(id) started: studio export, \(export.projectID), \(export.preset)")
                 try await runStudioExport(id, export)
+            } else if let request = job.forensicTranslate {
+                AppLog.info("Job \(id) started: forensic translation")
+                try await runForensicTranslate(id, request)
+            } else if let request = job.forensicTranscribe {
+                AppLog.info("Job \(id) started: forensic speech recognition")
+                try await runForensicTranscribe(id, request)
+            } else if let forensic = job.forensic {
+                AppLog.info("Job \(id) started: forensic case from \(forensic.files.count) file(s)")
+                try await runForensicCase(id, forensic)
             } else if let restore = job.restore {
                 AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
                 try await runRestore(id, restore)
@@ -485,6 +561,107 @@ actor JobQueue {
         if let done = jobs[id] {
             let peak = done.timings.map(\.peakMB).max().map { ", peak \(Int($0)) MB" } ?? ""
             AppLog.info("Job \(id) \(done.status) after \(String(format: "%.1f", Date().timeIntervalSince(started))) s\(peak)")
+        }
+    }
+
+    /// Ton-Forensik: Fall anlegen (`ForensicImport`, aus einem VDR-Export `VDRImport`), abseits des Actors, Fortschritt
+    /// über `setProgress`. Der Speicherwächter bricht ab, bevor der Datenträger der Fälle voll läuft.
+    private func runForensicCase(_ id: String, _ req: ForensicImport.Request) async throws {
+        let root = ForensicCases.directory
+        if let free = ForensicDiskGuard.available(root), free < ForensicDiskGuard.reserve {
+            throw ForensicError(ForensicDiskGuard.message(root))
+        }
+        let disk = ForensicDiskGuard(root)
+        let work = Task.detached(priority: .userInitiated) { () throws -> URL in
+            let progress: (Double, String) -> Void = { fraction, stage in
+                Task { await JobQueue.shared.setProgress(id, fraction, stage) }
+            }
+            if req.vdr, let folder = req.files.first {
+                return try await VDRImport.create(folder, name: req.name, progress: progress,
+                                                  isCancelled: { Task.isCancelled || disk.low })
+            }
+            return try await ForensicImport.create(req, progress: progress, isCancelled: { Task.isCancelled || disk.low })
+        }
+        forensicTask = work
+        defer { forensicTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }
+        do {
+            let url = try await work.value
+            update(id) { $0.resultPath = url.path }
+        } catch {
+            if disk.tripped { throw ForensicError(ForensicDiskGuard.message(root)) }
+            throw error
+        }
+    }
+
+    /// Ton-Forensik: Sprache erkennen. Whisper braucht den Speicher für sich (auf 8 GB erst die anderen Modelle weg)
+    /// und wird danach wieder entladen.
+    private func runForensicTranscribe(_ id: String, _ req: ForensicTranscribe.Request) async throws {
+        await CoreMLEngine.shared.unload()
+        await Flux2Engine.shared.unload()
+        await AudioEngine.shared.unload()
+        await SeedVR2Engine.shared.unload()
+        await VisionEngine.shared.unload()
+        await ZImageEngine.shared.unload()
+        await VideoEngine.shared.unload()
+        await SpeechEngine.shared.unload()
+        MemoryLog.release()
+        let work = Task.detached(priority: .userInitiated) { () throws -> ForensicTranscribe.Outcome in
+            try await ForensicTranscribe.run(req, progress: { fraction, stage in
+                Task { await JobQueue.shared.setProgress(id, fraction, stage) }
+            }, isCancelled: { Task.isCancelled })
+        }
+        transcribeTask = work
+        defer { transcribeTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }
+        do {
+            let r = try await work.value
+            await ForensicASR.shared.unload()
+            AppLog.info("Job \(id): \(r.added) blocks, \(r.dropped) dropped, \(r.rejectedVAD) without speech, "
+                        + "\(r.regions) regions, \(Int(r.speechSeconds)) s speech in \(Int(r.seconds)) s (\(r.target))")
+            update(id) {
+                $0.stage = t("\(r.added) Blöcke erkannt", "\(r.added) blocks recognised")
+            }
+        } catch {
+            await ForensicASR.shared.unload()
+            throw error
+        }
+    }
+
+    /// Ton-Forensik: übersetzen; das Sprachmodell braucht den Speicher für sich und wird danach entladen.
+    private func runForensicTranslate(_ id: String, _ req: ForensicTranslate.Request) async throws {
+        await CoreMLEngine.shared.unload()
+        await Flux2Engine.shared.unload()
+        await AudioEngine.shared.unload()
+        await SeedVR2Engine.shared.unload()
+        await VisionEngine.shared.unload()
+        await ZImageEngine.shared.unload()
+        await VideoEngine.shared.unload()
+        await SpeechEngine.shared.unload()
+        await ForensicASR.shared.unload()
+        MemoryLog.release()
+        let work = Task.detached(priority: .userInitiated) { () throws -> ForensicTranslate.Outcome in
+            try await ForensicTranslate.run(req, progress: { fraction, stage in
+                Task { await JobQueue.shared.setProgress(id, fraction, stage) }
+            }, isCancelled: { Task.isCancelled })
+        }
+        translateTask = work
+        defer { translateTask = nil }
+        if jobs[id]?.cancelRequested == true { work.cancel() }
+        do {
+            let r = try await work.value
+            AppLog.info("Job \(id): translated \(r.translated), untranslated \(r.untranslated) in \(Int(r.seconds)) s (\(r.model))")
+        } catch {
+            await ForensicLLM.shared.unload()
+            throw error
+        }
+    }
+
+    func setProgress(_ id: String, _ fraction: Double, _ stage: String) {
+        guard let job = jobs[id], job.status == "running", !job.cancelRequested else { return }
+        update(id) {
+            $0.progress = max($0.progress, min(0.99, fraction))
+            $0.stage = stage
         }
     }
 
@@ -591,6 +768,30 @@ actor JobQueue {
             downloadTask = work
             defer { downloadTask = nil }
             try await work.value
+            return
+        }
+        if modelID == "forensic-translator" {
+            update(id) { $0.stage = t("lädt \(ForensicTranslate.modelName)", "downloading \(ForensicTranslate.modelName)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await ForensicTranslate.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
+            return
+        }
+        if let forensic = ForensicModel.find(modelID) {
+            update(id) { $0.stage = t("lädt \(forensic.name)", "downloading \(forensic.name)") }
+            let report: @Sendable (Double, String) -> Void = { fraction, message in
+                Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: true) }
+            }
+            let work = Task { try await forensic.download(progress: report) }
+            downloadTask = work
+            defer { downloadTask = nil }
+            try await work.value
+            if jobs[id]?.cancelRequested == true { throw CancellationError() }
             return
         }
         if let helper = HelperModel.find(modelID) {

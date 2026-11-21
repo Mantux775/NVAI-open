@@ -1981,7 +1981,12 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
     progress(0.2, "Modell laden")
     adapter = at._adapter(s["model"])
     t0 = time.time()
-    bundle = adapter.load(Path(s["weights_dir"]), s.get("device") or "cuda", {})
+    device = s.get("device") or "cuda"
+    if device == "cuda":
+        import torch
+        if not torch.cuda.is_available():
+            device = "cpu"   # ohne nutzbare Karte (gpu.cpu_mode): Whisper rechnet auf dem Prozessor, in float32
+    bundle = adapter.load(Path(s["weights_dir"]), device, {})
     # Zweitmeinung und Wortzeiten mit Omnilingual CTC 1B (Apache-2.0, 2 % der Rechenzeit von Whisper): Whispers Text
     # wird am Ton ausgerichtet, je Wort p = min(Whisper-Token, ausgerichtet), dazu „bestätigt“, wenn Omnilingual selbst
     # dasselbe Wort an derselben Stelle hört (Messung 17.11.: bestätigte Wörter zu 4,3 % falsch, die übrigen fangen
@@ -1990,7 +1995,7 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
     if s.get("align_dir"):
         try:
             om_mod = at._adapter("omnilingual_ctc1b")
-            om = om_mod.load(Path(s["align_dir"]), s.get("device") or "cuda", {})
+            om = om_mod.load(Path(s["align_dir"]), device, {})
         except Exception as exc:  # noqa: BLE001 - ohne Zweitmeinung weiter
             emit(warning=f"Omnilingual nicht geladen: {exc}")
             om_mod = om = None

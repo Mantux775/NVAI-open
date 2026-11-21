@@ -682,6 +682,8 @@ export interface Health {
   gpus?: GpuInfo[]
   /** Eigenes ComfyUI für die Sprachmodelle, wenn sie auf einer anderen Karte liegen. */
   text_backend?: { separate: boolean; running: boolean; loaded: string | null }
+  /** Keine Karte, auf der PyTorch rechnet: ComfyUI läuft auf dem Prozessor (GitHub-Issue #3). */
+  cpu_mode?: { reason: 'amd_unsupported' | 'no_gpu_compute' | string; cards: string[] } | null
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'
@@ -1422,6 +1424,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(scene_ids ? { scene_ids } : {}),
     }),
+  /** „Startbild erzeugen“ für eine Videoszene: zwei Varianten im Projektordner (seit 0.5.30) */
+  studioStartImage: (id: string, sceneId: string) =>
+    req<Job>(`/api/studio/projects/${id}/scenes/${sceneId}/start-image`, { method: 'POST' }),
   /** Erzeugen abbrechen: laufende und wartende Aufträge der Szenen, wartende Anschlüsse (seit 0.5.19) */
   studioCancel: (id: string) =>
     req<{ cancelled: string[] }>(`/api/studio/projects/${id}/cancel`, { method: 'POST' }),
@@ -1568,6 +1573,8 @@ export interface StudioScene {
   jobs: string[]
   error: string | null
   status: 'empty' | 'waiting' | 'running' | 'done' | 'error'
+  /** Hinweise wie im Assistenten: zu lang für die Karte, Figur ohne Startbild, Prompt nicht englisch … (seit 0.5.30) */
+  hints?: string[]
 }
 
 export interface StudioMarker {

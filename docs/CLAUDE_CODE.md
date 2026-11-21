@@ -564,6 +564,9 @@ Workflow:
 
 1. `studio_create`, then one `scene.add` per shot, each video prompt written like for `generate_video`. Add
    `marker.add` with `kind="chain"` where two shots must join seamlessly and `kind="transition"` for dissolves.
+   Without `model_id` a scene gets the best downloaded model of its lane (since 0.5.30), and `studio_get` lists
+   `hints` per scene (too long for 16 GB at 1080p, a character without a start image, a prompt not in English, a
+   voice line under a video that makes its own sound): resolve them before generating.
 2. Tell the user how long it will take, then `studio_generate`. Look at three frames of every video take at full
    resolution; for a scene that missed, set a new seed with `scene.update` (`params.seed`) and run
    `studio_generate(scene_ids=[…])`. The old take stays, `scene.take` switches back.
