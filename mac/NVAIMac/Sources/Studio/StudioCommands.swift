@@ -296,13 +296,15 @@ enum StudioCommands {
             throw StudioError(t("Bahn \(lane) gibt es nicht (\(Studio.lanes.joined(separator: ", "))).",
                                 "No lane \(lane) (\(Studio.lanes.joined(separator: ", ")))."))
         }
-        // Ohne Angabe: Musik so lang wie der Film (mindestens 10 s), Geräusche 4 s, sonst 5 s (wie unter Windows seit 0.5.30)
-        let fallback = lane == "music" ? max(Studio.ticks(10), p.compositionDuration) : lane == "sfx" ? Studio.ticks(4) : Studio.ticks(5)
+        let start = a.time("start") ?? p.laneEnd(lane)
+        // Ohne Angabe: Musik bis zum Ende des Films ab ihrem Start (mindestens 10 s; bis Windows 0.5.30 Filmlänge ab dem
+        // Start: zu lang, der Export endete schwarz), Geräusche 4 s, sonst 5 s (wie unter Windows seit 0.5.31)
+        let fallback = lane == "music" ? max(Studio.ticks(10), p.compositionDuration - max(0, start))
+            : lane == "sfx" ? Studio.ticks(4) : Studio.ticks(5)
         let duration = a.time("duration") ?? fallback
         guard duration > 0 else {
             throw StudioError(t("Die Dauer muss größer als 0 sein.", "The duration must be greater than 0."))
         }
-        let start = a.time("start") ?? p.laneEnd(lane)
         let kind = a.string("kind").flatMap { $0.isEmpty ? nil : $0 } ?? (lane == "video" ? "video" : "audio")
         guard ["video", "image", "audio"].contains(kind) else {
             throw StudioError(t("kind ist video, image oder audio.", "kind is video, image or audio."))
@@ -329,6 +331,7 @@ enum StudioCommands {
     static func sceneUpdate(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
         let i = try p.sceneIndex(a.string("id") ?? "")
         var s = p.scenes[i]
+        let before = (s.lane, s.kind)
         if a.has("title") { s.title = a.string("title") ?? "" }
         if a.has("prompt") { s.prompt = a.string("prompt") ?? "" }
         if a.has("kind") { s.kind = a.string("kind") ?? s.kind }
@@ -338,6 +341,11 @@ enum StudioCommands {
         if a.has("lyrics") { s.lyrics = a.string("lyrics") ?? "" }
         guard Studio.lanes.contains(s.lane) else {
             throw StudioError(t("Bahn \(s.lane) gibt es nicht.", "No lane \(s.lane)."))
+        }
+        if (s.lane, s.kind) != before, !a.has("model_id") {
+            // Art oder Bahn gewechselt (Video → Standbild, Musik → Geräusch): Das vorgewählte Modell passt nicht mehr; wie
+            // beim Anlegen das beste der neuen Art, sonst das aktive (wie unter Windows seit 0.5.31)
+            s.modelID = env.bestModel(s.lane, s.kind)
         }
         if let params = a["params"]?.objectValue { s.params.merge(params) { _, new in new } }
         if let start = a.time("start") { s.start = max(0, start) }
@@ -362,13 +370,17 @@ enum StudioCommands {
             if p.scenes[o].chainFrom == id { p.scenes[o].chainFrom = nil }
             if p.scenes[o].waitingFor == id { p.scenes[o].waitingFor = nil }  // der wartende Auftrag sieht das und endet
             if p.scenes[o].params["audio_from"]?.stringValue == id { p.scenes[o].params["audio_from"] = .null }
+            // Stimmvorlage einer anderen Sprecher-Szene (wie unter Windows seit 0.5.31): sonst scheiterte deren Erzeugen
+            if p.scenes[o].params["voice_from"]?.stringValue == id { p.scenes[o].params["voice_from"] = .null }
         }
         // Figuren behalten ihre übrigen Angaben zur Stimme
         for c in p.characters.indices where p.characters[c].voiceFrom == id { p.characters[c].voiceFrom = nil }
         return .null
     }
 
-    /// Take wählen oder hinzufügen: ein Asset aus dem Verlauf wird zum Take.
+    /// Take wählen oder hinzufügen: ein Asset aus dem Verlauf wird zum Take. Fertige Aufträge der Szene trägt
+    /// `StudioStore.apply` vorher ein (wie `_collect_jobs` unter Windows seit 0.5.31); sonst setzte der nächste Abgleich
+    /// den neuesten Take und überschrieb diese Wahl.
     static func sceneTake(_ p: inout StudioProject, _ a: StudioParams, _ env: StudioEnvironment) throws -> JSONValue {
         let i = try p.sceneIndex(a.string("id") ?? "")
         let assetID = a.string("asset_id") ?? ""

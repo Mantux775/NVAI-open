@@ -542,7 +542,10 @@ Sound and frame rate stay, a generated video is read from its lossless copy, and
 A Studio project has two timelines. The **composition** holds scenes (prompt, model, length) on four lanes, `video`
 (video clips or still images), `voice`, `music` and `sfx`, plus markers that say what goes where. The **edit** holds
 the real clips on the tracks V1, V2 (above V1) … and A1, A2 …, with in and out points, speed, gain, transitions and
-zoom. The web interface uses the same commands as the MCP tools, so the user sees every change live and can undo it.
+zoom. `edit.conform` puts videos on V1, music on A2, voice lines on their own track "Voice" and sound effects on their
+own track "Sounds" (both added the first time); a video scene that speaks a line (`params.audio_from`) keeps the length
+of its take when the line is longer than the scene. The web interface uses the same commands as the MCP tools, so the
+user sees every change live and can undo it.
 User guide: [STUDIO.md](STUDIO.md). NVAI-open for Mac has the same Studio, REST interface (`/api/studio/*`) and project
 format; there video scenes use the Mac's video model and a chain starts from the last frame.
 

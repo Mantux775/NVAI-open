@@ -11,12 +11,16 @@ actor StudioStore {
     private var onChange: (@Sendable (StudioProject) -> Void)?
     /// Liest vor einem Befehl die Medieninfo der beteiligten Assets (App: AVFoundation, asynchron).
     private var prefetch: (@Sendable (StudioParams, StudioProject) async -> Void)?
+    /// Trägt vor dem Wählen eines Takes die fertigen Aufträge des Projekts als Takes ein (App: StudioGenerator.refresh).
+    private var collectJobs: (@Sendable (StudioStore, String) async -> Void)?
 
     init(directory: URL, env: StudioEnvironment,
-         prefetch: (@Sendable (StudioParams, StudioProject) async -> Void)? = nil) {
+         prefetch: (@Sendable (StudioParams, StudioProject) async -> Void)? = nil,
+         collectJobs: (@Sendable (StudioStore, String) async -> Void)? = nil) {
         self.directory = directory
         self.env = env
         self.prefetch = prefetch
+        self.collectJobs = collectJobs
     }
 
     /// Wird nach jedem Speichern gerufen (Oberfläche lädt nach, auch wenn Claude per REST geändert hat).
@@ -140,6 +144,11 @@ actor StudioStore {
     /// Befehl ausführen, speichern, den alten Stand auf den Rückgängig-Stapel legen. Scheitert der Befehl, bleibt
     /// alles beim Alten (auch bei batch).
     func apply(_ id: String, _ name: String, _ params: StudioParams = [:]) async throws -> (StudioProject, JSONValue) {
+        // Take wählen (scene.take, auch im Stapel): fertige Aufträge erst als Takes eintragen, wie _collect_jobs unter
+        // Windows seit 0.5.31; sonst setzte der nächste Abgleich den neuesten Take und überschrieb diese Wahl
+        if let collectJobs, Self.choosesTake(name, params), try load(id).scenes.contains(where: { !$0.jobs.isEmpty }) {
+            await collectJobs(self, id)
+        }
         if let prefetch { await prefetch(params, try load(id)) }
         var p = try load(id)  // nach dem Warten neu: dazwischen kann ein anderer Befehl gespeichert haben
         let before = p
@@ -152,6 +161,13 @@ actor StudioStore {
         undoStack[id] = stack
         redoStack[id] = nil
         return (p, result)
+    }
+
+    /// Wählt der Befehl einen Take (scene.take, auch in einem Stapel)?
+    static func choosesTake(_ name: String, _ params: StudioParams) -> Bool {
+        if name == "scene.take" { return true }
+        guard name == "batch" else { return false }
+        return (params["commands"]?.arrayValue ?? []).contains { $0["command"]?.stringValue == "scene.take" }
     }
 
     func undo(_ id: String) throws -> StudioProject {

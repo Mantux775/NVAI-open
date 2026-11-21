@@ -66,7 +66,7 @@ into a 3D mesh (GLB). Best results: one object, plain background, no cast shadow
 PhotoCraft add-on (if installed)
 --------------------------------
 Start menu: "NVAI-open for PhotoCraft". It requires PhotoCraft itself:
-https://github.com/storytold/photocraft/releases/latest (version 0.10.0 or newer)
+https://github.com/storytold/photocraft/releases/latest (tested with version 0.23.1)
 
 If something goes wrong
 -----------------------

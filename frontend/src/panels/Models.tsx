@@ -119,7 +119,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
   }
 
   useEffect(() => {
-    load()
+    load().catch((e) => setError(String((e as Error).message ?? e)))
   }, [load])
 
   // LoRA von außen hinzugekommen oder geändert (MCP add_lora, Generieren-Seite): Liste neu lesen

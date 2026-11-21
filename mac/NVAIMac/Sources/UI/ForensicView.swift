@@ -105,6 +105,17 @@ final class ReviewBridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMes
         return view
     }
 
+    /// Vor dem Schließen: Die Prüf-App speichert Textfelder erst beim Verlassen (onBlur, PUT nach „bearbeitung/“). Das
+    /// aktive Feld verlassen und dem Speichern eine Sekunde geben; vorher lud ← sofort about:blank, und eine eben
+    /// getippte Notiz oder Korrektur konnte mit der Seite verloren gehen.
+    func finishEditing() async {
+        guard let webView else { return }
+        _ = try? await webView.callAsyncJavaScript(
+            "const el = document.activeElement; if (el && el !== document.body && typeof el.blur === 'function') { el.blur() }; return true",
+            arguments: [:], in: nil, contentWorld: .page)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+    }
+
     /// Fall geschlossen: Seite leeren (Ton und Video halten sonst Dateien und Verbindungen offen).
     func unload() {
         target = nil
@@ -173,8 +184,8 @@ final class ReviewBridge: NSObject, WKScriptMessageHandlerWithReply, WKScriptMes
         switch body["op"] as? String {
         case "open": return await openPackage(window: window)
         case "close":
-            // ← in der Prüf-App: zurück zur Fallliste (seit 0.5.11)
-            ForensicStore.shared.close()
+            // ← in der Prüf-App: zurück zur Fallliste (seit 0.5.11), erst nachdem das offene Feld gespeichert ist
+            await ForensicStore.shared.close()
             return [:]
         case "save": return await saveTarget(name: body["name"] as? String ?? "export", ext: body["ext"] as? String ?? "", window: window)
         default: return ["error": "unknown op"]

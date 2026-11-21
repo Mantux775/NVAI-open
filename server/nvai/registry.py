@@ -781,7 +781,7 @@ def download(
     """
     if clean:
         if on_progress:
-            on_progress(0.0, "raeume alten Stand auf")
+            on_progress(0.0, t("räume alten Stand auf", "clearing the old state"))
         clean_partial(entry)
 
     files = entry["files"]
@@ -823,7 +823,7 @@ def download(
         paths.extend(_download_file(f, dest, label, i * span, span, on_progress, should_stop))
 
     if on_progress:
-        on_progress(1.0, "fertig")
+        on_progress(1.0, t("fertig", "done"))
     return paths
 
 
@@ -921,7 +921,7 @@ def delete(entry: dict[str, Any], protect_ids: list[str] | None = None) -> dict[
             size = _size_gb(p)
             shutil.rmtree(p, ignore_errors=True)
             if p.exists():
-                failed.append(f"{p.name}: konnte nicht vollstaendig geloescht werden")
+                failed.append(t(f"{p.name}: konnte nicht vollständig gelöscht werden", f"{p.name}: could not be deleted completely"))
             else:
                 removed.append(p.name + "/")
                 freed += size * 1024**3
@@ -929,7 +929,7 @@ def delete(entry: dict[str, Any], protect_ids: list[str] | None = None) -> dict[
         # Von mehreren Modellen geteilte Dateien (z.B. der umt5-Encoder) nicht
         # loeschen, solange ein anderes installiertes Modell sie noch braucht.
         if _shared_with_other_installed(entry["id"], f, protect_ids, keep=keep):
-            failed.append(f"{p.name}: wird von einem anderen Modell benutzt")
+            failed.append(t(f"{p.name}: wird von einem anderen Modell benutzt", f"{p.name}: used by another model"))
             continue
         try:
             size = p.stat().st_size
@@ -938,7 +938,8 @@ def delete(entry: dict[str, Any], protect_ids: list[str] | None = None) -> dict[
             freed += size
         except PermissionError:
             # Windows gibt eine geladene Datei nicht frei -- ComfyUI haelt sie noch.
-            failed.append(f"{p.name}: in Benutzung. Erst 'VRAM leeren', dann erneut versuchen.")
+            failed.append(t(f"{p.name}: in Benutzung. Erst „VRAM leeren“, dann erneut versuchen.",
+                             f"{p.name}: in use. First “Free VRAM”, then try again."))
         except OSError as exc:
             failed.append(f"{p.name}: {exc}")
 

@@ -14,10 +14,13 @@ enum VDRImport {
         let fm = FileManager.default
         let root = ForensicCases.directory
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
-        let work = root.appendingPathComponent(".neu-\(UUID().uuidString.prefix(8))", isDirectory: true)
-        try fm.createDirectory(at: work.appendingPathComponent("fall", isDirectory: true), withIntermediateDirectories: true)
-        try fm.createDirectory(at: work.appendingPathComponent("bearbeitung", isDirectory: true), withIntermediateDirectories: true)
+        // gesperrter Arbeitsordner: Bleibt er nach einem Absturz liegen, räumt ihn der nächste Start weg
+        let lock = try ForensicCases.Work(in: root)
+        defer { lock.finish() }
+        let work = lock.url
         do {
+            try fm.createDirectory(at: work.appendingPathComponent("fall", isDirectory: true), withIntermediateDirectories: true)
+            try fm.createDirectory(at: work.appendingPathComponent("bearbeitung", isDirectory: true), withIntermediateDirectories: true)
             return try await build(folder, name: name, work: work, progress: progress, isCancelled: isCancelled)
         } catch {
             try? fm.removeItem(at: work)

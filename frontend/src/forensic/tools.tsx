@@ -300,6 +300,13 @@ export function LearnTool({ st, proj, tracks, selection, busy, markers, onAddMar
   const [strength, setStrength] = useState(1)
   const noise = markers.filter((m) => m.kind === 'noise')
   const keep = markers.filter((m) => m.kind === 'keep')
+  // Beispiele aus der Auswahl (vorher ließen sich Marken „Störgeräusch“ und „behalten“ nur über die Ton-Suche setzen)
+  const hasSel = !!selection && selection[1] > selection[0]
+  const mark = (kind: 'noise' | 'keep') => {
+    if (!selection || selection[1] <= selection[0]) return
+    onAddMarkers([{ id: Math.random().toString(36).slice(2, 10), start: selection[0], end: selection[1], kind,
+      label: kind === 'noise' ? t('Störgeräusch', 'unwanted sound') : t('behalten', 'keep') }])
+  }
   const profiles = proj.profiles ?? []
   const learn = async () => {
     try {
@@ -356,7 +363,13 @@ export function LearnTool({ st, proj, tracks, selection, busy, markers, onAddMar
             <button className="au-x" onClick={() => onDeleteMarker(m)}>✕</button>
           </span>
         ))}
-        {noise.length < 2 && <span className="hint small warn">{t('Mindestens zwei Beispiele markieren (Auswahl ziehen, „Marke setzen“).', 'Mark at least two examples (drag a selection, “Add marker”).')}</span>}
+        {noise.length < 2 && <span className="hint small warn">{t('Mindestens zwei Beispiele markieren (Auswahl ziehen, dann „Auswahl als Störgeräusch“).', 'Mark at least two examples (drag a selection, then “Selection as unwanted sound”).')}</span>}
+      </div>
+      <div className="lt-toolbar">
+        <button className="btn small" disabled={!hasSel} onClick={() => mark('noise')}
+          title={hasSel ? '' : t('Erst im Zeitstrahl eine Stelle auswählen', 'Select a place in the timeline first')}>{t('Auswahl als Störgeräusch', 'Selection as unwanted sound')}</button>
+        <button className="btn small ghost" disabled={!hasSel} onClick={() => mark('keep')}
+          title={hasSel ? '' : t('Erst im Zeitstrahl eine Stelle auswählen', 'Select a place in the timeline first')}>{t('Auswahl als „behalten“', 'Selection as “keep”')}</button>
       </div>
       <div className="lt-toolbar">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Name, z. B. Alarm', 'Name, e.g. alarm')} />

@@ -10,6 +10,12 @@ from typing import Any
 
 import numpy as np
 
+try:
+    from . import L
+except ImportError:  # einzeln geladen, ohne das Paket audio_models
+    def L(de: str, en: str) -> str:
+        return de
+
 SAMPLE_RATE = 44100
 CHANNELS = 2
 STEMS = ["voice"]
@@ -34,7 +40,7 @@ def load(weights_dir: Path, device: str, params: dict[str, Any]) -> Any:
 
     path = Path(weights_dir) / "MelBandRoformer.ckpt"
     if not path.exists():
-        raise SystemExit(f"Mel-Band RoFormer: keine Gewichte in {weights_dir}")
+        raise SystemExit(L(f"Mel-Band RoFormer: keine Gewichte in {weights_dir}", f"Mel-Band RoFormer: no weights in {weights_dir}"))
     net = MelBandRoformer(**CONFIG)
     sd = torch.load(str(path), map_location="cpu", weights_only=True)
     sd = sd.get("state_dict", sd)

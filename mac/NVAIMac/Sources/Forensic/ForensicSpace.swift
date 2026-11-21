@@ -54,8 +54,10 @@ final class ForensicDiskGuard: @unchecked Sendable {
     /// Geschätzte Größe eines Falls aus einem VDR-Export: Ton je Kanal mit 2 Byte je Probe, dazu Spektrogramme und AAC
     /// (zusammen +54 %, gemessen), die Bilder höchstens so groß wie der ganze Export.
     static func vdrEstimate(seconds: Int, rates: [Int], exportBytes: Int64) -> Int64 {
-        let audio = Double(max(seconds, 0)) * Double(rates.reduce(0, +)) * 2
-        return Int64(audio * 1.54) + exportBytes
+        // in Gleitkomma und begrenzt: unplausible Zeiten oder Raten aus einem beschädigten Export dürfen nicht überlaufen
+        let audio = Double(max(seconds, 0)) * rates.reduce(0.0) { $0 + Double(max($1, 0)) } * 2
+        let total = audio * 1.54 + Double(max(exportBytes, 0))
+        return total.isFinite && total < 4e18 ? Int64(total) : 4_000_000_000_000_000_000
     }
 
     /// „12,3“ bzw. „12.3“, in GB wie der Finder (10⁹ Byte)

@@ -39,6 +39,7 @@ export const STATUS_LABEL: Record<string, string> = {
   done: t('fertig', 'done'),
   error: t('Fehler', 'error'),
   cancelled: t('abgebrochen', 'cancelled'),
+  paused: t('angehalten', 'paused'),
 }
 
 /** Bildanzeige in voller Größe mit Blättern (← →) und Esc; mit marks auch Behalten (1) und Aussortieren (2) */

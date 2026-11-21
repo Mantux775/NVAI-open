@@ -43,6 +43,11 @@ def progress(frac: float, stage: str = "") -> None:
     emit(progress=round(max(0.0, min(1.0, frac)), 4), stage=stage)
 
 
+def L(de: str, en: str) -> str:
+    """Meldung in der Sprache des Auftrags (main setzt sie über audio_tools.set_lang)."""
+    return at.L(de, en)
+
+
 class SpecFile:
     """Eine Stufe des Spektrogramms blockweise schreiben (Spalten als uint8, Kopf am Ende nachgetragen)."""
 
@@ -142,14 +147,14 @@ def cmd_spectro(s: dict[str, Any]) -> dict[str, Any]:
     for block in at.read_blocks(src, block_seconds=60.0):
         mono = block.mean(axis=1) if block.shape[1] > 1 else block[:, 0]
         buf = flush(np.concatenate([buf, mono.astype(np.float32)]), False)
-        progress(0.95 * done_cols / max(1, total_cols), "Spektrogramm")
+        progress(0.95 * done_cols / max(1, total_cols), L("Spektrogramm", "spectrogram"))
     flush(buf, True)
     for f in files:
         f.close()
     act = _activity(np.concatenate(act_cols) if act_cols else np.zeros((0, 2), np.float32), hop, sr)
     act_path = out.with_suffix(".act")
     act["values"].tofile(act_path)
-    progress(1.0, "fertig")
+    progress(1.0, L("fertig", "done"))
     return {"bins": bins, "hop": hop, "sr": sr, "fmax": fmax, "nfft": nfft, "cols": files[0].cols,
             "levels": [{"factor": f, "cols": x.cols} for f, x in zip(LEVELS, files)],
             "activity": {"rate": ACT_RATE, "method": "energy", "segments": act["segments"],
@@ -223,7 +228,7 @@ def cmd_vad(s: dict[str, Any]) -> dict[str, Any]:
                 for c in chunks:
                     probs.append(float(model(c.unsqueeze(0), 16000).item()))
             done += len(block)
-            progress(0.98 * done / max(1, frames), "Sprache suchen")
+            progress(0.98 * done / max(1, frames), L("Sprache suchen", "finding speech"))
     p = np.asarray(probs, np.float32)
     # je 0,1 s das Maximum der Silero-Werte (31,25 je Sekunde) in diesem Zehntel
     fi = (np.arange(len(p)) * win * ACT_RATE // 16000).astype(int)
@@ -300,7 +305,7 @@ def cmd_vadmap(s: dict[str, Any]) -> dict[str, Any]:
                 vals = (p[ok] * 255 + 0.5).astype(np.uint8)
                 np.maximum.at(out[k], fi[ok], vals)
         g = g1
-        progress(g / dur, f"Sprache finden {fmt_hms(g)} / {fmt_hms(dur)}")
+        progress(g / dur, L(f"Sprache finden {fmt_hms(g)} / {fmt_hms(dur)}", f"finding speech {fmt_hms(g)} / {fmt_hms(dur)}"))
     res = {}
     for k, tr in enumerate(tracks):
         a = out[k][: int(math.ceil(infos[k][2] / infos[k][0] * ACT_RATE))]
@@ -348,21 +353,24 @@ def cmd_align(s: dict[str, Any]) -> dict[str, Any]:
     s: video (Datei mit Ton), ref (Liste FLAC der Aufnahme), out (JSON). Ergebnis: Punkte, Gerade, Restfehler."""
     from scipy.signal import fftconvolve
     rate = 100
-    progress(0.01, "Ton des Videos lesen")
+    progress(0.01, L("Ton des Videos lesen", "reading the video's audio"))
     pr = at.probe(s["video"])
     vdur = float(pr.get("duration") or 0)
     sr_v = 8000
     venv: list[np.ndarray] = []
     done = 0.0
+    # Die Hüllkurve zählt ab der ersten Tonprobe, Export und Lagebild rechnen mit den Zeitstempeln des Videos: Beginnt
+    # der Ton nicht bei 0, lag die Zuordnung sonst um genau diesen Versatz daneben
+    a0 = _audio_start(s["video"])
 
     def vblocks() -> Any:
         nonlocal done
         for b in at.decode_blocks(s["video"], sr_v, 1, block_seconds=60.0):
             done += len(b) / sr_v
-            progress(0.02 + 0.6 * done / max(1.0, vdur), "Ton des Videos lesen")
+            progress(0.02 + 0.6 * done / max(1.0, vdur), L("Ton des Videos lesen", "reading the video's audio"))
             yield b
     V = _envelope(vblocks(), sr_v, rate)
-    progress(0.63, "Aufnahme lesen")
+    progress(0.63, L("Aufnahme lesen", "reading the recording"))
     sr_r = at.info(s["ref"][0])[0]
     R = _envelope(_mix_blocks(list(s["ref"]), [1.0] * len(s["ref"])), sr_r, rate)
 
@@ -376,7 +384,7 @@ def cmd_align(s: dict[str, Any]) -> dict[str, Any]:
     cc = fftconvolve(r10, v10[::-1], mode="full")
     lag = int(np.argmax(cc)) - (len(v10) - 1)        # r10[i + lag] ≈ v10[i]
     coarse = lag / 10.0                               # Aufnahme-Zeit = Video-Zeit + coarse
-    progress(0.75, "fein ausrichten")
+    progress(0.75, L("fein ausrichten", "fine alignment"))
     # 2. fein in Fenstern
     win, step, search = int(float(s.get("win_s") or 120) * rate), int(float(s.get("step_s") or 600) * rate), 3 * rate
     vn, rn = norm(V), norm(R)
@@ -396,12 +404,13 @@ def cmd_align(s: dict[str, Any]) -> dict[str, Any]:
             d = c[i - 1] - 2 * c[i] + c[i + 1]
             frac = 0.5 * (c[i - 1] - c[i + 1]) / d if d != 0 else 0.0
         score = float(c[i] / win)
-        vt = (a + win / 2) / rate
+        vt = (a + win / 2) / rate + a0               # Zeitstempel des Videos
         rt = (b0 + i + frac + win / 2) / rate
         pts.append([round(float(rt), 3), round(float(vt), 3), round(float(score), 3)])
     good = [p for p in pts if p[2] > 0.3]
     if len(good) < 2:
-        raise SystemExit("Video und Aufnahme passen nicht zusammen (keine sichere Übereinstimmung im Ton).")
+        raise SystemExit(L("Video und Aufnahme passen nicht zusammen (keine sichere Übereinstimmung im Ton).",
+                           "The video and the recording do not match (no reliable agreement in the sound)."))
     t = np.array([p[0] for p in good])
     v = np.array([p[1] for p in good])
     a_, b_ = np.polyfit(t, v, 1)
@@ -412,13 +421,31 @@ def cmd_align(s: dict[str, Any]) -> dict[str, Any]:
         if keep.sum() >= 2:
             a_, b_ = np.polyfit(t[keep], v[keep], 1)
     res = v - (a_ * t + b_)
-    out = {"coarse_offset_s": round(-coarse, 3), "points": pts, "fit": {"a": float(a_), "b": float(b_)},
+    out = {"coarse_offset_s": round(a0 - coarse, 3), "points": pts, "fit": {"a": float(a_), "b": float(b_)},
            "drift_ppm": round((a_ - 1) * 1e6, 1), "residual_ms": {"median": round(float(np.median(np.abs(res))) * 1000, 1),
                                                                    "max": round(float(np.abs(res).max()) * 1000, 1)},
-           "used_points": int(len(good)), "video_duration": vdur}
+           "used_points": int(len(good)), "video_duration": vdur, "audio_start_s": round(a0, 4)}
     Path(s["out"]).write_text(json.dumps(out), encoding="utf-8")
-    progress(1.0, "fertig")
+    progress(1.0, L("fertig", "done"))
     return out
+
+
+def _audio_start(path: str) -> float:
+    """Zeitstempel (s) der ersten dekodierten Tonprobe einer Datei (0, wenn es keinen gibt)."""
+    import av
+    with av.open(path) as c:
+        a = next((st for st in c.streams if st.type == "audio"), None)
+        if a is None:
+            return 0.0
+        for packet in c.demux(a):
+            try:
+                frames = packet.decode()
+            except av.error.FFmpegError:
+                continue
+            for fr in frames:
+                if fr.pts is not None and fr.time_base:
+                    return float(fr.pts * fr.time_base)
+    return 0.0
 
 
 class ClockReader:
@@ -557,10 +584,11 @@ def cmd_clockalign(s: dict[str, Any]) -> dict[str, Any]:
                 out.append((tt, f.to_ndarray(format="rgb24")))
                 nxt = tt + (every or 0)
         return out
-    progress(0.02, "Uhr im Bild lernen")
+    progress(0.02, L("Uhr im Bild lernen", "learning the clock in the picture"))
     first = frames_at(float(s.get("learn_at") or 5.0), 13.0, every=0.5)
     if not first or not reader.setup([f for _, f in first]):
-        raise SystemExit("Die Uhr im Bild ließ sich nicht lesen (Lage der Uhr prüfen).")
+        raise SystemExit(L("Die Uhr im Bild ließ sich nicht lesen (Lage der Uhr prüfen).",
+                           "The clock in the picture could not be read (check where the clock is)."))
     step = float(s.get("step_s") or 300)
     pts, misses = [], 0
     samples = list(np.arange(10.0, vdur - 3, step))
@@ -584,10 +612,11 @@ def cmd_clockalign(s: dict[str, Any]) -> dict[str, Any]:
             prev = (tt, r)
         if not found:
             misses += 1
-        progress(0.05 + 0.93 * (k + 1) / len(samples), f"Uhr lesen {k + 1}/{len(samples)}")
+        progress(0.05 + 0.93 * (k + 1) / len(samples), L(f"Uhr lesen {k + 1}/{len(samples)}",
+                                                          f"reading the clock {k + 1}/{len(samples)}"))
     c.close()
     if len(pts) < 2:
-        raise SystemExit("Zu wenige lesbare Stellen der Uhr im Bild.")
+        raise SystemExit(L("Zu wenige lesbare Stellen der Uhr im Bild.", "Too few readable spots of the clock in the picture."))
     t = np.array([p[0] for p in pts])
     v = np.array([p[1] for p in pts])
     a_, b_ = np.polyfit(t, v, 1)
@@ -601,7 +630,7 @@ def cmd_clockalign(s: dict[str, Any]) -> dict[str, Any]:
            "residual_ms": {"median": round(float(np.median(np.abs(res))) * 1000, 1), "max": round(float(np.abs(res).max()) * 1000, 1)},
            "used_points": int(len(pts)), "unreadable": misses, "video_duration": vdur, "fps": fps}
     Path(s["out"]).write_text(json.dumps(out), encoding="utf-8")
-    progress(1.0, "fertig")
+    progress(1.0, L("fertig", "done"))
     return out
 
 
@@ -765,9 +794,33 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
     tau0 = max(0.0, a_ * float(t0) + b_)
     tau1 = min(vdur, a_ * float(t1) + b_)
     if tau1 - tau0 < 0.5:
-        raise SystemExit("Der Bereich liegt nicht im Video.")
-    # Schlüsselbild vor dem Anfang suchen
+        raise SystemExit(L("Der Bereich liegt nicht im Video.", "The range is not inside the video."))
+    # Schlüsselbild vor dem Anfang suchen. Die Pakete danach werden nicht mehr gesammelt (bei 10 Stunden Video 9 bis
+    # 27 GB im Speicher), sondern nach dem Ton direkt aus dem Demuxer weitergereicht (video_packets)
     vin.seek(int(tau0 / vs.time_base), stream=vs, backward=True, any_frame=False)
+    demux = vin.demux(vs)
+    head = None
+    for packet in demux:
+        if packet.dts is None or packet.pts is None:
+            continue
+        if packet.is_keyframe:
+            head = packet
+            break
+    if head is None:
+        raise SystemExit(L("Kein Schlüsselbild im Bereich gefunden.", "No keyframe found in the range."))
+    first = head.pts
+
+    def video_packets() -> Any:
+        """Ab dem Schlüsselbild alle Pakete bis vor das erste hinter dem Ende, in Dekodier-Reihenfolge."""
+        if float(head.pts * vs.time_base) > tau1:
+            return
+        yield head
+        for packet in demux:
+            if packet.dts is None or packet.pts is None:
+                continue
+            if float(packet.pts * vs.time_base) > tau1:
+                return
+            yield packet
     out = Path(s["out"])
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_name(out.stem + ".part" + out.suffix)
@@ -791,22 +844,7 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
     st_a = c.add_stream("aac", rate=48000)
     st_a.layout = "mono" if s.get("mono") else "stereo"
     st_a.bit_rate = int(s.get("kbps") or 192) * 1000
-    first = None
     count = 0
-    packets = []
-    for packet in vin.demux(vs):
-        if packet.dts is None or packet.pts is None:
-            continue
-        pt = float(packet.pts * vs.time_base)
-        if first is None:
-            if not packet.is_keyframe:
-                continue
-            first = packet.pts
-        if pt > tau1:
-            break
-        packets.append(packet)
-    if first is None:
-        raise SystemExit("Kein Schlüsselbild im Bereich gefunden.")
     kf = float(first * vs.time_base)
     # Ton für [kf, tau1] in Video-Zeit
     out_sr = 48000
@@ -846,7 +884,7 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
             for p in st_a.encode(f):
                 c.mux(p)
         tau = tb
-        progress(0.6 * (tau - kf) / max(1e-6, total), "Ton mischen")
+        progress(0.6 * (tau - kf) / max(1e-6, total), L("Ton mischen", "mixing the audio"))
     for f in res.resample(None):
         for p in st_a.encode(f):
             c.mux(p)
@@ -881,24 +919,26 @@ def cmd_videoexport(s: dict[str, Any]) -> dict[str, Any]:
             for pk in vout.encode(f2):
                 c.mux(pk)
             count += 1
-        for i, packet in enumerate(packets):
+        for i, packet in enumerate(video_packets()):
+            pt = float(packet.pts * vs.time_base)
             for frame in dec.decode(packet):
                 put(frame)
             if i % 100 == 0:
-                progress(0.6 + 0.4 * i / max(1, len(packets)), "Untertitel einbrennen")
+                progress(0.6 + 0.4 * min(1.0, (pt - kf) / max(1e-6, total)), L("Untertitel einbrennen", "burning in subtitles"))
         for frame in dec.decode(None):
             put(frame)
         for pk in vout.encode(None):
             c.mux(pk)
     else:
-        for i, packet in enumerate(packets):
+        for i, packet in enumerate(video_packets()):
+            pt = float(packet.pts * vs.time_base)
             packet.pts -= first
             packet.dts -= first
             packet.stream = vout
             c.mux(packet)
             count += 1
             if i % 500 == 0:
-                progress(0.6 + 0.4 * i / max(1, len(packets)), "Bild übernehmen")
+                progress(0.6 + 0.4 * min(1.0, (pt - kf) / max(1e-6, total)), L("Bild übernehmen", "copying the picture"))
     c.close()
     vin.close()
     os.replace(tmp, out)
@@ -993,7 +1033,7 @@ def _pick_h264(w: int, h: int, fps: int) -> str:
             return name
         except Exception:  # noqa: BLE001 - nächster Encoder
             continue
-    raise SystemExit("Kein H.264-Encoder verfügbar.")
+    raise SystemExit(L("Kein H.264-Encoder verfügbar.", "No H.264 encoder available."))
 
 
 def _clock(origin: float | None, x: float, tenths: bool = False, date: bool = False) -> str:
@@ -1556,7 +1596,7 @@ def cmd_automix(s: dict[str, Any]) -> dict[str, Any]:
     infos = [at.info(p) for p in srcs]
     sr = infos[0][0]
     if any(i[0] != sr for i in infos):
-        raise SystemExit("Die Kanäle haben verschiedene Abtastraten.")
+        raise SystemExit(L("Die Kanäle haben verschiedene Abtastraten.", "The channels have different sample rates."))
     frames = min(i[2] for i in infos)
     n_ch = len(srcs)
     hop = sr // 50                                   # 20 ms
@@ -1569,7 +1609,7 @@ def cmd_automix(s: dict[str, Any]) -> dict[str, Any]:
             mono = block.mean(axis=1) if block.shape[1] > 1 else block[:, 0]
             parts.append(_speech_db(mono, sr, hop))
         levels.append(np.concatenate(parts) if parts else np.zeros(0, np.float32))
-        progress(0.45 * (c + 1) / n_ch, "Kanäle messen")
+        progress(0.45 * (c + 1) / n_ch, L("Kanäle messen", "measuring channels"))
     n = min(len(x) for x in levels)
     E = np.stack([x[:n] for x in levels])            # (Kanäle, Rahmen)
     step = 5                                         # Rahmen je Schritt (0,1 s)
@@ -1634,7 +1674,7 @@ def cmd_automix(s: dict[str, Any]) -> dict[str, Any]:
             out += np.interp(tt, kt[a:b], KW[c, a:b]).astype(np.float32) * mono
         w.add(out.reshape(-1, 1))
         pos += ln
-        progress(0.45 + 0.55 * pos / max(1, frames), "mischen")
+        progress(0.45 + 0.55 * pos / max(1, frames), L("mischen", "mixing"))
     res = w.close()
     # Abschnitte für die Anzeige und die Übersetzer-KI: [Anfang, Ende, Kanal (−1 = alle)]
     segs: list[list[float]] = []
@@ -1645,7 +1685,7 @@ def cmd_automix(s: dict[str, Any]) -> dict[str, Any]:
         else:
             segs.append([round(k * st, 2), round((k + 1) * st, 2), c])
     Path(s["decisions"]).write_text(json.dumps({"segments": segs, "channels": len(srcs)}), encoding="utf-8")
-    progress(1.0, "fertig")
+    progress(1.0, L("fertig", "done"))
     return {**res, "switches": sum(1 for x in segs if x[2] >= 0), "speech_seconds": round(sum(b - a for a, b, c in segs if c >= 0), 1),
             "compute_seconds": round(time.time() - t0, 1)}
 
@@ -1926,6 +1966,9 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
     total = sum(r["end"] - r["start"] for r in regions)
     if s.get("plan_only"):
         return {"regions": len(regions), "speech_seconds": round(total, 1)}
+    # Kennungen der Abschnitte dieses Plans: Der Server übernimmt aus out nur deren Zeilen (die Datei kann Zeilen eines
+    # früheren Plans derselben Spuren enthalten, etwa vor Silero; aus dem Tor entstehen „<Kennung>+<Versatz>“)
+    plan_ids = [r["id"] for r in regions]
     out_path = Path(s["out"])
     done: set[str] = set()
     if out_path.exists():
@@ -1936,8 +1979,8 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
                 pass
     todo = [r for r in regions if r["id"] not in done]
     if not todo:
-        progress(1.0, "fertig")
-        return {"regions": len(regions), "new": 0, "speech_seconds": round(total, 1)}
+        progress(1.0, L("fertig", "done"))
+        return {"regions": len(regions), "new": 0, "speech_seconds": round(total, 1), "plan_ids": plan_ids}
     # Tor: Silero VAD prüft jeden Abschnitt auf echte Sprache und kürzt ihn auf die Sprachstrecken (Messung 17.11.:
     # ohne Tor erfand Whisper auf Wind und Lärm Sätze wie „Thank you for watching!“)
     rejected: list[dict[str, Any]] = []
@@ -1970,15 +2013,16 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
                     kept_regions.append({**r, "id": f"{r['id']}+{a0:.1f}", "start": round(r["start"] + a0, 2),
                                          "end": round(r["start"] + b0, 2), "vad": round(pr, 3)})
             if k % 20 == 0:
-                progress(0.02 + 0.18 * k / max(1, len(todo)), f"Sprache prüfen {k}/{len(todo)}")
+                progress(0.02 + 0.18 * k / max(1, len(todo)), L(f"Sprache prüfen {k}/{len(todo)}", f"checking speech {k}/{len(todo)}"))
         with out_path.open("a", encoding="utf-8") as fh:
             for rec in rejected:
                 fh.write(json.dumps(rec) + "\n")
         todo = [r for r in kept_regions if r["id"] not in done]
     if not todo:
-        progress(1.0, "fertig")
-        return {"regions": len(regions), "new": 0, "rejected_vad": len(rejected), "speech_seconds": round(total, 1)}
-    progress(0.2, "Modell laden")
+        progress(1.0, L("fertig", "done"))
+        return {"regions": len(regions), "new": 0, "rejected_vad": len(rejected), "speech_seconds": round(total, 1),
+                "plan_ids": plan_ids}
+    progress(0.2, L("Modell laden", "loading the model"))
     adapter = at._adapter(s["model"])
     t0 = time.time()
     device = s.get("device") or "cuda"
@@ -1996,8 +2040,8 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
         try:
             om_mod = at._adapter("omnilingual_ctc1b")
             om = om_mod.load(Path(s["align_dir"]), device, {})
-        except Exception as exc:  # noqa: BLE001 - ohne Zweitmeinung weiter
-            emit(warning=f"Omnilingual nicht geladen: {exc}")
+        except (Exception, SystemExit) as exc:  # noqa: BLE001 - ohne Zweitmeinung weiter (der Baustein meldet per SystemExit)
+            emit(warning=L(f"Omnilingual nicht geladen: {exc}", f"Omnilingual not loaded: {exc}"))
             om_mod = om = None
     load_s = time.time() - t0
     params = {"language": s.get("language") or "auto", "allowed": s.get("allowed") or [], "beams": int(s.get("beams") or 5)}
@@ -2032,8 +2076,8 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
                     if om is not None:
                         try:
                             words, alt, sim = _second_opinion(om_mod, om, clip, x["text"], words, r["start"])
-                        except Exception as exc:  # noqa: BLE001 - Wörter ohne Zweitmeinung behalten
-                            emit(warning=f"Zweitmeinung fehlgeschlagen: {exc}")
+                        except (Exception, SystemExit) as exc:  # noqa: BLE001 - Wörter ohne Zweitmeinung behalten
+                            emit(warning=L(f"Zweitmeinung fehlgeschlagen: {exc}", f"Second opinion failed: {exc}"))
                         # Keine Vermerke aus der Zweitmeinung mehr (Nutzer 18.11.2026: „second_unusable oder disputed fast
                         # immer, was bringt es“): Im Schreiber-Fall war sie bei 52 % von 3290 Blöcken unbrauchbar und
                         # widersprach bei weiteren 32 %, ihre Ähnlichkeit zu Whisper war über 0–1 gleich verteilt. Sie
@@ -2045,12 +2089,14 @@ def cmd_transcribe(s: dict[str, Any]) -> dict[str, Any]:
                            "second_sim": sim}
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
             fh.flush()
-            progress(0.2 + 0.8 * (i + len(part)) / len(todo), f"Sprache erkennen {i + len(part)}/{len(todo)}")
+            progress(0.2 + 0.8 * (i + len(part)) / len(todo), L(f"Sprache erkennen {i + len(part)}/{len(todo)}",
+                                                                  f"recognising speech {i + len(part)}/{len(todo)}"))
     rt = time.time() - t1
     secs = sum(r["end"] - r["start"] for r in todo)
     return {"regions": len(regions), "new": len(todo), "kept": kept, "dropped": dropped, "rejected_vad": len(rejected),
             "speech_seconds": round(total, 1),
-            "load_seconds": round(load_s, 1), "asr_seconds": round(rt, 1), "rtf": round(rt / max(1.0, secs), 4)}
+            "load_seconds": round(load_s, 1), "asr_seconds": round(rt, 1), "rtf": round(rt / max(1.0, secs), 4),
+            "plan_ids": plan_ids}
 
 
 COMMANDS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {"spectro": cmd_spectro, "vad": cmd_vad,
@@ -2062,6 +2108,7 @@ COMMANDS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {"spectro": cm
 def main() -> None:
     cmd = sys.argv[1]
     settings = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")) if len(sys.argv) > 2 else {}
+    at.set_lang(settings.get("lang"))
     t0 = time.time()
     try:
         result = COMMANDS[cmd](settings)

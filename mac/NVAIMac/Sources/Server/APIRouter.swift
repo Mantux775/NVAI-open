@@ -566,7 +566,14 @@ enum APIRouter {
             }
         } else {
             // Bilder: was ImageIO nicht lesen kann, landet gar nicht erst in der Ablage (seit 0.5.9 als 422 statt 500,
-            // vorher kam „Bild nicht lesbar“ als Serverfehler zurück)
+            // vorher kam „Bild nicht lesbar“ als Serverfehler zurück). Über `FormBody.maxImage` 413, bevor das Feld in
+            // den Speicher kopiert wird (vorher bis zur ganzen Größe des Uploads, einige GB).
+            guard part.range.count <= FormBody.maxImage else {
+                let mb = part.range.count / (1024 * 1024), limit = FormBody.maxImage / (1024 * 1024)
+                let media = AssetStore.mediaSuffixes.joined(separator: ", ")
+                throw APIError(413, t("„\(name)“ hat \(mb) MB: Bilder nimmt NVAI-open für Mac bis \(limit) MB an. Video und Ton erkennt es an der Endung (\(media)).",
+                                      "“\(name)” has \(mb) MB: NVAI-open for Mac takes images up to \(limit) MB. It recognises video and audio by the extension (\(media))."))
+            }
             let data = form.bytes(part)
             do {
                 _ = try ImageFiles.load(data)

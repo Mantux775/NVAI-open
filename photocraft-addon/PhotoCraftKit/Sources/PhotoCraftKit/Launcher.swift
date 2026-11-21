@@ -54,8 +54,9 @@ public struct PhotoCraftLaunch: Equatable, Sendable {
     /// Neueste Veröffentlichung. Die Seite getartcraft.com/apps/photocraft verlinkte im Oktober 2026
     /// noch 0.7.0, während 0.10.0 aktuell war.
     public static let downloadURL = URL(string: "https://github.com/storytold/photocraft/releases/latest")!
-    /// Mit dieser Version ist der Steuerkanal vermessen; ältere bekommen einen Hinweis.
-    public static let testedVersion = "0.10.0"
+    /// Mit dieser Version ist der Steuerkanal zuletzt geprüft (vermessen mit 0.10.0, erneut mit 0.23.1 am
+    /// 21.11.2026); ältere bekommen einen Hinweis. Wie `config.PHOTOCRAFT_TESTED_VERSION` der Brücke.
+    public static let testedVersion = "0.23.1"
 
     /// Installiertes PhotoCraft – über die Bundle-ID (Launch Services, egal in welchem Ordner),
     /// sonst `/Applications/PhotoCraft.app`. `nil`, wenn es keines gibt.

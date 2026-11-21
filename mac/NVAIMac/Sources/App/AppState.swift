@@ -103,6 +103,11 @@ final class AppState: ObservableObject {
         Flux2Engine.configureModelsDirectory(modelsDirectory)
         LoRAUploads.removeStaleParts()  // Reste eines Uploads, während dessen die App beendet wurde
         FormBody.removeStaleParts()  // ebenso große Uploads und Studio-Pakete (seit 0.5.10)
+        // ebenso halb angelegte Fälle der Ton-Forensik („.neu-…“, ein VDR-Fall hat viele GB), im Hintergrund
+        Task.detached(priority: .utility) {
+            let removed = ForensicCases.removeStaleWork()
+            if !removed.isEmpty { AppLog.info("Removed \(removed.count) unfinished forensic case folder(s): \(removed.joined(separator: ", "))") }
+        }
         await AssetStore.shared.load()
         let notify: @Sendable () -> Void = { Task { @MainActor in AppState.shared.scheduleRefresh() } }
         await AssetStore.shared.setOnChange(notify)

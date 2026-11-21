@@ -13,6 +13,8 @@ uebernimmt den contextvars-Stand beim Anlegen eines Tasks.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 LANGUAGES = ("en", "de")
@@ -33,6 +35,17 @@ def set_lang(lang: str) -> None:
 
 def lang() -> str:
     return _lang.get()
+
+
+@contextmanager
+def language(code: str | None) -> Iterator[None]:
+    """Fuer Arbeit ohne Anfrage (Planer, Abgleich beim Start): Texte in der Sprache, die der Nutzer beim Anlegen
+    hatte; danach gilt wieder die vorige."""
+    token = _lang.set(code if code in LANGUAGES else "en")
+    try:
+        yield
+    finally:
+        _lang.reset(token)
 
 
 def t(de: str, en: str) -> str:

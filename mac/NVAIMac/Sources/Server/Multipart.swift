@@ -86,6 +86,10 @@ struct FormBody {
     /// Ab dieser Größe gehen POST /api/upload und POST /api/studio/import in eine Datei statt in den Puffer.
     static let streamFrom = 16 * 1024 * 1024
 
+    /// Größte Bilddatei für POST /api/upload: Ein Bild kommt zum Prüfen ganz in den Speicher (`bytes`), größere Felder
+    /// mit fremder Endung (etwa ein Video mit unbekannter Endung) lehnt der Server ab, statt einige GB zu kopieren.
+    static let maxImage = 256 * 1024 * 1024
+
     init(_ req: HTTPRequest) throws {
         guard let boundary = Multipart.boundary(from: req.headers["content-type"]) else {
             throw APIError(422, t("Erwartet wird multipart/form-data mit dem Feld file.", "Expected multipart/form-data with the field file."))
@@ -128,7 +132,8 @@ struct FormBody {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let free = (try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? Int64.max
-        guard 2 * bytes <= free - 256 * 1024 * 1024 else {
+        // ohne `2 * bytes`: Ein unsinniges Content-Length (fast Int64.max) ließ die Multiplikation überlaufen (Absturz)
+        guard bytes >= 0, bytes <= (free - 256 * 1024 * 1024) / 2 else {
             let f = String(format: "%.1f", Double(free) / 1e9), b = String(format: "%.2f", Double(bytes) / 1e9)
             throw APIError(507, t("Zu wenig Platz in \(folder.path): \(f) GB frei; der Upload hat \(b) GB und braucht beim "
                                   + "Ablegen kurz das Doppelte.",

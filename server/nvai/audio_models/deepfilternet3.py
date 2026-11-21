@@ -21,6 +21,12 @@ from pathlib import Path
 
 import numpy as np
 
+try:
+    from . import L
+except ImportError:  # einzeln geladen, ohne das Paket audio_models
+    def L(de: str, en: str) -> str:
+        return de
+
 SAMPLE_RATE = 48000
 CHANNELS = 2
 STEMS = ["clean"]
@@ -66,13 +72,15 @@ def load(weights_dir, device, params):
     try:
         import deepfilternet_slim
     except ImportError:
-        raise SystemExit("DeepFilterNet3 braucht das Paket deepfilternet-slim 0.1.0 im Audio-venv.") from None
+        raise SystemExit(L("DeepFilterNet3 braucht das Paket deepfilternet-slim 0.1.0 im Audio-venv.",
+                           "DeepFilterNet3 needs the package deepfilternet-slim 0.1.0 in the audio venv.")) from None
     model = Path(weights_dir) / MODEL_FILE
     if not model.is_file():
         model = deepfilternet_slim.model_path()  # gleiche Datei, im Paket mitgeliefert
     # Eine kaputte Datei bringt libDF zum Absturz (panic über FFI), deshalb vorher prüfen
     if _sha256(model) != MODEL_SHA256:
-        raise SystemExit(f"DeepFilterNet3: Modelldatei beschädigt ({model}). Bitte neu laden.")
+        raise SystemExit(L(f"DeepFilterNet3: Modelldatei beschädigt ({model}). Bitte neu laden.",
+                           f"DeepFilterNet3: model file damaged ({model}). Please download it again."))
     with tarfile.open(model) as t:
         member = next(m for m in t.getmembers() if m.name.endswith("config.ini"))
         cfg = configparser.ConfigParser()
@@ -86,7 +94,8 @@ def load(weights_dir, device, params):
     st = lib.df_create(df.model, ctypes.c_float(100.0), None)
     try:
         if lib.df_get_frame_length(st) != hop:
-            raise SystemExit("DeepFilterNet3: unerwartete Schrittweite der Bibliothek.")
+            raise SystemExit(L("DeepFilterNet3: unerwartete Schrittweite der Bibliothek.",
+                               "DeepFilterNet3: unexpected hop size of the library."))
     finally:
         lib.df_free(st)
     return df

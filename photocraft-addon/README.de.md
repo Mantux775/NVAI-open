@@ -48,7 +48,7 @@ scripts\install_shortcut.ps1   # Verknüpfung „NVAI-open for PhotoCraft“ (De
 
 Voraussetzungen:
 
-- **PhotoCraft 0.10 oder neuer.** Die Brücke findet es über den Eintrag, den der PhotoCraft-Installer
+- **PhotoCraft**, getestet mit 0.23.1. Die Brücke findet es über den Eintrag, den der PhotoCraft-Installer
   unter *App Paths* anlegt. Ein portables PhotoCraft trägt man in `settings.json` als
   `"photocraft_exe"` ein. Fehlt PhotoCraft oder ist es älter, zeigt das Panel einen Download-Knopf.
 - **NVAI-open**, entweder als Entwicklungsordner (der Ordner über diesem bzw. ein Nachbarordner `NVAI-open`)
@@ -147,7 +147,7 @@ starten. Das Fenster bleibt auf Wunsch über PhotoCraft (Stecknadel oben rechts)
   für die Weitergabe signiert `--sign "Developer ID Application: …"` mit Zeitstempel, danach lässt
   sich die App notarisieren.
 - **PhotoCraft** findet die App über seine Bundle-ID, egal in welchem Ordner. Fehlt es oder ist es
-  älter als 0.10.0, zeigt sie einen Hinweis mit Download-Knopf.
+  älter als 0.23.1, zeigt sie einen Hinweis mit Download-Knopf.
 - **NVAI-open:** Im Normalbetrieb läuft „NVAI-open für Mac“ auf demselben Mac unter
   `http://127.0.0.1:8100`, ohne Token. Läuft es nicht, startet der Knopf **NVAI-open starten** es im
   Hintergrund. Eine NVAI-open auf einem anderen Rechner geht auch: Adresse und Token unter
@@ -193,7 +193,7 @@ ausschließlich im Austauschordner lesen und schreiben.
 | Meldung | Ursache |
 |---|---|
 | „PhotoCraft ist nicht installiert“ | PhotoCraft über den Knopf im Panel laden (Datei `…-windows-x64.msi`). Ein portables PhotoCraft in `settings.json` als `photocraft_exe` eintragen |
-| „PhotoCraft … ist älter als 0.10.0“ | Mit älteren Versionen ist der Steuerkanal nicht getestet, also aktualisieren |
+| „PhotoCraft … ist älter als 0.23.1“ | Mit älteren Versionen ist der Steuerkanal nicht getestet, also aktualisieren |
 | „NVAI-open ist auf diesem PC nicht installiert“ | Weder das NVAI-open-Setup (`HKCU\Software\NV-AI`) noch der Entwicklungsordner wurde gefunden |
 | „In NVAI-open ist noch kein Bildmodell installiert“ | Frische Installation: In NVAI-open (Knopf **NVAI-open öffnen**) ein Bildmodell laden. Das Panel merkt es von selbst |
 | „PhotoCraft läuft bereits ohne NVAI-open-Anbindung“ | Normal gestartetes PhotoCraft schließen, dann im Panel neu starten |

@@ -58,6 +58,13 @@ PREVIEW_BITRATE = 8_000_000  # H.264-Vorschau neben MKV/ProRes, nur zum Ansehen 
 TIME_SLACK = 0.001  # s; kürzer als jedes Bild (120 fps: 8,3 ms)
 
 
+LANG = "en"  # Sprache der Stufen und Meldungen; main setzt sie aus dem Plan (Sprache des Auftrags)
+
+
+def L(de: str, en: str) -> str:
+    return de if LANG == "de" else en
+
+
 def emit(**msg: Any) -> None:
     print(json.dumps(msg), flush=True)
 
@@ -105,7 +112,8 @@ def pick_encoder(codec: str, width: int, height: int, fps: Fraction, bitrate: in
             return name
         except Exception as exc:  # noqa: BLE001 - nächster Encoder
             tried.append(f"{name}: {str(exc)[:80]}")
-    raise SystemExit("Kein Encoder für " + codec + " verfügbar: " + "; ".join(tried))
+    raise SystemExit(L("Kein Encoder für ", "No encoder for ") + codec + L(" verfügbar: ", " available: ")
+                     + "; ".join(tried))
 
 
 # -------------------------------------------------------------------------------------------- Bilder
@@ -416,7 +424,7 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
     n_frames = max(1, int(np.ceil(duration * fps - 1e-9)))
     t0 = time.time()
 
-    emit(progress=0.0, stage="Ton mischen")
+    emit(progress=0.0, stage=L("Ton mischen", "mixing sound"))
     audio = mix_audio(plan, rate)
     measured = loudness(audio, rate)
     gain_db = 0.0
@@ -427,7 +435,7 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
     peak = float(20 * np.log10(max(1e-9, float(np.abs(audio).max()))))
 
     encoder = pick_encoder(plan["codec"], width, height, fps, plan.get("bitrate"))
-    emit(progress=0.02, stage=f"Video mit {encoder}")
+    emit(progress=0.02, stage=L(f"Video mit {encoder}", f"video with {encoder}"))
     video_tracks = [tr for tr in reversed(plan["tracks"]) if tr.startswith("V")]  # V1 unten, V2 oben
     sources: dict[int, Any] = {}
 
@@ -438,8 +446,12 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
         return sources[i]
 
     def active(track: str, t: float) -> int | None:
+        # bildgenau: Ein Clip deckt die Bilder round(start · fps) bis vor round(ende · fps). Ein Start, der nicht aufs
+        # Bildraster fällt (clip.move start_s=2.96 hinter einem Clip, der bei Bild 71 = 2,958 s endet), gab vorher ein
+        # schwarzes Bild
+        n = round(t * fps)
         for i, c in enumerate(plan["clips"]):
-            if c["track"] == track and c["start"] <= t < c["start"] + length_of(c) - 1e-9:
+            if c["track"] == track and round(c["start"] * fps) <= n < round((c["start"] + length_of(c)) * fps):
                 return i
         return None
 
@@ -467,7 +479,7 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
             if i is None:
                 continue
             c = plan["clips"][i]
-            local = t - c["start"]
+            local = max(0.0, t - c["start"])  # bis zu einem halben Bild vor einem krummen Start: erstes Bild
             media_t = c["in"] + local * speed_of(c)
             img = source(i).frame_at(media_t)
             if img is None:
@@ -491,7 +503,7 @@ def render(plan: dict[str, Any], out_path: str, preview_path: str | None = None)
             sink.video(canvas if canvas is not None else black, f)
             sink.mux_audio(audio, int((f + 1) / float(fps) * rate))
         if f % 12 == 0:
-            emit(progress=round(0.02 + 0.96 * (f + 1) / n_frames, 4), stage=f"Video mit {encoder}",
+            emit(progress=round(0.02 + 0.96 * (f + 1) / n_frames, 4), stage=L(f"Video mit {encoder}", f"video with {encoder}"),
                  frame=f + 1, frames=n_frames)
     for sink in sinks:
         sink.finish(audio)
@@ -577,6 +589,8 @@ def main(argv: list[str]) -> None:
     if len(argv) not in (2, 3):
         raise SystemExit(__doc__)
     plan = json.loads(Path(argv[0]).read_text(encoding="utf-8"))
+    global LANG
+    LANG = "de" if plan.get("lang") == "de" else "en"
     emit(**render(plan, argv[1], argv[2] if len(argv) == 3 else None))
 
 

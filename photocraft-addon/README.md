@@ -47,7 +47,7 @@ network access. Its automation control channel is therefore the clean way in.
 
 ## Requirements
 
-- **PhotoCraft 0.10 or newer** – the version the control channel was measured with. The panel finds
+- **PhotoCraft**, tested with 0.23.1 (the control channel was first measured with 0.10). The panel finds
   it on its own (Windows: the *App Paths* entry of its installer; macOS: its bundle ID). If it is
   missing or older, the panel shows a download button for the
   [latest release](https://github.com/storytold/photocraft/releases/latest).
@@ -127,7 +127,7 @@ as `"photocraft_exe"`.
 | Message | Cause |
 |---|---|
 | "PhotoCraft is not installed" | Get PhotoCraft with the panel's download button (`…-windows-x64.msi` / `…-macos-universal.dmg`) |
-| "PhotoCraft … is older than 0.10.0" | The control channel is not tested with older versions – please update |
+| "PhotoCraft … is older than 0.23.1" | The control channel is not tested with older versions – please update |
 | "NVAI-open is not installed on this PC" | Neither the NVAI-open setup (`HKCU\Software\NV-AI`) nor a development checkout was found |
 | "No image model is installed in NVAI-open yet" | Fresh installation: load an image model in NVAI-open (**Open NVAI-open**); the panel notices it by itself |
 | "PhotoCraft is already running without the NVAI-open connection" | Close the normally started PhotoCraft, then start it again from the panel |

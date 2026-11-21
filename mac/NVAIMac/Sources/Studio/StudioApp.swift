@@ -2,11 +2,13 @@ import Foundation
 
 extension StudioStore {
     /// Die Projekte der App in ~/Library/Application Support/NV-AI/studio (wie data/studio unter Windows); vor jedem
-    /// Befehl liest AVFoundation die Medieninfo der beteiligten Assets.
+    /// Befehl liest AVFoundation die Medieninfo der beteiligten Assets, vor dem Wählen eines Takes trägt der Abgleich
+    /// fertige Aufträge ein.
     static let shared = StudioStore(
         directory: directory,
         env: StudioMediaProbe.environment,
-        prefetch: { params, p in await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets(params, p)) })
+        prefetch: { params, p in await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets(params, p)) },
+        collectJobs: { store, pid in _ = try? await StudioGenerator.shared.refresh(store, pid) })
 }
 
 extension StudioStore {

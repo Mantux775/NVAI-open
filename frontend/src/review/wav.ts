@@ -3,6 +3,7 @@
 // gemischt als 32-Bit-Gleitkomma. Über 4 GB als RF64. Geschrieben wird stückweise über „Speichern unter“ (File System
 // Access), damit auch Stunden nicht den Speicher füllen.
 
+import { t } from '../i18n'
 import { asBlob } from './native'
 
 export interface WavInfo { dataStart: number; dataBytes: number; sr: number; channels: number; bits: number; float: boolean }
@@ -11,7 +12,7 @@ export async function wavInfo(f: Blob): Promise<WavInfo> {
   const head = new DataView(await f.slice(0, 1 << 16).arrayBuffer())
   const tag = (o: number) => String.fromCharCode(head.getUint8(o), head.getUint8(o + 1), head.getUint8(o + 2), head.getUint8(o + 3))
   const kind = tag(0)
-  if (kind !== 'RIFF' && kind !== 'RF64') throw new Error('WAV')
+  if (kind !== 'RIFF' && kind !== 'RF64') throw new Error(t('Keine WAV-Datei.', 'Not a WAV file.'))
   let pos = 12
   let sr = 0
   let channels = 0
@@ -35,7 +36,7 @@ export async function wavInfo(f: Blob): Promise<WavInfo> {
     }
     pos += 8 + size + (size & 1)
   }
-  throw new Error('WAV: data')
+  throw new Error(t('WAV-Datei ohne Tondaten.', 'WAV file without audio data.'))
 }
 
 function header(sr: number, channels: number, bits: number, float: boolean, dataBytes: number): ArrayBuffer {
@@ -90,7 +91,7 @@ export function toFloat(buf: ArrayBuffer, info: WavInfo): Float32Array {
     }
     return out
   }
-  throw new Error(`WAV ${info.bits} bit`)
+  throw new Error(t(`WAV mit ${info.bits} Bit wird nicht unterstützt.`, `WAV with ${info.bits} bit is not supported.`))
 }
 
 type SaveTarget = { write: (d: BufferSource | Blob) => Promise<void>; close: () => Promise<void> }
@@ -108,7 +109,11 @@ export async function exportWav(sources: WavSource[], a: number, b: number, mono
   progress: (f: number) => void): Promise<{ bytes: number; exact: boolean }> {
   const infos = await Promise.all(sources.map((s) => wavInfo(s.file)))
   const sr = infos[0].sr
-  if (infos.some((x) => x.sr !== sr)) throw new Error('sample rate')
+  if (infos.some((x) => x.sr !== sr)) {
+    const rates = sources.map((s, i) => `${s.name} ${infos[i].sr} Hz`).join(', ')
+    throw new Error(t(`Die Spuren haben verschiedene Abtastraten (${rates}). Als WAV nur Spuren mit gleicher Rate zusammen speichern; der Video-Export rechnet sie um.`,
+      `The tracks have different sample rates (${rates}). Save only tracks with the same rate together as WAV; the video export converts them.`))
+  }
   const outCh = mono ? 1 : Math.max(...infos.map((x) => x.channels))
   const exact = sources.length === 1 && sources[0].gainDb === 0 && outCh === infos[0].channels
   const frames = Math.max(0, Math.round((b - a) * sr))

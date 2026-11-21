@@ -138,8 +138,10 @@ actor StudioGenerator {
     func generate(_ store: StudioStore, _ pid: String, sceneIDs: [String]? = nil) async throws -> JSONValue {
         let env = store.env
         let p = Self.resolvingChains(try await refresh(store, pid))
+        // Auch genannte Szenen nur ohne laufenden Auftrag (wie unter Windows seit 0.5.31): Rechtsklick „Erzeugen“ auf eine
+        // Auswahl (gesperrt nur für die angeklickte Szene) und scene_ids per REST oder MCP schickten laufende Szenen doppelt
         var wanted = p.scenes.filter { s in
-            s.waitingFor == nil && (sceneIDs.map { $0.contains(s.id) } ?? (s.take == nil && s.jobs.isEmpty))
+            s.waitingFor == nil && s.jobs.isEmpty && (sceneIDs.map { $0.contains(s.id) } ?? (s.take == nil))
         }
         // Reihenfolge in der Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann die Videos, Anschluss-
         // Szenen zuletzt: so folgt ein Anschluss direkt auf seine Vorlage, ohne dass LTX-Video entladen wird.
@@ -524,7 +526,10 @@ actor StudioGenerator {
 
     /// Der Satz gegen schwarze Balken aus den Startbildern des Assistenten (Windows: FULL_FRAME).
     static let fullFrame = "The picture fills the whole frame from edge to edge."
-    private static let soundWords = #"\b(sound\w*|audio|hear\w*|voices?|says|said|say|speaks?|speaking|talks?|tells|music\w*|nois\w*|silen\w*|quiet\w*|loud\w*|whisper\w*|shout\w*|sings?|singing|murmur\w*|rumbl\w*|ambient|narrat\w*|speech)\b"#
+    /// Nur Wörter, die allein vom Ton sprechen (wie _SOUND_WORDS unter Windows seit 0.5.31): „heart“, „musician“, „quiet
+    /// square“ oder „ambient light“ beschreiben das Bild; vorher fielen solche Sätze weg, und das Startbild hatte kein
+    /// Motiv mehr
+    private static let soundWords = #"\b(sounds?|sounding|audio|hears?|heard|hearing|voices?|says|said|say|speaks?|speaking|spoken|talks?|talking|tells|music|noises?|noisy|silence|loud|loudly|whisper\w*|shout\w*|sings?|singing|murmur\w*|rumbl\w*|narrator|narration|speech)\b"#
 
     /// Video-Prompt als Bildbeschreibung (wie _still_prompt unter Windows): ohne die Sätze über Ton, Stimmen und
     /// Gesprochenes (Anführungszeichen landen sonst als Schrift im Bild), dazu der Satz gegen schwarze Balken.

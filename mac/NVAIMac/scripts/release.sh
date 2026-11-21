@@ -161,7 +161,7 @@ NVAI-open for Mac: Getting Started
 Language: follows the system; switch under Settings > Language (the menu bar follows after a restart).
 
 PhotoCraft add-on
-- Needs PhotoCraft 0.10.0 or later:
+- Needs PhotoCraft (tested with 0.23.1):
   https://github.com/storytold/photocraft/releases/latest
 - The add-on starts NVAI-open when needed; both run locally only.
 
@@ -208,7 +208,7 @@ NVAI-open für Mac: Erste Schritte
 Sprache: folgt dem System; umstellen unter Einstellungen > Sprache (die Menüleiste folgt nach einem Neustart).
 
 PhotoCraft-Add-on
-- Braucht PhotoCraft ab Version 0.10.0:
+- Braucht PhotoCraft (getestet mit 0.23.1):
   https://github.com/storytold/photocraft/releases/latest
 - „NVAI-open für PhotoCraft“ startet NVAI-open bei Bedarf selbst; beide laufen nur lokal.
 

@@ -87,6 +87,8 @@ export function App() {
     setStarting(true)
     try {
       await api.startBackend()
+    } catch (e) {
+      setNotice(String((e as Error).message ?? e))
     } finally {
       setStarting(false)
       refreshHealth()
@@ -133,6 +135,8 @@ export function App() {
       const res = await api.freeVram()
       const list = res.freed.join(', ')
       setNotice(t(`VRAM freigegeben: ${list}`, `VRAM freed: ${list}`))
+    } catch (e) {
+      setNotice(String((e as Error).message ?? e))
     } finally {
       setStopping(false)
       refreshHealth()

@@ -14,10 +14,13 @@ sr/sample_rate 16000, channels 1, duration, analysis.
 from __future__ import annotations
 
 import asyncio
+import gzip
 import json
 import re
+import tarfile
 import time
 import uuid
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -89,10 +92,27 @@ async def submit_import(pid: str, track_ids: list[str] | None = None) -> Job:
             if j.kind == "audio_vdr_import" and (j.params or {}).get("project_id") == pid]
     if busy:
         return busy[0]
-    al.update(pid, lambda q: q.update(status="preparing", error=None))
     job = await jobs.submit("audio_vdr_import", {"project_id": pid, "track_ids": track_ids or []})
-    al.update(pid, lambda q: q.update(job_id=job.id))
+    # Status und Auftrag in einem Schritt: dazwischen sähe die Ansicht „wird eingelesen“ mit dem alten, beendeten
+    # Auftrag und hielte den Fall für unterbrochen (audio_lab._stalled)
+    al.update(pid, lambda q: q.update(status="preparing", error=None, job_id=job.id))
     return job
+
+
+async def _drop_partial_tracks(pid: str, p: dict[str, Any]) -> None:
+    """Halbe Spuren eines abgebrochenen Einlesens („<Kanal>.part.flac“, „.part.webm“; je Kanal bis zu Gigabytes).
+    Die fertigen Spuren eines früheren Einlesens bleiben. Die Arbeitsprozesse von vdr.py enden erst bis zu einer Sekunde
+    nach dem Hauptprozess (Wächter) und halten die Dateien so lange offen: deshalb einige Versuche."""
+    finals = []
+    for c in (p.get("vdr") or {}).get("audio") or []:
+        if c.get("id"):
+            paths = al._track_paths(pid, str(c["id"]))
+            finals += [Path(paths["flac"]), Path(paths["proxy"])]
+    for _ in range(8):
+        al.drop_partial(*finals)
+        if not any(f.with_name(f.stem + ".part" + f.suffix).exists() for f in finals):
+            return
+        await asyncio.sleep(0.5)
 
 
 def _track_name(tr: dict[str, Any]) -> str:
@@ -109,9 +129,11 @@ async def _import(job: Job, ctx: jobs.JobContext) -> list[str]:
         res = await al._run_tool("import", settings, ctx, 0.0, 1.0, t("VDR einlesen", "reading the VDR"), tool=TOOL)
     except asyncio.CancelledError:
         al.update(pid, lambda q: q.update(status="error", error=t("Einlesen abgebrochen.", "Reading cancelled.")))
+        await _drop_partial_tracks(pid, p)
         raise
     except Exception as exc:
         al.update(pid, lambda q: q.update(status="error", error=str(exc)[:800]))
+        await _drop_partial_tracks(pid, p)
         raise
 
     def fn(q: dict[str, Any]) -> None:
@@ -219,6 +241,9 @@ def _raw(pid: str, t_s: float) -> dict[str, Any]:
         return vdr.raw_lines(p["source"]["path"], t_s, names)
     except vdr.VdrError as e:
         raise LookupError(t(e.de, e.en)) from e
+    except (EOFError, tarfile.TarError, zlib.error, gzip.BadGzipFile) as e:
+        # beschädigter Block: Meldung statt 500
+        raise al.AudioError(t(f"Der Block zu dieser Zeit ist beschädigt: {e}", f"The block at this time is damaged: {e}")) from e
     except OSError as e:
         raise al.AudioError(t(f"Der VDR-Export ist nicht erreichbar: {e}", f"The VDR export is not reachable: {e}")) from e
 

@@ -252,15 +252,20 @@ final class SpectrogramBuilder {
     private var q: [UInt8]
     private var speechDB: [Double]
 
+    /// Die FFT ließ sich nicht einrichten (vDSP); die Meldung für Nutzer setzt der Aufrufer (`ChannelSink`), damit diese
+    /// Datei ohne die App übersetzbar bleibt.
+    struct SetupError: Error {}
+
     /// `outBase`: Pfad ohne Endung (…/fall/spec/<Spur>); `expectedFrames`: ungefähre Länge (nur für die Puffergröße).
     init(outBase: URL, sr: Int, expectedFrames: Int = 0, bins: Int = ForensicFormat.bins, fmax: Double = ForensicFormat.fmaxDefault) throws {
         let fm = min(Double(sr) / 2, fmax)
-        // Python: int(round(sr * 0.02)) rundet halbe Werte zur geraden Zahl (11 025 Hz → 220)
-        let hp = Int((Double(sr) * 0.02).rounded(.toNearestOrEven))
+        // Python: int(round(sr * 0.02)) rundet halbe Werte zur geraden Zahl (11 025 Hz → 220). Mindestens 1: Unter 25 Hz
+        // war der Abstand 0 und `drain` lief endlos (`ChannelSink` lehnt solche Raten vorher mit Meldung ab).
+        let hp = max(1, Int((Double(sr) * 0.02).rounded(.toNearestOrEven)))
         let n = sr >= 32000 ? 2048 : 1024
         let l2 = vDSP_Length(log2(Double(n)).rounded())
         guard let setup = vDSP_create_fftsetup(l2, FFTRadix(kFFTRadix2)) else {
-            throw NSError(domain: "Forensic", code: 1, userInfo: [NSLocalizedDescriptionKey: "FFT setup"])
+            throw SetupError()
         }
         // Hann-Fenster wie np.hanning (symmetrisch, Nenner N − 1)
         let win = (0..<n).map { Float(0.5 - 0.5 * cos(2 * Double.pi * Double($0) / Double(n - 1))) }

@@ -117,12 +117,13 @@ def profile() -> dict[str, Any]:
     card = max(cards, key=gpu.strength)
     vram = card.get("vram_total_gb")
     dev = match_device(card.get("name") or "", vram)
-    sp = speed(dev)
+    cpu = bool(gpu.cpu_mode())
+    sp = None if cpu else speed(dev)  # rechnet auf dem Prozessor (gpu.cpu_mode): die Werte der Karte gelten nicht
     return {"name": card.get("name"), "vendor": card.get("vendor"), "vram_gb": vram,
             "catalog_id": dev.get("id") if dev else None, "catalog_name": dev.get("name") if dev else None,
             "arch": dev.get("arch") if dev else None, "laptop": bool(dev.get("laptop")) if dev else None,
             "speed": round(sp, 2) if sp else None, "path": metric(dev)[1] or None,
-            "uncertain": bool(dev and dev.get("uncertain")), "reference": REFERENCE_NAME}
+            "uncertain": bool(dev and dev.get("uncertain")), "reference": REFERENCE_NAME, "cpu_mode": cpu}
 
 
 def _ref_for(model_id: str, family: str) -> tuple[float, str] | None:
@@ -134,6 +135,8 @@ def estimates(models: list[Any]) -> dict[str, dict[str, Any]]:
     Fassung, die der Server für diese Karte empfiehlt, oder Familien ohne Empfehlung: Andere Fassungen (INT8 auf einer
     RTX 50, bf16) liefen auf der Referenz nicht so und bekämen eine falsche Zahl."""
     prof = profile()
+    if prof.get("cpu_mode"):
+        return {}  # auf dem Prozessor stimmt keine Zeit der Referenzkarte
     sp = prof["speed"] or 1.0
     smaller = bool(prof["vram_gb"]) and prof["vram_gb"] < REF_VRAM_GB - 0.5
     fam_has_rec = {m.family for m in models if getattr(m, "recommended", False)}

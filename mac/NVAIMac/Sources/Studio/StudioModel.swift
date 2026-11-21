@@ -12,11 +12,15 @@ enum Studio {
 
     /// Bahnen der Komposition und die Spur, auf die das Übernehmen ihre Takes legt. Sprecherzeilen bekommen seit
     /// 0.5.4 eine eigene Tonspur „Stimme“ (Spur mit lane "voice", `StudioCommands.voiceTrack`), A1 nur, wenn keine
-    /// Tonspur mehr dazupasst.
+    /// Tonspur mehr dazupasst; Geräusche ebenso eine Spur „Geräusche“ (lane "sfx", wie unter Windows seit 0.5.31), A2
+    /// nur, wenn keine Tonspur mehr dazupasst.
     static let lanes = ["video", "voice", "music", "sfx"]
     static let laneTrack = ["video": "V1", "voice": "A1", "music": "A2", "sfx": "A2"]
     /// Ziel „neue Spur Stimme“, bis das Übernehmen sie anlegt
     static let newVoiceTrack = "+voice"
+    /// Ziel „neue Spur Geräusche“, bis das Übernehmen sie anlegt: Musik und Geräusche teilten sich A2, und jedes
+    /// Geräusch schnitt beim Übernehmen ein Loch in die Musik (die so lang ist wie der Film)
+    static let newSfxTrack = "+sfx"
     static let markerKinds = ["place", "transition", "chain", "audio", "ai", "note"]
     static let markerColors = ["place": "blue", "transition": "yellow", "chain": "green", "audio": "cyan",
                                "ai": "purple", "note": "gray"]
@@ -218,7 +222,8 @@ struct StudioTrack: Codable, Equatable, Sendable {
     var kind: String  // video | audio
     var hidden: Bool?
     var muted: Bool?
-    /// "voice": die Tonspur „Stimme“ für Sprecherzeilen (seit 0.5.4, wie unter Windows)
+    /// "voice": die Tonspur „Stimme“ für Sprecherzeilen (seit 0.5.4, wie unter Windows), "sfx": die Tonspur
+    /// „Geräusche“ (wie unter Windows seit 0.5.31)
     var lane: String?
 
     /// Anzeigename: nur die Spur „Stimme“ hat einen.

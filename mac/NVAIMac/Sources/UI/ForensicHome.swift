@@ -19,6 +19,8 @@ final class ForensicStore: ObservableObject {
     @Published var checkingVDR = false
     /// Auftrag „Neuer Fall“, dessen Ergebnis gleich geöffnet wird
     private var openWhenDone: String?
+    /// ← läuft gerade (`close`)
+    private var closing = false
     private var seenFinished = Set<String>()
     static let kinds: Set<String> = ["forensic_case", "forensic_transcribe", "forensic_translate"]
 
@@ -38,7 +40,13 @@ final class ForensicStore: ObservableObject {
         openCase = url
     }
 
-    func close() {
+    /// Zurück zur Fallliste. Zuerst darf die Prüf-App ein offenes Textfeld speichern (sie speichert beim Verlassen des
+    /// Feldes); erst dann wird die Seite geleert. Ein zweites ← in dieser Zeit tut nichts.
+    func close() async {
+        guard !closing else { return }
+        closing = true
+        defer { closing = false }
+        await ReviewBridge.shared.finishEditing()
         openCase = nil
         ReviewBridge.shared.unload()
         refresh()
@@ -203,6 +211,12 @@ final class ForensicStore: ObservableObject {
         alert.addButton(withTitle: t("Abbrechen", "Cancel"))
         let handle = { (response: NSApplication.ModalResponse) in
             guard response == .alertFirstButtonReturn else { return }
+            // inzwischen ein Auftrag für diesen Fall (etwa über REST)? Dann nicht wegnehmen, er schreibt hinein
+            if AppState.shared.jobs.contains(where: { !$0.isFinished && Self.kinds.contains($0.kind) && $0.resultPath == c.folder.path }) {
+                self.error = t("An diesem Fall wird gerade gerechnet (Sprache erkennen oder Übersetzen); erst danach in den Papierkorb legen.",
+                               "This case is being processed (speech recognition or translation); move it to the Trash afterwards.")
+                return
+            }
             do {
                 try FileManager.default.trashItem(at: c.folder, resultingItemURL: nil)
             } catch {
@@ -310,7 +324,9 @@ struct ForensicHome: View {
                             Button(t("Öffnen", "Open")) { store.open(c.folder) }
                             Button(t("Im Finder zeigen", "Show in Finder")) { store.reveal(c) }
                             Divider()
+                            // nicht, solange Erkennen oder Übersetzen in den Fall schreibt (oder dafür wartet)
                             Button(t("In den Papierkorb …", "Move to Trash …")) { store.trash(c, window: NSApp.keyWindow) }
+                                .disabled(busy(c))
                         }
                 }
                 .listStyle(.inset)

@@ -190,9 +190,23 @@ async function sha256(text: string): Promise<string> {
   }
 }
 
+// Alle schreibenden Schritte nacheinander: Zwei gleichzeitige Änderungen (Strg+Enter in einer Notiz speicherte zweimal)
+// lasen sonst dieselbe letzte Prüfsumme (doppelte Nummer, scheinbar gebrochene Kette) und schrieben dieselben Dateien
+// parallel; die zuletzt geschlossene gewann
+let chain: Promise<unknown> = Promise.resolve()
+function serial<T>(work: () => Promise<T>): Promise<T> {
+  const next = chain.then(work, work)
+  chain = next.catch(() => undefined)
+  return next
+}
+
 /** Prüfer-Protokoll: jede Änderung eine Zeile in bearbeitung/protokoll.jsonl, verkettet über SHA-256 (eine nachträglich
  * geänderte Zeile bricht die Kette ab der Stelle) */
-export async function logEntry(pkg: Pkg, op: string, detail: Record<string, unknown>): Promise<void> {
+export function logEntry(pkg: Pkg, op: string, detail: Record<string, unknown>): Promise<void> {
+  return serial(() => appendLog(pkg, op, detail))
+}
+
+async function appendLog(pkg: Pkg, op: string, detail: Record<string, unknown>): Promise<void> {
   const entry = { n: pkg.log.lines.length + 1, zeit: new Date().toISOString(), pruefer: pkg.reviewer, op, ...detail, vorher: pkg.log.last }
   const hash = await sha256(JSON.stringify(entry))
   pkg.log.lines.push(JSON.stringify({ ...entry, hash }))
@@ -236,14 +250,14 @@ async function route(pkg: Pkg, path: string, init?: RequestInit): Promise<Respon
     pkg.transcript = doc
     await save(pkg, 'bearbeitung/transkript.json', doc)
     const segs = (doc.segments ?? []) as { status?: string }[]
-    await logEntry(pkg, 'transkript', { bloecke: segs.length, geprueft: segs.filter((s) => s.status === 'checked').length })
+    await appendLog(pkg, 'transkript', { bloecke: segs.length, geprueft: segs.filter((s) => s.status === 'checked').length })
     return json(doc)
   }
   if (rest === '/markers' && method === 'PUT') {
     const markers = body().markers as AudioMarker[]
     pkg.project = { ...pkg.project, markers }
     await save(pkg, 'bearbeitung/marken.json', markers)
-    await logEntry(pkg, 'marken', { anzahl: markers.length, notizen: markers.filter((x) => x.kind === 'note').length })
+    await appendLog(pkg, 'marken', { anzahl: markers.length, notizen: markers.filter((x) => x.kind === 'note').length })
     return json(pkg.project)
   }
   const tr = /^\/tracks\/([^/]+)$/.exec(rest)
@@ -281,7 +295,8 @@ export function installFetch(pkg: Pkg, origFetch: typeof fetch): void {
     const i = u.pathname.indexOf('/api/')
     if (i < 0) return origFetch(input, init)
     try {
-      return await route(pkg, u.pathname.slice(i), init)
+      const write = (init?.method ?? 'GET').toUpperCase() !== 'GET'
+      return await (write ? serial(() => route(pkg, u.pathname.slice(i), init)) : route(pkg, u.pathname.slice(i), init))
     } catch (e) {
       return json({ detail: String((e as Error).message ?? e) }, 500)
     }

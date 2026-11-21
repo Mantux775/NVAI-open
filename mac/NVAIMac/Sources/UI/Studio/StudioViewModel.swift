@@ -278,7 +278,9 @@ final class StudioModel: ObservableObject {
             guard let j = await JobQueue.shared.job(job.id) else {
                 throw StudioError(t("Auftrag verschwunden.", "Job disappeared."))
             }
-            if j.status == "error" || j.status == "cancelled" { throw StudioError(j.error ?? j.status) }
+            if j.status == "error" || j.status == "cancelled" {
+                throw StudioError(j.error ?? (j.status == "cancelled" ? t("Abgebrochen.", "Cancelled.") : t("Fehlgeschlagen.", "Failed.")))
+            }
             guard j.status == "done" else { continue }
             await AssetStore.shared.tag(j.assetIDs, project: p.id)
             var out: [AssetRecord] = []

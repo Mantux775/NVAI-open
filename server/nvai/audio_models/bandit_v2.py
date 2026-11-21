@@ -9,6 +9,12 @@ from typing import Any
 
 import numpy as np
 
+try:
+    from . import L
+except ImportError:  # einzeln geladen, ohne das Paket audio_models
+    def L(de: str, en: str) -> str:
+        return de
+
 SAMPLE_RATE = 48000
 CHANNELS = 2               # Modell mono, jeder Kanal einzeln; gleiche Kanäle (Mono-Quelle) nur einmal
 STEMS = ["speech", "music", "effects"]
@@ -31,7 +37,7 @@ def _checkpoint(weights_dir: Path, variant: str) -> Path:
         return p
     found = sorted(weights_dir.glob("checkpoint-*.ckpt"))
     if not found:
-        raise SystemExit(f"Bandit v2: keine Gewichte in {weights_dir}")
+        raise SystemExit(L(f"Bandit v2: keine Gewichte in {weights_dir}", f"Bandit v2: no weights in {weights_dir}"))
     return found[0]
 
 

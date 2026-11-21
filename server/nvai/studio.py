@@ -35,7 +35,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
-from . import comfy, config, db, jobs, registry, workflows
+from . import comfy, config, db, i18n, jobs, registry, workflows
 from .i18n import t
 from .loras import compatible as lora_fits
 from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateSpeechRequest, GenerateVideoRequest, Job
@@ -49,6 +49,9 @@ VERSION = 1
 LANES = ("video", "voice", "music", "sfx")
 LANE_TRACK = {"video": "V1", "voice": "A1", "music": "A2", "sfx": "A2"}
 NEW_VOICE_TRACK = "+voice"  # Ziel „neue Spur Stimme“, bis _voice_track sie beim Übernehmen anlegt
+# Ziel „neue Spur Geräusche“ (seit 0.5.31): Musik und Geräusche teilten sich A2, jedes Geräusch schnitt beim Übernehmen
+# ein Loch in die Musik (die seit 0.5.30 den ganzen Film lang ist)
+NEW_SFX_TRACK = "+sfx"
 TRACKS = [{"id": "V2", "kind": "video"}, {"id": "V1", "kind": "video"},
           {"id": "A1", "kind": "audio"}, {"id": "A2", "kind": "audio"}]
 MARKER_KINDS = ("place", "transition", "chain", "audio", "ai", "note")
@@ -821,11 +824,12 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
     lane = a.get("lane", "video")
     if lane not in LANES:
         raise StudioError(t(f"Bahn {lane} gibt es nicht ({', '.join(LANES)}).", f"No lane {lane} ({', '.join(LANES)})."))
-    default = {"music": max(ticks(10), composition_duration(p)), "sfx": ticks(4)}.get(lane, ticks(5))
+    start = _time(a, "start", _lane_end(p, lane))
+    # Musik bis zum Ende des Films ab ihrem Start (vorher Filmlänge ab dem Start: zu lang, Export endete schwarz)
+    default = {"music": max(ticks(10), composition_duration(p) - max(0, start)), "sfx": ticks(4)}.get(lane, ticks(5))
     duration = _time(a, "duration", default)
     if duration <= 0:
         raise StudioError(t("Die Dauer muss größer als 0 sein.", "The duration must be greater than 0."))
-    start = _time(a, "start", _lane_end(p, lane))
     kind = a.get("kind") or ("video" if lane == "video" else "audio")
     if kind not in ("video", "image", "audio"):
         raise StudioError(t("kind ist video, image oder audio.", "kind is video, image or audio."))
@@ -851,11 +855,16 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
          "voice, voice_from, voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
+    before = (s["lane"], s["kind"])
     for key in SCENE_FIELDS:
         if key in a:
             s[key] = a[key]
     if s["lane"] not in LANES:
         raise StudioError(t(f"Bahn {s['lane']} gibt es nicht.", f"No lane {s['lane']}."))
+    if (s["lane"], s["kind"]) != before and "model_id" not in a:
+        # Art oder Bahn gewechselt (Video → Standbild, Musik → Geräusch): Das vorgewählte Modell passt nicht mehr (ein
+        # Bildauftrag mit LTX-2.5 scheiterte); wie beim Anlegen das beste der neuen Art, sonst das aktive
+        s["model_id"] = _best_model(s["lane"], s["kind"])
     if isinstance(a.get("params"), dict):
         s["params"].update(a["params"])
     start = _time(a, "start")
@@ -883,6 +892,8 @@ def _scene_delete(p: dict[str, Any], a: dict[str, Any]) -> None:
             other.pop("waiting_for")  # der wartende Task sieht das und endet
         if (other.get("params") or {}).get("audio_from") == s["id"]:
             other["params"]["audio_from"] = None
+        if (other.get("params") or {}).get("voice_from") == s["id"]:
+            other["params"]["voice_from"] = None  # sonst „Unbekannte Szene“ beim Erzeugen
     for c in p.get("characters") or []:
         if c.get("voice_from") == s["id"]:
             c["voice_from"] = None  # die Figur behält ihre übrigen Angaben zur Stimme
@@ -893,6 +904,9 @@ def _scene_take(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
     asset_id = a.get("asset_id", "")
     _media(p, asset_id)  # prueft, dass es das Asset gibt und es lesbar ist
+    # Fertige Aufträge der Szene erst einsammeln (ohne ihren Take zu wählen): sonst setzte der nächste Abgleich den
+    # neuesten Take und überschrieb diese Wahl
+    _collect_jobs(p, s, choose=False)
     if asset_id not in s["takes"]:
         s["takes"].append(asset_id)
     s["take"] = asset_id
@@ -1010,33 +1024,51 @@ def _track_or_highest(p: dict[str, Any], wanted: str | None, kind: str) -> str:
     return wanted if wanted in ids else max(ids, key=_track_number)
 
 
+def _lane_track_id(p: dict[str, Any], lane: str) -> str | None:
+    return next((tr["id"] for tr in p["tracks"] if tr.get("lane") == lane), None)
+
+
 def _voice_track_id(p: dict[str, Any]) -> str | None:
-    return next((tr["id"] for tr in p["tracks"] if tr.get("lane") == "voice"), None)
+    return _lane_track_id(p, "voice")
 
 
-def _voice_track(p: dict[str, Any]) -> str:
-    """Die Tonspur „Stimme“ für Sprecherzeilen (Nutzer 3.11.2026: „es sollte es in einer neuen audio track anlegen mit
-    namen Stimme (wieder entfernbar) weitere takes landen dann auch hier“). Fehlt sie, kommt sie unten als neue Tonspur
-    dazu; wer sie entfernt, bekommt sie beim nächsten Übernehmen einer Zeile wieder. Sind schon MAX_TRACKS Tonspuren da,
-    landet die Zeile wie bis 0.5.21 auf A1."""
-    have = _voice_track_id(p)
+def _lane_track(p: dict[str, Any], lane: str) -> str:
+    """Die Tonspur einer Bahn: „Stimme“ für Sprecherzeilen (Nutzer 3.11.2026: „es sollte es in einer neuen audio track
+    anlegen mit namen Stimme (wieder entfernbar) weitere takes landen dann auch hier“), seit 0.5.31 ebenso „Geräusche“.
+    Fehlt sie, kommt sie unten als neue Tonspur dazu; wer sie entfernt, bekommt sie beim nächsten Übernehmen wieder.
+    Sind schon MAX_TRACKS Tonspuren da, landet der Take wie früher auf A1 (Stimme) bzw. A2 (Geräusche)."""
+    have = _lane_track_id(p, lane)
     if have:
         return have
     audio = _tracks_of(p, "audio")
     if len(audio) >= MAX_TRACKS:
-        return _track_or_highest(p, LANE_TRACK["voice"], "audio")
-    track = {"id": f"A{len(audio) + 1}", "kind": "audio", "hidden": False, "muted": False, "lane": "voice"}
+        return _track_or_highest(p, LANE_TRACK[lane], "audio")
+    track = {"id": f"A{len(audio) + 1}", "kind": "audio", "hidden": False, "muted": False, "lane": lane}
     p["tracks"].append(track)
     _order_tracks(p)
     return track["id"]
 
 
+def _voice_track(p: dict[str, Any]) -> str:
+    return _lane_track(p, "voice")
+
+
+def _plain_track(p: dict[str, Any], wanted: str, kind: str) -> str:
+    """Wie _track_or_highest, aber ohne die Spuren einer Bahn („Stimme“, „Geräusche“): Nach dem Entfernen von A2 rückte
+    sonst die Spur „Stimme“ auf A2 nach, und Musik landete darauf."""
+    ids = [tr["id"] for tr in _tracks_of(p, kind) if not tr.get("lane")]
+    if not ids:
+        return _track_or_highest(p, wanted, kind)
+    return wanted if wanted in ids else max(ids, key=_track_number)
+
+
 def _track_info(p: dict[str, Any], track_id: str, new: bool = False) -> dict[str, Any]:
-    """Name der Spur für den Plan des Übernehmens: nur die Spur „Stimme“ hat einen."""
+    """Name der Spur für den Plan des Übernehmens: nur die Spuren „Stimme“ und „Geräusche“ haben einen."""
     tr = next((x for x in p["tracks"] if x["id"] == track_id), None)
-    if tr is None or tr.get("lane") != "voice":
+    names = {"voice": t("Stimme", "Voice"), "sfx": t("Geräusche", "Sounds")}
+    if tr is None or tr.get("lane") not in names:
         return {}
-    return {"track_name": t("Stimme", "Voice"), **({"track_new": True} if new else {})}
+    return {"track_name": names[tr["lane"]], **({"track_new": True} if new else {})}
 
 
 def _order_tracks(p: dict[str, Any]) -> None:
@@ -1467,13 +1499,34 @@ def _conform_targets(p: dict[str, Any]) -> dict[str, tuple[int, str]]:
         if m["kind"] == "audio" and m["params"].get("scene_id") in scenes:
             scenes[m["params"]["scene_id"]]["start"] = m["at"]
     voice = _voice_track_id(p) or NEW_VOICE_TRACK
-    targets = {s["id"]: (s["start"], voice if s["lane"] == "voice" else
-                         _track_or_highest(p, LANE_TRACK[s["lane"]], "video" if s["lane"] == "video" else "audio"))
+    sfx = _lane_track_id(p, "sfx") or NEW_SFX_TRACK
+    targets = {s["id"]: (s["start"], voice if s["lane"] == "voice" else sfx if s["lane"] == "sfx" else
+                         _plain_track(p, LANE_TRACK[s["lane"]], "video" if s["lane"] == "video" else "audio"))
                for s in p["scenes"]}
     for m in p["markers"]:
         if m["kind"] == "place" and m["params"].get("scene_id") in scenes:
             targets[m["params"]["scene_id"]] = (m["at"], _track_or_highest(p, m["params"].get("track") or "V2", "video"))
     return targets
+
+
+def _speaks(s: dict[str, Any]) -> bool:
+    """Eine Videoszene, die den Satz einer Sprecher-Szene als Ton nimmt (params.audio_from, seit 0.5.24)."""
+    return s["lane"] == "video" and s.get("kind") == "video" and bool((s.get("params") or {}).get("audio_from"))
+
+
+def _clip_length_for(p: dict[str, Any], s: dict[str, Any], start: int, at: int) -> int:
+    """Länge des Clips einer Szene auf der Zeitleiste: bis zum Szenenende. Spricht die Szene einen Satz, der länger ist
+    als sie, ist ihr Take länger (jobs: das Video folgt dem Ton); dann so lang wie der Take (docs/STUDIO.md: „the clip
+    gets the line's length“; bis 0.5.30 endete der Satz im Schnitt mitten im Wort)."""
+    length = start + s["duration"] - at
+    if _speaks(s):
+        try:
+            media = _media(p, s["take"])
+        except StudioError:
+            return length
+        if media["kind"] == "video" and media["duration"]:
+            length = max(length, int(media["duration"]))
+    return length
 
 
 def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
@@ -1487,6 +1540,7 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     q = copy.deepcopy(p)
     targets = _conform_targets(q)
     voice_before = _voice_track_id(q)
+    sfx_before = _lane_track_id(q, "sfx")
     in_edit = {c["asset_id"] for c in q["clips"]}
     items, without = [], 0
     spoken = _spoken_in_video(q)
@@ -1498,10 +1552,12 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
             continue
         start, track = targets[s["id"]]
         linked = [c for c in q["clips"] if c.get("scene_id") == s["id"]]
-        if not linked and track == NEW_VOICE_TRACK:
-            track = _voice_track(q)  # in der Kopie: die Spur, die das Übernehmen anlegen würde
+        if not linked and track in (NEW_VOICE_TRACK, NEW_SFX_TRACK):
+            # in der Kopie: die Spur, die das Übernehmen anlegen würde
+            track = _lane_track(q, "voice" if track == NEW_VOICE_TRACK else "sfx")
+        before = voice_before if s["lane"] == "voice" else sfx_before
         base = {"scene_id": s["id"], "title": s.get("title") or s.get("prompt", "")[:40] or s["id"],
-                "lane": s["lane"], "track": track, **_track_info(q, track, new=voice_before is None)}
+                "lane": s["lane"], "track": track, **_track_info(q, track, new=before is None)}
         if linked:
             changed = any(c["asset_id"] != s["take"] for c in linked)
             edited = len(linked) > 1 or not _untouched(q, s, start, linked[0])
@@ -1515,7 +1571,7 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
             continue
         try:
             at = _chain_start(q, track, s["take"], start)
-            clip = _new_clip(q, track, s["take"], at, start + s["duration"] - at, 0, s["id"])
+            clip = _new_clip(q, track, s["take"], at, _clip_length_for(q, s, start, at), 0, s["id"])
         except StudioError as exc:
             items.append({**base, "action": "error", "error": str(exc), "default": False})
             continue
@@ -1546,7 +1602,11 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
     # und eine später gelegte Vorlage überdeckt ihren Anfang nicht
     chained = {s["id"] for s in p["scenes"] if s.get("take") and _carry_ticks(s["take"])}
     spoken = _spoken_in_video(p)
-    for s in sorted(p["scenes"], key=lambda s: (s["id"] in chained, targets[s["id"]][0] if s["id"] in chained else 0)):
+    # Videos, die einen Satz sprechen, nach den übrigen: Ist der Satz länger als die Szene, überdeckt ihr Clip den
+    # Anfang der nächsten Szene, statt dass deren Clip den Satz abschneidet
+    speaking = {s["id"] for s in p["scenes"] if _speaks(s)}
+    for s in sorted(p["scenes"], key=lambda s: (s["id"] in chained, s["id"] in speaking,
+                                                targets[s["id"]][0] if s["id"] in chained else 0)):
         if not s.get("take") or (only is not None and s["id"] not in only):
             continue
         start, track = targets[s["id"]]
@@ -1565,11 +1625,13 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
             continue
         if track == NEW_VOICE_TRACK:
             track = _voice_track(p)  # erste Sprecherzeile im Schnitt: Spur „Stimme“ anlegen
+        elif track == NEW_SFX_TRACK:
+            track = _lane_track(p, "sfx")  # erstes Geräusch im Schnitt: Spur „Geräusche“ anlegen
         # Latent-Kette: Der Take beginnt mit der letzten Sekunde seiner Vorlage; er liegt um diese Bilder früher, der
         # Clip davor wird dort gekürzt und läuft unter einer Überblendung genau dieser Länge aus (studio_render).
         carry = _carry_ticks(s["take"])
         at = _chain_start(p, track, s["take"], start)
-        clip = _new_clip(p, track, s["take"], at, start + s["duration"] - at, 0, s["id"])
+        clip = _new_clip(p, track, s["take"], at, _clip_length_for(p, s, start, at), 0, s["id"])
         # Überdecken zählt erst ab dem Szenenanfang: die gewollte Überlappung ist kein Überschreiben
         covers = any(c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start for c in p["clips"])
         if covers and only is not None and s["id"] not in allowed:
@@ -1591,6 +1653,34 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- Abgleich mit den Aufträgen
 
+def _collect_jobs(p: dict[str, Any], s: dict[str, Any], choose: bool) -> bool:
+    """Fertige Aufträge einer Szene als Takes eintragen. choose: der neueste wird gewählt (Abgleich); ohne bleibt die
+    Wahl, und Fehler alter Aufträge zählen nicht mehr (scene.take). Liefert, ob sich etwas geändert hat."""
+    changed = False
+    pending = []
+    for job_id in s.get("jobs", []):
+        job = db.get_job(job_id)
+        if job is None or job.status in ("queued", "running"):
+            if job is not None:
+                pending.append(job_id)
+            continue
+        changed = True
+        if job.status == "done":
+            for asset_id in job.asset_ids:
+                if asset_id not in s["takes"]:
+                    s["takes"].append(asset_id)
+            if job.asset_ids and choose:
+                s["take"] = job.asset_ids[-1]
+                s["error"] = None
+                _fit_voice(p, s)
+        elif job.status == "error" and choose:
+            s["error"] = job.error
+    if pending != s.get("jobs", []):
+        s["jobs"] = pending
+        changed = True
+    return changed
+
+
 def refresh(pid: str) -> dict[str, Any]:
     """Fertige Erzeugungsaufträge als Takes eintragen (auch wenn Claude per MCP erzeugen ließ). Kein Befehl:
     landet nicht auf dem Rückgängig-Stapel."""
@@ -1598,26 +1688,7 @@ def refresh(pid: str) -> dict[str, Any]:
         p = load(pid)
         changed = False
         for s in p["scenes"]:
-            pending = []
-            for job_id in s.get("jobs", []):
-                job = db.get_job(job_id)
-                if job is None or job.status in ("queued", "running"):
-                    if job is not None:
-                        pending.append(job_id)
-                    continue
-                changed = True
-                if job.status == "done":
-                    for asset_id in job.asset_ids:
-                        if asset_id not in s["takes"]:
-                            s["takes"].append(asset_id)
-                    if job.asset_ids:
-                        s["take"] = job.asset_ids[-1]
-                        s["error"] = None
-                        _fit_voice(p, s)
-                elif job.status == "error":
-                    s["error"] = job.error
-            if pending != s.get("jobs", []):
-                s["jobs"] = pending
+            if _collect_jobs(p, s, choose=True):
                 changed = True
             # Takes, deren Datei gelöscht wurde (Material oder Verlauf), fallen weg
             alive = [a for a in s["takes"] if db.get_asset(a) is not None]
@@ -1725,8 +1796,10 @@ def _publish_badge_model(asset_ids: list[str]) -> str:
 
 
 def _known_model(model_id: str | None, kind: str) -> str | None:
-    """Das Modell der Szene, wenn es es noch gibt, sonst das aktive (etwa nach dem Entfernen von ACE-Step)."""
-    if model_id and registry.get_entry(model_id) is not None:
+    """Das Modell der Szene, wenn es es noch gibt und zur Art passt (nach einem Wechsel der Art stand sonst ein
+    Videomodell an einer Standbild-Szene), sonst das aktive (etwa nach dem Entfernen von ACE-Step)."""
+    entry = registry.get_entry(model_id) if model_id else None
+    if entry is not None and entry.get("kind") == kind:
         return model_id
     return registry.get_active_model(kind)
 
@@ -1959,8 +2032,10 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
     Eine Anschluss-Szene, deren Vorlage gerade erst entsteht, wartet darauf und wird danach abgeschickt."""
     p = await asyncio.to_thread(refresh, pid)
     _resolve_chain_markers(p)
-    wanted = [s for s in p["scenes"] if not s.get("waiting_for")
-              and (s["id"] in scene_ids if scene_ids else not s.get("take") and not s.get("jobs"))]
+    # Auch genannte Szenen nur ohne laufenden Auftrag (Rechtsklick „Erzeugen“ auf eine Auswahl schickte sonst laufende
+    # Szenen doppelt, bei LTX-2.5 mit DFR rund 13 min)
+    wanted = [s for s in p["scenes"] if not s.get("waiting_for") and not s.get("jobs")
+              and (s["id"] in scene_ids if scene_ids else not s.get("take"))]
     # Reihenfolge in der GPU-Schlange: Ton und Bilder zuerst (kurz, schnelle Rückmeldung), dann Videos nach Modell,
     # Anschluss-Szenen zuletzt. So folgt ein Anschluss direkt auf seine Vorlage, ohne dass das Videomodell
     # dazwischen für ein Bild- oder Tonmodell entladen wird.
@@ -2194,7 +2269,7 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
     # MKV (FFV1) und ProRes spielt kein Browser: dieselben Bilder zusätzlich als H.264-Vorschau
     preview = config.ASSET_DIR / f"{stem}.preview.mp4" if out.suffix.lower() in NO_BROWSER else None
     plan_path = config.DATA_DIR / "studio" / f"{job.id}.plan.json"
-    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    plan_path.write_text(json.dumps({**plan, "lang": i18n.lang()}), encoding="utf-8")  # Stufen in der Sprache
     script = Path(__file__).with_name("studio_render.py")
     proc = await asyncio.create_subprocess_exec(
         str(comfy.comfy_python()), "-I", str(script), str(plan_path), str(out), *([str(preview)] if preview else []),
@@ -2512,9 +2587,11 @@ def _hints(p: dict[str, Any], s: dict[str, Any], vram: float | None) -> list[str
 
 START_IMAGE_FAMILIES = ("flux3", "qwenimage", "krea2", "moss_image")  # Reihenfolge wie wizard.ROLES["image"]
 FULL_FRAME = "The picture fills the whole frame from edge to edge."
-_SOUND_WORDS = re.compile(r"\b(sound\w*|audio|hear\w*|voices?|says|said|say|speaks?|speaking|talks?|tells|music\w*|"
-                          r"nois\w*|silen\w*|quiet\w*|loud\w*|whisper\w*|shout\w*|sings?|singing|murmur\w*|rumbl\w*|"
-                          r"ambient|narrat\w*|speech)\b", re.IGNORECASE)
+# Nur Wörter, die allein vom Ton sprechen: „heart“, „musician“, „quiet square“ oder „ambient light“ beschreiben das Bild
+# (bis 0.5.30 fielen solche Sätze weg, und das Startbild hatte kein Motiv mehr)
+_SOUND_WORDS = re.compile(r"\b(sounds?|sounding|audio|hears?|heard|hearing|voices?|says|said|say|speaks?|speaking|spoken|"
+                          r"talks?|talking|tells|music|noises?|noisy|silence|loud|loudly|whisper\w*|shout\w*|sings?|"
+                          r"singing|murmur\w*|rumbl\w*|narrator|narration|speech)\b", re.IGNORECASE)
 
 
 def _still_prompt(text: str) -> str:

@@ -6,7 +6,8 @@ import WhisperKit
 /// `audio_forensic._transcribe` unter Windows:
 /// 1. Sprachkarte je Spur mit Silero VAD (`.vad`, je 0,1 s), sonst die grobe Aktivität (`.act`),
 /// 2. Abschnitte planen: Mikrofone gemeinsam (je Abschnitt die Spur mit der höchsten Sprachwahrscheinlichkeit, die
-///    zweitbeste als Gegenprobe), Lücken unter 0,6 s überbrückt, höchstens 28 s, Spurwechsel nach 2 s klarem Vorsprung,
+///    zweitbeste als Gegenprobe), Funkkanäle (Kategorie VHF) je für sich, Lücken unter 0,6 s überbrückt, höchstens 28 s,
+///    Spurwechsel nach 2 s klarem Vorsprung,
 /// 3. Tor: Silero prüft jeden Abschnitt und kürzt ihn auf die Sprachstrecken (ohne Tor erfand Whisper auf Wind Sätze),
 /// 4. Whisper large-v3 (WhisperKit, Core ML) je Abschnitt, mit Wortzeiten,
 /// 5. verworfen wird „keine Sprache“ (no_speech > 0,6 und unsicher), Leeres und bekannte Erfindungen; Wiederholungs-
@@ -23,15 +24,6 @@ enum ForensicTranscribe {
         var region: [Double]? = nil
         /// Sprache vorgeben (ISO-Code); nil = je Abschnitt erkennen
         var language: String? = nil
-    }
-
-    struct Region {
-        var id: String
-        var start: Double
-        var end: Double
-        var track: String
-        var second: String?
-        var vad: Double?
     }
 
     struct Outcome: Sendable {
@@ -88,7 +80,9 @@ enum ForensicTranscribe {
             let url = fall.appendingPathComponent("spec/\(tid).\(useVAD ? "vad" : "act")")
             acts.append([UInt8]((try? Data(contentsOf: url)) ?? Data()))
         }
-        let planned = plan(tids: tids, acts: acts, threshold: useVAD ? 128 : 90, region: req.region)
+        // Funkkanäle (VHF) für sich: ein Funkspruch neben einem Gespräch auf der Brücke kommt sonst nicht an Whisper
+        let radio = radioTracks(project["tracks"] as? [[String: Any]] ?? [])
+        let planned = plan(tids: tids, acts: acts, radio: radio, threshold: useVAD ? 128 : 90, region: req.region)
         let speechSeconds = planned.reduce(0) { $0 + $1.end - $1.start }
 
         // 3. Tor
@@ -102,7 +96,9 @@ enum ForensicTranscribe {
                 for tid in [r.track] + (r.second.map { [$0] } ?? []) {
                     spans = try vad.speechSpans(try Audio16k.read(wav(tid), start: r.start, end: r.end))
                     if !spans.isEmpty {
-                        if tid != r.track { region = Region(id: r.id, start: r.start, end: r.end, track: tid, second: r.track) }
+                        if tid != r.track {
+                            region = Region(id: r.id, start: r.start, end: r.end, track: tid, second: r.track, kind: r.kind)
+                        }
                         break
                     }
                 }
@@ -121,7 +117,7 @@ enum ForensicTranscribe {
                     for g in groups {
                         todo.append(Region(id: "\(region.id)+\(String(format: "%.1f", g[0]))", start: round2(region.start + g[0]),
                                            end: round2(region.start + g[1]), track: region.track, second: region.second,
-                                           vad: (g[2] * 1000).rounded() / 1000))
+                                           vad: (g[2] * 1000).rounded() / 1000, kind: region.kind))
                     }
                 }
                 if k % 10 == 0 {
@@ -162,7 +158,7 @@ enum ForensicTranscribe {
                     }
                     let id = "ai" + Insecure.SHA1.hash(data: Data(r.id.utf8)).map { String(format: "%02x", $0) }.joined().prefix(10)
                     segments.append([
-                        "id": id, "start": r.start, "end": r.end, "track": r.track, "speaker": "", "kind": "speech",
+                        "id": id, "start": r.start, "end": r.end, "track": r.track, "speaker": "", "kind": r.kind,
                         "text": x.text, "lang": x.lang, "translation": [String: Any](),
                         "conf": lp.map { (exp($0) * 1000).rounded() / 1000 } ?? NSNull(), "status": "draft", "origin": "ai",
                         "note": flags.joined(separator: ", "), "words": words, "second": r.second ?? NSNull(),
@@ -182,7 +178,7 @@ enum ForensicTranscribe {
         let useEdited = FileManager.default.fileExists(atPath: edited.path)
         var doc = ForensicJSON.object(useEdited ? edited : delivered)
             ?? ["version": 1, "source_lang": "", "target_lang": "de", "speakers": [Any](), "segments": [Any]()]
-        let region = req.region ?? [0, ((project["duration"] as? NSNumber)?.doubleValue ?? 0) + 1]
+        let region = req.region.flatMap { $0.count >= 2 ? $0 : nil } ?? [0, ((project["duration"] as? NSNumber)?.doubleValue ?? 0) + 1]
         let group = Set(tids)
         let old = doc["segments"] as? [[String: Any]] ?? []
         let keep = old.filter { s in
@@ -192,9 +188,9 @@ enum ForensicTranscribe {
             return !stale
         }
         let blocking = keep.filter { $0["status"] as? String == "checked" || ($0["pinned"] as? Bool ?? false && $0["origin"] as? String == "ai") }
-        let fresh = segments.filter { s in
-            !blocking.contains { c in num(c["start"]) < num(s["end"]) && num(c["end"]) > num(s["start"]) }
-        }
+        // nicht über einen geprüften oder festgelegten Block derselben Stelle legen (wie same_place unter Windows): gleiche
+        // Spur oder beide Mikrofone; ein Funkspruch neben einem geprüften Gespräch kommt also hinzu (und umgekehrt)
+        let fresh = segments.filter { s in !blocking.contains { c in samePlace(c, s, radio: radio) } }
         doc["segments"] = (keep + fresh).sorted { num($0["start"]) < num($1["start"]) }
         let source = req.language ?? langs.max { $0.value < $1.value }?.key ?? (doc["source_lang"] as? String ?? "")
         doc["source_lang"] = source
@@ -247,40 +243,82 @@ enum ForensicTranscribe {
                        target: useEdited ? "bearbeitung" : "fall")
     }
 
+    // MARK: Abschnitte planen (wie plan_regions)
+    // Reine Funktionen ohne WhisperKit: Das Prüfprogramm übersetzt den Teil von hier bis „Wiederholungsschleifen“ allein.
+
+    struct Region {
+        var id: String
+        var start: Double
+        var end: Double
+        var track: String
+        var second: String?
+        var vad: Double?
+        /// „speech“ (Mikrofone) oder „radio“ (Funkkanal, Kategorie VHF), wie `kind` der Blöcke unter Windows
+        var kind = "speech"
+    }
+
     static func round2(_ x: Double) -> Double { (x * 100).rounded() / 100 }
     static func num(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? 0 }
 
-    // MARK: Abschnitte planen (wie plan_regions)
+    /// Funkkanäle eines Falls: Spuren mit der Kanal-Kategorie VHF (wie `radio()` in `audio_forensic._transcribe`).
+    static func radioTracks(_ tracks: [[String: Any]]) -> Set<String> {
+        Set(tracks.compactMap { tr -> String? in
+            guard let id = tr["id"] as? String,
+                  ((tr["channel"] as? [String: Any])?["category"] as? String ?? "").uppercased() == "VHF" else { return nil }
+            return id
+        })
+    }
 
-    static func plan(tids: [String], acts: [[UInt8]], threshold: Float, region: [Double]?, maxSeconds: Double = 28) -> [Region] {
+    /// Sperrt der geprüfte (oder festgelegte) Block `c` den neuen Block `s`? Wie `same_place` unter Windows: nur bei
+    /// zeitlicher Überlappung und auf derselben Spur oder wenn beide auf Mikrofonen liegen (die hören dasselbe Gespräch).
+    static func samePlace(_ c: [String: Any], _ s: [String: Any], radio: Set<String>) -> Bool {
+        let ct = c["track"] as? String ?? ""
+        let st = s["track"] as? String ?? ""
+        let bothMics = !radio.contains(ct) && !radio.contains(st)
+        return (ct == st || bothMics) && num(c["start"]) < num(s["end"]) && num(c["end"]) > num(s["start"])
+    }
+
+    /// Mikrofone gemeinsam (je Abschnitt die Spur mit der höchsten Aktivität, die zweitbeste als Gegenprobe), Funkkanäle
+    /// (`radio`) je für sich; vorher lagen alle Spuren in einer Gruppe, und neben einem Funkspruch ging das Gespräch auf
+    /// der Brücke (oder umgekehrt) gar nicht an Whisper.
+    static func plan(tids: [String], acts: [[UInt8]], radio: Set<String> = [], threshold: Float, region: [Double]?,
+                     maxSeconds: Double = 28) -> [Region] {
         let rate = Double(ForensicFormat.actRate)
         let n = acts.map(\.count).max() ?? 0
         var lo = 0
         var hi = n
-        if let region {
-            lo = max(0, Int(region[0] * rate))
-            hi = min(n, Int((region[1] * rate).rounded(.up)))
+        if let region, region.count >= 2, region[0].isFinite, region[1].isFinite {
+            lo = Int(min(max(region[0] * rate, 0), Double(n)))
+            hi = Int(min(max((region[1] * rate).rounded(.up), 0), Double(n)))
         }
         guard hi > lo else { return [] }
         let width = hi - lo
-        // Matrix Spur × Zeit (fehlende Werte 0)
-        let sub: [[Float]] = acts.map { a in (lo..<hi).map { $0 < a.count ? Float(a[$0]) : 0 } }
-        let curve = (0..<width).map { i in sub.map { $0[i] }.max() ?? 0 }
+        let count = min(tids.count, acts.count)
+        let mics = (0..<count).filter { !radio.contains(tids[$0]) }
+        let groups = [mics] + (0..<count).filter { radio.contains(tids[$0]) }.map { [$0] }
         var out: [Region] = []
-        for (a, b) in runs(curve.map { $0 > threshold }, gap: 6, minLen: 4) {
-            for (s0, e0) in split(a, b, curve: curve, step: Int(maxSeconds * rate)) {
-                for (s, e) in switchParts(sub, s0, e0) {
-                    let seg = sub.map { row -> Float in
-                        let slice = row[s..<e]
-                        return slice.isEmpty ? 0 : slice.reduce(0, +) / Float(slice.count)
+        for grp in groups where !grp.isEmpty {
+            // Matrix Spur × Zeit dieser Gruppe (fehlende Werte 0)
+            let sub: [[Float]] = grp.map { k in
+                let a = acts[k]
+                return (lo..<hi).map { $0 < a.count ? Float(a[$0]) : 0 }
+            }
+            let curve = (0..<width).map { i in sub.map { $0[i] }.max() ?? 0 }
+            for (a, b) in runs(curve.map { $0 > threshold }, gap: 6, minLen: 4) {
+                for (s0, e0) in split(a, b, curve: curve, step: Int(maxSeconds * rate)) {
+                    for (s, e) in switchParts(sub, s0, e0) {
+                        let seg = sub.map { row -> Float in
+                            let slice = row[s..<e]
+                            return slice.isEmpty ? 0 : slice.reduce(0, +) / Float(slice.count)
+                        }
+                        let order = seg.indices.sorted { seg[$0] > seg[$1] }
+                        let best = tids[grp[order[0]]]
+                        let second = order.count > 1 ? tids[grp[order[1]]] : nil
+                        let t0 = max(0, Double(lo + s) / rate - 0.25)
+                        let t1 = Double(lo + e) / rate + 0.25
+                        out.append(Region(id: "\(best)@\(String(format: "%.1f", t0))", start: round2(t0), end: round2(t1),
+                                          track: best, second: second, vad: nil, kind: radio.contains(best) ? "radio" : "speech"))
                     }
-                    let order = seg.indices.sorted { seg[$0] > seg[$1] }
-                    let best = tids[order[0]]
-                    let second = order.count > 1 ? tids[order[1]] : nil
-                    let t0 = max(0, Double(lo + s) / rate - 0.25)
-                    let t1 = Double(lo + e) / rate + 0.25
-                    out.append(Region(id: "\(best)@\(String(format: "%.1f", t0))", start: round2(t0), end: round2(t1),
-                                      track: best, second: second, vad: nil))
                 }
             }
         }
@@ -458,7 +496,7 @@ actor ForensicASR {
     var loaded: Bool { kit != nil }
 
     func transcribe(_ audio: [Float], language: String?) async throws -> Result {
-        guard let kit else { throw ForensicError("Whisper nicht geladen") }
+        guard let kit else { throw ForensicError(t("Whisper ist nicht geladen.", "Whisper is not loaded.")) }
         let options = DecodingOptions(verbose: false, task: .transcribe, language: language, temperature: 0,
                                       temperatureFallbackCount: 5, usePrefillPrompt: true, detectLanguage: language == nil,
                                       skipSpecialTokens: true, withoutTimestamps: false, wordTimestamps: true,

@@ -4,7 +4,9 @@ Referenz ist die Python-Brücke in diesem Repository (`bridge/`). Der Swift-Port
 Verhalten nach und prüft sich gegen dieselben Golden-Daten (`golden/*.json`). Alle Angaben zum
 Steuerkanal sind an **PhotoCraft 0.10.0** unter Windows 11 und macOS 26.6 (Mac mini M1) gemessen
 (`tools/chain_probe.py`, 18.10.2026). Beide Plattformen verhalten sich in allen 46 Prüfschritten
-gleich; exportierte PNGs sind bitgleich.
+gleich; exportierte PNGs sind bitgleich. Am 21.11.2026 mit
+**PhotoCraft 0.23.1** auf beiden Plattformen erneut geprüft: Steuerkette und Zusatzprobe Restaurieren/Erweitern
+bestanden.
 
 | Teil | Python (Windows) | Swift (macOS) |
 |---|---|---|
@@ -77,7 +79,7 @@ PhotoCraft --control 47821
 - **PhotoCraft finden:** `PhotoCraftLaunch.installedApp()` sucht über die Bundle-ID
   `ai.storyteller.photocraft` (Launch Services, egal in welchem Ordner) und fällt auf
   `/Applications/PhotoCraft.app` zurück. Die Version kommt aus `CFBundleShortVersionString`.
-  Getestet ist 0.10.0 (`testedVersion`), ältere bekommen einen Hinweis. Fehlt PhotoCraft, zeigt
+  Getestet ist 0.23.1 (`testedVersion`, vorher 0.10.0), ältere bekommen einen Hinweis. Fehlt PhotoCraft, zeigt
   die App „PhotoCraft ist nicht installiert“ mit Knopf zu `downloadURL`. Das ist die neueste
   GitHub-Veröffentlichung, Datei `…-macos-universal.dmg`; getartcraft.com verlinkte noch 0.7.0.
   Windows macht dasselbe über App Paths (`bridge/config.py`).

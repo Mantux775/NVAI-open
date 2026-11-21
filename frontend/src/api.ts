@@ -1200,6 +1200,8 @@ export const api = {
   audioCreate: (o: { asset_id?: string; path?: string; name?: string }) =>
     req<AudioProject>('/api/audio/projects', { method: 'POST', body: JSON.stringify(o) }),
   audioProject: (id: string) => req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}`),
+  /** Einlesen wiederholen, etwa nach einem Abbruch oder Fehler (seit 0.5.31; VDR-Fälle lesen ihren Export neu) */
+  audioPrepare: (id: string) => req<Job>(`/api/audio/projects/${encodeURIComponent(id)}/prepare`, { method: 'POST' }),
   audioProjectUpdate: (id: string, o: { name?: string }) =>
     req<AudioProject>(`/api/audio/projects/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(o) }),
   audioProjectDelete: (id: string) => req<{ ok: boolean; trash: string }>(`/api/audio/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),

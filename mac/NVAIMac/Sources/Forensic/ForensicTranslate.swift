@@ -102,8 +102,12 @@ enum ForensicTranslate {
         let target = req.target ?? (doc["target_lang"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "de"
         let source = doc["source_lang"] as? String ?? ""
         var segments = doc["segments"] as? [[String: Any]] ?? []
+        // Nur KI-Entwürfe: Geprüfte und von Hand angelegte oder geänderte Blöcke bleiben, wie sie sind (unter Windows
+        // übersetzt nur der Lauf, der die Blöcke gerade erkannt hat; die Prüf-App setzt origin auf „human“, sobald
+        // jemand Text, Übersetzung oder Notiz ändert). Vorher überschrieb „Übersetzen“ auch geprüfte Übersetzungen.
         let todo = segments.indices.filter { i in
             let s = segments[i]
+            guard s["origin"] as? String == "ai", s["status"] as? String != "checked" else { return false }
             let text = (s["text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty, (s["kind"] as? String) != "note" else { return false }
             let have = ((s["translation"] as? [String: Any])?[target] as? String ?? "")
@@ -118,15 +122,20 @@ enum ForensicTranslate {
         let srcName = Self.languageName(source, maritime: maritime)
         let tgtName = Self.names[target] ?? target
         let stages = target == "en" ? 1 : 2
-        let total = Double(todo.count * stages)
+        // 1. nach Englisch nur, wo noch keins steht: Ein vorhandener englischer Entwurf bleibt (vorher wurde er bei jedem
+        // Lauf überschrieben); ist Englisch selbst das Ziel, gilt die Auswahl oben (mit `all` alle KI-Entwürfe neu).
+        let stage1 = todo.filter { i in
+            let en = (segments[i]["translation"] as? [String: Any])?["en"] as? String ?? ""
+            return target == "en" || en.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let total = Double(max(1, stage1.count + (stages == 2 ? todo.count : 0)))
         var done = 0.0
         var untranslated = 0
         let batch = 12
-        // 1. nach Englisch
         let sysEN = Self.systemEN(srcName, maritime: maritime, examples: source == "tl" || (source.isEmpty && maritime))
-        for start in stride(from: 0, to: todo.count, by: batch) {
+        for start in stride(from: 0, to: stage1.count, by: batch) {
             if isCancelled() { throw CancellationError() }
-            let part = Array(todo[start..<min(todo.count, start + batch)])
+            let part = Array(stage1[start..<min(stage1.count, start + batch)])
             let need = part.filter { (segments[$0]["lang"] as? String) != "en" }
             let res = need.isEmpty ? [] : try await llm.lines(system: sysEN, need.map { segments[$0]["text"] as? String ?? "" })
             var byIndex: [Int: String] = [:]
@@ -141,9 +150,10 @@ enum ForensicTranslate {
                 if cut { addFlag(&segments[i], "repetition") }
             }
             done += Double(part.count)
-            progress(0.05 + 0.93 * done / total, t("übersetzen nach Englisch \(min(Int(done), todo.count))/\(todo.count)",
-                                                    "translating to English \(min(Int(done), todo.count))/\(todo.count)"))
+            progress(0.05 + 0.93 * done / total, t("übersetzen nach Englisch \(min(Int(done), stage1.count))/\(stage1.count)",
+                                                    "translating to English \(min(Int(done), stage1.count))/\(stage1.count)"))
         }
+        var done2 = 0
         // 2. in die Zielsprache, Original mit englischem Entwurf
         if stages == 2 {
             let sysT = Self.systemTarget(srcName, tgtName, target, maritime: maritime,
@@ -177,8 +187,9 @@ enum ForensicTranslate {
                     if cut { addFlag(&segments[i], "repetition") }
                 }
                 done += Double(part.count)
-                progress(0.05 + 0.93 * done / total, t("übersetzen nach \(tgtName) \(Int(done) - todo.count)/\(todo.count)",
-                                                        "translating to \(tgtName) \(Int(done) - todo.count)/\(todo.count)"))
+                done2 += part.count
+                progress(0.05 + 0.93 * done / total, t("übersetzen nach \(tgtName) \(done2)/\(todo.count)",
+                                                        "translating to \(tgtName) \(done2)/\(todo.count)"))
             }
         }
         await llm.unload()
@@ -209,7 +220,12 @@ enum ForensicTranslate {
                        seconds: Date().timeIntervalSince(started), model: modelName)
     }
 
+    /// Vermerk der KI („repetition“, „untranslated“) an einen KI-Entwurf. Bei diesen Blöcken ist `note` das Feld der
+    /// Vermerke: Whisper schreibt seine dorthin, Windows ebenso (`"note": ", ".join(flags)`), und die Prüf-App liest sie
+    /// nur bei origin „ai“ aus `note`. Eine Notiz von Prüfern macht den Block zu „human“; solche Blöcke übersetzt dieser
+    /// Lauf nicht mehr (`todo`), ihre Notiz bleibt also unberührt.
     static func addFlag(_ s: inout [String: Any], _ flag: String) {
+        guard s["origin"] as? String == "ai" else { return }
         var parts = (s["note"] as? String ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if !parts.contains(flag) { parts.append(flag) }
         s["note"] = parts.joined(separator: ", ")
@@ -344,7 +360,7 @@ actor ForensicLLM {
     }
 
     func complete(system: String, user: String, maxTokens: Int) async throws -> String {
-        guard let container else { throw ForensicError("Sprachmodell nicht geladen") }
+        guard let container else { throw ForensicError(t("Das Sprachmodell ist nicht geladen.", "The language model is not loaded.")) }
         let session = ChatSession(container, instructions: system,
                                   generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0),
                                   additionalContext: ["enable_thinking": false])

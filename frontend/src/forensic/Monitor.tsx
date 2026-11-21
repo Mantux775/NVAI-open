@@ -5,7 +5,7 @@ import {
   type VdrSeries,
 } from '../api'
 import { t } from '../i18n'
-import { clockAt, EVENT_COLOR } from './Lanes'
+import { clockAt, EVENT_COLOR, EVENT_LABEL } from './Lanes'
 
 // Monitor der Ton-Forensik: zeigt zum Abspielkopf das Bild (Video der Aufnahme oder Radar-/ECDIS-Bild des
 // Schiffsschreibers) und die Daten wie die Wiedergabe-Programme der Hersteller: Fahrstand (Conning), serielle Rohdaten,
@@ -222,7 +222,7 @@ function EventList({ events, time, origin, onSeek }: { events: VdrEvent[]; time:
       <div className="lt-toolbar">
         {kinds.map((k) => (
           <label key={k} className="check small"><input type="checkbox" checked={!off[k]} onChange={(e) => setOff({ ...off, [k]: !e.target.checked })} />
-            <span className="fx-dot" style={{ background: EVENT_COLOR[k] ?? '#aaa' }} />{k} ({events.filter((e) => e.kind === k).length})</label>
+            <span className="fx-dot" style={{ background: EVENT_COLOR[k] ?? '#aaa' }} />{EVENT_LABEL[k] ?? k} ({events.filter((e) => e.kind === k).length})</label>
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Suchen …', 'Search …')} />
         <button className="btn small ghost" onClick={() => toRow(nowIdx)} title={t('Liste zur Abspielposition', 'Scroll the list to the playhead')}>⌖ {t('Abspielposition', 'Playhead')}</button>

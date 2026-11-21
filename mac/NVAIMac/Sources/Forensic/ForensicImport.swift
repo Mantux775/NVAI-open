@@ -35,11 +35,14 @@ enum ForensicImport {
         let fm = FileManager.default
         let root = ForensicCases.directory
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
-        let work = root.appendingPathComponent(".neu-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        // gesperrter Arbeitsordner: Bleibt er nach einem Absturz liegen, räumt ihn der nächste Start weg
+        let lock = try ForensicCases.Work(in: root)
+        defer { lock.finish() }
+        let work = lock.url
         let fall = work.appendingPathComponent("fall", isDirectory: true)
-        try fm.createDirectory(at: fall, withIntermediateDirectories: true)
-        try fm.createDirectory(at: work.appendingPathComponent("bearbeitung", isDirectory: true), withIntermediateDirectories: true)
         do {
+            try fm.createDirectory(at: fall, withIntermediateDirectories: true)
+            try fm.createDirectory(at: work.appendingPathComponent("bearbeitung", isDirectory: true), withIntermediateDirectories: true)
             let url = try await build(req, work: work, progress: progress, isCancelled: isCancelled)
             return url
         } catch {
@@ -78,11 +81,18 @@ enum ForensicImport {
                 guard let desc = try await track.load(.formatDescriptions).first,
                       let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(desc)?.pointee else { continue }
                 let (codec, kind) = describe(asbd)
-                audio.append(SourceAudio(track: track, sr: Int(asbd.mSampleRate.rounded()), channels: Int(asbd.mChannelsPerFrame),
+                // eine beschädigte Angabe (unendlich, riesig) nicht mit Int() umrechnen: 0 gilt unten als unbekannt
+                let rate = asbd.mSampleRate.isFinite && asbd.mSampleRate > 0 && asbd.mSampleRate < 1e7 ? Int(asbd.mSampleRate.rounded()) : 0
+                audio.append(SourceAudio(track: track, sr: rate, channels: Int(asbd.mChannelsPerFrame),
                                          codec: codec, wavKind: kind))
             }
             guard !audio.isEmpty, audio.allSatisfy({ $0.sr > 0 && $0.channels > 0 }) else {
                 throw ForensicError(t("„\(url.lastPathComponent)“: Tonformat unbekannt.", "“\(url.lastPathComponent)”: unknown audio format."))
+            }
+            // gleich hier statt erst nach der Prüfsumme der Quelle (dieselbe Grenze prüft `ChannelSink`)
+            if let bad = audio.first(where: { !ChannelSink.rates.contains($0.sr) }) {
+                throw ForensicError(t("„\(url.lastPathComponent)“: Abtastrate \(bad.sr) Hz wird nicht unterstützt (1000 bis 768 000 Hz).",
+                                      "“\(url.lastPathComponent)”: sample rate \(bad.sr) Hz is not supported (1000 to 768,000 Hz)."))
             }
             let video = try? await asset.loadTracks(withMediaType: .video).first
             let duration = (try? await asset.load(.duration)).map { CMTimeGetSeconds($0) } ?? 0
@@ -173,7 +183,8 @@ enum ForensicImport {
             try ForensicJSON.data(act, indent: nil).write(to: data.appendingPathComponent("act_\(tid).json"), options: .atomic)
         }
 
-        // 4. Video: das erste, das WebKit abspielen kann (APFS legt nur einen Verweis an, kein zweites Mal die Bytes)
+        // 4. Video: das erste, das WebKit abspielen kann (auf demselben APFS-Datenträger nur ein Verweis, sonst eine Kopie
+        // mit Platzprüfung und Abbruch, `copyVideo`)
         var videoName: String?
         var videoInfo: [String: Any]?
         var known: [String: String] = [:]
@@ -193,7 +204,7 @@ enum ForensicImport {
                 let dir = fall.appendingPathComponent("video", isDirectory: true)
                 try fm.createDirectory(at: dir, withIntermediateDirectories: true)
                 let target = dir.appendingPathComponent(vname)
-                try fm.copyItem(at: item.url, to: target)
+                try copyVideo(item.url, to: target, isCancelled: isCancelled)
                 let bytes = (try? target.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                 videoName = vname
                 if let sha = sourceHash[item.url] { known["fall/video/\(vname)"] = sha }
@@ -247,6 +258,45 @@ enum ForensicImport {
         try fm.moveItem(at: work, to: target)
         progress(1, t("fertig", "done"))
         return target
+    }
+
+    /// Video in den Fall. Auf demselben Datenträger mit Klonen (APFS) legt `copyItem` nur einen Verweis an, das kostet
+    /// keinen Platz. Sonst (externe Platte, Netz) eine Kopie in Blöcken zu 8 MB: vorher Platz für die ganze Datei samt
+    /// Rückhalt für macOS, dabei Abbruch und Speicherwächter (`isCancelled`). Vorher kopierte `copyItem` auch dann ohne
+    /// beides, ein großes Video füllte den Datenträger.
+    static func copyVideo(_ source: URL, to target: URL, isCancelled: () -> Bool) throws {
+        let fm = FileManager.default
+        let keys: Set<URLResourceKey> = [.volumeIdentifierKey, .volumeSupportsFileCloningKey]
+        let from = try? source.resourceValues(forKeys: keys)
+        let to = try? target.deletingLastPathComponent().resourceValues(forKeys: keys)
+        if let a = from?.volumeIdentifier, let b = to?.volumeIdentifier, a.isEqual(b), to?.volumeSupportsFileCloning == true {
+            try fm.copyItem(at: source, to: target)
+            return
+        }
+        let size = Int64((try? source.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        if let free = ForensicDiskGuard.available(target), free - ForensicDiskGuard.reserve < size {
+            throw ForensicError(t("Für das Video (\(ForensicDiskGuard.gb(size)) GB) ist zu wenig Platz: frei sind \(ForensicDiskGuard.gb(free)) GB, \(ForensicDiskGuard.gb(ForensicDiskGuard.reserve)) GB bleiben für macOS. Bitte Platz schaffen und den Fall neu anlegen.",
+                                  "Not enough space for the video (\(ForensicDiskGuard.gb(size)) GB): \(ForensicDiskGuard.gb(free)) GB are free, \(ForensicDiskGuard.gb(ForensicDiskGuard.reserve)) GB stay free for macOS. Please free up space and create the case again."))
+        }
+        guard fm.createFile(atPath: target.path, contents: nil) else {
+            throw ForensicError(t("Video nicht schreibbar: \(target.lastPathComponent)", "Cannot write the video: \(target.lastPathComponent)"))
+        }
+        do {
+            let input = try FileHandle(forReadingFrom: source)
+            defer { try? input.close() }
+            let output = try FileHandle(forWritingTo: target)
+            defer { try? output.close() }
+            while true {
+                if isCancelled() { throw CancellationError() }
+                let chunk = try autoreleasepool { try input.read(upToCount: 8 << 20) } ?? Data()
+                if chunk.isEmpty { break }
+                try output.write(contentsOf: chunk)
+            }
+            try output.synchronize()
+        } catch {
+            try? fm.removeItem(at: target)
+            throw error
+        }
     }
 
     /// Schon berechnete Summen aus PRUEFSUMMEN.sha256 (relativer Pfad → SHA-256).
@@ -326,11 +376,13 @@ enum ForensicImport {
             // Lage nach Zeitstempel: Lücke → Stille, Überlappung → doppelte Proben weg, ±2 Proben gelten als nahtlos
             let pts = CMSampleBufferGetPresentationTimeStamp(sb)
             var skip = 0
-            if pts.isValid {
-                let start = Int((CMTimeGetSeconds(pts) * Double(src.sr)).rounded())
+            let seconds = pts.isValid ? CMTimeGetSeconds(pts) : .nan
+            // unplausible Zeitstempel (beschädigte Datei) nicht in Proben umrechnen: Int() stürzte bei Überlauf ab
+            if seconds.isFinite, abs(seconds) < 1e9 {
+                let start = Int((seconds * Double(src.sr)).rounded())
                 if start - position > 2 {
                     let gap = start - position
-                    for sink in sinks { try sink.silence(gap) }
+                    for sink in sinks { try sink.silence(gap, isCancelled: isCancelled) }
                     position += gap
                 } else if position - start > 2 {
                     skip = min(n, position - start)
@@ -441,14 +493,29 @@ final class ChannelSink {
     private let spec: SpectrogramBuilder
     private var zeros: [Float] = []
 
+    /// Abtastraten, die ein Fall nimmt: Darunter wäre der Spaltenabstand des Spektrogramms 0 (Endlosschleife), darüber
+    /// scheitern AAC und die Umrechnung; solche Werte kommen nur aus beschädigten Dateien oder Konfigurationen.
+    static let rates = 1000...768_000
+
     init(tid: String, fall: URL, sr: Int, kind: WavWriter.Kind) throws {
+        guard Self.rates.contains(sr) else {
+            throw ForensicError(t("Abtastrate \(sr) Hz wird nicht unterstützt (1000 bis 768 000 Hz); die Datei oder die Konfiguration ist vermutlich beschädigt.",
+                                  "Sample rate \(sr) Hz is not supported (1000 to 768,000 Hz); the file or the configuration is probably damaged."))
+        }
         self.tid = tid
         self.fall = fall
         self.sr = sr
         wav = try WavWriter(url: fall.appendingPathComponent("original/\(tid).wav"), sr: sr, kind: kind)
         proxy = try AACProxyWriter(url: fall.appendingPathComponent("proxy/\(tid).m4a"), sr: sr)
         try FileManager.default.createDirectory(at: fall.appendingPathComponent("spec"), withIntermediateDirectories: true)
-        spec = try SpectrogramBuilder(outBase: fall.appendingPathComponent("spec/\(tid)"), sr: sr)
+        do {
+            spec = try SpectrogramBuilder(outBase: fall.appendingPathComponent("spec/\(tid)"), sr: sr)
+        } catch {
+            // ForensicAnalysis.swift bleibt ohne App-Abhängigkeit (Prüfprogramm); die Meldung für Nutzer kommt von hier
+            guard error is SpectrogramBuilder.SetupError else { throw error }
+            throw ForensicError(t("Das Spektrogramm lässt sich nicht einrichten (FFT); vermutlich ist der Arbeitsspeicher knapp.",
+                                  "The spectrogram cannot be set up (FFT); memory is probably low."))
+        }
     }
 
     func add(_ x: UnsafeBufferPointer<Float>) throws {
@@ -458,9 +525,12 @@ final class ChannelSink {
         try spec.add(x)
     }
 
-    func silence(_ n: Int) throws {
+    /// Stille (Lücke laut Zeitstempel). Je 65 536 Proben wird der Abbruch geprüft: Eine lange Lücke lief vorher ohne
+    /// Halt durch, auch am Speicherwächter vorbei (er wirkt über den Abbruch).
+    func silence(_ n: Int, isCancelled: () -> Bool) throws {
         var left = n
         while left > 0 {
+            if isCancelled() { throw CancellationError() }
             let k = min(left, 1 << 16)
             if zeros.count < k { zeros = [Float](repeating: 0, count: k) }
             try zeros.withUnsafeBufferPointer { try add(UnsafeBufferPointer(rebasing: $0[0..<k])) }

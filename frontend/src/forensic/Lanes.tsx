@@ -55,6 +55,13 @@ export const EVENT_COLOR: Record<string, string> = {
   ais: '#b39ddb', text: '#c8c8c8', gap: '#777', system: '#999', tone: '#ff8fab',
 }
 
+/** Ereignisarten in der Sprache der Oberfläche (vorher erschienen die Schlüssel roh: alarm, digital, gap …) */
+export const EVENT_LABEL: Record<string, string> = {
+  alarm: t('Alarm', 'alarm'), alert: t('Warnung', 'alert'), digital: t('Digital', 'digital'), analog: t('Analog', 'analog'),
+  telegraph: t('Maschinentelegraf', 'telegraph'), autopilot: t('Autopilot', 'autopilot'), ais: 'AIS', text: t('Text', 'text'),
+  gap: t('Lücke', 'gap'), system: t('System', 'system'), tone: t('Ton', 'tone'),
+}
+
 /** Uhrzeit (UTC) zu Sekunde x, wenn die Aufnahme einen Zeitbezug hat, sonst Laufzeit */
 export function clockAt(x: number, origin: number | null | undefined, tenths = false): string {
   if (!origin) return fmtClock(x, tenths)
@@ -497,7 +504,7 @@ export function ForensicLanes({ pid, tracks, peaks, sr, duration, view, setView,
           ))}
           {markers.filter((m) => m.kind !== 'note').map((m) => (
             <span key={m.id} className={`au-mark ${m.kind}`} style={{ left: toX(m.start), width: Math.max(3, toX(m.end) - toX(m.start)), background: MARK_COLOR[m.kind] }}
-              title={`${m.label || m.kind} · ${clockAt(m.start, origin, true)} – ${clockAt(m.end, origin, true)}`}
+              title={`${m.label || (EVENT_LABEL[m.kind] ?? m.kind)} · ${clockAt(m.start, origin, true)} – ${clockAt(m.end, origin, true)}`}
               onMouseDown={(e) => { e.stopPropagation(); onMarkerSelect(m) }}
               onDoubleClick={(e) => { e.stopPropagation(); onMarkerDelete(m) }} />
           ))}

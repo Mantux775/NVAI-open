@@ -317,8 +317,10 @@ final class VorbisChain {
                     let len = page.headerLength + page.bodyLength
                     out.baseAddress!.advanced(by: w).copyMemory(from: raw.baseAddress!.advanced(by: page.start), byteCount: len)
                     out[w + 5] = page.flags & 0x01
-                    // stb_vorbis 1.25 lehnt die Granule −1 (kein Paket endet hier) ab: dann die letzte Position wiederholen
-                    let g = page.granule >= 0 ? granuleBase + page.granule : lastGranule
+                    // stb_vorbis 1.25 lehnt die Granule −1 (kein Paket endet hier) ab: dann die letzte Position wiederholen.
+                    // Granule aus der Datei: Eine beschädigte darf die Summe nicht überlaufen lassen (sonst Absturz).
+                    let (sum, overflow) = granuleBase.addingReportingOverflow(page.granule)
+                    let g = page.granule >= 0 && !overflow ? sum : lastGranule
                     if page.granule >= 0 { fileGranule = page.granule }
                     lastGranule = g
                     out.storeBytes(of: UInt64(bitPattern: g).littleEndian, toByteOffset: w + 6, as: UInt64.self)
@@ -331,7 +333,8 @@ final class VorbisChain {
                     w += len
                 }
             }
-            granuleBase += fileGranule
+            let (base, wrapped) = granuleBase.addingReportingOverflow(fileGranule)
+            if !wrapped { granuleBase = base }
             return feed(stream)
         }
     }

@@ -69,7 +69,10 @@ export function HistoryPanel({ event }: Props) {
 
   const load = useCallback(async () => {
     // Ohne Downloads und ohne die Aufträge des LoRA-Bereichs (Training, Probebilder): die haben kein Material im Verlauf
-    const js = await api.jobs(limit + 1, 0, 'download,lora_train,lora_test,lora_dataset,lora_setup,audio_prepare,audio_dsp,audio_ai,audio_setup',
+    // Ton-Forensik ebenso ohne Material (Export, Video-Export und Lagebild legen eins an und bleiben sichtbar)
+    const js = await api.jobs(limit + 1, 0, 'download,lora_train,lora_test,lora_dataset,lora_setup,audio_prepare,audio_dsp,audio_ai,audio_setup,'
+      + 'audio_learn,audio_scan,audio_spectro,audio_hash,audio_transcribe,audio_mix,audio_vad,audio_align,audio_package,'
+      + 'audio_vdr_import,audio_vdr_verify',
       folder === 'all' ? undefined : folder)
     api.assetFolders().then(setFolders).catch(() => {})
     setHasMore(js.length > limit)

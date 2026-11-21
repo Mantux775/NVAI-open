@@ -15,6 +15,7 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -31,7 +32,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from . import comfy, config, db, gpu, jobs, mesh_workers, registry
-from .i18n import t
+from .i18n import lang, t
 from .schemas import Job
 
 ROOT = config.DATA_DIR / "Audio"
@@ -212,14 +213,31 @@ def _dir(pid: str) -> Path:
     return ROOT / pid
 
 
+def _finite(x: Any) -> Any:
+    """NaN und Unendlich (aus beschädigten Float-Quellen) an Ort und Stelle durch None ersetzen."""
+    items = x.items() if isinstance(x, dict) else enumerate(x) if isinstance(x, list) else ()
+    for k, v in list(items):
+        if isinstance(v, float) and not math.isfinite(v):
+            x[k] = None
+        elif isinstance(v, (dict, list)):
+            _finite(v)
+    return x
+
+
 def _write(path: Path, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(f".{uuid.uuid4().hex[:6]}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    try:
+        text = json.dumps(data, ensure_ascii=False, indent=1, allow_nan=False)
+    except ValueError:
+        # NaN/Unendlich im JSON lehnt jede Antwort des Servers ab (500) und der Browser auch: als null speichern
+        text = json.dumps(_finite(data), ensure_ascii=False, indent=1)
+    tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
 
 
 def load(pid: str) -> dict[str, Any]:
-    return json.loads((_dir(pid) / "project.json").read_text(encoding="utf-8"))
+    # parse_constant: ältere Projekte mit NaN/Infinity (Spitzenwerte aus Float-Quellen) wieder lesbar machen
+    return json.loads((_dir(pid) / "project.json").read_text(encoding="utf-8"), parse_constant=lambda _c: None)
 
 
 def _save(p: dict[str, Any]) -> dict[str, Any]:
@@ -237,13 +255,30 @@ def update(pid: str, fn: Any) -> dict[str, Any]:
         return _save(p)
 
 
+def _stalled(p: dict[str, Any]) -> bool:
+    """„Wird eingelesen“, aber der Auftrag wartet und läuft nicht mehr (abgebrochen, bevor er lief, oder der Server
+    wurde beendet): Die Ansicht zeigt dann einen Fehler statt eines Fortschritts, der nie endet."""
+    if p.get("status") != "preparing" or not p.get("job_id"):
+        return False
+    with contextlib.suppress(Exception):
+        job = db.get_job(p["job_id"])
+        return job is None or job.status not in ("queued", "running")
+    return False
+
+
+def _stalled_error() -> str:
+    return t("Das Einlesen wurde unterbrochen (abgebrochen oder Server neu gestartet).",
+             "Reading was interrupted (cancelled or the server restarted).")
+
+
 def list_projects() -> list[dict[str, Any]]:
     out = []
     if ROOT.exists():
         for f in ROOT.glob("aud_*/project.json"):
             with contextlib.suppress(OSError, ValueError, KeyError):
                 p = json.loads(f.read_text(encoding="utf-8"))
-                out.append({"id": p["id"], "name": p["name"], "duration": p.get("duration"), "status": p.get("status"),
+                out.append({"id": p["id"], "name": p["name"], "duration": p.get("duration"),
+                            "status": "error" if _stalled(p) else p.get("status"),
                             "tracks": len(p.get("tracks") or []), "updated": p.get("updated"),
                             "has_video": (p.get("source") or {}).get("has_video", False),
                             "source_kind": (p.get("source") or {}).get("kind") or "file"})
@@ -280,6 +315,25 @@ async def create_project(asset_id: str | None, path: str | None, name: str = "")
     _save(p)
     job = await jobs.submit("audio_prepare", {"project_id": pid})
     return update(pid, lambda q: q.update(job_id=job.id))
+
+
+async def submit_prepare(pid: str) -> Job:
+    """Erneut einlesen (nach Abbruch oder Fehler); VDR-Aufzeichnungen über audio_vdr.submit_import."""
+    p = load(pid)
+    if (p.get("source") or {}).get("kind") == "vdr":
+        from . import audio_vdr
+        return await audio_vdr.submit_import(pid)
+    busy = [j for j in db.list_jobs(limit=200, active=True)
+            if j.kind == "audio_prepare" and (j.params or {}).get("project_id") == pid]
+    if busy:
+        return busy[0]
+    if p.get("status") == "ready":
+        raise AudioError(t("Das Projekt ist schon eingelesen.", "The project has already been read."))
+    _source_path(p["source"])  # Quelle noch da? Sonst gleich die Meldung statt eines Auftrags
+    job = await jobs.submit("audio_prepare", {"project_id": pid})
+    # Status und Auftrag in einem Schritt (jobs.submit gibt die Schleife nicht ab, der Auftrag startet erst danach)
+    update(pid, lambda q: q.update(status="preparing", error=None, job_id=job.id))
+    return job
 
 
 def delete_project(pid: str) -> dict[str, Any]:
@@ -479,13 +533,31 @@ async def _run_tool(cmd: str, settings: dict[str, Any], ctx: jobs.JobContext | N
     work = ROOT / "_settings"
     work.mkdir(parents=True, exist_ok=True)
     path = work / f"{cmd}_{uuid.uuid4().hex[:8]}.json"
-    path.write_text(json.dumps(settings), encoding="utf-8")
+    # lang: Sprache der Meldungen in den Werkzeugen (L()); ausdrücklich übergebene Werte gehen vor
+    path.write_text(json.dumps({"lang": lang(), **settings}), encoding="utf-8")
+    # -X utf8: Unter -I gelten PYTHONUTF8/PYTHONIOENCODING nicht, Fehlermeldungen (stderr) kämen in der Codepage an.
+    # limit: Ergebniszeilen werden lang (bis 20 000 Sprachabschnitte, Töne); mit 64 KiB je Zeile brach das Lesen ab.
     proc = await asyncio.create_subprocess_exec(
-        str(_python()), "-I", str(tool or TOOL), cmd, str(path), env=_tool_env(), stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        str(_python()), "-I", "-X", "utf8", str(tool or TOOL), cmd, str(path), env=_tool_env(),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=64 << 20,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     err_task = asyncio.create_task(proc.stderr.read()) if proc.stderr else None
     result: dict[str, Any] = {}
     error = ""
+    stopped = False
+
+    async def watch() -> None:
+        # Abbrechen auch in stillen Abschnitten (lange Rechnung ohne Ausgabezeile): Render-Aufträge melden es nur über
+        # should_stop, das sonst erst die nächste Zeile prüfte
+        nonlocal stopped
+        while proc.returncode is None:
+            await asyncio.sleep(0.5)
+            if ctx is not None and ctx.should_stop():
+                stopped = True
+                with contextlib.suppress(ProcessLookupError):
+                    proc.kill()
+                return
+    watcher = asyncio.create_task(watch()) if ctx is not None else None
     try:
         assert proc.stdout is not None
         async for raw in proc.stdout:
@@ -506,28 +578,57 @@ async def _run_tool(cmd: str, settings: dict[str, Any], ctx: jobs.JobContext | N
                 proc.kill()
                 raise asyncio.CancelledError
         err = (await err_task).decode(errors="replace") if err_task else ""
-        if await proc.wait() != 0 or not result:
+        code = await proc.wait()
+        if stopped or (ctx is not None and ctx.should_stop()):
+            raise asyncio.CancelledError
+        if code != 0 or not result:
             raise RuntimeError(error or t(f"Audio-Werkzeug ({cmd}) gescheitert: {err[-700:]}",
                                           f"Audio tool ({cmd}) failed: {err[-700:]}"))
     finally:
+        if watcher is not None:
+            watcher.cancel()
         if proc.returncode is None:
             proc.kill()
+            # bis der Prozess wirklich beendet ist: Unter Windows hält er seine Dateien sonst noch offen, und das Aufräumen
+            # der Hilfsdateien danach (drop_partial) scheiterte
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(proc.wait(), 15)
+        if err_task is not None and not err_task.done():
+            err_task.cancel()
         path.unlink(missing_ok=True)
     return result
+
+
+def drop_partial(*paths: str | Path) -> None:
+    """Die Hilfsdatei „<Name>.part<.Endung>“, die ein Werkzeug statt der Datei <Name><.Endung> schreibt, nach Abbruch
+    oder Fehler entfernen. Ein Abbruch beendet den Prozess hart; dessen eigenes Aufräumen läuft dann nicht."""
+    for p in paths:
+        p = Path(p)
+        with contextlib.suppress(OSError):
+            p.with_name(p.stem + ".part" + p.suffix).unlink(missing_ok=True)
 
 
 # ------------------------------------------------------------------------------------------------- Aufträge
 
 async def _prepare(job: Job, ctx: jobs.JobContext) -> list[str]:
     pid = job.params["project_id"]
-    p = load(pid)
-    src = _source_path(p["source"])
     tid = "t_orig"
+    paths = _track_paths(pid, tid)
+    # Jeder Ausgang ohne Ergebnis setzt den Fall auf „Fehler“ (auch Abbrechen und Beenden des Servers, und eine
+    # fehlende Quelle); sonst blieb er für immer auf „wird eingelesen“
     try:
-        res = await _run_tool("prepare", {"src": str(src), **_track_paths(pid, tid)}, ctx, 0, 1,
-                              t("einlesen", "reading"))
+        p = load(pid)
+        src = _source_path(p["source"])
+        res = await _run_tool("prepare", {"src": str(src), **paths}, ctx, 0, 1, t("einlesen", "reading"))
+    except asyncio.CancelledError:
+        drop_partial(paths["flac"], paths["proxy"])
+        with contextlib.suppress(Exception):
+            update(pid, lambda q: q.update(status="error", error=t("Einlesen abgebrochen.", "Reading cancelled.")))
+        raise
     except Exception as exc:
-        update(pid, lambda q: q.update(status="error", error=str(exc)[:800]))
+        drop_partial(paths["flac"], paths["proxy"])
+        with contextlib.suppress(Exception):
+            update(pid, lambda q: q.update(status="error", error=str(exc)[:800]))
         raise
 
     def fn(q: dict[str, Any]) -> None:
@@ -625,6 +726,16 @@ def _op_label(spec: dict[str, Any], m: dict[str, Any] | None) -> str:
     return t(m.get("label_de") or spec["model"], m.get("label_en") or spec["model"]) if m else spec["model"]
 
 
+def _drop_tracks(pid: str, tids: list[str]) -> None:
+    """Dateien neuer Spuren eines gescheiterten oder abgebrochenen Laufs entfernen (frische Kennungen, nie im Projekt
+    eingetragen; eine Spur von Stunden belegt sonst Gigabytes)."""
+    for tid in tids:
+        for f in _track_paths(pid, tid).values():
+            drop_partial(f)
+            with contextlib.suppress(OSError):
+                Path(f).unlink(missing_ok=True)
+
+
 async def _op(job: Job, ctx: jobs.JobContext) -> list[str]:
     pid = job.params["project_id"]
     spec = job.params["op"]
@@ -649,7 +760,11 @@ async def _op(job: Job, ctx: jobs.JobContext) -> list[str]:
         settings: dict[str, Any] = {"src": paths_in["flac"], "chain": chain, **_track_paths(pid, tid)}
         if spec.get("region"):
             settings["region"] = spec["region"]
-        res = await _run_tool("process", settings, ctx, 0, 1, t("bearbeiten", "processing"))
+        try:
+            res = await _run_tool("process", settings, ctx, 0, 1, t("bearbeiten", "processing"))
+        except BaseException:
+            _drop_tracks(pid, [tid])
+            raise
         outs = {"main": (tid, res)}
         names = {"main": base_name or f"{src['name']} · {label}"}
     else:
@@ -664,7 +779,11 @@ async def _op(job: Job, ctx: jobs.JobContext) -> list[str]:
                     "outputs": {st: _track_paths(pid, tid) for st, tid in ids.items()}}
         if spec.get("region"):
             settings["region"] = spec["region"]
-        res = await _run_tool("ai", settings, ctx, 0.02, 0.98, label, info)
+        try:
+            res = await _run_tool("ai", settings, ctx, 0.02, 0.98, label, info)
+        except BaseException:
+            _drop_tracks(pid, list(ids.values()))  # der Arbeitsordner bleibt: Neustart setzt dort fort
+            raise
         outs = {st: (ids[st], res["stems"][st]) for st in want}
         if m["id"] == "learned":
             sound = (spec.get("params") or {}).get("profile_name") or "?"
@@ -826,7 +945,11 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
                                 "mono": bool(job.params.get("mono")), "region": job.params.get("region")}
     if job.params.get("into_video"):
         settings["video_src"] = str(_source_path(p["source"]))
-    res = await _run_tool("export", settings, ctx, 0, 1, t("exportieren", "exporting"))
+    try:
+        res = await _run_tool("export", settings, ctx, 0, 1, t("exportieren", "exporting"))
+    except BaseException:
+        drop_partial(dest)  # „<Name>.part.<Endung>“ bliebe sonst im gewählten Ordner liegen
+        raise
     kind = "video" if job.params.get("into_video") else "audio"
     if not as_asset:
         update(pid, lambda q: q["history"].append({"time": time.time(), "op": "export", "format": fmt, "path": str(dest),
@@ -863,11 +986,18 @@ def suggestions(p: dict[str, Any]) -> list[dict[str, Any]]:
     if (a.get("clipped") or 0) > 100:
         out.append({"kind": "info", "text": t(f"{a['clipped']} Proben übersteuert: Die Aufnahme ist an diesen Stellen verzerrt.",
                                               f"{a['clipped']} samples clipped: the recording is distorted there.")})
+    if a.get("decode_errors"):
+        out.append({"kind": "info", "text": t(f"{a['decode_errors']} beschädigte Stellen in der Quelle ließen sich nicht dekodieren; "
+                                              f"sie stehen als Stille ihrer Länge in der Spur.",
+                                              f"{a['decode_errors']} damaged spots in the source could not be decoded; they are "
+                                              f"silence of the same length in the track.")})
     return out
 
 
 def project_view(pid: str) -> dict[str, Any]:
     p = load(pid)
+    if _stalled(p):
+        p.update(status="error", error=p.get("error") or _stalled_error())
     return {**p, "suggestions": suggestions(p) if p.get("status") == "ready" else []}
 
 
@@ -1026,6 +1156,12 @@ async def api_create(req: ProjectCreate) -> dict[str, Any]:
 @router.get("/projects/{pid}")
 async def api_project(pid: str) -> dict[str, Any]:
     return _http(project_view, pid)
+
+
+@router.post("/projects/{pid}/prepare", response_model=Job)
+async def api_prepare(pid: str) -> Job:
+    """Einen Fall nach Abbruch oder Fehler erneut einlesen."""
+    return await _ahttp(submit_prepare(pid))
 
 
 @router.put("/projects/{pid}")

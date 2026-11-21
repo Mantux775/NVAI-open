@@ -385,8 +385,10 @@ def parse_image(d: bytes) -> dict[str, Any] | None:
     capture = None
     m = re.match(r"\w{3}, (\d{1,2}) (\w{3}) (\d{4}) (\d\d):(\d\d):(\d\d)", head.get("Time") or "")
     if m and m.group(2) in _MONTHS:
-        capture = _day(int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1))) + int(m.group(4)) * 3600 \
-            + int(m.group(5)) * 60 + int(m.group(6)) + _int(head.get("Time-ms")) / 1000
+        # beschädigter Kopf (Jahr 0000): ohne Aufnahmezeit weiter, statt das ganze Einlesen abzubrechen
+        with contextlib.suppress(ValueError, OverflowError):
+            capture = _day(int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1))) + int(m.group(4)) * 3600 \
+                + int(m.group(5)) * 60 + int(m.group(6)) + _int(head.get("Time-ms")) / 1000
     payload = d[off:]
     kind = "png" if payload[:4] == b"\x89PNG" else "jpg" if payload[:2] == b"\xff\xd8" else \
         "bmp" if payload[:2] == b"BM" else "zlib" if payload[:1] == b"\x78" else "bin"
@@ -493,7 +495,7 @@ def verify(path: str | Path, progress: Callable[[float, str], None] | None = Non
             if algo is None and f.suffix != ".gz":
                 algo = "md5"   # nur entpackt vorhanden: die Liste gilt der .gz-Datei, prüfen geht dann nicht
             break
-        algo = algo or "unbekannt"
+        algo = algo or L("unbekannt", "unknown")
         ok: list[str] = []
         bad: list[str] = []
         missing: list[str] = []
@@ -517,7 +519,7 @@ def verify(path: str | Path, progress: Callable[[float, str], None] | None = Non
                 {"ok": ok, "bad": bad, "missing": missing, "unpacked": unpacked}[st].append(name)
                 done[0] += 1
                 if progress and done[0] % 50 == 0:
-                    progress(done[0] / max(1, len(checks)), "Prüfsummen")
+                    progress(done[0] / max(1, len(checks)), L("Prüfsummen", "checksums"))
         listed = {n for n, _ in entries}
         unlisted = sorted(b["name"] for b in _scan(folder) if b["name"].removesuffix(".gz") not in listed)
         out["checklist"] = {"algorithm": algo, "covers": ".gz", "listed": len(entries), "ok": len(ok), "bad": bad[:500],
@@ -540,7 +542,7 @@ def verify(path: str | Path, progress: Callable[[float, str], None] | None = Non
                             "not_covered": sorted(f.name for f in folder.glob("configure.*.xml"))}
     if out["checklist"] is None and out["checkfile"] is None:
         out["ok"] = None   # nichts zu prüfen (etwa ein einzelner entpackter Block)
-        out["note"] = "Keine VdrCheckList.dat/VdrCheckFile.dat im Ordner."
+        out["note"] = L("Keine VdrCheckList.dat/VdrCheckFile.dat im Ordner.", "No VdrCheckList.dat/VdrCheckFile.dat in the folder.")
     else:
         cl = out["checklist"]
         cl_ok = cl is None or (cl["bad_count"] == 0 and cl["missing_count"] == 0 and cl["unpacked"] == 0)
@@ -1474,21 +1476,24 @@ def task_images(job: dict[str, Any]) -> dict[str, Any]:
 
 def _convert_image(payload: bytes, hd: dict[str, Any]) -> tuple[bytes, str]:
     from PIL import Image
-    img = None
-    if hd["kind"] == "bmp":
-        img = Image.open(io.BytesIO(payload))
-    elif hd["kind"] == "zlib":
-        with contextlib.suppress(zlib.error, ValueError):
-            raw = zlib.decompress(payload)
-            if hd["w"] and hd["h"] and len(raw) == hd["w"] * hd["h"] * 3:
-                img = Image.frombytes("RGB", (hd["w"], hd["h"]), raw, "raw", "BGR")
-    if img is None:
+    try:
+        img = None
+        if hd["kind"] == "bmp":
+            img = Image.open(io.BytesIO(payload))
+        elif hd["kind"] == "zlib":
+            with contextlib.suppress(zlib.error, ValueError):
+                raw = zlib.decompress(payload)
+                if hd["w"] and hd["h"] and len(raw) == hd["w"] * hd["h"] * 3:
+                    img = Image.frombytes("RGB", (hd["w"], hd["h"]), raw, "raw", "BGR")
+        if img is None:
+            return payload, "bin"
+        img = img.convert("RGB")
+        png, jpg = io.BytesIO(), io.BytesIO()
+        img.save(png, "PNG", optimize=False, compress_level=6)
+        img.save(jpg, "JPEG", quality=92, subsampling=0)
+        return (png.getvalue(), "png") if png.tell() <= 3 * jpg.tell() else (jpg.getvalue(), "jpg")
+    except Exception:  # noqa: BLE001 - beschädigtes Bild: unverändert als .bin ablegen, das Einlesen läuft weiter
         return payload, "bin"
-    img = img.convert("RGB")
-    png, jpg = io.BytesIO(), io.BytesIO()
-    img.save(png, "PNG", optimize=False, compress_level=6)
-    img.save(jpg, "JPEG", quality=92, subsampling=0)
-    return (png.getvalue(), "png") if png.tell() <= 3 * jpg.tell() else (jpg.getvalue(), "jpg")
 
 
 # ------------------------------------------------------------------------------------------------ Ton
@@ -1571,6 +1576,7 @@ def task_audio(job: dict[str, Any]) -> dict[str, Any]:
     restarts: list[dict[str, Any]] = []
     pads: list[dict[str, Any]] = []
     missing: list[int] = []
+    damaged: list[int] = []   # Ogg-Datei vorhanden, aber nicht dekodierbar (zählt auch als fehlend)
     max_drift = int(MAX_DRIFT_S * sr)
 
     def decode(data: bytes, fresh_ctx: bool) -> Any:
@@ -1599,6 +1605,8 @@ def task_audio(job: dict[str, Any]) -> dict[str, Any]:
         nonlocal pos, sq, cnt
         if not len(y):
             return
+        if not np.isfinite(y).all():  # sonst würden Pegel und Übersicht NaN (JSON-Antworten scheitern)
+            y = np.nan_to_num(y, nan=0.0, posinf=1.0, neginf=-1.0)
         w.add(y)
         loud.add(y)
         first = pos // sr
@@ -1630,12 +1638,27 @@ def task_audio(job: dict[str, Any]) -> dict[str, Any]:
             continue
         gp = ogg_granule(data)
         fresh = ctx is None or prev_id is None or b["id"] != prev_id + 1
-        x = decode(data, fresh)
         restarted = False
-        if not fresh and gp is not None and len(x) != gp:
-            # Kodierer neu angelaufen (oder Datei beschädigt): diese Datei für sich dekodieren
-            x = decode(data, True)
-            restarted = True
+        try:
+            x = decode(data, fresh)
+            if not fresh and gp is not None and len(x) != gp:
+                # Kodierer neu angelaufen (oder Datei beschädigt): diese Datei für sich dekodieren
+                x = decode(data, True)
+                restarted = True
+        except Exception:  # noqa: BLE001 - beschädigte Ogg-Datei: nicht das ganze Einlesen abbrechen
+            x = None
+            if not fresh and not restarted:
+                with contextlib.suppress(Exception):  # zweiter Versuch: diese Datei für sich
+                    x = decode(data, True)
+                    restarted = True
+        if x is None:
+            # auch für sich nicht lesbar: wie ein fehlender Block (die Lücke füllt der nächste Block über das Raster)
+            damaged.append(b["id"])
+            missing.append(b["id"])
+            ctx = None
+            prev_id = None
+            continue
+        if restarted:
             restarts.append({"block": b["id"], "t": round(expected / sr, 2)})
         lead = 0
         if (fresh or restarted) and gp is not None and 0 < gp - len(x) <= 8192:
@@ -1696,6 +1719,7 @@ def task_audio(job: dict[str, Any]) -> dict[str, Any]:
                    "active_s": active, "active_share": round(active / nsec, 4)},
         "levels": [round(float(v), 1) for v in db],
         "blocks": len(lengths), "missing_blocks": missing[:200], "missing_count": len(missing),
+        "damaged_blocks": damaged[:200], "damaged_count": len(damaged),
         "file_seconds": {"min": round(min(lengths) / sr, 3) if lengths else None,
                          "max": round(max(lengths) / sr, 3) if lengths else None,
                          "mean": round(sum(lengths) / len(lengths) / sr, 4) if lengths else None,
@@ -1800,6 +1824,8 @@ def _audio_offsets(blocks: list[dict[str, Any]], t0: float, parts: list[dict[str
 
 
 def _run_task(kind: str, job: dict[str, Any]) -> tuple[str, str, dict[str, Any], float]:
+    global _LANG
+    _LANG = job.get("lang") or _LANG  # Arbeitsprozesse kennen die Sprache nur aus der Aufgabe
     t_start = time.time()
     if kind == "audio":
         res = task_audio(job)
@@ -1867,7 +1893,7 @@ def cmd_import(s: dict[str, Any]) -> dict[str, Any]:
                 tasks.append(("images", {"key": f"images{i}", "blocks": part, "t0": t0, "out_dir": str(out)},
                               0.5 / n_img))
     if s.get("verify", True):
-        tasks.append(("verify", {"key": "verify", "path": s["path"]}, 0.2))
+        tasks.append(("verify", {"key": "verify", "path": s["path"], "lang": _LANG}, 0.2))
     weights = {job["key"]: wt for _, job, wt in tasks + audio_jobs}
     fracs = {k: 0.0 for k in weights}
     workers = max(1, min(int(s.get("workers") or (os.cpu_count() or 4)),
@@ -1880,6 +1906,8 @@ def cmd_import(s: dict[str, Any]) -> dict[str, Any]:
     emit(progress=0.0, stage=L("liest den VDR-Export", "reading the VDR export"))
     with spawn.Pool(workers, initializer=_worker_init,
                     initargs=(queue, os.getpid(), os.environ.get("NVAI_AUDIO_TORCH_SITE", ""))) as pool:
+        # Arbeiter gleich festhalten: Stirbt einer, nimmt Pool ihn binnen 0,1 s aus seiner Liste und startet einen neuen
+        procs: dict[int, Any] = {id(proc): proc for proc in list(getattr(pool, "_pool", None) or [])}
         # Vorlauf und kurze Aufgaben zuerst; der Ton startet, sobald die Versätze feststehen
         pending = [pool.apply_async(_run_task, (kind, job)) for kind, job, _ in tasks]
         audio_started = not audio_jobs
@@ -1894,6 +1922,20 @@ def cmd_import(s: dict[str, Any]) -> dict[str, Any]:
                     fracs[k] = max(fracs.get(k, 0.0), f)
             except Exception:  # noqa: BLE001 - leere Warteschlange
                 pass
+            # Endet ein Arbeitsprozess hart (Absturz in einer Bibliothek, kein Speicher), kommt sein Ergebnis nie: Pool
+            # startet still einen neuen, und diese Schleife wartete ewig. Arbeiter enden sonst erst mit dem Pool.
+            for proc in list(getattr(pool, "_pool", None) or []):
+                procs.setdefault(id(proc), proc)
+            for proc in procs.values():
+                try:
+                    code = proc.exitcode
+                except ValueError:
+                    code = None
+                if code is not None:
+                    raise VdrError(f"Ein Arbeitsprozess des Einlesens ist abgestürzt (Code {code}), etwa an einer beschädigten "
+                                   f"Datei oder aus Speichermangel. Das Einlesen wurde abgebrochen.",
+                                   f"A worker process of the import crashed (code {code}), for example on a damaged file "
+                                   f"or for lack of memory. The import was stopped.")
             still = []
             for a in pending:
                 if a.ready():

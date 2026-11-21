@@ -307,7 +307,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         }
         return next
       })
-    })
+    }).catch((e) => setError(String((e as Error).message ?? e)))
     // eslint-disable-next-line react-hooks/exhaustive-deps -- activeKey steht für health.active_models
   }, [activeKey, downloads.finished, modelsVersion])
 
@@ -326,7 +326,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       setSourceMore(merged.length > limit)
       setSourceImages(all)
       setSourceId((cur) => cur || all[0]?.id || '')
-    })
+    }).catch(() => { /* die Auswahl bleibt, wie sie war; der nächste Abgleich holt sie */ })
   }
   const loadMoreSources = () => {
     sourceLimit.current += SOURCE_PAGE
@@ -1923,7 +1923,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     ) : dl ? (
                       <span className="muted small">{dl.stage || t('wartet', 'queued')}</span>
                     ) : (
-                      <button className="btn small" onClick={() => downloads.start(l.id)}>
+                      <button className="btn small" onClick={() => downloads.start(l.id).catch((e) => setError(String((e as Error).message ?? e)))}>
                         {t(`Laden (${dec(l.size_gb, 2)} GB)`, `Download (${dec(l.size_gb, 2)} GB)`)}
                       </button>
                     )}

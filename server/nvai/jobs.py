@@ -1951,6 +1951,7 @@ async def _tts(job: Job, ctx: JobContext) -> list[str]:
     payload: dict[str, Any] = {
         "mode": mode, "model_path": str(dirs[mode]), "text": p["text"], "language": p.get("language") or "auto",
         "instruct": p.get("voice") or "", "seed": p.get("seed"), "output_path": str(config.ASSET_DIR / out_name),
+        "lang": i18n.lang(),  # Meldungen des Workers in der Sprache des Auftrags
     }
     if ref_path is not None:
         payload |= {"ref_audio_path": str(ref_path), "ref_text": p.get("voice_text") or None,

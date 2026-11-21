@@ -43,6 +43,13 @@ from pydantic import BaseModel, Field  # noqa: E402
 import transformers  # noqa: E402,F401  - VOR den Stubs: prueft beim Import per find_spec, ob torchaudio da ist
 
 
+_ui = {"lang": "en"}  # Sprache der Meldungen; generate setzt sie je Auftrag (laeuft unter _lock, einer nach dem anderen)
+
+
+def _t(de: str, en: str) -> str:
+    return de if _ui["lang"] == "de" else en
+
+
 def _stub(name: str, **attrs: Any) -> types.ModuleType:
     mod = types.ModuleType(name)
     mod.__spec__ = importlib.machinery.ModuleSpec(name, loader=None)
@@ -115,9 +122,11 @@ def _load(path: str) -> FasterQwen3TTS:
         return _model
     _unload()
     if not (Path(path) / "config.json").exists():
-        raise HTTPException(404, f"Modellordner unvollstaendig oder fehlt: {path}")
+        raise HTTPException(404, _t(f"Modellordner unvollständig oder fehlt: {path}",
+                                    f"Model folder incomplete or missing: {path}"))
     if not torch.cuda.is_available():
-        raise HTTPException(503, "Qwen3-TTS braucht eine NVIDIA- oder AMD-Grafikkarte (CUDA/ROCm).")
+        raise HTTPException(503, _t("Qwen3-TTS braucht eine NVIDIA- oder AMD-Grafikkarte (CUDA/ROCm).",
+                                    "Qwen3-TTS needs an NVIDIA or AMD graphics card (CUDA/ROCm)."))
     t0 = time.time()
     model = FasterQwen3TTS.from_pretrained(path, device="cuda", dtype=torch.bfloat16, attn_implementation="sdpa",
                                            local_files_only=True)
@@ -154,7 +163,8 @@ def _language(model: FasterQwen3TTS, code: str) -> str:
         for s in supported:
             if s.lower() == name.lower():
                 return s
-        raise HTTPException(422, f"Sprache nicht unterstuetzt: {code}. Moeglich: {', '.join(sorted(supported))}")
+        raise HTTPException(422, _t(f"Sprache nicht unterstützt: {code}. Möglich: {', '.join(sorted(supported))}",
+                                    f"Language not supported: {code}. Possible: {', '.join(sorted(supported))}"))
     return name
 
 
@@ -174,7 +184,7 @@ def _decode(path: str) -> tuple[np.ndarray, int]:
     chunks: list[np.ndarray] = []
     with av.open(path) as container:
         if not container.streams.audio:
-            raise HTTPException(422, "Die Aufnahme hat keine Tonspur.")
+            raise HTTPException(422, _t("Die Aufnahme hat keine Tonspur.", "The recording has no audio track."))
         stream = container.streams.audio[0]
         sr = int(stream.rate or 24000)
         resampler = av.AudioResampler(format="flt", layout="mono", rate=sr)
@@ -184,7 +194,7 @@ def _decode(path: str) -> tuple[np.ndarray, int]:
             if sum(c.shape[0] for c in chunks) > (REF_MAX_SECONDS + 5) * sr:
                 break
     if not chunks:
-        raise HTTPException(422, "Die Tonspur der Aufnahme ist leer.")
+        raise HTTPException(422, _t("Die Tonspur der Aufnahme ist leer.", "The audio track of the recording is empty."))
     return np.concatenate(chunks).astype(np.float32), sr
 
 
@@ -193,7 +203,8 @@ def _prepare_reference(path: str, ref_text: str, work: Path) -> tuple[str, str, 
     nicht mehr, und es zaehlt nur der Stimmklang (x-vector). Gibt (Pfad, Text, Art) zurueck."""
     mono, sr = _decode(path)
     if mono.size < sr:
-        raise HTTPException(422, "Die Aufnahme ist kuerzer als eine Sekunde; drei Sekunden und mehr sind gut.")
+        raise HTTPException(422, _t("Die Aufnahme ist kürzer als eine Sekunde; drei Sekunden und mehr sind gut.",
+                                    "The recording is shorter than one second; three seconds or more work well."))
     trimmed = mono.shape[0] > REF_MAX_SECONDS * sr
     if trimmed:
         mono = mono[: int(REF_MAX_SECONDS * sr)]
@@ -248,6 +259,7 @@ class GenerateRequest(BaseModel):
     temperature: float | None = Field(None, gt=0.0, le=2.0)
     top_p: float | None = Field(None, gt=0.0, le=1.0)
     peak_dbfs: float = Field(-1.0, le=0.0, description="Spitze danach (Pegel angleichen, hoechstens +20 dB)")
+    lang: str = Field("en", description="Sprache der Meldungen (de/en), wie die Anfrage an NVAI-open")
 
 
 @app.get("/health")
@@ -278,6 +290,7 @@ def cancel() -> dict[str, bool]:
 @app.post("/generate")
 def generate(req: GenerateRequest) -> dict[str, Any]:
     with _lock:
+        _ui["lang"] = "de" if req.lang == "de" else "en"
         _cancel.clear()
         model = _load(req.model_path)
         lang = _language(model, req.language)
@@ -296,7 +309,8 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
                 wavs, sr = model.generate_voice_design(text=req.text, instruct=req.instruct, language=lang, **gen)
             else:
                 if not req.ref_audio_path or not Path(req.ref_audio_path).exists():
-                    raise HTTPException(422, f"Referenzaufnahme fehlt: {req.ref_audio_path}")
+                    raise HTTPException(422, _t(f"Referenzaufnahme fehlt: {req.ref_audio_path}",
+                                                f"Reference recording missing: {req.ref_audio_path}"))
                 ref_path, ref_text, ref_mode = _prepare_reference(req.ref_audio_path, (req.ref_text or "").strip(),
                                                                   Path(req.work_dir or Path(req.output_path).parent / ".tts-ref"))
                 wavs, sr = model.generate_voice_clone(text=req.text, language=lang, ref_audio=ref_path,
@@ -310,7 +324,7 @@ def generate(req: GenerateRequest) -> dict[str, Any]:
         gen_s = time.time() - t0
         wav = np.asarray(wavs[0], dtype=np.float32).reshape(-1)
         if wav.size == 0 or not np.isfinite(wav).all():
-            raise HTTPException(500, "Das Modell lieferte keinen gueltigen Ton.")
+            raise HTTPException(500, _t("Das Modell lieferte keinen gültigen Ton.", "The model returned no valid audio."))
         peak = float(np.abs(wav).max())
         wav, gain_db = _tidy(wav, int(sr), req.peak_dbfs)
         out = Path(req.output_path)

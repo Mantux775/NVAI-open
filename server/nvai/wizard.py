@@ -180,7 +180,7 @@ def plan(req: dict[str, Any]) -> dict[str, Any]:
         if own is not None:
             return own * n, "history", count
         f = _factor(role, model)
-        if f is None:
+        if f is None or prof.get("cpu_mode"):  # auf dem Prozessor gilt keine Zeit der Referenzkarte
             return None, "unknown", 0
         base = REF[ref_key] * n / sp * f
         if model and model.get("fits_vram") == "nein" and smaller:

@@ -173,7 +173,9 @@ def test_outdated_photocraft(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "photocraft_exe", lambda: tmp_path / "photocraft.exe")
     monkeypatch.setattr(winutil, "file_version", lambda path: "0.7.0")
     assert launcher.photocraft_install()["outdated"] is True
-    monkeypatch.setattr(winutil, "file_version", lambda path: "0.10.0")
+    monkeypatch.setattr(winutil, "file_version", lambda path: "0.10.0")  # früher getestet, seit 0.23.1 mit Hinweis
+    assert launcher.photocraft_install()["outdated"] is True
+    monkeypatch.setattr(winutil, "file_version", lambda path: "0.23.1")
     assert launcher.photocraft_install()["outdated"] is False
     monkeypatch.setattr(winutil, "file_version", lambda path: None)  # ohne Versionsangabe kein Hinweis
     assert launcher.photocraft_install()["outdated"] is False
@@ -182,6 +184,7 @@ def test_outdated_photocraft(monkeypatch, tmp_path):
 @pytest.mark.parametrize("version, reference, older", [
     ("0.7.0", "0.10.0", True), ("0.9", "0.10.0", True), ("0.10.0", "0.10.0", False),
     ("0.10.0.0", "0.10.0", False), ("0.10.1", "0.10.0", False), ("1.0", "0.10.0", False), ("unbekannt", "0.10.0", False),
+    ("0.23.0", "0.23.1", True), ("0.23.1", "0.23.1", False), ("0.24", "0.23.1", False),
 ])
 def test_version_older(version, reference, older):
     assert config.version_older(version, reference) is older

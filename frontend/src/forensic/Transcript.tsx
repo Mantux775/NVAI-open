@@ -104,14 +104,14 @@ export function exportTranscript(proj: AudioProject, tracks: AudioTrack[], doc: 
       .map((s) => ({ start: rel(s.start), end: rel(s.end), text: text(s), voice: s.speaker || undefined })), note), 'text/vtt')
   } else if (fmt === 'csv') {
     const q = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    download(`${base}_transkript.csv`, ['nr;start_s;end_s;time;channel;speaker;kind;status;confidence;original;translation_en;translation;second_opinion;note',
+    download(`${base}_${t('transkript', 'transcript')}.csv`, ['nr;start_s;end_s;time;channel;speaker;kind;status;confidence;original;translation_en;translation;second_opinion;note',
       ...lines.map((s, i) => [i + 1, s.start.toFixed(2), s.end.toFixed(2), clockAt(s.start, origin, true), q(trackName(s.track)), q(s.speaker), s.kind, s.status,
         s.conf == null ? '' : s.conf.toFixed(2), q(s.text), q(s.translation?.en || ''), q(s.translation?.[tl] || ''), q(s.alt_text || ''), q(noteText(s.note || ''))].join(';'))].join('\n'), 'text/csv')
   } else {
     const head = t(`Transkript: ${proj.name}\nZeiten ${origin ? 'in UTC' : 'ab Beginn der Aufnahme'}. Blöcke mit „Entwurf“ stammen von der KI und sind ungeprüft; die Übersetzung ist ein Entwurf und ersetzt keine beeidigte Übersetzung.\n`,
       `Transcript: ${proj.name}\nTimes ${origin ? 'in UTC' : 'from the start of the recording'}. Blocks marked “draft” come from the AI and are unchecked; the translation is a draft and does not replace a certified translation.\n`)
     const note = creditsLines(doc.credits)
-    download(`${base}_transkript.txt`, head + (note.length ? note.join('\n') + '\n' : '') + '\n' + lines.map((s, i) => [
+    download(`${base}_${t('transkript', 'transcript')}.txt`, head + (note.length ? note.join('\n') + '\n' : '') + '\n' + lines.map((s, i) => [
       `${i + 1}. [${clockAt(s.start, origin, true)} – ${clockAt(s.end, origin, true)}] ${trackName(s.track)}${s.speaker ? ` · ${s.speaker}` : ''} · ${s.status === 'checked' ? t('geprüft', 'checked') : t('Entwurf', 'draft')}${s.conf != null ? ` · ${Math.round(s.conf * 100)} %` : ''}`,
       `  ${t('Original', 'Original')} (${s.lang || '?'}): ${s.kind === 'sound' ? `[${s.text}]` : s.text}`,
       ...(tl !== 'en' && s.translation?.en ? [`  ${t('Englisch (Entwurf)', 'English (draft)')}: ${s.translation.en}`] : []),

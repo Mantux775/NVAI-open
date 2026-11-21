@@ -142,7 +142,8 @@ comes from:
 
 A voice scene takes the length of its take, so conforming never cuts off the end of a sentence. Conform puts the lines
 on their own audio track "Voice" (on the Mac since 0.5.4), which it adds the first time; remove it like any other track, and the next conform
-brings it back. The export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
+brings it back. Sound effects get their own track "Sounds" the same way (since 0.5.31, Mac 0.5.12; before, they shared
+A2 with the music and cut a hole into it). The export brings the mix to −14 LUFS. In our test three lines took 30 s including loading the model.
 
 ## Characters
 

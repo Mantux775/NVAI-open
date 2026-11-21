@@ -39,6 +39,20 @@ def progress(frac: float, stage: str = "") -> None:
     emit(progress=round(max(0.0, min(1.0, frac)), 4), stage=stage)
 
 
+_LANG = "de"
+
+
+def set_lang(code: Any) -> None:
+    """Sprache der Meldungen (der Server gibt sie in den Einstellungen mit); die Modell-Bausteine lesen NVAI_LANG."""
+    global _LANG
+    _LANG = "en" if str(code or "de").lower().startswith("en") else "de"
+    os.environ["NVAI_LANG"] = _LANG
+
+
+def L(de: str, en: str) -> str:
+    return de if _LANG == "de" else en
+
+
 # --------------------------------------------------------------------------------------------- Lesen, Schreiben
 
 def probe(path: str) -> dict[str, Any]:
@@ -64,14 +78,17 @@ def probe(path: str) -> dict[str, Any]:
 
 
 def decode_blocks(path: str, sr: int, channels: int, block_seconds: float = BLOCK_SECONDS,
-                  start: float = 0.0, end: float | None = None) -> Iterator[np.ndarray]:
-    """Tonspur in Blöcken als float32 (Proben, Kanäle) mit Rate sr; start/end in Sekunden (Auswahl)."""
+                  start: float = 0.0, end: float | None = None, stats: dict[str, Any] | None = None) -> Iterator[np.ndarray]:
+    """Tonspur in Blöcken als float32 (Proben, Kanäle) mit Rate sr; start/end in Sekunden (Auswahl). Ein beschädigtes
+    Paket (kaputter AAC- oder MP3-Rahmen) bricht das Lesen nicht ab: Es wird Stille seiner Länge, damit die Zeit danach
+    stimmt, gezählt in stats["decode_errors"]."""
     import av
     layout = "mono" if channels == 1 else "stereo"
     target = max(1, int(block_seconds * sr))
     first = int(round(start * sr))
     last = int(round(end * sr)) if end is not None else None
     pos = 0  # Probe der Ausgabe ab Dateianfang
+    bad = good = 0
     with av.open(path) as c:
         a = next(s for s in c.streams if s.type == "audio")
         if start > 2:
@@ -81,19 +98,35 @@ def decode_blocks(path: str, sr: int, channels: int, block_seconds: float = BLOC
         n = 0
         started = start <= 2
         done = False
+        frame_len = 0  # Länge des letzten Rahmens in Proben der Ausgabe (für Pakete ohne Dauer)
 
-        def frames() -> Iterator[np.ndarray]:
+        def frames() -> Iterator[Any]:
+            nonlocal bad, good, frame_len
             for packet in c.demux(a):
-                for frame in packet.decode():
+                try:
+                    got = packet.decode()
+                except av.error.FFmpegError:
+                    bad += 1
+                    dur = float(packet.duration * packet.time_base) if packet.duration and packet.time_base else 0.0
+                    yield int(round(dur * sr)) if dur > 0 else frame_len
+                    continue
+                for frame in got:
+                    good += 1
+                    if frame.sample_rate:
+                        frame_len = int(round(frame.samples * sr / frame.sample_rate))
                     yield frame
             yield None  # Resampler leeren
 
+        def chunks(frame: Any) -> list[np.ndarray]:
+            if isinstance(frame, int):  # Stille für ein beschädigtes Paket (erst, wenn die Lage feststeht)
+                return [np.zeros((frame, channels), np.float32)] if frame > 0 and started else []
+            return [f.to_ndarray().reshape(-1, channels).astype(np.float32, copy=False) for f in res.resample(frame)]
+
         for frame in frames():
-            if frame is not None and not started:
+            if frame is not None and not isinstance(frame, int) and not started:
                 pos = int(round(float(frame.pts * frame.time_base) * sr)) if frame.pts is not None else 0
                 started = True
-            for f in res.resample(frame):
-                arr = f.to_ndarray().reshape(-1, channels).astype(np.float32, copy=False)
+            for arr in chunks(frame):
                 lo, hi = pos, pos + len(arr)
                 pos = hi
                 if hi <= first:
@@ -117,6 +150,11 @@ def decode_blocks(path: str, sr: int, channels: int, block_seconds: float = BLOC
                 break
         if n:
             yield np.concatenate(buf)
+    if stats is not None:
+        stats["decode_errors"] = bad
+    if bad and not good:
+        raise SystemExit(L("Die Tonspur lässt sich nicht dekodieren (jedes Paket beschädigt).",
+                           "The audio track cannot be decoded (every packet is damaged)."))
 
 
 def read_blocks(path: str, block_seconds: float = BLOCK_SECONDS, start: int = 0,
@@ -234,6 +272,8 @@ class Writer:
 
     def add(self, block: np.ndarray) -> None:
         block = np.clip(block, -1.0, 1.0)
+        if np.isnan(block).any():  # NaN (beschädigte Float-Quelle, Modell): als Stille, PCM kennt kein NaN
+            block = np.nan_to_num(block, copy=False, nan=0.0)
         self.f.write(block)
         self.frames += len(block)
         if len(block):
@@ -285,6 +325,10 @@ class Loudness:
         self.clipped = 0
 
     def add(self, block: np.ndarray) -> None:
+        if not np.isfinite(block).all():
+            # NaN/Unendlich aus Float-Quellen: Sonst wurden Spitze und Pegel NaN/Infinity, und jede Antwort mit dem
+            # Projekt scheiterte (JSON kennt beides nicht). Wie in der geschriebenen Spur: NaN als Stille, ±∞ als ±1
+            block = np.nan_to_num(block, nan=0.0, posinf=1.0, neginf=-1.0)
         self.peak = max(self.peak, float(np.abs(block).max()) if len(block) else 0.0)
         self.clipped += int((np.abs(block) >= 0.999).sum())
         w = np.empty_like(block, dtype=np.float64)
@@ -361,7 +405,7 @@ def cmd_prepare(s: dict[str, Any]) -> dict[str, Any]:
     """Quelle (Audio oder Video) einlesen: Arbeitsdatei FLAC, Wellenform, MP3-Vorschau, Messwerte."""
     pr = probe(s["src"])
     if not pr.get("has_audio"):
-        raise SystemExit("Die Datei hat keine Tonspur.")
+        raise SystemExit(L("Die Datei hat keine Tonspur.", "The file has no audio track."))
     sr = int(s.get("sr") or pr["sample_rate"] or 48000)
     sr = sr if sr in (44100, 48000) else (44100 if sr % 11025 == 0 else 48000)
     channels = 1 if (pr.get("channels") or 2) == 1 else 2
@@ -369,18 +413,22 @@ def cmd_prepare(s: dict[str, Any]) -> dict[str, Any]:
     w = Writer(Path(s["flac"]), sr, channels, Path(s["peaks"]), Path(s["proxy"]))
     loud = Loudness(sr, channels)
     done = 0
-    for block in decode_blocks(s["src"], sr, channels, start=float(s.get("start") or 0), end=s.get("end")):
+    stats: dict[str, Any] = {}
+    for block in decode_blocks(s["src"], sr, channels, start=float(s.get("start") or 0), end=s.get("end"), stats=stats):
         w.add(block)
         loud.add(block)
         done += len(block)
         if duration:
-            progress(0.95 * done / (duration * sr), "einlesen")
+            progress(0.95 * done / (duration * sr), L("einlesen", "reading"))
     out = w.close()
     real = out["frames"] / sr
-    progress(0.96, "Brummen")
+    progress(0.96, L("Brummen", "hum"))
     hum = detect_hum(str(s["flac"]), sr, channels, real)
+    analysis = {**loud.result(), **hum}
+    if stats.get("decode_errors"):
+        analysis["decode_errors"] = stats["decode_errors"]
     return {"probe": pr, "sample_rate": sr, "channels": channels, "duration": round(real, 3), **out,
-            "analysis": {**loud.result(), **hum}}
+            "analysis": analysis}
 
 
 def _filter_graph(chain: list[dict[str, Any]], sr: int, channels: int, gain_db: float) -> tuple[Any, Any, Any]:
@@ -429,34 +477,25 @@ def _filter_graph(chain: list[dict[str, Any]], sr: int, channels: int, gain_db: 
         n = g.add("alimiter", "limit=0.891:level=false")  # −1 dBFS
         last.link_to(n)
         last = n
+    # Ausgabe immer verschränkt als float32: Die meisten Filter liefern planar (fltp, dblp), _through liest verschränkt.
+    # Ohne diesen Schritt kamen bei Stereo die Proben beider Kanäle durcheinander (gemessen 21.11.: links ein Sinus,
+    # rechts Stille ergab nach dem Trittschallfilter auf beiden Seiten denselben Pegel)
+    n = g.add("aformat", f"sample_fmts=flt:channel_layouts={layout}")
+    last.link_to(n)
+    last = n
     sink = g.add("abuffersink")
     last.link_to(sink)
     g.configure()
     return g, src, sink
 
 
-def cmd_process(s: dict[str, Any]) -> dict[str, Any]:
-    """Klassische Bearbeitung einer Spur (ohne KI): Filterkette, dann Lautheit auf ein Ziel (zwei Durchgänge:
-    erst messen, dann mit festem Pegel und Begrenzer)."""
+def _through(abuf: Any, sink: Any, blocks: Iterator[np.ndarray], sr: int, channels: int,
+             out: Callable[[np.ndarray], None], step: Callable[[int], None]) -> None:
+    """Blöcke (Proben, Kanäle) durch einen Filtergraphen aus _filter_graph; out bekommt die Ausgabe, step die Zahl der
+    eingespeisten Proben."""
     import av
-    src = s["src"]
-    sr, channels, frames = info(src)
-    first, frames = (int(s["region"][0]), int(s["region"][1])) if s.get("region") else (0, frames)
-    chain = s.get("chain") or []
-    gain = 0.0
-    target = next((float(st.get("target") or -16) for st in chain if st.get("type") == "loudness"), None)
-    if target is not None:
-        loud = Loudness(sr, channels)
-        for i, block in enumerate(read_blocks(src, start=first, frames=frames)):
-            loud.add(block)
-            progress(0.25 * min(1.0, (i + 1) * BLOCK_SECONDS * sr / max(1, frames)), "messen")
-        lufs = loud.result()["lufs"]
-        gain = (target - lufs) if lufs is not None else 0.0
-    g, abuf, sink = _filter_graph(chain, sr, channels, gain)
-    w = Writer(Path(s["flac"]), sr, channels, Path(s["peaks"]), Path(s["proxy"]))
-    loud2 = Loudness(sr, channels)
-    pts = 0
     layout = "mono" if channels == 1 else "stereo"
+    pts = 0
 
     def pull() -> None:
         while True:
@@ -464,12 +503,9 @@ def cmd_process(s: dict[str, Any]) -> dict[str, Any]:
                 f = sink.pull()
             except (av.BlockingIOError, av.EOFError):
                 return
-            arr = f.to_ndarray().reshape(-1, channels).astype(np.float32, copy=False)
-            w.add(arr)
-            loud2.add(arr)
+            out(f.to_ndarray().reshape(-1, channels).astype(np.float32, copy=False))
 
-    base = 0.25 if target is not None else 0.0
-    for i, block in enumerate(read_blocks(src, start=first, frames=frames)):
+    for block in blocks:
         frame = av.AudioFrame.from_ndarray(np.ascontiguousarray(block.reshape(1, -1)), format="flt", layout=layout)
         frame.sample_rate = sr
         frame.pts = pts
@@ -477,9 +513,41 @@ def cmd_process(s: dict[str, Any]) -> dict[str, Any]:
         pts += len(block)
         abuf.push(frame)
         pull()
-        progress(base + (0.98 - base) * min(1.0, pts / max(1, frames)), "bearbeiten")
+        step(pts)
     abuf.push(None)
     pull()
+
+
+def cmd_process(s: dict[str, Any]) -> dict[str, Any]:
+    """Klassische Bearbeitung einer Spur (ohne KI): Filterkette, dann Lautheit auf ein Ziel (zwei Durchgänge:
+    erst messen, dann mit festem Pegel und Begrenzer)."""
+    src = s["src"]
+    sr, channels, frames = info(src)
+    first, frames = (int(s["region"][0]), int(s["region"][1])) if s.get("region") else (0, frames)
+    chain = s.get("chain") or []
+    gain = 0.0
+    target = next((float(st.get("target") or -16) for st in chain if st.get("type") == "loudness"), None)
+    if target is not None:
+        # Gemessen wird hinter derselben Filterkette (ohne Pegel und Begrenzer): Die Kette ändert die Lautheit
+        # („Pegel angleichen“ hebt leise Stellen kräftig an). An der unbearbeiteten Spur gemessen verfehlte das Ergebnis
+        # das Ziel und lief in den Begrenzer.
+        loud = Loudness(sr, channels)
+        _g0, abuf0, sink0 = _filter_graph([st for st in chain if st.get("type") != "loudness"], sr, channels, 0.0)
+        _through(abuf0, sink0, read_blocks(src, start=first, frames=frames), sr, channels, loud.add,
+                 lambda done: progress(0.25 * min(1.0, done / max(1, frames)), L("messen", "measuring")))
+        lufs = loud.result()["lufs"]
+        gain = (target - lufs) if lufs is not None else 0.0
+    _g, abuf, sink = _filter_graph(chain, sr, channels, gain)
+    w = Writer(Path(s["flac"]), sr, channels, Path(s["peaks"]), Path(s["proxy"]))
+    loud2 = Loudness(sr, channels)
+
+    def keep(arr: np.ndarray) -> None:
+        w.add(arr)
+        loud2.add(arr)
+
+    base = 0.25 if target is not None else 0.0
+    _through(abuf, sink, read_blocks(src, start=first, frames=frames), sr, channels, keep,
+             lambda done: progress(base + (0.98 - base) * min(1.0, done / max(1, frames)), L("bearbeiten", "processing")))
     out = w.close()
     return {**out, "sample_rate": sr, "channels": channels, "gain_db": round(gain, 2),
             "analysis": loud2.result()}
@@ -491,12 +559,12 @@ def cmd_export(s: dict[str, Any]) -> dict[str, Any]:
     import soundfile as sf
     tracks = [t for t in s["tracks"] if not t.get("mute")]
     if not tracks:
-        raise SystemExit("Keine Spur zum Mischen.")
+        raise SystemExit(L("Keine Spur zum Mischen.", "No track to mix."))
     sr, channels, frames = info(tracks[0]["file"])
     for t in tracks[1:]:
         sr2, _, fr2 = info(t["file"])
         if sr2 != sr:
-            raise SystemExit("Spuren mit verschiedener Abtastrate.")
+            raise SystemExit(L("Spuren mit verschiedener Abtastrate.", "Tracks with different sample rates."))
         frames = max(frames, fr2)
     # Ausschnitt (Ton-Forensik: Export einer Auswahl)
     first = 0
@@ -543,7 +611,7 @@ def cmd_export(s: dict[str, Any]) -> dict[str, Any]:
                 peak = max(peak, float(np.abs(acc).max()))
                 f.write(np.clip(acc, -1, 1))
                 done += len(acc)
-                progress(done / max(1, frames), "mischen")
+                progress(done / max(1, frames), L("mischen", "mixing"))
     else:
         video_src = s.get("video_src")
         c = av.open(str(tmp), "w")
@@ -564,11 +632,15 @@ def cmd_export(s: dict[str, Any]) -> dict[str, Any]:
             frame = av.AudioFrame.from_ndarray(np.ascontiguousarray(np.clip(acc, -1, 1).reshape(1, -1)), format="flt",
                                                layout="mono" if channels == 1 else "stereo")
             frame.sample_rate = sr
+            # Zeitstempel setzen: Dann weist die Datei den Vorlauf des Kodierers aus und der Ton beginnt bei 0 (ohne lag
+            # er bei AAC 1024 Proben zu spät: 21 ms bei 48 kHz, 64 ms bei 16 kHz; wie forensic_tools.cmd_videoexport)
+            frame.pts = done
+            frame.time_base = Fraction(1, sr)
             for f in res.resample(frame):
                 for p in st_a.encode(f):
                     c.mux(p)
             done += len(acc)
-            progress((0.6 if vin else 1.0) * done / max(1, frames), "mischen")
+            progress((0.6 if vin else 1.0) * done / max(1, frames), L("mischen", "mixing"))
         for f in res.resample(None):
             for p in st_a.encode(f):
                 c.mux(p)
@@ -583,7 +655,7 @@ def cmd_export(s: dict[str, Any]) -> dict[str, Any]:
                 packet.stream = vout
                 c.mux(packet)
                 if total and i % 200 == 0:
-                    progress(0.6 + 0.4 * min(1.0, i / total), "Video übernehmen")
+                    progress(0.6 + 0.4 * min(1.0, i / total), L("Video übernehmen", "copying the video"))
             vin.close()
         c.close()
     os.replace(tmp, out)
@@ -598,7 +670,7 @@ def cmd_peaks(s: dict[str, Any]) -> dict[str, Any]:
     for block in read_blocks(s["src"]):
         pk.add(block)
         done += len(block)
-        progress(done / max(1, frames), "Wellenform")
+        progress(done / max(1, frames), L("Wellenform", "waveform"))
     return {"bars": pk.save(Path(s["peaks"]))}
 
 
@@ -663,7 +735,7 @@ def cmd_ai(s: dict[str, Any]) -> dict[str, Any]:
         if all(f.exists() for f in done_files):
             continue
         if model is None:
-            progress(k / n_win, "Modell laden")
+            progress(k / n_win, L("Modell laden", "loading the model"))
             t0 = time.time()
             model = a.load(Path(s["weights_dir"]), device, params)
             t_model = time.time() - t0
@@ -691,7 +763,7 @@ def cmd_ai(s: dict[str, Any]) -> dict[str, Any]:
         for st in want:
             sf.write(str(work / f"w{k:05d}_{st}.part.flac"), np.clip(stems[st], -1, 1), sr, format="FLAC", subtype="PCM_24")
             os.replace(work / f"w{k:05d}_{st}.part.flac", work / f"w{k:05d}_{st}.flac")
-        progress(0.9 * (k + 1) / n_win, f"Abschnitt {k + 1} von {n_win}")
+        progress(0.9 * (k + 1) / n_win, L(f"Abschnitt {k + 1} von {n_win}", f"section {k + 1} of {n_win}"))
         if device == "cuda" and k == 0:
             vram = torch.cuda.max_memory_allocated() / 1024**3
             emit(info={"vram_gb": round(vram, 2), "model_seconds": round(t_model, 1)})
@@ -713,7 +785,7 @@ def cmd_ai(s: dict[str, Any]) -> dict[str, Any]:
             else:
                 writers[st].add(y[: len(y) - ov])
                 tails[st] = y[len(y) - ov:]
-        progress(0.9 + 0.1 * (k + 1) / n_win, "zusammensetzen")
+        progress(0.9 + 0.1 * (k + 1) / n_win, L("zusammensetzen", "joining"))
     result = {st: w.close() for st, w in writers.items()}
     return {"stems": result, "windows": n_win, "sample_rate": sr, "channels": ch, "first": first, "frames": count,
             "model_seconds": round(t_model, 1)}
@@ -747,8 +819,9 @@ def cmd_learn(s: dict[str, Any]) -> dict[str, Any]:
     noise = [span(int(a), int(n)) for a, n in s["noise"]]
     noise = [x for x in noise if len(x) > sr // 10]
     if not noise:
-        raise SystemExit("Keine verwertbaren Beispiele (mindestens 0,1 s je Marke).")
-    progress(0.02, "Beispiele")
+        raise SystemExit(L("Keine verwertbaren Beispiele (mindestens 0,1 s je Marke).",
+                           "No usable examples (at least 0.1 s per marker)."))
+    progress(0.02, L("Beispiele", "examples"))
     # saubere Stellen: „behalten“-Marken, sonst 4-s-Stücke außerhalb der Beispiele (1 s Abstand)
     clean: list[np.ndarray] = [span(int(a), int(n)) for a, n in s.get("keep") or []]
     if sum(len(x) for x in clean) < sr * 60:
@@ -763,10 +836,10 @@ def cmd_learn(s: dict[str, Any]) -> dict[str, Any]:
             x = span(a, win)
             if len(x) and float(np.sqrt((x ** 2).mean())) > 1e-4:
                 clean.append(x)
-            progress(0.02 + 0.06 * min(1.0, sum(len(c) for c in clean) / (sr * 240)), "saubere Stellen")
+            progress(0.02 + 0.06 * min(1.0, sum(len(c) for c in clean) / (sr * 240)), L("saubere Stellen", "clean passages"))
     clean = [x for x in clean if len(x) >= sr]
     if not clean:
-        raise SystemExit("Zu wenig saubere Stellen gefunden.")
+        raise SystemExit(L("Zu wenig saubere Stellen gefunden.", "Too few clean passages found."))
     # ein Beispiel (bei mehreren das letzte) und ein Fünftel der sauberen Stellen bleiben zur Prüfung zurück
     val_noise = noise[-1:] if len(noise) > 1 else noise
     train_noise = noise[:-1] if len(noise) > 1 else noise
@@ -820,7 +893,8 @@ def cmd_learn(s: dict[str, Any]) -> dict[str, Any]:
         opt.step()
         sched.step()
         if step % 50 == 0:
-            progress(0.1 + 0.8 * step / steps, f"lernen {step}/{steps}, Verlust {loss.item():.4f}")
+            progress(0.1 + 0.8 * step / steps, L(f"lernen {step}/{steps}, Verlust {loss.item():.4f}",
+                                                 f"learning {step}/{steps}, loss {loss.item():.4f}"))
     train_seconds = time.time() - t0
     # Prüfung: Geräusch-Absenkung an zurückgehaltenen Mischungen, Pegel sauberer Stellen
     net.eval()
@@ -892,7 +966,7 @@ def cmd_scan(s: dict[str, Any]) -> dict[str, Any]:
         else:
             rest = data
         done += len(block)
-        progress(0.9 * done / max(1, frames), "Töne suchen")
+        progress(0.9 * done / max(1, frames), L("Töne suchen", "finding tones"))
     if not peak_bin:
         return {"clusters": [], "events": 0}
     pk = np.concatenate(peak_bin)
@@ -940,7 +1014,7 @@ def cmd_scan(s: dict[str, Any]) -> dict[str, Any]:
                          "score": round(len(evs) * max(0.0, ton - 30), 1),
                          "events": [[round(e["start"], 2), round(e["end"], 2)] for e in evs[:500]]})
     clusters.sort(key=lambda c: -c["score"])
-    progress(1.0, "fertig")
+    progress(1.0, L("fertig", "done"))
     return {"clusters": clusters[:12], "events": len(merged), "seconds_scanned": round(frames / sr, 1)}
 
 def cmd_wavcopy(s: dict[str, Any]) -> dict[str, Any]:
@@ -979,6 +1053,7 @@ COMMANDS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
 def main() -> None:
     cmd = sys.argv[1]
     settings = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8")) if len(sys.argv) > 2 else {}
+    set_lang(settings.get("lang"))
     t0 = time.time()
     try:
         result = COMMANDS[cmd](settings)

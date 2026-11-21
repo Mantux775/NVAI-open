@@ -63,8 +63,9 @@ PHOTOCRAFT_PORT = int(os.environ.get("ARTCRAFT_PHOTOCRAFT_PORT", "47821"))
 # Neueste Veröffentlichung. Die Seite getartcraft.com/apps/photocraft verlinkte im Oktober 2026
 # noch 0.7.0, während 0.10.0 aktuell war.
 PHOTOCRAFT_DOWNLOAD_URL = "https://github.com/storytold/photocraft/releases/latest"
-# Mit dieser Version ist der Steuerkanal vermessen (docs/mac-port.md). Ältere bekommen einen Hinweis.
-PHOTOCRAFT_TESTED_VERSION = "0.10.0"
+# Mit dieser Version ist der Steuerkanal zuletzt geprüft (vermessen mit 0.10.0 am 18.10.2026, erneut mit 0.23.1
+# am 21.11.2026; docs/mac-port.md). Ältere bekommen einen Hinweis, starten lässt sich PhotoCraft trotzdem.
+PHOTOCRAFT_TESTED_VERSION = "0.23.1"
 
 
 def photocraft_exe() -> Path | None:

@@ -189,7 +189,9 @@ final class VDRData {
         de = lang == .de
         self.t0 = t0
         self.duration = duration
-        nSec = Int(duration.rounded(.up)) + 1
+        // Reihen je Sekunde: begrenzt wie `VDR.checkTimes` (eine verstellte Uhr ergab sonst Reihen über Jahre und Int()
+        // stürzte bei unendlicher Dauer ab)
+        nSec = Int((duration.isFinite ? min(max(duration, 0), Double(VDR.maxSpanSeconds)) : 0).rounded(.up)) + 1
         for d in config["serial"] as? [[String: Any]] ?? [] {
             serialNames[d["channel"] as? Int ?? 0] = d["name"] as? String ?? ""
         }

@@ -148,9 +148,10 @@ export function LoraWizard({ st, ds, genProgress, onCreated, onReload, onJob, on
     onCreated(d.id)
     setStep(1)
   })
-  const upload = async (files: FileList | null): Promise<string[]> => {
+  // Ein Array, keine FileList: Die Liste des Eingabefelds ist lebendig und leer, sobald value = '' gesetzt ist
+  const upload = async (files: File[]): Promise<string[]> => {
     const ids: string[] = []
-    for (const f of Array.from(files ?? [])) ids.push((await api.upload(f)).id)
+    for (const f of files) ids.push((await api.upload(f)).id)
     return ids
   }
   const fileUrl = (name: string) => (ds ? `${loraFileUrl('datasets', ds.id, name)}?v=${ds.updated ?? 0}` : '')
@@ -258,7 +259,7 @@ export function LoraWizard({ st, ds, genProgress, onCreated, onReload, onJob, on
                   <div className="lt-toolbar">
                     <button className="btn small" disabled={busy} onClick={() => sketchInput.current?.click()}>{t('Vom Rechner …', 'From this computer …')}</button>
                     <input ref={sketchInput} type="file" accept="image/png,image/jpeg,image/webp" hidden
-                      onChange={(e) => { const f = e.target.files; e.target.value = ''; run(async () => api.loraDatasetSketch(ds.id, (await upload(f))[0])) }} />
+                      onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ''; if (f.length) run(async () => api.loraDatasetSketch(ds.id, (await upload(f))[0])) }} />
                     <button className="btn small" disabled={busy} onClick={() => setPicker('sketch')}>{t('Aus dem Verlauf …', 'From the history …')}</button>
                     {ds.sketch && (
                       <button className={`btn small${ds.template_from === ds.sketch ? ' on' : ''}`} disabled={busy}
@@ -343,7 +344,7 @@ export function LoraWizard({ st, ds, genProgress, onCreated, onReload, onJob, on
                   <div className="lt-toolbar">
                     <button className="btn small" disabled={busy} onClick={() => imagesInput.current?.click()}>{t('Vom Rechner …', 'From this computer …')}</button>
                     <input ref={imagesInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden
-                      onChange={(e) => { const f = e.target.files; e.target.value = ''; run(async () => api.loraDatasetAddAssets(ds.id, await upload(f))) }} />
+                      onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ''; if (f.length) run(async () => api.loraDatasetAddAssets(ds.id, await upload(f))) }} />
                     <button className="btn small" disabled={busy} onClick={() => setPicker('images')}>{t('Aus dem Verlauf …', 'From the history …')}</button>
                     <input className="lt-folder" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={t('Ordner mit Bildern und .txt (kohya) …', 'Folder with images and .txt (kohya) …')} />
                     <button className="btn small" disabled={busy || !folder.trim()} onClick={() => run(() => api.loraDatasetAddFolder(ds.id, folder))}>{t('Ordner übernehmen', 'Add folder')}</button>

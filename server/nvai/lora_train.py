@@ -40,7 +40,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from . import comfy, config, db, gpu, imagesize, jobs, loras, mesh_workers, registry, workflows
+from . import comfy, config, db, gpu, i18n, imagesize, jobs, loras, mesh_workers, registry, workflows
 from .i18n import t
 from .schemas import Job
 
@@ -351,7 +351,7 @@ def _ds_dir(ds_id: str) -> Path:
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(f".{uuid.uuid4().hex[:6]}.tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    db.replace_file(tmp, path)  # unter Windows scheitert os.replace kurz, solange jemand die Datei liest
 
 
 def load_dataset(ds_id: str) -> dict[str, Any]:
@@ -919,7 +919,7 @@ async def submit_training(ds_id: str, epochs: int, lr: str, rank: int, save_ever
            "class_word": ds.get("class_word", ""), "base": "qwenimage", "images": len(keep),
            "settings": {"epochs": epochs, "lr": lr, "rank": rank, "alpha": alpha, "save_every": save_every},
            "status": "queued", "queued": time.time(), "test_prompts": prompts or [], "tests": {},
-           "test_after": bool(test)}
+           "test_after": bool(test), "lang": i18n.lang()}
     if start_at and start_at > time.time() + 60:
         run.update({"status": "scheduled", "start_at": float(start_at)})
         _save_run(run)
@@ -937,18 +937,23 @@ async def _start_due() -> None:
     for run in await asyncio.to_thread(list_runs):
         if run.get("status") != "scheduled" or (run.get("start_at") or 0) > now:
             continue
-        try:
-            ds = load_dataset(run["dataset_id"])
-        except LookupError:
-            run.update({"status": "error", "error": t("Datensatz gelöscht.", "Dataset deleted.")})
-            _save_run(run)
-            continue
-        run["images"] = len([im for im in ds["images"] if im.get("status") != "reject"])
-        job = await jobs.submit("lora_train", {"run_id": run["id"], "dataset_id": run["dataset_id"],
-                                               "test": bool(run.get("test_after", True)),
-                                               "resume": bool(run.get("resume_pending"))})
-        run.update({"status": "queued", "queued": now, "job_id": job.id})
-        _save_run(run)
+        # Der Planer läuft ohne Anfrage (sonst Englisch): Meldungen und Auftrag in der Sprache beim Vormerken.
+        # Nur einzelne Felder setzen: list_runs lässt loss, quick und captions weg; zurückgeschrieben gingen sonst
+        # Verlustkurve, Schnelltests und der Abgleich geänderter Bildbeschreibungen beim Fortsetzen verloren.
+        with i18n.language(run.get("lang")):
+            if load_run(run["id"]).get("status") != "scheduled":  # inzwischen zurückgestellt
+                continue
+            try:
+                ds = load_dataset(run["dataset_id"])
+            except LookupError:
+                _update_run(run["id"], status="error", error=t("Datensatz gelöscht.", "Dataset deleted."))
+                jobs.publish({"type": "lora.changed", "run_id": run["id"]})
+                continue
+            images = len([im for im in ds["images"] if im.get("status") != "reject"])
+            job = await jobs.submit("lora_train", {"run_id": run["id"], "dataset_id": run["dataset_id"],
+                                                   "test": bool(run.get("test_after", True)),
+                                                   "resume": bool(run.get("resume_pending"))})
+            _update_run(run["id"], status="queued", queued=now, job_id=job.id, images=images)
         jobs.publish({"type": "lora.changed", "run_id": run["id"]})
 
 
@@ -964,10 +969,43 @@ async def _scheduler_loop() -> None:
         await asyncio.sleep(20)
 
 
+def _reconcile_runs() -> None:
+    """Beim Start: Läufe, die beim Beenden noch liefen oder warteten (Absturz, Neustart von Windows), haben keinen
+    Auftrag mehr (jobs._requeue_orphans bricht alle ab). Ohne Abgleich blieben sie für immer auf „läuft“: Fortsetzen,
+    Löschen und „Zustand löschen“ lehnten ab. Was der letzte Abschnitt noch schrieb, wird vorher eingeordnet."""
+    if not OUTPUT.exists():
+        return
+    for folder in OUTPUT.iterdir():
+        if not (folder.is_dir() and _RUN_ID.match(folder.name) and (folder / "run.json").exists()):
+            continue
+        try:
+            run = load_run(folder.name)
+            if run.get("status") not in ("running", "queued"):
+                continue
+            segs = run.get("segments") or []
+            if run.get("status") == "running" and segs:
+                s = run.get("settings") or {}
+                first = int(segs[-1].get("from_epoch") or 0)
+                _sync_outputs(run["id"], f"{run['trigger']}__s{first}", first, int(s.get("epochs") or 0),
+                              int(s.get("save_every") or 1))
+            st = load_run(folder.name).get("state")
+            with i18n.language(run.get("lang")):
+                note = (t(f"Durch einen Neustart unterbrochen; Fortsetzen macht nach Epoche {st['epoch']} weiter.",
+                          f"Interrupted by a restart; resume continues after epoch {st['epoch']}.") if st else
+                        t("Durch einen Neustart unterbrochen, bevor ein Haltepunkt gespeichert war; Fortsetzen "
+                          "beginnt von vorn.",
+                          "Interrupted by a restart before a checkpoint was saved; resume starts over."))
+            _update_run(run["id"], status="cancelled", finished=time.time(), live=None, pause=None, note=note)
+        except Exception:  # noqa: BLE001 - ein kaputter Lauf darf den Start nicht verhindern
+            traceback.print_exc()
+
+
 def start_scheduler() -> None:
-    """Beim Start der App: vorgemerkte Trainings zur Startzeit einreihen (auch nach einem Neustart)."""
+    """Beim Start der App: hängende Läufe abgleichen, dann vorgemerkte Trainings zur Startzeit einreihen (auch nach
+    einem Neustart)."""
     global _scheduler
     if _scheduler is None or _scheduler.done():
+        _reconcile_runs()
         _scheduler = asyncio.create_task(_scheduler_loop())
 
 
@@ -1035,6 +1073,9 @@ async def _run(cmd: list[Any], ctx: jobs.JobContext, log: Path, base: float, spa
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1", **(env_extra or {})}
     for key in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"):
         env.pop(key, None)
+    if gpu.multi_gpu() and not gpu.cpu_mode():
+        # mehrere Karten: dieselbe, die _free_gpu räumt (sonst rechnete accelerate auf Karte 0)
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu.device_for("image"))
     cwd = TOOL if TOOL.exists() else ROOT
     with log.open("a", encoding="utf-8") as fh:
         fh.write(f"\n=== {title} {time.strftime('%Y-%m-%d %H:%M:%S')}\n{' '.join(map(str, cmd))}\n")
@@ -1177,6 +1218,7 @@ async def _train(job: Job, ctx: jobs.JobContext) -> list[str]:
                       resumed=now if resume else None, job_id=job.id, error=None, pause=None, segments=segs,
                       log=str(log), resume_pending=None)
     test = bool(p.get("test"))
+    trained = False
     stop = {"epoch": False}
 
     def should_stop() -> bool:
@@ -1233,7 +1275,9 @@ async def _train(job: Job, ctx: jobs.JobContext) -> list[str]:
             if "Random states saved in" in line and "-state" in line:
                 with contextlib.suppress(Exception):
                     _sync_outputs(run_id, seg, start_epoch, total, save_every)
-                if _PAUSE.get(run_id) == "epoch":
+                # nur nach einem Epochen-Zustand (<seg>-000005-state) anhalten: den End-Zustand (<seg>-state) schreibt
+                # musubi vor dem Endmodell, ein Anhalten dort verlöre die fertige LoRA (Pause in der letzten Epoche)
+                if _PAUSE.get(run_id) == "epoch" and re.search(re.escape(seg) + r"-\d+-state", line):
                     stop["epoch"] = True
                 jobs.publish({"type": "lora.changed", "run_id": run_id})
                 return
@@ -1295,8 +1339,7 @@ async def _train(job: Job, ctx: jobs.JobContext) -> list[str]:
         run = _update_run(run_id, status="done", finished=time.time(), loss=loss_pts[-LOSS_MAX:], live=None,
                           pause=None, note=None)
         jobs.publish({"type": "lora.changed", "run_id": run_id})
-        if test:
-            await _test_run(run, ctx, run.get("test_prompts") or None, 0.92, 0.08)
+        trained = True
     except asyncio.CancelledError:
         with contextlib.suppress(Exception):
             _update_run(run_id, status="cancelled", finished=time.time(), live=None, pause=None)
@@ -1309,7 +1352,32 @@ async def _train(job: Job, ctx: jobs.JobContext) -> list[str]:
         _PAUSE.pop(run_id, None)
         shutil.rmtree(TRAIN / run_id, ignore_errors=True)
         jobs.publish({"type": "lora.changed", "run_id": run_id})
+    if test and trained:
+        await _tests_after_training(run_id, run, ctx)
     return []
+
+
+async def _tests_after_training(run_id: str, run: dict[str, Any], ctx: jobs.JobContext) -> None:
+    """Probebilder nach dem Training als eigener Schritt: Ein Fehler oder Abbrechen hier lässt den Lauf fertig (vorher
+    wurde aus „fertig“ nach Stunden Training „Fehler“ bzw. „abgebrochen“, und „Fortsetzen“ lehnte der Server ab)."""
+    if inference_entry() is None:
+        _update_run(run_id, note=t("Probebilder übersprungen: Qwen-Image-2512 fehlt (unter „Modelle“).",
+                                   "Test images skipped: Qwen-Image-2512 is missing (under “Models”)."))
+        jobs.publish({"type": "lora.changed", "run_id": run_id})
+        return
+    try:
+        await _test_run(run, ctx, run.get("test_prompts") or None, 0.92, 0.08)
+    except asyncio.CancelledError:
+        with contextlib.suppress(Exception):
+            _update_run(run_id, note=t("Probebilder abgebrochen; das Training ist fertig.",
+                                       "Test images cancelled; the training is finished."))
+        jobs.publish({"type": "lora.changed", "run_id": run_id})
+        raise
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            _update_run(run_id, note=t(f"Probebilder gescheitert: {exc}", f"Test images failed: {exc}"))
+        jobs.publish({"type": "lora.changed", "run_id": run_id})
+        raise
 
 
 async def request_pause(run_id: str, mode: str) -> dict[str, Any]:
@@ -1334,6 +1402,17 @@ async def request_pause(run_id: str, mode: str) -> dict[str, Any]:
     return run
 
 
+def _need_dataset(run: dict[str, Any]) -> None:
+    """Läufe von Hand (ohne run.json, etwa die ersten Somi-LoRAs) haben keinen Datensatz in NVAI-open: Fortsetzen und
+    Korrigieren verständlich ablehnen (vorher ein KeyError, den die Route als 404 „dataset_id“ meldete)."""
+    if not run.get("dataset_id"):
+        raise LoraTrainError(t("Dieses Training wurde außerhalb von NVAI-open angelegt und hat keinen Datensatz hier: "
+                               "Fortsetzen und Korrigieren gehen nur mit einem Datensatz. Übernehmen und Probebilder "
+                               "gehen.",
+                               "This training was made outside NVAI-open and has no dataset here: resume and correct "
+                               "need a dataset. Adopt and test images work."))
+
+
 async def resume_training(run_id: str, epochs: int | None = None, test: bool = True,
                           start_at: float | None = None) -> dict[str, Any]:
     """Fortsetzen ab dem gespeicherten Zustand (mit dem Datensatz, wie er jetzt ist) oder, mit mehr Epochen, ein
@@ -1344,6 +1423,7 @@ async def resume_training(run_id: str, epochs: int | None = None, test: bool = T
     if not status()["ready"]:
         raise LoraTrainError(t("Zum Training fehlt noch etwas: oben unter „Einrichten“.",
                                "Something is still missing for training: see “Set up” above."))
+    _need_dataset(run)
     load_dataset(run["dataset_id"])
     st = run.get("state") or {}
     done = int(st.get("epoch") or 0) if st else int(run.get("epoch_base") or 0)
@@ -1365,7 +1445,7 @@ async def resume_training(run_id: str, epochs: int | None = None, test: bool = T
                 if a.get("checkpoint") == fin.name:
                     a["checkpoint"] = new_name
         run["settings"] = {**run["settings"], "epochs": total}
-        run.update({"test_after": bool(test), "error": None, "note": None})
+        run.update({"test_after": bool(test), "error": None, "note": None, "lang": i18n.lang()})
         if start_at and start_at > time.time() + 60:
             run.update({"status": "scheduled", "start_at": float(start_at), "resume_pending": bool(st)})
             _save_run(run)
@@ -1394,6 +1474,7 @@ async def branch_training(run_id: str, checkpoint: str, extra_epochs: int, lr: s
     if not status()["ready"]:
         raise LoraTrainError(t("Zum Training fehlt noch etwas: oben unter „Einrichten“.",
                                "Something is still missing for training: see “Set up” above."))
+    _need_dataset(run)
     ds = load_dataset(run["dataset_id"])
     extra = max(1, min(int(extra_epochs), 100))
     new_id = _free_run_id(run["trigger"])
@@ -1411,7 +1492,7 @@ async def branch_training(run_id: str, checkpoint: str, extra_epochs: int, lr: s
            "settings": settings, "status": "queued", "queued": time.time(),
            "test_prompts": prompts or run.get("test_prompts") or [], "tests": {}, "test_after": bool(test),
            "epoch_base": int(ck["epoch"]), "epochs_done": int(ck["epoch"]), "init_weights": str(init),
-           "parent": {"run": run_id, "checkpoint": checkpoint, "epoch": int(ck["epoch"])}}
+           "parent": {"run": run_id, "checkpoint": checkpoint, "epoch": int(ck["epoch"])}, "lang": i18n.lang()}
     if start_at and start_at > time.time() + 60:
         new.update({"status": "scheduled", "start_at": float(start_at)})
         _save_run(new)
@@ -1516,14 +1597,15 @@ async def _test_run(run: dict[str, Any], ctx: jobs.JobContext, prompts: list[str
                 jobs.publish({"type": "lora.changed", "run_id": run["id"]})
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
-    run = load_run(run["id"])
-    old = run.get("tests") or {}
-    for names in (old.get("images") or {}).values():
-        for name in names:
-            (out / name).unlink(missing_ok=True)
-    run["tests"] = {"prompts": full, "images": images, "time": time.time(), "model_id": entry["id"],
-                    "size": [896, 1152], "seeds": [777 + k for k in range(len(full))]}
-    _save_run(run)
+    with _run_lock:  # wie _update_run: ein gleichzeitiges Übernehmen oder Statuswechsel geht nicht verloren
+        run = load_run(run["id"])
+        old = run.get("tests") or {}
+        for names in (old.get("images") or {}).values():
+            for name in names:
+                (out / name).unlink(missing_ok=True)
+        run["tests"] = {"prompts": full, "images": images, "time": time.time(), "model_id": entry["id"],
+                        "size": [896, 1152], "seeds": [777 + k for k in range(len(full))]}
+        _save_run(run)
     jobs.publish({"type": "lora.changed", "run_id": run["id"]})
 
 
@@ -1630,8 +1712,10 @@ def adopt(run_id: str, checkpoint: str, name: str = "") -> dict[str, Any]:
                                                      "epoch": ck["epoch"], "images": run.get("images"),
                                                      "dataset": run.get("name"), "settings": run.get("settings")}})
     entry = registry.get_entry(entry["id"]) or entry  # mit den eben ergänzten Trainingsangaben
-    run.setdefault("adopted", []).append({"checkpoint": checkpoint, "model_id": entry["id"], "time": time.time()})
-    _save_run(run)
+    with _run_lock:  # frisch laden: Prüfsumme und Kopie dauern, inzwischen können Probebilder oder Status dazukommen
+        cur = load_run(run_id)
+        cur.setdefault("adopted", []).append({"checkpoint": checkpoint, "model_id": entry["id"], "time": time.time()})
+        _save_run(cur)
     jobs.publish({"type": "models.changed"})
     jobs.publish({"type": "lora.changed", "run_id": run_id})
     return entry

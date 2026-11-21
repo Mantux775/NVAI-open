@@ -338,7 +338,7 @@ interne Tests. In einer SSH-Sitzung mit gesperrtem Schlüsselbund das Kennwort �
 
 ## Optional: PhotoCraft-Add-on
 
-**NVAI-open für PhotoCraft** verbindet PhotoCraft mit einem lokalen NVAI-open. Es braucht PhotoCraft ab 0.10.0:
+**NVAI-open für PhotoCraft** verbindet PhotoCraft mit einem lokalen NVAI-open. Es braucht PhotoCraft selbst (getestet mit 0.23.1):
 https://github.com/storytold/photocraft/releases/latest
 
 - **Windows:** Teil der vollständigen Installation. Fehlt PhotoCraft, bietet das Setup die Download-Seite an und

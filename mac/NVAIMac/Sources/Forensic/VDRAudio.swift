@@ -69,7 +69,7 @@ enum VDRAudio {
                     continue
                 }
                 devs.append(Double(cum) / sr - Double(b.start - t0))
-                cum += Int(gp)
+                cum &+= Int(gp)   // Granule aus der Datei: eine beschädigte darf nicht durch Überlauf abstürzen lassen
                 prevID = b.id
             }
             if devs.count >= 20 {
@@ -139,11 +139,14 @@ enum VDRAudio {
             }
         }
 
-        func zeros(_ n: Int, pos: Int, sr: Int) throws {
+        /// Stille ab Lage `pos` (Versatz, Lücke, Rest bis zum Ende). Je 65 536 Proben wird der Abbruch geprüft: Eine lange
+        /// Lücke lief vorher ohne Halt durch, auch am Speicherwächter vorbei (er wirkt über den Abbruch).
+        func zeros(_ n: Int, pos: Int, sr: Int, cancelled: () -> Bool) throws {
             var left = n
             var p = pos
-            let chunk = [Float](repeating: 0, count: min(n, 1 << 16))
+            let chunk = [Float](repeating: 0, count: min(max(n, 0), 1 << 16))
             while left > 0 {
+                if cancelled() { throw CancellationError() }
                 let k = min(left, chunk.count)
                 try chunk.withUnsafeBufferPointer { try write(UnsafeBufferPointer(rebasing: $0[0..<k]), pos: p, sr: sr) }
                 left -= k
@@ -175,8 +178,9 @@ enum VDRAudio {
         // gemeinsamer Bezug aller Kanäle: um den üblichen Versatz der Schnitte verschieben
         let shift = Int((job.offset * Double(sr)).rounded(.toNearestOrEven))
         var skip = 0
+        let stop = { progress.cancelled }
         if shift > 0 {
-            for s in sides { try s.zeros(shift, pos: pos, sr: sr) }
+            for s in sides { try s.zeros(shift, pos: pos, sr: sr, cancelled: stop) }
             pos += shift
         } else if shift < 0 {
             skip = -shift
@@ -233,7 +237,7 @@ enum VDRAudio {
                 pads.append(JSONObject(["t": Py.round(Double(pos) / Double(sr), 2), "seconds": r3(Double(gap) / Double(sr)),
                                         "block": b.id, "kind": "pad"]))
                 for s in sides {
-                    try s.zeros(gap, pos: pos, sr: sr)
+                    try s.zeros(gap, pos: pos, sr: sr, cancelled: stop)
                     s.tail = nil
                 }
                 pos += gap
@@ -274,7 +278,7 @@ enum VDRAudio {
         // bis zum Ende der Aufnahme auffüllen (alle Spuren decken die ganze Aufnahme ab)
         let total = Int((job.duration * Double(sr)).rounded(.toNearestOrEven))
         if pos < total {
-            for s in sides { try s.zeros(total - pos, pos: pos, sr: sr) }
+            for s in sides { try s.zeros(total - pos, pos: pos, sr: sr, cancelled: stop) }
             pos = total
         }
         progress.set(key, 0.98)

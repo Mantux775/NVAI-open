@@ -376,6 +376,8 @@ export function LorasPanel({ event, modelsVersion, onShowModels }: Props) {
   const [progress, setProgress] = useState<Record<string, Progress>>({})
   // laufende Aufträge je Art: Einrichten, Bilder je Datensatz, Probebilder je Training
   const [jobs, setJobs] = useState<{ setup?: string; gen: Record<string, string>; test: Record<string, string> }>({ gen: {}, test: {} })
+  const jobsRef = useRef(jobs)  // für den Abgleich (syncJobs): welche Aufträge bisher hier liefen
+  jobsRef.current = jobs
   // rechte Seite: Übersicht, Einrichten, Meine LoRAs, neuer Assistent, Datensatz oder Training
   const [main, setMain] = useState<'home' | 'setup' | 'mine' | 'new' | 'dataset' | 'run'>('home')
   const [wizardStep, setWizardStep] = useState<number | undefined>(undefined)
@@ -408,10 +410,17 @@ export function LorasPanel({ event, modelsVersion, onShowModels }: Props) {
   useEffect(loadDs, [loadDs])
   useEffect(loadRun, [loadRun])
 
-  // Laufende Aufträge nach dem Neuladen der Seite wiederfinden
-  useEffect(() => {
-    Promise.all(['lora_setup', 'lora_dataset', 'lora_test'].map((k) => api.activeJobs(k).catch(() => [] as Job[])))
+  // Laufende Aufträge vom Server abgleichen: nach dem Neuladen der Seite, bei „lora.changed“, nach „Abbrechen“ und alle
+  // 5 s, solange einer läuft. Kommen zwei Ereignisse vor dem nächsten Rendern an, sieht dieser Bereich nur das letzte;
+  // ein verpasstes job.done (oder ein Serverneustart) ließ sonst Fortschritt und „Abbrechen“ bis zum Neuladen stehen
+  const syncJobs = useCallback(() => {
+    Promise.all(['lora_setup', 'lora_dataset', 'lora_test'].map((k) => api.activeJobs(k).catch(() => null)))
       .then(([setup, gen, test]) => {
+        if (!setup || !gen || !test) return  // Server gerade nicht erreichbar: nichts verwerfen
+        const active = new Set([...setup, ...gen, ...test].map((j) => j.id))
+        const old = jobsRef.current
+        const gone = [old.setup, ...Object.values(old.gen), ...Object.values(old.test)]
+          .filter((id): id is string => Boolean(id) && !active.has(id as string))
         setJobs({
           setup: setup[0]?.id,
           gen: Object.fromEntries(gen.map((j) => [String(j.params?.dataset_id), j.id])),
@@ -419,9 +428,21 @@ export function LorasPanel({ event, modelsVersion, onShowModels }: Props) {
         })
         const p: Record<string, Progress> = {}
         for (const j of [...setup, ...gen, ...test]) p[j.id] = { progress: j.progress ?? 0, stage: j.stage ?? '' }
-        setProgress((old) => ({ ...p, ...old }))
+        setProgress((old) => {
+          const n = { ...p, ...old }
+          for (const id of gone) delete n[id]
+          return n
+        })
       })
   }, [])
+  useEffect(syncJobs, [syncJobs])
+
+  const tracking = Boolean(jobs.setup) || Object.keys(jobs.gen).length > 0 || Object.keys(jobs.test).length > 0
+  useEffect(() => {
+    if (!tracking) return
+    const timer = window.setInterval(syncJobs, 5000)
+    return () => window.clearInterval(timer)
+  }, [tracking, syncJobs])
 
   const refreshAll = useCallback(() => { loadStatus(); loadDs(); loadRun() }, [loadStatus, loadDs, loadRun])
   const refreshTimer = useRef<number | null>(null)
@@ -446,6 +467,7 @@ export function LorasPanel({ event, modelsVersion, onShowModels }: Props) {
         || st?.runs.some((r) => r.job_id === id))) setError(event.error)
       refreshSoon()
     } else if (event.type === 'lora.changed') {
+      syncJobs()
       refreshSoon()
     } else if (event.type === 'models.changed') {
       loadModels()
@@ -458,11 +480,16 @@ export function LorasPanel({ event, modelsVersion, onShowModels }: Props) {
     if (kind === 'gen') setJobs((j) => ({ ...j, gen: { ...j.gen, [key]: job.id } }))
     if (kind === 'test') setJobs((j) => ({ ...j, test: { ...j.test, [key]: job.id } }))
     // Nach „Training starten“ gleich das neue Training öffnen, mit Fortschritt und „Abbrechen“
-    if (kind === 'train') { loadStatus(); setRunId(typeof job.params?.run_id === 'string' ? job.params.run_id : null) }
+    if (kind === 'train') {
+      loadStatus()
+      setRunId(typeof job.params?.run_id === 'string' ? job.params.run_id : null)
+      setMain('run')  // auch im Modus „Alles auf einer Seite“ (vorher blieb die Datensatzseite stehen)
+    }
     refreshSoon()
   }
   const cancel = async (id: string) => {
     try { await api.cancelJob(id) } catch (e) { setError(String((e as Error).message ?? e)) }
+    syncJobs()  // „schon beendet“: dann verschwinden Fortschritt und Knopf hier
     refreshSoon()
   }
   const setup = async (parts: ('tool' | 'weights' | 'edit')[]) => {

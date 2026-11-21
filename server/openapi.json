@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.30",
+  "version": "0.5.31",
   "x-api-version": 1
  },
  "paths": {
@@ -1580,6 +1580,46 @@
          "type": "object",
          "additionalProperties": true,
          "title": "Response Api Project Delete Api Audio Projects  Pid  Delete"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/audio/projects/{pid}/prepare": {
+   "post": {
+    "summary": "Api Prepare",
+    "description": "Einen Fall nach Abbruch oder Fehler erneut einlesen.",
+    "operationId": "api_prepare_api_audio_projects__pid__prepare_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
         }
        }
       }
@@ -9938,6 +9978,11 @@
       "type": "boolean",
       "title": "Translate",
       "default": true
+     },
+     "force": {
+      "type": "boolean",
+      "title": "Force",
+      "default": false
      }
     },
     "type": "object",

@@ -145,7 +145,8 @@ wählst du, woher die Stimme kommt:
 
 Eine Sprecher-Szene wird so lang wie ihr Take, so schneidet Übernehmen nie das Satzende ab. Übernehmen legt die Zeilen
 auf eine eigene Tonspur „Stimme“ (auf dem Mac ab 0.5.4), die es beim ersten Mal anlegt; sie lässt sich wie jede Spur entfernen, das nächste
-Übernehmen legt sie wieder an. Der Export bringt die Mischung auf −14 LUFS. Im Test brauchten drei Zeilen samt Laden
+Übernehmen legt sie wieder an. Geräusche bekommen ebenso eine eigene Spur „Geräusche“ (seit 0.5.31, Mac 0.5.12; vorher
+teilten sie A2 mit der Musik und schnitten ein Loch hinein). Der Export bringt die Mischung auf −14 LUFS. Im Test brauchten drei Zeilen samt Laden
 des Modells 30 s.
 
 ## Figuren

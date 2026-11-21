@@ -403,7 +403,7 @@ async def health() -> dict[str, Any]:
 @app.post("/api/backend/start")
 async def backend_start() -> dict[str, Any]:
     if await comfy.is_running():
-        return {"started": False, "reason": "laeuft bereits"}
+        return {"started": False, "reason": t("läuft bereits", "already running")}
     comfy.start()
     ready = await comfy.wait_until_ready()
     return {"started": ready}
@@ -931,7 +931,9 @@ async def upscale_video(req: UpscaleVideoRequest) -> Job:
     """Video hochskalieren (seit 0.5.23): RelayVSR verdoppelt Breite und Hoehe, Ton und Bildrate bleiben
     (jobs._video_upscale)."""
     asset = db.get_asset(req.asset_id)
-    if asset is None or asset.kind != "video":
+    # auch ein hochgeladenes Video (Art „upload“): so lädt es das MCP-Werkzeug mit video_path hoch
+    if asset is None or not (asset.kind == "video" or (
+            asset.kind == "upload" and comfy.kind_for(Path(asset.filename)) == "video")):
         raise HTTPException(404, t(f"Video nicht gefunden: {req.asset_id}", f"Video not found: {req.asset_id}"))
     model_id = req.model_id or registry.get_active_model("video_upscale")
     entry = registry.get_entry(model_id) if model_id else None
@@ -1014,8 +1016,8 @@ async def generate_3d(req: Generate3DRequest) -> Job:
     if not worker.is_set_up():
         raise HTTPException(
             409,
-            f"{worker.name}-Worker ist nicht eingerichtet. "
-            f"scripts/setup_{worker.key}.ps1 ausfuehren.",
+            t(f"{worker.name}-Worker ist nicht eingerichtet: scripts/setup_{worker.key}.ps1 ausführen.",
+              f"The {worker.name} worker is not set up: run scripts/setup_{worker.key}.ps1."),
         )
     return await jobs.submit("img23d", req.model_dump())
 

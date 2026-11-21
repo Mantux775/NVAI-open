@@ -564,12 +564,9 @@ export async function videoWithSound(o: VOptions): Promise<VResult> {
   const cfg: AudioEncoderConfig = { codec: 'mp4a.40.2', sampleRate: OUT_SR, numberOfChannels: ch, bitrate }
   const supported = typeof AudioEncoder !== 'undefined' && (await AudioEncoder.isConfigSupported(cfg).catch(() => ({ supported: false }))).supported
   if (!supported) throw new Error(t('Dieser Browser kann kein AAC kodieren. Bitte Edge oder Chrome unter Windows oder macOS verwenden.', 'This browser cannot encode AAC. Please use Edge or Chrome on Windows or macOS.'))
-  let priming = 0
-  try {
-    priming = await aacPriming(cfg)
-  } catch {
-    priming = 0
-  }
+  // Scheitert die Messung, bricht der Export mit der Meldung von aacPriming ab (vorher wurde der Fehler geschluckt, und
+  // der Ton lag ohne Hinweis 44 ms daneben)
+  const priming = await aacPriming(cfg)
   const srcs: Src[] = await Promise.all(o.tracks.map(async (x) => {
     const wi = await wavInfo(x.file)
     const block = (wi.channels * wi.bits) / 8

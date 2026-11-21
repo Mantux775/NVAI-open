@@ -24,6 +24,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import shutil
 import time
 from pathlib import Path
 from typing import Any
@@ -187,6 +188,24 @@ def _copy_part(job: Job, ctx: jobs.JobContext) -> dict[str, Any]:
     out = _unique(Path(prm["dest_dir"]) / f"{_safe(p['name'])} – Prüfpaket")
     fall = out / "fall"
     fall.mkdir(parents=True)
+    try:
+        return _copy_files(job, ctx, p, items, proxies, vname, out)
+    except BaseException:
+        _drop_package(out)
+        raise
+
+
+def _drop_package(out: Path) -> None:
+    """Halbes Prüfpaket nach Abbruch oder Fehler entfernen: Der Ordner ist in diesem Lauf neu angelegt (_unique), ohne
+    Prüfsummen und Prüf-App taugt er nicht zur Weitergabe und belegt sonst Gigabytes."""
+    with contextlib.suppress(OSError):
+        shutil.rmtree(out)
+
+
+def _copy_files(job: Job, ctx: jobs.JobContext, p: dict[str, Any], items: Any, proxies: Any, vname: Any,
+                out: Path) -> dict[str, Any]:
+    prm = job.params
+    fall = out / "fall"
     (out / "bearbeitung").mkdir()
     sums: dict[str, str] = {}
     total = sum(src.stat().st_size for src, _ in items)
@@ -259,20 +278,25 @@ def _finish(job: Job, state: dict[str, Any], originals: dict[str, Any]) -> dict[
 
 async def _package(job: Job, ctx: jobs.JobContext) -> list[str]:
     pid = job.params["project_id"]
-    state = await asyncio.to_thread(_copy_part, job, ctx)
+    state = await asyncio.to_thread(_copy_part, job, ctx)  # räumt bei Abbruch selbst auf
     originals: dict[str, Any] = {}
     todo = job.params["originals"]
-    for k, tid in enumerate(todo):
-        name = f"{tid}.wav"
-        dst = state["out"] / "fall" / "original" / name
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        base = state["share"] + (1 - state["share"]) * k / len(todo)
-        res = await al._run_tool("wavcopy", {"src": str(al._track_paths(pid, tid)["flac"]), "dst": str(dst)}, ctx,
-                                 0.97 * base, 0.97 * (1 - state["share"]) / len(todo), t("Originalton als WAV", "original audio as WAV"))
-        state["sums"][f"fall/original/{name}"] = res["sha256"]
-        state["bytes"] += res["bytes"]
-        originals[tid] = {"file": name, **{k2: res[k2] for k2 in ("sample_rate", "channels", "frames", "subtype", "format")}}
-    res = await asyncio.to_thread(_finish, job, state, originals)
+    try:
+        for k, tid in enumerate(todo):
+            name = f"{tid}.wav"
+            dst = state["out"] / "fall" / "original" / name
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            base = state["share"] + (1 - state["share"]) * k / len(todo)
+            res = await al._run_tool("wavcopy", {"src": str(al._track_paths(pid, tid)["flac"]), "dst": str(dst)}, ctx,
+                                     0.97 * base, 0.97 * (1 - state["share"]) / len(todo),
+                                     t("Originalton als WAV", "original audio as WAV"))
+            state["sums"][f"fall/original/{name}"] = res["sha256"]
+            state["bytes"] += res["bytes"]
+            originals[tid] = {"file": name, **{k2: res[k2] for k2 in ("sample_rate", "channels", "frames", "subtype", "format")}}
+        res = await asyncio.to_thread(_finish, job, state, originals)
+    except BaseException:
+        _drop_package(state["out"])
+        raise
     ctx.progress(1.0, t("fertig", "done"))
     al.update(pid, lambda q: q["history"].append(
         {"time": time.time(), "op": "export", "format": "pruefpaket", "path": res["path"], "file": Path(res["path"]).name,

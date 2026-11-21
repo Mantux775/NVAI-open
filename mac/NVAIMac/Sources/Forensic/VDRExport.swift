@@ -143,10 +143,15 @@ enum VDR {
             var lo = 0, hi = kid.count
             while lo < hi { let m = (lo + hi) / 2; if kid[m] < blocks[i].id { lo = m + 1 } else { hi = m } }
             let k = min(max(0, lo - 1), known.count - 1)
-            blocks[i].start = known[k].1 + (blocks[i].id - known[k].0) * blockSeconds
+            // Überlauf-sicher: Blocknummern aus Dateinamen können beliebig groß sein (dann lehnt `checkTimes` ab)
+            let diff = blocks[i].id - known[k].0
+            let (step, o1) = diff.multipliedReportingOverflow(by: blockSeconds)
+            let (start, o2) = known[k].1.addingReportingOverflow(step)
+            blocks[i].start = o1 || o2 ? (diff < 0 ? Int.min : Int.max) : start
             blocks[i].timeGuessed = true
         }
         blocks.sort { ($0.start, $0.id) < ($1.start, $1.id) }
+        try checkTimes(blocks)
         let t0 = blocks[0].start
         var gaps: [JSONObject] = []
         for (a, b) in zip(blocks, blocks.dropFirst()) {
@@ -163,6 +168,37 @@ enum VDR {
         let layout = blocks.allSatisfy(\.gz) ? "gz" : (blocks.contains(where: \.gz) ? "mixed" : "tar")
         return Export(folder: folder, track: track, tracks: tracks, blocks: blocks, t0: t0, end: blocks.last!.start + blockSeconds,
                       gaps: gaps, listedMissing: listedMissing, layout: layout, times: source, trackInfo: info)
+    }
+
+    /// Längste Zeitspanne eines Exports: Ein VDR hält höchstens 30 Tage (Langzeitspeicher). Mehr heißt fast immer eine
+    /// verstellte Uhr (etwa auf 2000 zurückgesetzt); der Fall liefe dann über Jahre, mit Reihen und Ton je Sekunde bis
+    /// dahin (Arbeitsspeicher, Platte, Ganzzahl-Überlauf).
+    static let maxSpanSeconds = 40 * 86400
+
+    /// Zeiten der Blöcke (nach Zeit sortiert) prüfen. Windows nimmt die Zeiten aus Track.txt ungeprüft; der Mac lehnt
+    /// eine Spanne über `maxSpanSeconds` mit Zeitraum und den Blöcken weit ab vom Rest ab, statt Speicher und Platte zu
+    /// füllen. Die Grenze ±2⁴⁰ s hält alle Rechnungen in Sekunden und Proben fern vom Überlauf.
+    static func checkTimes(_ blocks: [Block]) throws {
+        guard let first = blocks.first, let last = blocks.last else { return }
+        let limit = 1 << 40
+        let sane = first.start > -limit && last.start < limit
+        let span = sane ? last.start + blockSeconds - first.start : Int.max
+        guard span > maxSpanSeconds else { return }
+        let when = { (t: Int) in t > -limit && t < limit ? utc(t) + " UTC" : "\(t)" }
+        let mid = Double(blocks[blocks.count / 2].start)
+        let far = blocks.filter { abs(Double($0.start) - mid) > Double(maxSpanSeconds) / 2 }
+        let list = far.prefix(5).map { "\($0.id) (\(when($0.start)))" }.joined(separator: ", ") + (far.count > 5 ? " …" : "")
+        let days = sane ? String(Int((Double(span) / 86400).rounded())) : "?"
+        let maxDays = maxSpanSeconds / 86400
+        var de = "Die Zeiten der VDR-Blöcke reichen von \(when(first.start)) bis \(when(last.start)), über \(days) Tage; "
+            + "ein Fall nimmt höchstens \(maxDays) Tage. Meist war die Uhr des VDR verstellt (etwa auf 2000 zurückgesetzt)."
+        var en = "The VDR block times run from \(when(first.start)) to \(when(last.start)), over \(days) days; "
+            + "a case takes at most \(maxDays) days. Usually the VDR clock was wrong (for example reset to 2000)."
+        if !far.isEmpty {
+            de += " \(far.count) Blöcke weit ab vom Rest: \(list). Für einen Fall eine Kopie des Exports ohne diese Blöcke wählen."
+            en += " \(far.count) blocks far from the rest: \(list). For a case, choose a copy of the export without these blocks."
+        }
+        throw ForensicError(t(de, en))
     }
 
     // MARK: Block lesen (gzip + tar)
@@ -235,7 +271,9 @@ enum VDR {
         while p + 512 <= d.endIndex {
             if d[p..<(p + 512)].allSatisfy({ $0 == 0 }) { break }
             let name = field(0, 100)
-            let size = Int(field(124, 12).trimmingCharacters(in: .whitespaces), radix: 8) ?? 0
+            // nie negativ: „-1000“ im Kopf eines beschädigten Blocks gab einen umgekehrten Bereich (Absturz) oder einen
+            // Schritt zurück (Endlosschleife)
+            let size = max(0, Int(field(124, 12).trimmingCharacters(in: .whitespaces), radix: 8) ?? 0)
             let mtime = Int(field(136, 12).trimmingCharacters(in: .whitespaces), radix: 8) ?? 0
             let type = d[p + 156]
             let prefix = field(345, 155)

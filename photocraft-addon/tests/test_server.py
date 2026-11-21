@@ -40,7 +40,7 @@ def test_missing_programs(client, monkeypatch):
     state = client.get("/api/state").json()
     pc, nv = state["photocraft"], state["nvai"]
     assert (pc["connected"], pc["installed"], pc["outdated"]) == (False, False, False)
-    assert pc["download_url"] == config.PHOTOCRAFT_DOWNLOAD_URL and pc["tested_version"] == "0.10.0"
+    assert pc["download_url"] == config.PHOTOCRAFT_DOWNLOAD_URL and pc["tested_version"] == "0.23.1"
     assert (nv["connected"], nv["startable"], nv["starting"]) == (False, False, False)
 
     answer = client.post("/api/nvai/start")

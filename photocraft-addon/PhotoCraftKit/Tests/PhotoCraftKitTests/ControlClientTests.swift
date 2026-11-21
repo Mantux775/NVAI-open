@@ -171,6 +171,7 @@ final class LauncherAndNVAITests: XCTestCase {
             ("0.7.0", "0.10.0", true), ("0.9", "0.10.0", true), ("0.10.0", "0.10.0", false),
             ("0.10.0.0", "0.10.0", false), ("0.10.1", "0.10.0", false), ("1.0", "0.10.0", false),
             ("unbekannt", "0.10.0", false),
+            ("0.23.0", "0.23.1", true), ("0.23.1", "0.23.1", false), ("0.24", "0.23.1", false),
         ]
         for (version, reference, older) in cases {
             XCTAssertEqual(PhotoCraftLaunch.isVersion(version, olderThan: reference), older, "\(version) gegen \(reference)")

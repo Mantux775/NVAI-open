@@ -109,8 +109,8 @@ Die Brücke sucht bei jedem Statusabgleich neu, in dieser Reihenfolge:
    PhotoCraft-MSI ein, auch wenn der ArtCraft Launcher ihn installiert hat.
 3. `%ProgramFiles%\PhotoCraft\photocraft.exe`.
 
-Die Version kommt aus der Versionsressource der exe. Ist sie älter als 0.10.0 (damit ist der
-Steuerkanal vermessen), erscheint ein Hinweis mit Download-Knopf. Starten lässt sich PhotoCraft
+Die Version kommt aus der Versionsressource der exe. Ist sie älter als 0.23.1 (damit ist der
+Steuerkanal zuletzt geprüft, vermessen mit 0.10.0), erscheint ein Hinweis mit Download-Knopf. Starten lässt sich PhotoCraft
 trotzdem. Fehlt PhotoCraft ganz, zeigt das Panel „PhotoCraft ist nicht installiert“ mit Knopf
 „PhotoCraft herunterladen“. Nach der Installation geht es ohne Neustart weiter.
 

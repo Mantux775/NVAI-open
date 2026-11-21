@@ -71,8 +71,15 @@ async def _compute_spectro(pid: str, tid: str, ctx: jobs.JobContext, base_p: flo
     """Spektrogramm und grobe Sprachaktivität einer Spur rechnen und im Projekt eintragen."""
     src = al._track_paths(pid, tid)["flac"]
     base = _spec_base(pid, tid)
-    res = await al._run_tool("spectro", {"src": src, "out": str(base)}, ctx, base_p, span, t("Spektrogramm", "spectrogram"),
-                             tool=TOOL)
+    try:
+        res = await al._run_tool("spectro", {"src": src, "out": str(base)}, ctx, base_p, span, t("Spektrogramm", "spectrogram"),
+                                 tool=TOOL)
+    except BaseException:
+        # halbe Stufen („<Spur>.spec.part“ …; bei Stunden Ton einige hundert MB)
+        for k in ("0", "1", "2", "3"):
+            with contextlib.suppress(OSError):
+                Path(str(base.with_suffix(SPEC_FILES[k])) + ".part").unlink(missing_ok=True)
+        raise
     act = res.get("activity") or {}
     (_data_dir(pid) / f"act_{tid}.json").write_text(json.dumps({"track": tid, **act}), encoding="utf-8")
 
@@ -390,10 +397,17 @@ async def _transcribe(job: Job, ctx: jobs.JobContext) -> list[str]:
     t0 = time.time()
     res = await al._run_tool("transcribe", settings, ctx, 0.1, 0.45, t("Sprache erkennen", "recognising speech"), tool=TOOL)
     asr_s = time.time() - t0
+    # Nur Zeilen des aktuellen Plans: asr.jsonl sammelt über Läufe mit denselben Spuren und demselben Bereich, ändert sich
+    # die Sprachkarte (etwa Silero statt grober Aktivität), lägen sonst alte und neue Blöcke doppelt in der Spur.
+    # Ohne plan_ids (älteres Werkzeug) wie bisher alle Zeilen.
+    plan = res.pop("plan_ids", None)
+    plan = set(plan) if isinstance(plan, list) else None
     segs = []
     for line in out.read_text(encoding="utf-8").splitlines():
         with contextlib.suppress(ValueError):
             r = json.loads(line)
+            if plan is not None and str(r.get("id") or "").split("+", 1)[0] not in plan:
+                continue
             if not r.get("dropped") and r.get("text"):
                 segs.append(r)
     # 3. Übersetzen (Sprachmodell in ComfyUI, nach dem Whisper-Prozess, 16 GB tragen nur eins)
@@ -493,9 +507,13 @@ async def _automix(job: Job, ctx: jobs.JobContext) -> list[str]:
     p = al.load(pid)
     tid = f"t_{uuid.uuid4().hex[:8]}"
     dec = _data_dir(pid) / f"automix_{tid}.json"
-    res = await al._run_tool("automix", {"srcs": [al._track_paths(pid, x)["flac"] for x in tids], **al._track_paths(pid, tid),
-                                         "decisions": str(dec), "vads": vads}, ctx, 0.4 if vads else 0.0, 0.6 if vads else 1.0,
-                             t("bester Kanal", "best channel"), tool=TOOL)
+    try:
+        res = await al._run_tool("automix", {"srcs": [al._track_paths(pid, x)["flac"] for x in tids], **al._track_paths(pid, tid),
+                                             "decisions": str(dec), "vads": vads}, ctx, 0.4 if vads else 0.0,
+                                 0.6 if vads else 1.0, t("bester Kanal", "best channel"), tool=TOOL)
+    except BaseException:
+        al._drop_tracks(pid, [tid])  # neue Spur, nie eingetragen
+        raise
     names = [al._track(p, x)["name"] for x in tids]
     sr = al._track(p, tids[0]).get("sr")
 
@@ -632,15 +650,20 @@ async def _vexport(job: Job, ctx: jobs.JobContext) -> list[str]:
             txt = s["text"] if mode == "original" else (s.get("translation") or {}).get(lang) or ""
             if txt:
                 srt.append({"start": s["start"], "end": s["end"], "text": f"[{txt}]" if s.get("kind") == "sound" else txt})
-    stem = _re.sub(r"[^\w\-. ]+", "_", job.params.get("name") or f"{p['name']} mit Ton")[:80].strip() or "video"
+    stem = _re.sub(r"[^\w\-. ]+", "_", job.params.get("name") or t(f"{p['name']} mit Ton", f"{p['name']} with sound"))[:80].strip() \
+        or "video"
     dest, as_asset = al.export_target(job.params.get("dest_dir"), stem, ".mp4")
     out_name = dest.name
-    res = await al._run_tool("videoexport", {"video": v["path"], "fit": v["fit"],
-                                             "tracks": [{"file": al._track_paths(pid, x["id"])["flac"], "gain_db": x["gain_db"]}
-                                                        for x in job.params["tracks"]],
-                                             "region": job.params.get("region"), "out": str(dest), "mono": job.params.get("mono"),
-                                             "srt": srt, "burn": bool(job.params.get("burn") and srt)},
-                             ctx, 0, 1, t("Video mit Ton", "video with sound"), tool=TOOL)
+    try:
+        res = await al._run_tool("videoexport", {"video": v["path"], "fit": v["fit"],
+                                                 "tracks": [{"file": al._track_paths(pid, x["id"])["flac"], "gain_db": x["gain_db"]}
+                                                            for x in job.params["tracks"]],
+                                                 "region": job.params.get("region"), "out": str(dest), "mono": job.params.get("mono"),
+                                                 "srt": srt, "burn": bool(job.params.get("burn") and srt)},
+                                 ctx, 0, 1, t("Video mit Ton", "video with sound"), tool=TOOL)
+    except BaseException:
+        al.drop_partial(dest)  # halbes Video („<Name>.part.mp4“) nicht im gewählten Ordner liegen lassen
+        raise
     if not as_asset:
         al.update(pid, lambda q: q["history"].append({"time": time.time(), "op": "export", "format": "mp4", "path": str(dest),
                                                        "file": out_name, "srt": Path(res["srt"]).name if res.get("srt") else None,
@@ -733,17 +756,23 @@ async def _render(job: Job, ctx: jobs.JobContext) -> list[str]:
         if p.get("time_origin"):
             return time.strftime("%H%M%S", time.gmtime(p["time_origin"] + x))
         return f"{int(x // 3600)}h{int(x % 3600 // 60):02d}m{int(x % 60):02d}s"
-    stem = re.sub(r"[^\w\-. ]+", "_", f"{p['name']} Lagebild {hms(a)}-{hms(b)}")[:90].strip() or "lagebild"
+    # Dateiname in der Sprache des Videos (wie seine Beschriftung)
+    word = "Lagebild" if (job.params.get("lang") or "de") == "de" else "situation"
+    stem = re.sub(r"[^\w\-. ]+", "_", f"{p['name']} {word} {hms(a)}-{hms(b)}")[:90].strip() or word.lower()
     dest, as_asset = al.export_target(job.params.get("dest_dir"), stem, ".mp4")
     out_name = dest.name
-    res = await al._run_tool("render", {
-        "out": str(dest), "region": [a, b], "fps": job.params["fps"], "origin": p.get("time_origin"),
-        "lang": job.params.get("lang") or "de", "title": p["name"], "panels": job.params["panels"], "tracks": tracks,
-        "spec": job.params.get("spec") or {}, "segments": segments, "target_lang": doc.get("target_lang") or "de",
-        "credits": credits_line(doc, (job.params.get("lang") or "de") == "de"),
-        "notes": notes, "events": events, "series": str(data / "series.json"), "images": str(data / "images.json"),
-        "images_dir": str(folder / "images"), "video": {"path": v["path"], "fit": v["fit"]} if v.get("fit") else None,
-        "mono": job.params.get("mono")}, ctx, 0, 1, t("Lagebild-Video", "situation video"), tool=TOOL)
+    try:
+        res = await al._run_tool("render", {
+            "out": str(dest), "region": [a, b], "fps": job.params["fps"], "origin": p.get("time_origin"),
+            "lang": job.params.get("lang") or "de", "title": p["name"], "panels": job.params["panels"], "tracks": tracks,
+            "spec": job.params.get("spec") or {}, "segments": segments, "target_lang": doc.get("target_lang") or "de",
+            "credits": credits_line(doc, (job.params.get("lang") or "de") == "de"),
+            "notes": notes, "events": events, "series": str(data / "series.json"), "images": str(data / "images.json"),
+            "images_dir": str(folder / "images"), "video": {"path": v["path"], "fit": v["fit"]} if v.get("fit") else None,
+            "mono": job.params.get("mono")}, ctx, 0, 1, t("Lagebild-Video", "situation video"), tool=TOOL)
+    except BaseException:
+        al.drop_partial(dest)  # halbes Video („<Name>.part.mp4“) nicht im gewählten Ordner liegen lassen
+        raise
     if not as_asset:
         al.update(pid, lambda q: q["history"].append({"time": time.time(), "op": "export", "format": "mp4", "kind": "render",
                                                        "path": str(dest), "file": out_name, "region": [a, b],
@@ -1017,6 +1046,8 @@ class TranscribeRequest(BaseModel):
     target_lang: str = Field("de", max_length=12)
     region: list[float] | None = None
     translate: bool = True
+    # Feste Spur: genau eine Spur für den markierten Bereich, ersetzt dort die KI-Entwürfe der übrigen Mikrofone
+    force: bool = False
 
 
 @router.post("/projects/{pid}/transcribe", response_model=Job)

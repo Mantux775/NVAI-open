@@ -25,12 +25,12 @@ export function exportNotes(proj: AudioProject, notes: AudioMarker[], fmt: 'csv'
   const list = [...notes].sort((a, b) => a.start - b.start)
   if (fmt === 'csv') {
     const q = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    download(`${base}_notizen.csv`, ['nr;start_s;end_s;time_start;time_end;duration_s;author;created;note',
+    download(`${base}_${t('notizen', 'notes')}.csv`, ['nr;start_s;end_s;time_start;time_end;duration_s;author;created;note',
       ...list.map((m, i) => [i + 1, m.start.toFixed(2), m.end.toFixed(2), clockAt(m.start, origin, true), clockAt(m.end, origin, true),
         (m.end - m.start).toFixed(1), q(m.author ?? ''), m.created ? new Date(m.created * 1000).toISOString() : '', q(m.label)].join(';'))].join('\n'), 'text/csv')
   } else {
     const head = t(`Notizen: ${proj.name}\nZeiten ${origin ? 'in UTC' : 'ab Beginn der Aufnahme'}.\n`, `Notes: ${proj.name}\nTimes ${origin ? 'in UTC' : 'from the start of the recording'}.\n`)
-    download(`${base}_notizen.txt`, head + '\n' + list.map((m, i) =>
+    download(`${base}_${t('notizen', 'notes')}.txt`, head + '\n' + list.map((m, i) =>
       `${i + 1}. ${clockAt(m.start, origin, true)}${m.end > m.start ? ` – ${clockAt(m.end, origin, true)} (${fmtClock(m.end - m.start, true)})` : ''}${m.author ? ` · ${m.author}` : ''}\n   ${(m.label || '').replace(/\n/g, '\n   ')}`).join('\n\n'))
   }
 }
@@ -99,7 +99,7 @@ export function NotesTool({ proj, markers, save, onSeek, onSelect, focus, onFocu
               </div>
               <textarea rows={2} value={draft[m.id] ?? m.label} placeholder={t('Notiz …', 'Note …')}
                 onChange={(e) => setDraft((d) => ({ ...d, [m.id]: e.target.value }))} onBlur={() => commit(m)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(m); (e.target as HTMLTextAreaElement).blur() } }} />
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() } }} />
             </div>
           )
         })}

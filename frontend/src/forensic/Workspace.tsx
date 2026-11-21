@@ -368,8 +368,24 @@ export function Workspace({ st, proj, running, progress, paused, active, mode: i
     setTracks((cur) => cur.map((x) => (x.id === id ? { ...x, ...fields } : x)))
     api.audioTrack(proj.id, id, fields).catch((e) => onError(String(e.message ?? e)))
   }
-  const markers = proj.markers ?? []
-  const saveMarkers = (list: AudioMarker[]) => api.audioMarkers(proj.id, list).then(onReload).catch((e) => onError(String(e.message ?? e)))
+  // Marken lokal führen: Jede Änderung baut auf der neuesten Liste auf, nicht auf proj.markers (kommt erst nach dem
+  // Neuladen). Vorher überschrieben sich zwei schnelle Änderungen (Notiz tippen, gleich „+ Notiz“ oder ✕): der Server
+  // ersetzt die ganze Liste. Gespeichert wird nacheinander; den Server-Stand übernimmt die Ansicht erst, wenn nichts mehr
+  // aussteht
+  const [localMarkers, setLocalMarkers] = useState<AudioMarker[] | null>(null)
+  const pendingMarkers = useRef(0)
+  const markerChain = useRef<Promise<unknown>>(Promise.resolve())
+  useEffect(() => { if (!pendingMarkers.current) setLocalMarkers(null) }, [proj.markers])
+  const markers = localMarkers ?? proj.markers ?? []
+  const saveMarkers = (list: AudioMarker[]) => {
+    setLocalMarkers(list)
+    pendingMarkers.current += 1
+    const run = markerChain.current.then(() => api.audioMarkers(proj.id, list))
+    markerChain.current = run.catch(() => undefined)
+    return run
+      .then(() => { pendingMarkers.current -= 1; if (!pendingMarkers.current) onReload() })
+      .catch((e) => { pendingMarkers.current -= 1; setLocalMarkers(null); onReload(); onError(String(e.message ?? e)) })
+  }
   const fullTracks = tracks.filter((x) => !x.offset)
   const busyJob = running.find((j) => !['audio_export', 'audio_spectro'].includes(j.kind))
   const span = selection ? selection[1] - selection[0] : duration
@@ -535,7 +551,13 @@ export function Workspace({ st, proj, running, progress, paused, active, mode: i
       <div className="fx-ws-wait">
         <button className="btn small ghost" onClick={onBack}>← {t('Übersicht', 'Overview')}</button>
         <h3>{proj.name}</h3>
-        {proj.status === 'error' ? <p className="error">{proj.error}</p> : (
+        {proj.status === 'error' ? (
+          <>
+            <p className="error">{proj.error}</p>
+            <button className="btn small" onClick={() => api.audioPrepare(proj.id).then(onReload).catch((e) => onError(String(e.message ?? e)))}>
+              {t('Erneut einlesen', 'Read in again')}</button>
+          </>
+        ) : (
           <div className="lt-progress">
             <div className="progress"><div className="bar" style={{ width: `${Math.round((j ? progress[j.id]?.progress ?? 0 : 0) * 100)}%` }} /></div>
             <span className="muted small">{(j && progress[j.id]?.stage) || t('wird eingelesen …', 'reading …')}</span>
@@ -742,7 +764,7 @@ export function Workspace({ st, proj, running, progress, paused, active, mode: i
                     const url = URL.createObjectURL(new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv;charset=utf-8' }))
                     const a = document.createElement('a')
                     a.href = url
-                    a.download = `${proj.name.replace(/[^\w\-. ]+/g, '_')}_ereignisse.csv`
+                    a.download = `${proj.name.replace(/[^\w\-. ]+/g, '_')}_${t('ereignisse', 'events')}.csv`
                     a.click()
                     window.setTimeout(() => URL.revokeObjectURL(url), 2000)
                   }}>{t(`${events.length} Ereignisse als CSV`, `${events.length} events as CSV`)}</button>

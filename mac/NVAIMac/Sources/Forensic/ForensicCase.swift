@@ -78,6 +78,79 @@ enum ForensicCases {
         "aud_" + String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(8))
     }
 
+    // MARK: Arbeitsordner von „Neuer Fall“
+
+    /// Ein Fall entsteht im versteckten Ordner „.neu-…“ und bekommt erst am Ende seinen Namen. Daneben liegt
+    /// „.neu-….lock“, exklusiv gesperrt (O_EXLOCK), solange der Auftrag läuft; nach einem Absturz gibt macOS die Sperre
+    /// frei. So erkennt `removeStaleWork` beim Start, welcher Ordner ein Rest ist und welcher noch entsteht (auch in einem
+    /// zweiten Programm, etwa einem Prüfstand).
+    final class Work {
+        let url: URL
+        private let lockPath: String
+        private var fd: Int32
+        private var done = false
+
+        init(in root: URL) throws {
+            let name = ".neu-\(UUID().uuidString.prefix(8))"
+            url = root.appendingPathComponent(name, isDirectory: true)
+            lockPath = root.appendingPathComponent(name + ".lock").path
+            // erst die Sperre, dann der Ordner: Einen entstehenden Ordner ohne gesperrte Sperrdatei gibt es so nie
+            fd = Darwin.open(lockPath, O_CREAT | O_RDWR | O_EXLOCK | O_NONBLOCK | O_CLOEXEC, 0o644)
+            if fd < 0 { fd = Darwin.open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o644) }   // Datenträger ohne Sperren
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            } catch {
+                finish()
+                throw error
+            }
+        }
+
+        /// Sperre lösen und ihre Datei löschen, wenn der Ordner umbenannt oder gelöscht ist.
+        func finish() {
+            guard !done else { return }
+            done = true
+            unlink(lockPath)
+            if fd >= 0 { Darwin.close(fd) }
+        }
+
+        deinit { finish() }
+    }
+
+    /// Reste von „Neuer Fall“ (die App wurde beendet oder stürzte ab, während ein Fall entstand) beim Start löschen, wie
+    /// `FormBody.removeStaleParts`: jeden „.neu-…“-Ordner, dessen Sperrdatei sich sperren lässt oder fehlt (Fassungen
+    /// vor der Sperre). Woran noch ein Auftrag arbeitet, bleibt; ebenso alles auf Datenträgern ohne Sperren. Ergebnis:
+    /// die Namen der gelöschten Ordner.
+    @discardableResult
+    static func removeStaleWork() -> [String] {
+        let fm = FileManager.default
+        let root = directory
+        guard let names = try? fm.contentsOfDirectory(atPath: root.path) else { return [] }
+        var removed: [String] = []
+        for name in names where name.hasPrefix(".neu-") && !name.hasSuffix(".lock") {
+            let folder = root.appendingPathComponent(name, isDirectory: true)
+            let lock = root.appendingPathComponent(name + ".lock").path
+            var fd: Int32 = -1
+            if fm.fileExists(atPath: lock) {
+                fd = Darwin.open(lock, O_RDONLY | O_EXLOCK | O_NONBLOCK | O_CLOEXEC)
+                guard fd >= 0 else { continue }   // gesperrt: Der Fall entsteht noch
+            }
+            if (try? fm.removeItem(at: folder)) != nil { removed.append(name) }
+            if fd >= 0 {
+                unlink(lock)
+                Darwin.close(fd)
+            }
+        }
+        // Sperrdateien ohne Ordner (Absturz zwischen Umbenennen und Aufräumen)
+        for name in names where name.hasPrefix(".neu-") && name.hasSuffix(".lock") && !names.contains(String(name.dropLast(5))) {
+            let lock = root.appendingPathComponent(name).path
+            let fd = Darwin.open(lock, O_RDONLY | O_EXLOCK | O_NONBLOCK | O_CLOEXEC)
+            guard fd >= 0 else { continue }
+            unlink(lock)
+            Darwin.close(fd)
+        }
+        return removed
+    }
+
     /// Die Fälle im Ablageordner, neueste zuerst.
     static func list() -> [ForensicCaseSummary] {
         let fm = FileManager.default

@@ -40,6 +40,12 @@ from typing import Any, Callable
 
 import numpy as np
 
+try:
+    from . import L
+except ImportError:  # einzeln geladen, ohne das Paket audio_models
+    def L(de: str, en: str) -> str:
+        return de
+
 SAMPLE_RATE = 16000
 CHANNELS = 1
 STEMS: list[str] = []          # liefert Text, keine Spuren
@@ -101,7 +107,7 @@ def _hf_config(sd: dict[str, Any]) -> dict[str, Any]:
                     if (m := re.match(r"encoder_frontend\.feature_extractor\.layers\.(\d+)\.", k))})
     kernels = tuple(int(sd[f"encoder_frontend.feature_extractor.layers.{i}.conv.weight"].shape[2]) for i in convs)
     if kernels != _CONV_KERNEL:
-        raise SystemExit(f"Omnilingual: unerwartete Faltungen {kernels}")
+        raise SystemExit(L(f"Omnilingual: unerwartete Faltungen {kernels}", f"Omnilingual: unexpected convolutions {kernels}"))
     v = sd["encoder_frontend.pos_encoder.conv.weight_v"]
     return {
         "architectures": ["Wav2Vec2ForCTC"], "model_type": "wav2vec2",
@@ -134,7 +140,7 @@ def convert(weights_dir: Path) -> Path:
     weights_dir = Path(weights_dir)
     src = weights_dir / CHECKPOINT
     if not src.is_file():
-        raise SystemExit(f"Omnilingual: {CHECKPOINT} fehlt in {weights_dir}")
+        raise SystemExit(L(f"Omnilingual: {CHECKPOINT} fehlt in {weights_dir}", f"Omnilingual: {CHECKPOINT} is missing in {weights_dir}"))
     out = weights_dir / CACHE
     out.mkdir(parents=True, exist_ok=True)
     ck = torch.load(str(src), map_location="cpu", weights_only=True, mmap=True)
@@ -148,10 +154,10 @@ def convert(weights_dir: Path) -> Path:
             if n:
                 break
         else:
-            raise SystemExit(f"Omnilingual: unbekannter Gewichtsname {k}")
+            raise SystemExit(L(f"Omnilingual: unbekannter Gewichtsname {k}", f"Omnilingual: unknown weight name {k}"))
         t = t.detach().to(torch.float32)
         if not torch.isfinite(t).all() or float(t.abs().max()) > 60000:
-            raise SystemExit(f"Omnilingual: {k} passt nicht in fp16")
+            raise SystemExit(L(f"Omnilingual: {k} passt nicht in fp16", f"Omnilingual: {k} does not fit into fp16"))
         tensors[new] = t.to(torch.float16).contiguous()
     tag = f".{os.getpid()}.part"
     save_file(tensors, str(out / f"model.safetensors{tag}"), metadata={"format": "pt", "source": CHECKPOINT})
@@ -201,7 +207,7 @@ def load(weights_dir: Path, device: str, params: dict[str, Any]) -> dict[str, An
 
     weights_dir = Path(weights_dir)
     if not (weights_dir / TOKENIZER).is_file():
-        raise SystemExit(f"Omnilingual: {TOKENIZER} fehlt in {weights_dir}")
+        raise SystemExit(L(f"Omnilingual: {TOKENIZER} fehlt in {weights_dir}", f"Omnilingual: {TOKENIZER} is missing in {weights_dir}"))
     if not _cache_ok(weights_dir):
         convert(weights_dir)
     prec = str(params.get("precision") or PRECISION) if device == "cuda" else "fp32"
@@ -210,11 +216,13 @@ def load(weights_dir: Path, device: str, params: dict[str, Any]) -> dict[str, An
                                                  local_files_only=True, output_loading_info=True)
     bad = [k for k in ("missing_keys", "unexpected_keys", "mismatched_keys") if info.get(k)]
     if bad:
-        raise SystemExit(f"Omnilingual: Gewichte passen nicht ({ {k: list(info[k])[:5] for k in bad} })")
+        detail = {k: list(info[k])[:5] for k in bad}
+        raise SystemExit(L(f"Omnilingual: Gewichte passen nicht ({detail})", f"Omnilingual: weights do not match ({detail})"))
     model.to(device).eval()
     vocab = _Vocab(weights_dir / TOKENIZER)
     if vocab.size != model.config.vocab_size:
-        raise SystemExit(f"Omnilingual: Tokenizer ({vocab.size}) passt nicht zum Modell ({model.config.vocab_size})")
+        raise SystemExit(L(f"Omnilingual: Tokenizer ({vocab.size}) passt nicht zum Modell ({model.config.vocab_size})",
+                           f"Omnilingual: tokenizer ({vocab.size}) does not match the model ({model.config.vocab_size})"))
     return {"model": model, "device": device, "dtype": dtype, "precision": prec, "vocab": vocab}
 
 

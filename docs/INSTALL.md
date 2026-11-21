@@ -325,7 +325,7 @@ pipe the password in and add `--unlock-from-stdin`.
 
 ## Optional: PhotoCraft add-on
 
-**NVAI-open for PhotoCraft** connects PhotoCraft to a local NVAI-open. It needs PhotoCraft 0.10.0 or newer:
+**NVAI-open for PhotoCraft** connects PhotoCraft to a local NVAI-open. It needs PhotoCraft itself (tested with 0.23.1):
 https://github.com/storytold/photocraft/releases/latest
 
 - **Windows:** part of the full installation. If PhotoCraft is missing, the setup offers its download page and

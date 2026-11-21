@@ -60,7 +60,7 @@ struct JobRecord: Sendable, Identifiable {
     var isFinished: Bool { ["done", "error", "cancelled"].contains(status) }
 
     var json: [String: Any] {
-        [
+        var out: [String: Any] = [
             "id": id, "kind": kind, "status": status, "progress": progress, "stage": stage,
             "params": params.any, "asset_ids": assetIDs,
             "error": error ?? NSNull(),
@@ -68,6 +68,10 @@ struct JobRecord: Sendable, Identifiable {
             "started_at": startedAt ?? NSNull(),
             "finished_at": finishedAt ?? NSNull(),
         ]
+        // Ergebnisordner, wenn es einen gibt (Ton-Forensik: der Fall); vorher erfuhr ein REST-Client nicht, wo sein neuer
+        // Fall liegt. Der Server lauscht nur auf 127.0.0.1, GET /api/forensic/cases nennt die Ordner ebenso.
+        if let resultPath { out["result_path"] = resultPath }
+        return out
     }
 }
 

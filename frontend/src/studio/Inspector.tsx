@@ -500,6 +500,8 @@ function ExpandPrompt({ p, s, models, active, update }: {
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const latest = useRef(p)  // der neueste Stand des Projekts, wenn das Ergebnis nach rund 15 s kommt
+  latest.current = p
   if (s.lane === 'voice') return null
   const video = models.find((m) => m.id === (s.model_id || active?.video))
   const image: string | null = s.params?.image_asset_id || null
@@ -509,12 +511,18 @@ function ExpandPrompt({ p, s, models, active, update }: {
   const run = async () => {
     setBusy(true)
     setError(null)
+    const sent = s.prompt
     try {
       const r = await api.expandPrompt({
-        prompt: s.prompt, target, width: p.settings.width, height: p.settings.height,
+        prompt: sent, target, width: p.settings.width, height: p.settings.height,
         ...(image && target === 'video_start' ? { reference_asset_ids: [image] } : {}),
       })
-      if (r.expanded.trim()) update({ prompt: r.expanded.trim() })
+      // Nur übernehmen, wenn der Prompt inzwischen nicht geändert wurde (vorher ersetzte das Ergebnis neue Eingaben)
+      const now = latest.current.scenes.find((x) => x.id === s.id)
+      if (now && now.prompt !== sent) {
+        setError(t('Der Prompt wurde inzwischen geändert; der ausgebaute Text ist nicht übernommen.',
+          'The prompt was changed in the meantime; the expanded text was not applied.'))
+      } else if (r.expanded.trim()) update({ prompt: r.expanded.trim() })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -557,7 +565,10 @@ function StartImage({ p, s, models, active, update }: {
   const set = (v: string | null) => update({ params: { image_asset_id: v } })
   // „Startbild erzeugen“ (seit 0.5.30): zwei Varianten wie im Assistenten, die erste wird gleich das Startbild
   const [gen, setGen] = useState<{ busy: boolean; error: string | null; variants: Asset[] }>({ busy: false, error: null, variants: [] })
+  const latest = useRef(p)  // der neueste Stand des Projekts, wenn die Bilder nach rund einer Minute kommen
+  latest.current = p
   const generate = async () => {
+    const before = s.params?.image_asset_id ?? null
     setGen({ busy: true, error: null, variants: [] })
     try {
       const job = await api.studioStartImage(p.id, s.id)
@@ -568,7 +579,9 @@ function StartImage({ p, s, models, active, update }: {
         await new Promise((r) => setTimeout(r, 1500))
       }
       const variants = await api.jobAssets(job.id)
-      if (variants[0]) set(variants[0].id)
+      // Startbild nur setzen, wenn inzwischen kein anderes gewählt wurde (vorher überschrieb das Ergebnis die Wahl)
+      const now = latest.current.scenes.find((x) => x.id === s.id)
+      if (variants[0] && (!now || (now.params?.image_asset_id ?? null) === before)) set(variants[0].id)
       setGen({ busy: false, error: null, variants })
     } catch (e) {
       setGen({ busy: false, error: e instanceof Error ? e.message : String(e), variants: [] })
@@ -1151,10 +1164,7 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed, playhead, onPlayhead }:
       )}
       {media?.kind !== 'image' && (
         <>
-          <label className="st-field">
-            <span>{t('Lautstärke', 'Volume')}: {c.gain_db > 0 ? '+' : ''}{c.gain_db} dB</span>
-            <input type="range" min={-30} max={12} step={1} value={c.gain_db} onChange={(e) => update({ gain_db: Number(e.target.value) })} />
-          </label>
+          <VolumeRange value={c.gain_db} onCommit={(v) => update({ gain_db: v })} />
           <label className="st-check">
             <input type="checkbox" checked={c.muted} onChange={(e) => update({ muted: e.target.checked })} />
             <span>{t('Stumm', 'Muted')}</span>
@@ -1195,6 +1205,24 @@ function ClipProps({ p, c, onCommand, onSelect, onSpeed, playhead, onPlayhead }:
 }
 
 /** Regler, der erst beim Loslassen meldet: ein Schritt im Rückgängig statt eines je Pixel. */
+/** Lautstärke: der Wert zieht beim Schieben mit, gespeichert wird beim Loslassen (vorher je Schritt ein clip.update:
+ * bis zu 42 Einträge auf dem Rückgängig-Stapel, und ein Zwischenwert konnte als letzter gespeichert bleiben) */
+function VolumeRange({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState<number | null>(null)
+  const v = draft ?? value
+  const commit = () => {
+    if (draft !== null && draft !== value) onCommit(draft)
+    setDraft(null)
+  }
+  return (
+    <label className="st-field">
+      <span>{t('Lautstärke', 'Volume')}: {v > 0 ? '+' : ''}{v} dB</span>
+      <input type="range" min={-30} max={12} step={1} value={v}
+        onChange={(e) => setDraft(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+    </label>
+  )
+}
+
 function CommitRange({ value, min, max, onCommit }: { value: number; min: number; max: number; onCommit: (v: number) => void }) {
   const [draft, setDraft] = useState<number | null>(null)
   const commit = () => {

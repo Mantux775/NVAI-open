@@ -147,10 +147,14 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   }, [])
   const closeMenu = useCallback(() => setMenu(null), [])
 
+  const openSeq = useRef(0)
   const open = useCallback(async (id: string) => {
+    const seq = ++openSeq.current
     try {
       const p = await api.studioProject(id)
+      if (seq !== openSeq.current) return  // inzwischen ein anderes Projekt gewählt: dessen Antwort gilt
       setProject(p)
+      setExporting(null)  // die Anzeige gehörte zum vorigen Projekt
       setSelection(null)
       setPlayhead(0)
       setPlaying(false)
@@ -166,7 +170,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
       const last = stored(KEY_PROJECT)
       const pick = list.find((x) => x.id === last) ?? list[0]
       if (pick) open(pick.id)
-    })
+    }).catch((e) => setNotice(String((e as Error).message ?? e)))
     api.health().then((h) => setActive(h.active_models)).catch(() => {})
     api.studioPresets().then(setPresets).catch(() => {})
   }, [open])
@@ -195,7 +199,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   // Eine Antwort nur übernehmen, wenn sie nicht älter ist als der Stand, den die Ansicht schon hat: GET und Befehle laufen
   // im Server nebeneinander, ein spätes GET setzte sonst einen überholten Stand (etwa ein eben Rückgängig-gemachtes)
   const accept = useCallback((next: StudioProject) => {
-    setProject((cur) => (cur && cur.id === next.id && (next.updated_at ?? 0) < (cur.updated_at ?? 0) ? cur : next))
+    // auch keine Antwort eines anderen Projekts (ein Befehl an das vorige, der nach dem Wechsel ankommt)
+    setProject((cur) => (cur && (cur.id !== next.id || (next.updated_at ?? 0) < (cur.updated_at ?? 0)) ? cur : next))
   }, [])
 
   const reload = useCallback(async () => {
@@ -242,11 +247,32 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   }, [studioEvent])
 
   // Live-Feed: fertige Szenen neu laden, Export-Fortschritt anzeigen, Medienleiste auffrischen
+  // Solange ein Export läuft, alle 5 s beim Server nachfragen: Kommen zwei Ereignisse vor dem nächsten Rendern an, sieht
+  // die Ansicht nur das letzte, und ein Serverneustart meldet abgebrochene Aufträge gar nicht. Vorher blieb die Anzeige
+  // dann auf „läuft“ und „Exportieren“ gesperrt
+  const exportId = exporting?.status === 'running' ? exporting.id : null
+  useEffect(() => {
+    if (!exportId) return
+    const timer = window.setInterval(() => {
+      api.job(exportId).then((j) => {
+        if (j.status === 'running' || j.status === 'queued') return
+        if (j.status === 'done') {
+          api.jobAssets(j.id).then((a) => setExporting((x) => (x && x.id === j.id ? { ...x, status: 'done', progress: 1, url: a[0]?.url } : x)))
+          setBinKey((k) => k + 1)
+        } else {
+          setExporting((x) => (x && x.id === j.id ? { ...x, status: 'error', error: j.error || t('Export abgebrochen.', 'Export cancelled.') } : x))
+        }
+      }).catch(() => {})
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [exportId])
+
   useEffect(() => {
     if (!event || !('job_id' in event)) return
     if (exporting && event.job_id === exporting.id) {
       if (event.type === 'job.progress') setExporting({ ...exporting, progress: event.progress, stage: event.stage })
       if (event.type === 'job.error') setExporting({ ...exporting, status: 'error', error: event.error })
+      if (event.type === 'job.cancelled') setExporting({ ...exporting, status: 'error', error: t('Export abgebrochen.', 'Export cancelled.') })
       if (event.type === 'job.done') {
         api.jobAssets(event.job_id).then((a) => setExporting({ ...exporting, status: 'done', progress: 1, url: a[0]?.url }))
         setBinKey((k) => k + 1)
@@ -503,11 +529,15 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
       return
     }
     setConfirmDelete(false)
-    await api.studioDelete(pid)
-    const list = await api.studioProjects()
-    setProjects(list)
-    setProject(null)
-    if (list[0]) open(list[0].id)
+    try {
+      await api.studioDelete(pid)
+      const list = await api.studioProjects()
+      setProjects(list)
+      setProject(null)
+      if (list[0]) open(list[0].id)
+    } catch (e) {
+      setNotice(String((e as Error).message ?? e))  // etwa eine Datei, die Windows noch sperrt
+    }
   }
 
   const toggleFullscreen = () => {
