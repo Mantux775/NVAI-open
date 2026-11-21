@@ -266,11 +266,20 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NVAI-open from Claude Code
 - [docs/MAKING_OF.md](docs/MAKING_OF.md): how Claude built a video in the Studio
 - [docs/SHORT_FILM.md](docs/SHORT_FILM.md): a short film from a hand sketch, step by step with screenshots
+- [docs/DOCK_ORGANIZER_VIDEO.md](docs/DOCK_ORGANIZER_VIDEO.md): a promo video for a Mac app, with automated screen recordings
 - [photocraft-addon/](photocraft-addon/): source of the PhotoCraft add-on
 
 ---
 
 ## Video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=zeig-Rml4gA"><img src="https://i.ytimg.com/vi/zeig-Rml4gA/maxresdefault.jpg" width="480" alt="YouTube: Dock Organizer for macOS, a promo video made with NVAI-open"></a>
+</p>
+
+<p align="center">A promo video for the Mac app Dock Organizer: music from Stable Audio 3, cut in the Studio, on YouTube (<a href="docs/DOCK_ORGANIZER_VIDEO.md">how it was made</a>).<br>
+Ein Werbevideo für die Mac-App Dock Organizer: Musik von Stable Audio 3, geschnitten im Studio, auf YouTube (<a href="docs/de/DOCK_ORGANIZER_VIDEO.md">wie es entstand</a>).<br>
+<a href="https://www.youtube.com/watch?v=zeig-Rml4gA">youtube.com/watch?v=zeig-Rml4gA</a></p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="480" alt="YouTube: a short film with the rabbit Somi, made in the NVAI Studio"></a>
@@ -556,4 +565,5 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 - [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NVAI-open aus Claude Code nutzen (englisch)
 - [docs/de/MAKING_OF.md](docs/de/MAKING_OF.md): wie Claude ein Video im Studio gebaut hat
 - [docs/de/KURZFILM.md](docs/de/KURZFILM.md): ein Kurzfilm von der Handskizze an, Schritt für Schritt mit Bildern
+- [docs/de/DOCK_ORGANIZER_VIDEO.md](docs/de/DOCK_ORGANIZER_VIDEO.md): ein Werbevideo für eine Mac-App, mit automatischen Bildschirmaufnahmen
 - [photocraft-addon/](photocraft-addon/): Quelltext des PhotoCraft-Add-ons
