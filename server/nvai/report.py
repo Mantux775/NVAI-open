@@ -30,6 +30,7 @@ LOGS = [
     ("triposg.log", 80),
     ("trellis2.log", 80),
     ("sdcpp.log", 80),  # Vulkan-Engine (stable-diffusion.cpp, seit 0.5.34): Aufrufe, Fehler, Zeiten
+    ("audiocpp.log", 80),  # Ton und Sprache ueber Vulkan (audio.cpp, seit 0.5.35)
     ("install.log", 120),
 ]
 
@@ -191,17 +192,20 @@ def build(description: str) -> dict[str, Any]:
         out.append(f"Assignment:   {gpu.assignment()} (separate text backend: {gpu.separate_text_backend()})")
     mode = gpu.cpu_mode()
     if mode:
-        # Radeon ohne ROCm (GitHub-Issue #3): Prozessor oder DirectML (seit 0.5.33, eigenes venv mit PyTorch 2.4.1)
-        if mode.get("directml"):
-            compute = f"DirectML ({mode['directml'].get('device') or '?'}, PyTorch 2.4.1)"
-        elif mode.get("directml_failed"):
-            compute = f"processor; DirectML failed: {mode['directml_failed'][-300:]}"
-        else:
-            compute = "processor"
-        from . import sdcpp
-        if sdcpp.active():
-            compute += "; video through the Vulkan engine (stable-diffusion.cpp)"
+        # Karte ohne CUDA/ROCm (GitHub-Issue #3): Bilder und Videos ueber die Vulkan-Engine, sonst der Prozessor
+        from . import audiocpp, sdcpp
+        compute = ("images and video through the Vulkan engine (stable-diffusion.cpp)" if sdcpp.active() else
+                   "images and video on the processor")
+        compute += ("; sound and voice through audio.cpp (Vulkan)" if audiocpp.active() else
+                    "; sound on the processor")
         out.append(f"Compute:      {compute} (reason: {mode.get('reason')})")
+    else:
+        from . import engine, sdcpp
+        eff = engine.effective()
+        if eff["engine"] == "sdcpp":
+            # Wahl unter „Deine Hardware“ (seit 0.5.35): SDXL und Wan 2.1 1.3B ueber sd.cpp, der Rest ueber ComfyUI
+            out.append(f"Engine:       stable-diffusion.cpp ({eff['backend']}, "
+                       f"{'ready' if sdcpp.active() else 'not installed yet'}) for SDXL and Wan 2.1 1.3B; ComfyUI for the rest")
     active = registry.get_active_models()
     installed = sorted(e["id"] for e in registry.all_entries() if registry.is_installed(e))
     out += [

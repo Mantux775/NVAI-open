@@ -848,6 +848,40 @@ EN: dict[str, dict[str, Any]] = {
             "New in NVAI-open, not much experience yet",
         ],
     },
+    "stable-audio-3-small-sfx-gguf": {
+        "best_for": "Sound effects on cards without CUDA and ROCm (through Vulkan)",
+        "description": (
+            "The small sound-effects model of Stability AI's Stable Audio 3 family, as GGUF (Q8) through audio.cpp "
+            "and Vulkan: for older Radeons and Intel cards, on which PyTorch does not compute. Describe the sound, "
+            "not the scene: material, impact, room."
+        ),
+        "pros": [
+            "Measured without matrix units: a 6 s sound effect in about 8 s including loading",
+            "Small: 1.7 GB, little graphics memory",
+        ],
+        "cons": [
+            "Community License with a USD 1 million revenue cap",
+            "A different model from Stable Audio Open: sound and prompt behaviour differ",
+            "New in NVAI-open, not much experience yet",
+        ],
+    },
+    "stable-audio-3-medium-gguf": {
+        "best_for": "Instrumental music on cards without CUDA and ROCm (through Vulkan)",
+        "description": (
+            "The same music model as Stable Audio 3 Medium, as GGUF (Q8) through audio.cpp and Vulkan, for older "
+            "Radeons and Intel cards. Describe genre, instruments, percussion and mood in one sentence, then "
+            "\"BPM: 100.\""
+        ),
+        "pros": [
+            "Measured without matrix units: 30 s of music in about 8 s including loading",
+            "3.6 instead of 10.4 GB and far less graphics memory than the ComfyUI path",
+        ],
+        "cons": [
+            "No vocals, no lyrics",
+            "Community License with a USD 1 million revenue cap",
+            "New in NVAI-open, not much experience yet",
+        ],
+    },
     "qwen3-tts-1.7b": {
         "best_for": "Narrator voice: describe a voice or take it over from a short recording",
         "description": (
@@ -1592,3 +1626,7 @@ SIZE_LABELS.update(_MINIMAX_SIZE_LABELS)
 from .kandinsky6 import EN as _K6_EN, SIZE_LABELS as _K6_SIZE_LABELS  # noqa: E402
 EN.update(_K6_EN)
 SIZE_LABELS.update(_K6_SIZE_LABELS)
+# PAN 2 (pan2.py, since 0.5.35)
+from .pan2 import EN as _PAN2_EN, SIZE_LABELS as _PAN2_SIZE_LABELS  # noqa: E402
+EN.update(_PAN2_EN)
+SIZE_LABELS.update(_PAN2_SIZE_LABELS)

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.34",
+  "version": "0.5.35",
   "x-api-version": 1
  },
  "paths": {
@@ -3528,6 +3528,68 @@
          "additionalProperties": true,
          "type": "object",
          "title": "Response Put Gpus Api Gpus Put"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/engine": {
+   "get": {
+    "summary": "Get Engine",
+    "description": "Rechenweg fuer Bilder und Videos (seit 0.5.35, engine.py): die Wahl (engine, sdcpp_backend), was auf dieser Karte\nangeboten wird (nur Kompatibles), was gerade rechnet (effective) und ein laufender Download des Programms.",
+    "operationId": "get_engine_api_engine_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Get Engine Api Engine Get"
+        }
+       }
+      }
+     }
+    }
+   },
+   "put": {
+    "summary": "Put Engine",
+    "description": "Wahl speichern ({\"engine\": \"auto\"|\"comfyui\"|\"sdcpp\", \"sdcpp_backend\": \"auto\"|\"cuda\"|\"vulkan\"}, Teilangaben\ngenuegen). Gilt ab dem naechsten Auftrag; fehlt das Programm, laedt der Server es (state()[\"install\"]).",
+    "operationId": "put_engine_api_engine_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Put Engine Api Engine Put"
         }
        }
       }
@@ -8992,6 +9054,11 @@
       "type": "string",
       "title": "Gpu Note",
       "default": ""
+     },
+     "usable": {
+      "type": "boolean",
+      "title": "Usable",
+      "default": true
      },
      "content": {
       "anyOf": [

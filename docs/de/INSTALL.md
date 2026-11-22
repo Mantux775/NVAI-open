@@ -43,13 +43,13 @@ Das Setup prüft Grafikkarte und Treiber und warnt, wenn es keine passende Karte
   Radeons. 3D braucht NVIDIA. Auf einer echten Radeon ist noch nichts gemessen, Rückmeldungen in
   [#2](https://github.com/Mantux775/NVAI-open/issues/2) helfen deshalb sehr. `install-runtime.ps1 -Gpu amd|nvidia` oder
   `-Rocm 10.0|7.2` erzwingt eine Wahl.
-- **Ältere Radeons** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 und älter) kennt AMDs PyTorch für Windows nicht.
-  Seit 0.5.33 richtet das Setup für sie DirectML ein (experimentell): Bilder und Ton rechnen auf der Karte, oben steht
-  „DirectML (experimentell)“, und unter „Modelle“ sind die SDXL-Modelle und Stable Audio Open als empfohlen markiert.
-  Seit 0.5.34 rechnet Video (Wan 2.1 T2V 1.3B) über eine zweite Engine, stable-diffusion.cpp mit Vulkan, die das
-  Setup für diese Karten lädt. Einzelheiten und Messungen: [DIRECTML.md](DIRECTML.md). Geht DirectML nicht oder rechnet PyTorch auf der Karte gar
-  nicht, rechnet NVAI-open auf dem Prozessor und warnt oben im Fenster („Rechnet auf dem Prozessor“, der Tooltip
-  erklärt es): Bilder dauern sehr lange, Sprecherstimme und 3D gehen nicht, Studio-Schnitt und Export laufen normal.
+- **Ältere Radeons und Intel-Karten** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 und älter; Intel Arc) haben unter
+  Windows kein PyTorch mit CUDA oder ROCm. Seit 0.5.35 richtet das Setup für sie Vulkan ein (experimentell):
+  stable-diffusion.cpp rechnet Bilder und Videos, audio.cpp Ton und Sprecherstimme, oben steht „Vulkan
+  (experimentell)“, und Generieren und Studio wählen die Modelle, die auf der Karte laufen. Einzelheiten und Messungen:
+  [DIRECTML.md](DIRECTML.md). Sieht Vulkan keine eigene Grafikkarte (etwa nur eine Prozessorgrafik), rechnet NVAI-open
+  auf dem Prozessor und warnt oben im Fenster („Rechnet auf dem Prozessor“, der Tooltip erklärt es): Bilder dauern sehr
+  lange, Sprecherstimme und 3D gehen nicht, Studio-Schnitt und Export laufen normal.
   Mit einer unterstützten Karte oder einem aktuellen Treiber richtet „NVAI-open reparieren“ die Grafikkarte wieder ein.
 - **Mehrere NVIDIA-Karten:** Alles rechnet auf der stärksten Karte. Unter „Modelle“ → „Grafikkarten“ (oder per Klick
   auf eine Karte in der Kopfzeile) bekommen Bildmodelle, Sprachmodelle und 3D auf Wunsch eine eigene Karte; die Wahl

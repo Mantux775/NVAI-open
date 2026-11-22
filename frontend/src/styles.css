@@ -127,7 +127,7 @@ body {
 }
 
 .controls h2 { margin: 0 0 10px; font-size: 15px; }
-.controls h3 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.6px; }
+.controls h3 { margin: 12px 0 5px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.6px; }
 
 textarea, input, select {
   width: 100%;
@@ -273,8 +273,10 @@ kbd {
 .mode-switch.five { grid-template-columns: repeat(5, minmax(max-content, 1fr)); }
 .mode-switch.five .mode { padding: 8px 2px; font-size: 12.5px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Seit 0.5.21 sechs Reiter (Sprache dazu): zwei Reihen zu drei, so bleibt jede Beschriftung lesbar */
-.mode-switch.six { grid-template-columns: repeat(3, 1fr); }
-.mode-switch.six .mode { padding: 7px 2px; font-size: 13px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Sechs Modi in einer Reihe (kompakter, Nutzer 22.11.2026); schmal wieder drei Spalten */
+.mode-switch.six { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.mode-switch.six .mode { padding: 7px 2px; font-size: 12.5px; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1100px) { .mode-switch.six { grid-template-columns: repeat(3, 1fr); } }
 /* Sprecherstimme: Stimme beschreiben oder aus einer Aufnahme */
 .voice-mode { display: flex; gap: 16px; margin: 2px 0 6px; }
 .voice-mode label { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; flex: none; width: auto; }
@@ -727,6 +729,19 @@ kbd {
 .gpu-pop-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .gpu-pop-note { margin-top: 2px; line-height: 1.4; }
 
+/* Rechenweg (seit 0.5.35): an der Speicher-Anzeige, im Kartenfenster und unter „Deine Hardware“ */
+.gpu-pop-sep { border-top: 1px solid var(--line); margin: 4px 0 2px; }
+.engine-choice { display: flex; flex-direction: column; gap: 6px; }
+.engine-head { font-size: 12px; font-weight: 600; }
+.engine-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+.engine-row select { flex: 0 1 210px; min-width: 0; }
+.engine-tip { margin: 0; line-height: 1.4; }
+.engine-now { margin: 0; line-height: 1.4; color: var(--accent); }
+.engine-install { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.engine-install .vram-bar { width: 100%; }
+.engine-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: #ff8a80; }
+.hw-settings .engine-choice { max-width: 560px; margin: 2px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+
 /* Aufgaben je Karte: ganze Zeilen statt kleiner Kästchen. „läuft hier“ ist kräftig gefüllt,
    „hierher holen“ ist eine umrandete Schaltfläche -- auf einen Blick unterscheidbar. */
 .gpu-role-list { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 4px; }
@@ -835,7 +850,7 @@ kbd {
 .h3-note { text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--muted); }
 .h3-note.on { color: var(--accent); }
 .lora-box { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); padding: 6px 8px; }
-.lora-box.lora-none { background: none; border-style: dashed; margin: 0; padding: 8px 10px; line-height: 1.5; }
+.lora-box.lora-none { background: none; border: none; margin: 0; padding: 0 2px; line-height: 1.45; }
 .lora-box > .hint { margin: 2px 2px 4px; line-height: 1.5; }
 .lora-list { max-height: 270px; overflow-y: auto; }
 .lora-box .lora-row { margin: 2px 0; padding: 3px 6px; border-radius: 6px; }
@@ -1819,3 +1834,30 @@ kbd {
   white-space: nowrap;
   cursor: help;
 }
+
+/* Generieren: Modell-Infos als Klappmenü unter dem Tipp (Nutzer 22.11.2026), kompakter als die freien Plaketten */
+.model-info { margin: 4px 0 8px; }
+.model-info > summary { cursor: pointer; font-size: 12px; color: var(--muted); user-select: none; }
+.model-info > summary:hover { color: var(--text); }
+.model-info-warn { color: #ffab6b; }
+.model-info-icon { color: var(--accent); font-size: 13px; }
+.model-info[open] > summary { margin-bottom: 6px; }
+.model-info .feature-chips { gap: 4px; margin: 0; }
+.model-info .badge { font-size: 11px; padding: 1px 6px; }
+.model-info .hint { font-size: 11.5px; margin: 6px 0 0; line-height: 1.4; }
+
+/* Generieren: Trenngriff zwischen Einstellungen und Ergebnissen (Nutzer 22.11.2026), wie .st-vsplit im Studio */
+.split.split-resizable { grid-template-columns: clamp(40%, 760px, 50%) 9px minmax(0, 1fr); column-gap: 4px; }
+.gen-vsplit { align-self: stretch; min-height: 120px; cursor: col-resize; border-radius: 4px; position: relative; }
+.gen-vsplit::after { content: ""; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: var(--line); }
+.gen-vsplit:hover::after, .gen-vsplit:active::after { left: 3px; width: 3px; background: var(--accent-dim); }
+@media (max-width: 900px) {
+  .split.split-resizable { grid-template-columns: 1fr !important; }
+  .gen-vsplit { display: none; }
+}
+.mode-switch.six.narrow { grid-template-columns: repeat(3, 1fr); }
+/* Knopf unten an der linken Spalte festhalten (Nutzer 22.11.2026: „kann nicht nach unten scrollen um es zu bestätigen“) */
+.controls .gen-submit { position: sticky; bottom: -18px; z-index: 3; margin: 14px -16px -16px; padding: 10px 16px 18px;
+  background: var(--panel); border-top: 1px solid var(--line); border-radius: 0 0 var(--radius) var(--radius); }
+.controls .gen-submit .btn.primary { margin-top: 0; }
+.lora-fold summary .h3-note { margin-left: 4px; }

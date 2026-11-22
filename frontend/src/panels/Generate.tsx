@@ -1,5 +1,22 @@
 import { LinkText } from '../components/LinkText'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+
+/** Bildraster mit eigenem Scrollbereich: Ist es am Ende, scrollt das Mausrad die Seite weiter. Sonst hält Chrome die
+ *  Geste im Raster fest, und mit vielen Bildern ging es nicht nach unten zum Knopf (Nutzer 22.11.2026: „ich kann nicht
+ *  nach unten scrollen um es zu bestätigen“; gemessen: 5 Rastungen bewegten die Seite nur 120 px, der Rest ins Raster). */
+const chained = new WeakSet<HTMLElement>()
+function chainWheel(el: HTMLDivElement | null) {
+  if (!el || chained.has(el)) return
+  chained.add(el)
+  el.addEventListener('wheel', (e) => {
+    const down = e.deltaY > 0
+    const atEnd = down ? el.scrollTop + el.clientHeight >= el.scrollHeight - 1 : el.scrollTop <= 0
+    const page = el.closest('main.content') as HTMLElement | null
+    if (!atEnd || !page || e.deltaY === 0) return
+    e.preventDefault()
+    page.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? page.clientHeight : 1) })
+  }, { passive: false })
+}
 import { api, LORA_BASE_LABEL, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type LoraUploadResult, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
 import { LoraUpload } from '../components/LoraFile'
 import { AssetView } from '../components/AssetView'
@@ -127,6 +144,11 @@ interface Props {
 /** Hochgeladene Dateien, die als Quellbild taugen */
 const IMAGE_FILE = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i
 
+// Bild erweitern ohne eigenen Prompt (Nutzer 22.11.2026: „wenn ich nur extend will dann lieber neuen button
+// einblenden“): neutral, damit nichts erfunden wird; FLUX 3 ergaenzt die Beschreibung aus dem Vorlagenbild selbst
+const EXTEND_PROMPT = 'The same scene continues seamlessly beyond the edges, in the same style, with the same lighting '
+  + 'and the same perspective.'
+
 export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onShowModels }: Props) {
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -174,6 +196,38 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const voiceFileRef = useRef<HTMLInputElement>(null)
   // Video verlängern (seit 0.5.10): ein vorhandenes Video fortsetzen, sein letzter Frame wird Startbild
   const [extendId, setExtendId] = useState('')
+  // Breite der Einstellungen ziehen wie die Spalten im Studio (Nutzer 22.11.2026: „den abstand zwischen linken und
+  // rechten bereich im generieren … verschieben können wie in studio fenstern“); Doppelklick stellt sie zurück
+  const splitRef = useRef<HTMLDivElement>(null)
+  const [leftWidth, setLeftWidth] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem('nvai-generate-left'))
+      return v >= 320 ? v : null
+    } catch {
+      return null
+    }
+  })
+  const dragSplit = (e: RPointerEvent) => {
+    const box = splitRef.current?.getBoundingClientRect()
+    if (!box) return
+    e.preventDefault()
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      const w = Math.round(Math.min(box.width - 340, Math.max(340, ev.clientX - box.left - 4)))
+      setLeftWidth(w)
+      try { localStorage.setItem('nvai-generate-left', String(w)) } catch { /* privates Fenster: nur diese Sitzung */ }
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  const resetSplit = () => {
+    setLeftWidth(null)
+    try { localStorage.removeItem('nvai-generate-left') } catch { /* egal */ }
+  }
   const [videoAssets, setVideoAssets] = useState<Asset[]>([])
   const [motionSpeed, setMotionSpeed] = useState(1)
   // Verlustfreie Kopie jedes Videos (FFV1/MKV) für Schnitt und Studio-Export; kostet Platz, deshalb abschaltbar
@@ -431,7 +485,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     () => mode === 'restore'
       ? models.filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0
         && m.features?.reference_kind !== 'style')
-      : models.filter((m) => m.kind === mode && m.runnable),
+      // nur, was auf dieser Karte rechnet (usable, seit 0.5.35; auf NVIDIA alles)
+      : models.filter((m) => m.kind === mode && m.runnable && m.usable !== false),
     [models, mode],
   )
   const selected = available.find((m) => m.id === modelId[mode])
@@ -684,6 +739,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     }
     return out
   }, [feat, negWorks])
+  // Lizenzhinweis ohne harte Grenze (etwa FLUX Kommunity): steht im Klappmenü „Modell-Infos“
+  const infoWarning = selected && !selected.license_badge
+    && (mode === 'image' || (mode === 'video' && selected.commercial_ok === false))
+    ? selected.warning ?? '' : ''
 
   // Ein modelleigenes Format gilt nach dem Wechsel nicht mehr -- zurück auf die Vorwahl des neuen Modells, sonst das
   // erste. Läuft nach dem Vorwahl-Effekt oben und darf ihn nicht überschreiben (FLUX 3 1440² -> Qwen stand sonst auf 832 × 1216).
@@ -783,7 +842,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         ? !!prompt.trim() && !!sourceId
         : needsRefs
         ? !!prompt.trim() && videoRefs.length > 0
-        : mode === 'image' && useSource && (canImg2img || outpainting)
+        : mode === 'image' && outpainting
+          ? !!sourceId
+          : mode === 'image' && useSource && (canImg2img || outpainting)
           ? !!prompt.trim() && !!sourceId
           : mode === 'image' && cnId
             ? !!prompt.trim() && !!cnImageId
@@ -1119,7 +1180,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     setStage(t('in der Warteschlange', 'queued'))
 
     const common = {
-      prompt,
+      // Bild erweitern ohne eigenen Prompt (Nutzer 22.11.2026): ein neutraler Satz; FLUX 3 beschreibt das Vorlagenbild
+      // dazu selbst (Upsampler), die Maskenmodelle bekommen wenigstens Stil, Licht und Perspektive vorgegeben
+      prompt: mode === 'image' && outpainting && !prompt.trim() ? EXTEND_PROMPT : prompt,
       negative_prompt: negative,
       model_id: modelId[mode] || null,
       steps: steps ? Number(steps) : null,
@@ -1236,7 +1299,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         </p>
       ) : (
         <>
-          <div className="source-grid">
+          <div className="source-grid" ref={chainWheel}>
             {allowNone && (
               <button
                 className={sourceId ? 'source none' : 'source none selected'}
@@ -1303,14 +1366,16 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
   // Referenzbilder: FLUX 3 und andere Bearbeitungsmodelle, Stilvorlage bei Krea 2, Figur und Gesicht bei der
   // Referenz-Fassung von MiniMax H3 (Video)
+  // Als Klappmenue wie die LoRA-Auswahl, bei Bildern standardmaessig zu (Nutzer 22.11.2026: „reference images sollte
+  // als klapp menü standart mässig zugeklappt sein“); beim Referenz-Video sind sie Pflicht und deshalb offen
   const refPicker = () => (
-    <>
-      <h3>
+    <details className="lora-picker ref-picker" open={mode === 'video' || undefined}>
+      <summary>
         {styleRefs ? t('Stil-Referenz', 'Style reference') : t('Referenzbilder', 'Reference images')}{' '}
         <span className="muted small">
           {t(`— ${refIds.length} von ${maxRefs}`, `— ${refIds.length} of ${maxRefs}`)}
         </span>
-      </h3>
+      </summary>
       {sourceImages.length === 0 ? (
         <p className="hint small">
           {t(
@@ -1319,7 +1384,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           )}
         </p>
       ) : (
-        <div className="source-grid">
+        <div className="source-grid" ref={chainWheel}>
           {sourceImages.map((a) => {
             const idx = refIds.indexOf(a.id)
             return (
@@ -1372,7 +1437,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </button>
         )}
       </div>
-    </>
+    </details>
   )
 
   // Foto restaurieren: Quellfoto, Schritte, Hinweise. Zeiten gemessen auf der RTX 5060 Ti (25.10.2026).
@@ -1465,7 +1530,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   )
 
   return (
-    <div className="split">
+    <div className="split split-resizable" ref={splitRef}
+      style={leftWidth ? { gridTemplateColumns: `${leftWidth}px 9px minmax(0, 1fr)` } : undefined}>
       <section className="panel controls">
         {/* Einmal für alle Auswahlen: Quellbild, Startbild und Referenzbilder. */}
         <input
@@ -1479,7 +1545,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             e.target.value = ''
           }}
         />
-        <div className={MODES.length === 6 ? 'mode-switch six' : MODES.length === 5 ? 'mode-switch five' : 'mode-switch four'}>
+        <div className={(MODES.length === 6 ? 'mode-switch six' : MODES.length === 5 ? 'mode-switch five' : 'mode-switch four')
+          + (leftWidth && leftWidth < 600 ? ' narrow' : '')}>
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -1582,12 +1649,16 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     </p>
                   )}
                 </details>
+                {/* Als Klappmenue wie die Referenzbilder, standardmaessig zu (Nutzer 22.11.2026: „End image optional beim
+                    viedeo auch als klapp menü“); die Kopfzeile zeigt, ob schon etwas gewaehlt ist */}
                 {isLtx25 && vfeat?.end_image && sourceImages.length > 0 && (
-                  <>
-                    <h3>
+                  <details className="lora-picker end-picker" open={loop || !!endId || undefined}>
+                    <summary>
                       {t('Endbild', 'End image')}{' '}
-                      <span className="muted small">{t('optional', 'optional')}</span>
-                    </h3>
+                      <span className="muted small">
+                        {loop ? t('— Schleife', '— loop') : endId ? t('— gewählt', '— selected') : t('— optional', '— optional')}
+                      </span>
+                    </summary>
                     <label className="check">
                       <input type="checkbox" checked={loop} disabled={!sourceId}
                         onChange={(e) => {
@@ -1608,7 +1679,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                       </p>
                     )}
                     {!loop && (
-                      <div className="source-grid">
+                      <div className="source-grid" ref={chainWheel}>
                         <button className={endId ? 'source none' : 'source none selected'}
                           title={t('Ohne Endbild', 'No end image')} onClick={() => setEndId('')}>
                           {t('ohne', 'none')}
@@ -1640,7 +1711,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                             + 'same in both images stands still in between (water and smoke as still as the shore '
                             + 'in the test); for a moving background, leave it out.')}
                     </p>
-                  </>
+                  </details>
                 )}
               </>
             )}
@@ -1674,6 +1745,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               </>
             )}
 
+            {/* Nur, wenn er beim gewählten Modell wirkt; sonst sagt es die Plakette in den Modell-Infos (kompakter,
+                Nutzer 22.11.2026) */}
+            {negWorks && (<>
             <h3>{t('Negativ', 'Negative')}</h3>
             <textarea
               value={negWorks ? negative : ''}
@@ -1696,6 +1770,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                       : 'blurry, low quality'
               }
             />
+            </>)}
           </>
         )}
 
@@ -1718,21 +1793,27 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         {selected?.features?.tested && <p className="hint small tested">{selected.features.tested}</p>}
         <ModelTip mode={mode} model={selected} />
         <ModelEstimate id={selected?.id} />
-        {selected && (mode === 'image' || mode === 'video') && (
-          <div className="feature-chips"><ContentBadge model={selected} /><LicenseBadge model={selected} /></div>
-        )}
-        {chips.length > 0 && (
-          <div className="feature-chips">
-            {chips.map((c) => (
-              <span key={c.text} className={c.ok ? 'badge ok' : 'badge warn'}>{c.text}</span>
-            ))}
-          </div>
+        {/* Merkmale und Lizenz als Klappmenü unter dem Tipp, kompakt und standardmäßig zu (Nutzer 22.11.2026: „sollte als
+            aufklappmenü unter tip sein (auch kompakter) mit icon model infos“); die harte Lizenzgrenze bleibt sichtbar */}
+        {selected && ((mode === 'image' || mode === 'video') || chips.length > 0 || !!infoWarning) && (
+          <details className="model-info">
+            <summary>
+              <span className="model-info-icon" aria-hidden="true">ⓘ</span> {t('Modell-Infos', 'Model info')}
+              {/* Lizenzhinweis auch zugeklappt erkennbar (FLUX 3, Krea 2: jedes Bild vor der Veröffentlichung prüfen) */}
+              {infoWarning && <span className="model-info-warn"> · {t('Lizenzhinweis', 'license note')}</span>}
+            </summary>
+            <div className="feature-chips">
+              {(mode === 'image' || mode === 'video') && <><ContentBadge model={selected} /><LicenseBadge model={selected} /></>}
+              {chips.map((c) => (
+                <span key={c.text} className={c.ok ? 'badge ok' : 'badge warn'}>{c.text}</span>
+              ))}
+            </div>
+            {infoWarning && <p className="hint small warn">{infoWarning}</p>}
+          </details>
         )}
         {/* Harte Lizenzgrenze: roter Kasten, bis der Nutzer unter „Modelle“ eine Genehmigung bestätigt; danach keiner */}
-        {selected?.license_badge ? (
-          licenseBlocked(selected) && selected.warning && <p className="warn-banner"><LinkText text={selected.warning} /></p>
-        ) : (mode === 'image' || (mode === 'video' && selected?.commercial_ok === false)) && selected?.warning && (
-          <p className="hint small warn">{selected.warning}</p>
+        {selected?.license_badge && licenseBlocked(selected) && selected.warning && (
+          <p className="warn-banner"><LinkText text={selected.warning} /></p>
         )}
         {mode === 'image' && feat?.missing?.style_reference && (
           <p className="hint small">
@@ -1748,18 +1829,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             zu sehen sein“); nimmt das Modell keine oder ist keine passende geladen, steht hier ein Hinweis */}
         {(mode === 'image' || mode === 'video') && selected && (
           <div className="lora-section">
-            <h3>
-              LoRAs
-              {loraChoices.length > 0 && (
-                <span className={activeLoras.length > 0 ? 'h3-note on' : 'h3-note'}>
-                  {activeLoras.length > 0
-                    ? t(`${activeLoras.length} von ${loraChoices.length} aktiv`,
-                      `${activeLoras.length} of ${loraChoices.length} active`)
-                    : t(`${loraChoices.length} verfügbar`, `${loraChoices.length} available`)}
-                </span>
-              )}
-            </h3>
             {(selected.lora_bases?.length ?? 0) === 0 ? (
+              <>
+              <h3>LoRAs</h3>
               <p className="lora-box lora-none hint small">
                 {t(`${shortName(selected)} nimmt keine LoRAs.`, `${shortName(selected)} does not take LoRAs.`)}{' '}
                 {loraModels.length > 0 ? (
@@ -1790,7 +1862,22 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                   t('Von deinen Modellen nimmt keines LoRAs.', 'None of your models takes LoRAs.')
                 )}
               </p>
+              </>
             ) : (
+              // Aufklappbar, standardmäßig zu (Nutzer 22.11.2026: „loras "xx available" sollte auch zugeklappt sein,
+              // aufklapbar“); die Zeile sagt, wie viele da und aktiv sind
+              <details className="lora-picker lora-fold">
+              <summary>
+                LoRAs{' '}
+                <span className={activeLoras.length > 0 ? 'h3-note on' : 'h3-note'}>
+                  {activeLoras.length > 0
+                    ? t(`${activeLoras.length} von ${loraChoices.length} aktiv`,
+                      `${activeLoras.length} of ${loraChoices.length} active`)
+                    : loraChoices.length > 0
+                      ? t(`${loraChoices.length} verfügbar`, `${loraChoices.length} available`)
+                      : t('keine geladen', 'none downloaded')}
+                </span>
+              </summary>
               <div className="lora-box">
                 {loraChoices.length === 0 ? (
                   <p className="hint small">
@@ -1851,6 +1938,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                   {loraNote && <p className="ok-text small">{loraNote}</p>}
                 </div>
               </div>
+              </details>
             )}
           </div>
         )}
@@ -1975,23 +2063,21 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             )}
 
             {feat?.upsampler && (
-              <label className="check">
+              <label className="check" title={t(
+                'Der mitgelieferte Upsampler schreibt aus dem Prompt die lange Bildbeschreibung, auf die das Modell '
+                  + 'trainiert ist. Abschalten, wenn der Prompt schon eine volle Beschreibung ist oder Bauweise, Anzahl '
+                  + 'und Blickrichtung genau stimmen müssen: Bei FLUX 3 kam mit Ausbauer in 4 von 6 Bildern eine zweite '
+                  + 'Angelschnur dazu, ohne in 0 von 2.',
+                'The bundled upsampler turns the prompt into the long image description the model was trained on. '
+                  + 'Switch it off if the prompt already is a full description or construction, counts and gaze have '
+                  + 'to be exact: with FLUX 3 a second fishing line appeared in 4 of 6 images with the upsampler, in 0 '
+                  + 'of 2 without.')}>
                 <input type="checkbox" checked={upsample} onChange={(e) => setUpsample(e.target.checked)} />
                 {/* Ein Textblock statt Text + span: sonst quetscht Flex die Beschriftung schmal. */}
                 <span>
                   {t('Prompt ausbauen lassen', 'Expand the prompt')}{' '}
                   <span className="muted small">
-                    {t(
-                      '— der mitgelieferte Upsampler schreibt daraus die lange Bildbeschreibung, '
-                        + 'auf die das Modell trainiert ist. Abschalten, wenn der Prompt schon eine volle '
-                        + 'Beschreibung ist oder Bauweise, Anzahl und Blickrichtung genau stimmen müssen: '
-                        + 'Bei FLUX 3 kam mit Ausbauer in 4 von 6 Bildern eine zweite Angelschnur dazu, '
-                        + 'ohne in 0 von 2.',
-                      '— the bundled upsampler turns it into the long image description the model '
-                        + 'was trained on. Switch it off if the prompt already is a full description or '
-                        + 'construction, counts and gaze have to be exact: with FLUX 3 a second fishing '
-                        + 'line appeared in 4 of 6 images with the upsampler, in 0 of 2 without.',
-                    )}
+                    {t('— aus für genaue Bauweise, Anzahl und Blickrichtung', '— off for exact construction, counts and gaze')}
                   </span>
                 </span>
               </label>
@@ -2052,31 +2138,29 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
             {canImg2img && (
               <label className="check">
-                <input type="checkbox" checked={useSource}
-                  onChange={(e) => setUseSource(e.target.checked)} />
+                <input type="checkbox" checked={useSource && !outpaintOn}
+                  onChange={(e) => { setUseSource(e.target.checked); setOutpaintOn(false) }} />
                 {t('Vorhandenes Bild überarbeiten', 'Rework an existing image')}{' '}
                 <span className="muted small">
                   {t('— statt neu zu würfeln.', '— instead of rolling a new one.')}
                 </span>
               </label>
             )}
-            {!canImg2img && canOutpaint && (
+            {/* Erweitern als eigener Haken (Nutzer 22.11.2026: „die steuerungselemente sollten nicht zu sehen sein
+                solange ich nicht den checkbox für extend image ausgewählt habe“): Bildauswahl und Rand erst danach */}
+            {canOutpaint && (
               <label className="check">
                 <input type="checkbox" checked={useSource && outpaintOn}
                   onChange={(e) => { setUseSource(e.target.checked); setOutpaintOn(e.target.checked) }} />
-                {t('Vorhandenes Bild erweitern (Outpainting)', 'Extend an existing image (outpainting)')}
+                {t('Bild erweitern (Outpainting)', 'Extend an image (outpainting)')}{' '}
+                <span className="muted small">
+                  {t('— über den Rand hinaus, ein Prompt ist nicht nötig.', '— beyond its edges, no prompt needed.')}
+                </span>
               </label>
             )}
             {(canImg2img || canOutpaint) && useSource && (
               <>
                 {sourcePicker(false)}
-                {canImg2img && canOutpaint && (
-                  <label className="check">
-                    <input type="checkbox" checked={outpaintOn}
-                      onChange={(e) => setOutpaintOn(e.target.checked)} />
-                    {t('Über den Rand hinaus erweitern (Outpainting)', 'Extend beyond the edges (outpainting)')}
-                  </label>
-                )}
                 {canOutpaint && outpaintOn ? (
                   <div className="outpaint">
                     <div className="row">
@@ -2118,8 +2202,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                           {' · '}</>
                       )}
                       {t(
-                        'Das Bild bleibt, nur der neue Rand wird gemalt. Der Prompt beschreibt das ganze erweiterte Bild.',
-                        'The image stays; only the new border is painted. The prompt describes the whole extended picture.',
+                        'Das Bild bleibt, nur der neue Rand wird gemalt. Ein Prompt ist freiwillig; wenn, beschreibt er das ganze erweiterte Bild.',
+                        'The image stays; only the new border is painted. A prompt is optional; if given, it describes the whole extended picture.',
                       )}
                       {!outpaintByRef && (
                         <span className="warn-text">
@@ -2216,7 +2300,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     {cnId && (
                       <>
                         <p className="hint small">{t('Vorlage wählen:', 'Choose a template:')}</p>
-                        <div className="source-grid">
+                        <div className="source-grid" ref={chainWheel}>
                           {sourceImages.map((a) => (
                             <div key={a.id}
                               className={cnImageId === a.id ? 'source selected' : 'source'}
@@ -2330,20 +2414,22 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     {t('48 fps (zeitlich verdoppelt, langsamer)', '48 fps (temporal upscale, slower)')}
                   </label>
                 )}
-                <p className="hint small">
-                  {t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem Detail-IC-LoRA: '
-                      + 'Gesicht und Stoffe bleiben über die ganze Länge scharf, dafür rund dreimal so lang '
-                      + '(gemessen 5 s in 1080p: 13 statt 4 Minuten).',
-                    'DFR computes detail keyframes and a second stage with a detail IC-LoRA: faces and fabric '
-                      + 'stay sharp over the whole clip, at about three times the time (measured 5 s at 1080p: '
-                      + '13 instead of 4 minutes).')}
+                <p className="hint small" title={t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem '
+                    + 'Detail-IC-LoRA: Gesicht und Stoffe bleiben über die ganze Länge scharf (gemessen 5 s in 1080p: 13 '
+                    + 'statt 4 Minuten).',
+                  'DFR computes detail keyframes and a second stage with a detail IC-LoRA: faces and fabric stay sharp '
+                    + 'over the whole clip (measured 5 s at 1080p: 13 instead of 4 minutes).')}>
+                  {t('DFR: über die ganze Länge scharf, rund dreimal so lang.',
+                    'DFR: sharp over the whole clip, about three times the time.')}
                   {!vfeat?.dfr && missingNote('dfr')}
                 </p>
 
-                <h3>
+                {/* Klappmenue wie Endbild und Referenzbilder (Nutzer 22.11.2026: „Extend a video optional auch“) */}
+                <details className="lora-picker extend-picker" open={!!extendId || undefined}>
+                <summary>
                   {t('Video verlängern', 'Extend a video')}{' '}
-                  <span className="muted small">{t('optional', 'optional')}</span>
-                </h3>
+                  <span className="muted small">{extendId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
+                </summary>
                 <select value={extendId} onChange={(e) => setExtendId(e.target.value)}>
                   <option value="">{t('— kein Video, neu beginnen —', '— no video, start fresh —')}</option>
                   {videoAssets.map((a) => (
@@ -2367,13 +2453,14 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                         + 'given sound are not used.')}
                   </p>
                 )}
+                </details>
 
                 {vfeat?.audio_input && (
-                  <>
-                    <h3>
+                  <details className="lora-picker sound-picker" open={!!audioId || undefined}>
+                    <summary>
                       {t('Ton vorgeben', 'Given sound')}{' '}
-                      <span className="muted small">{t('optional', 'optional')}</span>
-                    </h3>
+                      <span className="muted small">{audioId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
+                    </summary>
                     <select value={audioId} onChange={(e) => setAudioId(e.target.value)}>
                       <option value="">{t('— keiner, LTX-2.5 erzeugt den Ton —', '— none, LTX-2.5 creates the sound —')}</option>
                       {audioAssets.map((a) => (
@@ -2387,7 +2474,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                       {t('Der Ton bleibt unverändert im Video, das Bild richtet sich nach ihm. Höchstens 20 s.',
                         'The sound stays unchanged in the video and the picture follows it. At most 20 s.')}
                     </p>
-                  </>
+                  </details>
                 )}
 
                 {vfeat?.motion_speed && (
@@ -2442,14 +2529,14 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               </>
             )}
 
-            <label className="check">
+            <label className="check" title={t('Speichert das Video zusätzlich Bild für Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus: gemessen 42,3 statt 37,7 dB PSNR beim YouTube-Export, Anschluss-Startbilder pixelgenau. Kostet Platz: rund 32 MB je Sekunde bei 1080p, 16 MB bei 720p (5 s 1080p: 162 statt 10 MB).',
+                'Also stores the video frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it: measured 42.3 instead of 37.7 dB PSNR for the YouTube export, chain start images pixel-exact. Costs space: about 32 MB per second at 1080p, 16 MB at 720p (5 s at 1080p: 162 instead of 10 MB).')}>
               <input type="checkbox" checked={master} onChange={(e) => setMaster(e.target.checked)} />
-              {t('Verlustfreie Kopie für den Schnitt (MKV)', 'Lossless copy for editing (MKV)')}
+              <span>
+                {t('Verlustfreie Kopie für den Schnitt (MKV)', 'Lossless copy for editing (MKV)')}{' '}
+                <span className="muted small">{t('— bessere Exporte, rund 32 MB je Sekunde', '— better exports, about 32 MB per second')}</span>
+              </span>
             </label>
-            <p className="hint small">
-              {t('Speichert das Video zusätzlich Bild für Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus: gemessen 42,3 statt 37,7 dB PSNR beim YouTube-Export, Anschluss-Startbilder pixelgenau. Kostet Platz: rund 32 MB je Sekunde bei 1080p, 16 MB bei 720p (5 s 1080p: 162 statt 10 MB).',
-                'Also stores the video frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it: measured 42.3 instead of 37.7 dB PSNR for the YouTube export, chain start images pixel-exact. Costs space: about 32 MB per second at 1080p, 16 MB at 720p (5 s at 1080p: 162 instead of 10 MB).')}
-            </p>
           </>
         )}
 
@@ -2591,17 +2678,23 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </label>
         )}
 
+        {/* Klebt unten an der linken Spalte: Knopf ohne Scrollen erreichbar, auch wenn Erweitern, Referenzen oder die
+            Video-Teile aufgeklappt sind (Nutzer 22.11.2026: „kann nicht nach unten scrollen um es zu bestätigen“) */}
+        <div className="gen-submit">
         <button className="btn primary" onClick={generate}
           disabled={busy || (mode === 'restore' ? false : noModel) || !canGenerate}>
           {busy
-            ? t('Generiert…', 'Generating…')
+            ? (mode === 'image' && outpainting ? t('Erweitert…', 'Extending…') : t('Generiert…', 'Generating…'))
             : mode === '3d'
               ? t('Mesh erzeugen', 'Create mesh')
               : mode === 'restore'
                 ? t('Foto restaurieren', 'Restore photo')
-                : t('Generieren', 'Generate')}
+                : mode === 'image' && outpainting
+                  ? t('Bild erweitern', 'Extend image')
+                  : t('Generieren', 'Generate')}
           {mode !== '3d' && <kbd>{t('Strg+Enter', 'Ctrl+Enter')}</kbd>}
         </button>
+        </div>
 
         {noModel && mode === 'restore' && restoreEdits && (
           <p className="hint warn">
@@ -2640,6 +2733,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </p>
         )}
       </section>
+
+      <div className="gen-vsplit" onPointerDown={dragSplit} onDoubleClick={resetSplit}
+        title={t('Ziehen: Breite der Einstellungen · Doppelklick: zurücksetzen',
+          'Drag: width of the settings · double-click: reset')} />
 
       <section className="panel output">
         {busy && (

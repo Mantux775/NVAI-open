@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, connectEvents, type Health, type ServerEvent, type StudioChangedEvent } from './api'
 import { GpuChip } from './components/GpuChip'
+import { VramChip } from './components/VramChip'
 import { ReportDialog } from './components/ReportDialog'
 import { useDownloads } from './downloads'
 import { getLang, setLang, t, type Lang } from './i18n'
@@ -169,7 +170,7 @@ export function App() {
         </nav>
 
         <div className="status">
-          {health?.cpu_mode && <CpuModeChip mode={health.cpu_mode} vulkan={!!health.vulkan_engine} />}
+          {health?.cpu_mode && <CpuModeChip mode={health.cpu_mode} vulkan={!!health.vulkan_engine} audio={!!health.vulkan_audio} />}
           <span className={health?.comfy_running ? 'dot ok' : 'dot off'} />
 
           {/* Was liegt im VRAM? Wichtiger als der GPU-Name, deshalb zuerst. */}
@@ -180,15 +181,9 @@ export function App() {
               <GpuChip key={g.index} gpu={g} onChanged={refreshHealth} onError={setNotice} />
             ))
           ) : (
-            <span className="vram" title={`${health?.gpu?.name ?? 'GPU'} · ${vram}`}>
-              <span className="vram-bar">
-                <span
-                  className={vramPct > 85 ? 'vram-fill high' : 'vram-fill'}
-                  style={{ width: `${vramPct}%` }}
-                />
-              </span>
-              <span className="muted small">{vram}</span>
-            </span>
+            // Eine Karte: Balken und Belegung; ein Klick wählt den Rechenweg (ComfyUI oder stable-diffusion.cpp)
+            <VramChip name={health?.gpu?.name} label={vram} pct={vramPct} engine={health?.engine}
+              onChanged={refreshHealth} />
           )}
 
           <span className="loaded">
@@ -341,48 +336,49 @@ export function App() {
   )
 }
 
-/** Warnung oben in der Leiste: NVAI-open rechnet auf dem Prozessor (Nutzer 21.11.2026: „oben in der Leiste warnen, dass
- * es auf der CPU läuft, und mouse over Hinweis, was es für ihn bedeutet und was zu machen wäre“; GitHub-Issue #3). */
-function CpuModeChip({ mode, vulkan }: { mode: NonNullable<Health['cpu_mode']>; vulkan: boolean }) {
-  // seit 0.5.34: Video mit Wan 2.1 1.3B über die Vulkan-Engine (stable-diffusion.cpp)
-  const video = vulkan
-    ? t(' Videos rechnet Wan 2.1 T2V 1.3B über die Vulkan-Engine (stable-diffusion.cpp), langsam: 3 s in rund 4,5 min auf der Vergleichskarte.',
-      ' Videos compute with Wan 2.1 T2V 1.3B through the Vulkan engine (stable-diffusion.cpp), slowly: 3 s in about 4.5 min on the comparison card.')
-    : ''
+/** Hinweis oben in der Leiste: Karte ohne CUDA/ROCm (GitHub-Issue #3; Nutzer 21.11.2026: „oben in der Leiste warnen,
+ * dass es auf der CPU läuft, und mouse over Hinweis, was es für ihn bedeutet und was zu machen wäre“). Seit 0.5.35
+ * rechnen Bilder (SDXL) und Videos (Wan 2.1 1.3B) dort über die Vulkan-Engine (stable-diffusion.cpp), Ton auf dem
+ * Prozessor; DirectML ist raus. Ohne Vulkan-Engine rechnet alles auf dem Prozessor. */
+function CpuModeChip({ mode, vulkan, audio }: {
+  mode: NonNullable<Health['cpu_mode']>; vulkan: boolean; audio: boolean
+}) {
   const cards = mode.cards.length ? mode.cards.join(', ') : t('die Grafikkarte', 'the graphics card')
-  if (mode.directml) {
-    // DirectML (seit 0.5.33, GitHub-Issue #3): Bilder, Videos und Ton aus ComfyUI rechnen auf der Radeon
-    const dmlWhy = t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt. NVAI-open rechnet deshalb über DirectML auf der Karte (experimentell, PyTorch 2.4.1).`,
-      `${cards} is not supported by AMD's PyTorch for Windows (ROCm). NVAI-open therefore computes through DirectML on the card (experimental, PyTorch 2.4.1).`)
-    const dmlMeans = t('Was das heißt: Gedacht sind die Modelle, die unter „Modelle“ als empfohlen markiert sind: SDXL-Modelle wie Juggernaut XL, Pony oder Illustrious und Stable Audio Open; Stable Audio 3 läuft, aber langsam. Video geht über DirectML nicht, große Modelle wie Qwen-Image, FLUX 3 oder LTX-2.5 passen nicht. Audio-Werkzeuge und Ton-Forensik rechnen auf dem Prozessor; Sprecherstimme und 3D gehen nicht.',
-      'What this means: the models marked as recommended under "Models" are meant for it: SDXL models such as Juggernaut XL, Pony or Illustrious, and Stable Audio Open; Stable Audio 3 runs, but slowly. Video does not work through DirectML, and large models such as Qwen-Image, FLUX 3 or LTX-2.5 do not fit. The audio tools and audio forensics compute on the processor; the narrator voice and 3D do not work.') + video
-    const dmlTodo = t('Läuft etwas nicht oder ist es sehr langsam: bitte über „Problem melden“ (oben rechts) berichten, der Bericht enthält die Zeiten.',
-      'If something does not work or is very slow: please tell us via "Report a problem" (top right); the report includes the timings.')
+  const why = mode.reason === 'amd_unsupported'
+    ? t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt.`,
+      `${cards} is not supported by AMD's PyTorch for Windows (ROCm).`)
+    : mode.reason === 'no_cuda_rocm'
+      ? t(`PyTorch rechnet unter Windows nur auf NVIDIA-Karten (CUDA) und neueren Radeons (ROCm), nicht auf ${cards}.`,
+        `On Windows, PyTorch computes only on NVIDIA cards (CUDA) and newer Radeons (ROCm), not on ${cards}.`)
+      : t(`PyTorch konnte beim Einrichten nicht auf ${cards} rechnen.`,
+        `PyTorch could not compute on ${cards} during setup.`)
+  const report = t('Läuft etwas nicht oder ist es sehr langsam: bitte über „Problem melden“ (oben rechts) berichten, der Bericht enthält die Zeiten.',
+    'If something does not work or is very slow: please tell us via "Report a problem" (top right); the report includes the timings.')
+  if (vulkan) {
+    const how = t('Deshalb rechnet NVAI-open Bilder und Videos über Vulkan auf der Karte (stable-diffusion.cpp, experimentell).',
+      'NVAI-open therefore computes images and videos through Vulkan on the card (stable-diffusion.cpp, experimental).')
+    const sound = audio
+      ? t('Ton (Stable Audio 3) und Sprecherstimme (Qwen3-TTS) rechnen über audio.cpp ebenfalls auf der Karte. Große Modelle wie Qwen-Image, FLUX 3 oder LTX-2.5 und 3D gehen auf dieser Karte nicht.',
+        'Sound (Stable Audio 3) and the narrator voice (Qwen3-TTS) also compute on the card through audio.cpp. Large models such as Qwen-Image, FLUX 3 or LTX-2.5 and 3D do not work on this card.')
+      : t('Ton rechnet auf dem Prozessor und braucht länger. Große Modelle wie Qwen-Image, FLUX 3 oder LTX-2.5, die Sprecherstimme und 3D gehen auf dieser Karte nicht.',
+        'Sound computes on the processor and takes longer. Large models such as Qwen-Image, FLUX 3 or LTX-2.5, the narrator voice and 3D do not work on this card.')
+    const means = t('Was das heißt: Gedacht sind die Modelle, die unter „Modelle“ als empfohlen markiert sind: SDXL-Modelle wie Juggernaut XL, Pony oder Illustrious für Bilder und Wan 2.1 T2V 1.3B für Videos (langsam).',
+      'What this means: the models marked as recommended under "Models" are meant for it: SDXL models such as Juggernaut XL, Pony or Illustrious for images and Wan 2.1 T2V 1.3B for videos (slow).') + ' ' + sound + ' ' + t('Studio-Schnitt und Export laufen normal.', 'Studio editing and export work normally.')
     return (
-      <span className="cpu-mode" title={`${dmlWhy}\n\n${dmlMeans}\n\n${dmlTodo}`}>
-        ⚠ {t('DirectML (experimentell)', 'DirectML (experimental)')}
+      <span className="cpu-mode" title={`${why} ${how}\n\n${means}\n\n${report}`}>
+        ⚠ {t('Vulkan (experimentell)', 'Vulkan (experimental)')}
       </span>
     )
   }
-  const why = mode.reason === 'amd_unsupported'
-    ? t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt. Deshalb rechnet NVAI-open auf dem Prozessor.`,
-      `${cards} is not supported by AMD's PyTorch for Windows (ROCm), so NVAI-open computes on the processor.`)
-    : t(`PyTorch konnte beim Einrichten nicht auf ${cards} rechnen. Deshalb rechnet NVAI-open auf dem Prozessor.`,
-      `PyTorch could not compute on ${cards} during setup, so NVAI-open computes on the processor.`)
-  const means = t('Was das heißt: Bilder und Videos dauern sehr lange (viele Minuten je Bild), große Modelle wie Qwen-Image, FLUX oder LTX sind kaum nutzbar, Sprecherstimme und 3D gehen nicht. Studio-Schnitt und Export laufen normal; Audio-Werkzeuge und Ton-Forensik rechnen ebenfalls auf dem Prozessor und brauchen länger.',
-    'What this means: images and videos take very long (many minutes per image), large models such as Qwen-Image, FLUX or LTX are hardly usable, the narrator voice and 3D do not work. Studio editing and export work normally; the audio tools and audio forensics also compute on the processor and take longer.') + video
-  const todo = mode.reason === 'amd_unsupported'
-    ? t('Was hilft: eine NVIDIA-Grafikkarte oder eine Radeon RX 7000 oder 9000 (RX 6000 experimentell), danach im Startmenü „NVAI-open reparieren“ ausführen.',
-      'What helps: an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 6000 experimental), then run "Repair NVAI-open" from the Start menu.')
+  const means = t('Deshalb rechnet NVAI-open auf dem Prozessor. Was das heißt: Bilder und Videos dauern sehr lange (viele Minuten je Bild), große Modelle wie Qwen-Image, FLUX oder LTX sind kaum nutzbar, Sprecherstimme und 3D gehen nicht. Studio-Schnitt und Export laufen normal; Audio-Werkzeuge und Ton-Forensik rechnen ebenfalls auf dem Prozessor und brauchen länger.',
+    'NVAI-open therefore computes on the processor. What this means: images and videos take very long (many minutes per image), large models such as Qwen-Image, FLUX or LTX are hardly usable, the narrator voice and 3D do not work. Studio editing and export work normally; the audio tools and audio forensics also compute on the processor and take longer.')
+  const todo = mode.reason === 'amd_unsupported' || mode.reason === 'no_cuda_rocm'
+    ? t('Was hilft: den aktuellen Grafiktreiber installieren und im Startmenü „NVAI-open reparieren“ ausführen; dann richtet das Setup Vulkan für die Karte ein, wenn Vulkan sie sieht. Am schnellsten ist eine NVIDIA-Grafikkarte oder eine Radeon RX 7000 oder 9000 (RX 6000 experimentell).',
+      'What helps: install the current graphics driver and run "Repair NVAI-open" from the Start menu; the setup then sets up Vulkan for the card if Vulkan sees it. Fastest is an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 6000 experimental).')
     : t('Was hilft: den aktuellen Grafiktreiber installieren (bei AMD Adrenalin 26.2.2 oder neuer), danach im Startmenü „NVAI-open reparieren“ ausführen.',
       'What helps: install the current graphics driver (for AMD, Adrenalin 26.2.2 or newer), then run "Repair NVAI-open" from the Start menu.')
-  // DirectML war eingerichtet, startete aber in dieser Sitzung nicht (Rückfall auf den Prozessor)
-  const failed = mode.directml_failed
-    ? t(`DirectML startete nicht, deshalb rechnet NVAI-open bis zum nächsten Start auf dem Prozessor. Grund: ${mode.directml_failed}`,
-      `DirectML did not start, so NVAI-open computes on the processor until the next start. Reason: ${mode.directml_failed}`)
-    : ''
   return (
-    <span className="cpu-mode" title={`${why}\n\n${means}\n\n${todo}${failed ? `\n\n${failed}` : ''}`}>
+    <span className="cpu-mode" title={`${why} ${means}\n\n${todo}\n\n${report}`}>
       ⚠ {t('Rechnet auf dem Prozessor', 'Running on the CPU')}
     </span>
   )

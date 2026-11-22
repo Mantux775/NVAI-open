@@ -140,13 +140,11 @@ def amd_unsupported(name: str) -> bool:
 def cpu_mode() -> dict[str, Any] | None:
     """Rechnet ComfyUI ohne CUDA/ROCm? {"reason", "cards"} oder None. reason "amd_unsupported": alle eigenen Radeons
     (ohne eigene: alle) sind ohne ROCm unter Windows und es steckt keine NVIDIA im Rechner; "no_gpu_compute": das Setup
-    fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json).
+    fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json);
+    "no_cuda_rocm" (seit 0.5.35): eine Karte ohne CUDA und ROCm, etwa Intel Arc.
 
-    Hat das Setup DirectML eingerichtet (seit 0.5.33, GitHub-Issue #3), steht dazu "directml": {"device"}: Bilder,
-    Videos und Ton aus ComfyUI rechnen dann ueber DirectML auf der Radeon (eigenes venv mit PyTorch 2.4.1, nur das
-    Bild-ComfyUI); alles andere bleibt wie ohne Karte (Audio-Werkzeuge, Prompt-Ausbau, Sprecherstimme, 3D).
-    "directml_failed": Grund, wenn DirectML in dieser Sitzung nicht startete."""
-    from . import directml
+    Bilder (SDXL) und Videos (Wan 2.1 1.3B) rechnen dann ueber die Vulkan-Engine auf der Karte, wenn das Setup sie
+    einrichten konnte (sdcpp.py; DirectML ist seit 0.5.35 raus), alles andere aus ComfyUI auf dem Prozessor."""
     mode: dict[str, Any] | None = None
     cards = list_gpus()
     if cards and all(c.get("vendor") == "amd" for c in cards):
@@ -163,12 +161,19 @@ def cpu_mode() -> dict[str, Any] | None:
             return None
         mode = {"reason": str(saved.get("reason") or "no_gpu_compute"),
                 "cards": [str(c) for c in saved.get("cards") or [c.get("name") for c in cards] if c]}
-    dml = directml.active()
-    if dml:
-        mode["directml"] = dml
-    elif directml.FAILED:
-        mode["directml_failed"] = directml.FAILED
     return mode
+
+
+def vulkan_device() -> int | None:
+    """Vulkan-Nummer der eigenen Karte, die das Setup gefunden hat (gpu_mode.json "vulkan": {"index"}, seit 0.5.35;
+    0.5.34 schrieb nur true). Die Engines rechnen nur dort (GGML_VK_VISIBLE_DEVICES), auch wenn Vulkan zuerst die
+    Prozessorgrafik meldet."""
+    try:
+        saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
+        index = saved.get("vulkan", {}).get("index")
+        return int(index) if index is not None else None
+    except (OSError, ValueError, AttributeError, TypeError):
+        return None
 
 
 def amd_arch(name: str) -> str | None:

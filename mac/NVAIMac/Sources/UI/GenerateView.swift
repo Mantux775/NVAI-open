@@ -18,6 +18,11 @@ struct GenerateView: View {
     /// Outpainting: Ränder links, oben, rechts, unten in Pixeln.
     @State private var outpaintOn = false
     @State private var edges = [0, 0, 0, 0]
+    /// Zugeklappt, bis etwas gewählt ist, wie unter Windows (Nutzer 22.11.2026: „reference images sollte als klapp menü
+    /// standart mässig zugeklappt sein“, „also alles kompakter und atraktiver für den user“)
+    @State private var startOpen = false
+    @State private var refsOpen = false
+    @State private var infoOpen = false
     @State private var lastJobID: String?
     /// Ein Absenden zur Zeit (seit 0.5.9): Zwei schnelle Klicks oder zweimal ⌘↩ gaben zwei gleiche Aufträge.
     @State private var submitting = false
@@ -83,6 +88,12 @@ struct GenerateView: View {
     private var hint: String { activeModel?.features["prompt_hint"] as? String ?? ModelCatalog.promptHint }
     private var placeholder: String { activeModel?.features["placeholder"] as? String ?? ModelCatalog.placeholder }
     private var maxReferences: Int { isCoreML ? 0 : activeModel?.features["references"] as? Int ?? 3 }
+    /// Nur erweitern (Ausgangsbild, Schalter, Ränder): Der Knopf heißt dann „Bild erweitern“, der Prompt ist optional
+    /// (Nutzer 22.11.2026: „wenn ich nur extend will dann lieber neuen button einblenden, mit extend image“)
+    private var extending: Bool { takesImages && startID != nil && outpaintOn && !isCoreML && edges.contains { $0 > 0 } }
+    /// Ohne eigenen Text beim Erweitern, wie EXTEND_PROMPT in der Windows-Oberfläche
+    private static let extendPrompt = "The same scene continues seamlessly beyond the edges, in the same style, "
+        + "with the same lighting and the same perspective."
 
     /// Bilder zur Auswahl: die neuesten erzeugten und hochgeladenen, neueste zuerst; „Weitere laden“ nimmt je
     /// 50 dazu (wie der Verlauf der Windows-Oberfläche).
@@ -126,6 +137,8 @@ struct GenerateView: View {
             if state.showVideo { formMode = .video }
             if state.showSpeech { formMode = .speech }
             if let start = state.generateStartPreset { startID = start }
+            if startID != nil { startOpen = true }
+            if !referenceIDs.isEmpty { refsOpen = true }
         }
         .onChange(of: state.activeModelID) { _, _ in applyDefaults() }
         .onChange(of: state.images.count + state.uploads.count) { _, _ in pruneSelection() }
@@ -133,6 +146,9 @@ struct GenerateView: View {
         .onChange(of: state.showAudio) { _, show in if show { formMode = .audio } }
         .onChange(of: state.showVideo) { _, show in if show { formMode = .video } }
         .onChange(of: state.showSpeech) { _, show in if show { formMode = .speech } }
+        // Ein gewähltes Bild klappt seinen Bereich auf (Vorschau „Als Ausgangsbild“, „Als Referenz“)
+        .onChange(of: startID) { _, id in if id != nil { startOpen = true } }
+        .onChange(of: referenceIDs.count) { old, new in if new > old { refsOpen = true } }
         .sheet(item: $preview) { asset in
             let list = jobAssets.contains(asset) ? jobAssets : [asset]
             PreviewSheet(assets: list, index: list.firstIndex(of: asset) ?? 0,
@@ -219,7 +235,40 @@ struct GenerateView: View {
                 Text(t("Noch nicht geladen: unter „Modelle“ herunterladen.", "Not downloaded yet: download it under \"Models\"."))
                     .font(.caption).foregroundStyle(.orange)
             }
+            // Modell-Infos zugeklappt unter dem Tipp (Nutzer 22.11.2026: „sollte als aufklappmenü unter tip sein (auch
+            // kompakter) mit icon model infos“)
+            if let model = activeModel {
+                DisclosureGroup(isExpanded: $infoOpen) {
+                    modelInfo(model)
+                } label: {
+                    Label(t("Modell-Infos", "Model info"), systemImage: "info.circle").font(.caption)
+                }
+            }
         }
+    }
+
+    /// Beschreibung, Lizenz, Download, Für und Wider des Modells
+    @ViewBuilder
+    private func modelInfo(_ model: AnyModel) -> some View {
+        let info = model.info
+        let license = info["license"] as? String ?? ""
+        let commercial = info["commercial_ok"] as? Bool ?? false
+        VStack(alignment: .leading, spacing: 4) {
+            if let text = info["description"] as? String, !text.isEmpty {
+                Text(text).fixedSize(horizontal: false, vertical: true)
+            }
+            if !license.isEmpty {
+                Text(t("Lizenz: \(license)", "License: \(license)")
+                     + (commercial ? t(" · kommerziell erlaubt", " · commercial use allowed") : ""))
+            }
+            if let gb = info["size_gb"] as? Double, gb > 0 {
+                Text("Download: \(gb.formatted(.number.precision(.fractionLength(1)))) GB")
+            }
+            ForEach(info["pros"] as? [String] ?? [], id: \.self) { Text("+ " + $0) }
+            ForEach(info["cons"] as? [String] ?? [], id: \.self) { Text("– " + $0) }
+        }
+        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+        .padding(.top, 2)
     }
 
     // MARK: LoRAs
@@ -824,7 +873,7 @@ struct GenerateView: View {
         }
 
         if takesImages {
-        GroupBox(t("Ausgangsbild (optional)", "Start image (optional)")) {
+        DisclosureGroup(isExpanded: $startOpen) {
             VStack(alignment: .leading, spacing: 8) {
                 strip(single($startID))
                 if let size = pixelSize(startID) {
@@ -878,13 +927,16 @@ struct GenerateView: View {
                     }
                 }
             }
-            .padding(4)
+            .padding(.top, 4)
+        } label: {
+            Text(startID == nil ? t("Vorhandenes Bild überarbeiten oder erweitern", "Edit or extend an existing image")
+                 : outpaintOn ? t("Bild erweitern", "Extend image") : t("Vorhandenes Bild überarbeiten", "Edit an existing image"))
+                .font(.subheadline.bold())
         }
         }
 
         if maxReferences > 0 {
-            GroupBox(t("Referenzbilder (bis \(maxReferences)) – \(referenceIDs.count) gewählt",
-                       "Reference images (up to \(maxReferences)) – \(referenceIDs.count) chosen")) {
+            DisclosureGroup(isExpanded: $refsOpen) {
                 VStack(alignment: .leading, spacing: 6) {
                     strip($referenceIDs, limit: maxReferences, allowNone: false)
                     Text(t("Im Prompt als „the first image“, „the second image“ ansprechen, in der Reihenfolge der Nummern. "
@@ -902,7 +954,12 @@ struct GenerateView: View {
                            + "With \"keep … exactly as in the first image\" the photo's clothes and framing stay."))
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(4)
+                .padding(.top, 4)
+            } label: {
+                Text(referenceIDs.isEmpty
+                     ? t("Referenzbilder (bis \(maxReferences))", "Reference images (up to \(maxReferences))")
+                     : t("Referenzbilder – \(referenceIDs.count) gewählt", "Reference images – \(referenceIDs.count) chosen"))
+                    .font(.subheadline.bold())
             }
         }
 
@@ -910,11 +967,12 @@ struct GenerateView: View {
             Button {
                 Task { await submit() }
             } label: {
-                Text(t("Generieren", "Generate")).frame(minWidth: 120)
+                // Nur erweitern: eigener Knopf, der Prompt ist dann optional (wie unter Windows)
+                Text(extending ? t("Bild erweitern", "Extend image") : t("Generieren", "Generate")).frame(minWidth: 120)
             }
             .keyboardShortcut(.return, modifiers: .command)
             .buttonStyle(.borderedProminent)
-            .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !extending)
             if let job = runningJob(kinds: ["txt2img", "img2img"]) {
                 Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
             }
@@ -1090,8 +1148,10 @@ struct GenerateView: View {
         message = nil
         pruneSelection()
         let size = fixedSize.map { (label: "", w: $0, h: $0) } ?? sizes[min(sizeIndex, sizes.count - 1)]
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         var body: [String: JSONValue] = [
-            "prompt": .string(prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
+            // Nur erweitern ohne eigenen Text: der Ersatz-Prompt beschreibt die fortgesetzte Szene
+            "prompt": .string(text.isEmpty && self.extending ? Self.extendPrompt : text),
             "width": .int(size.w), "height": .int(size.h),
             "steps": .int(steps), "batch_size": .int(batch),
             "model_id": .string(state.activeModelID),

@@ -115,9 +115,6 @@ New-Item -ItemType Directory -Force "$app\tools", "$app\locks", "$app\licenses" 
 Copy-Item $uvExe "$app\tools\uv.exe"
 Copy-Item "$here\licenses\uv\*" "$app\tools\"
 Copy-Item "$here\locks\*.lock" "$app\locks\"
-# DirectML for Radeons without ROCm (since 0.5.33): install-runtime.ps1 puts it into external\comfyui\.venv-directml
-New-Item -ItemType Directory -Force "$app\directml" | Out-Null
-Copy-Item "$here\directml\nvai_directml.py" "$app\directml\"
 Copy-Item "$here\install-runtime.ps1", "$here\stop-all.ps1", "$here\nvai-start.cmd", `
           "$here\GETTING_STARTED.txt", "$here\ERSTE_SCHRITTE.txt" $app
 Copy-Item "$repo\LICENSE" "$app\LICENSE.txt"

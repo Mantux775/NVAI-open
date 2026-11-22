@@ -466,8 +466,11 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     ausfuehren, Ergebnisse in die Library legen."""
     p = job.params
     entry = _resolve_model(p, kind)
-    if sdcpp.handles(entry, kind):
-        return await _run_sdcpp(job, ctx, entry, extra_meta)
+    from . import audiocpp
+    if audiocpp.handles(entry, kind):
+        return await _run_audiocpp(job, ctx, entry, extra_meta)
+    if sdcpp.handles(entry, kind, job.params):
+        return await _run_sdcpp(job, ctx, entry, kind, extra_meta)
     await _ensure_backend(ctx)
     if kind == "video" and p.get("master", True) and not await comfy.has_node(workflows.MASTER_NODE):
         # ComfyUI lief schon, bevor der Knoten dazukam: diesmal nur das MP4, ab dem naechsten Start mit Master
@@ -506,31 +509,84 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     return _store_assets(job, entry, paths, seed, masters, extra_meta)
 
 
-async def _run_sdcpp(job: Job, ctx: JobContext, entry: dict[str, Any], extra_meta: dict[str, Any]) -> list[str]:
-    """Karten ohne CUDA/ROCm: der Auftrag laeuft ueber die Vulkan-Engine (sdcpp.py) statt ueber ComfyUI."""
+async def _run_sdcpp(job: Job, ctx: JobContext, entry: dict[str, Any], kind: str,
+                     extra_meta: dict[str, Any]) -> list[str]:
+    """Bilder (SDXL) und Videos (Wan 2.1 1.3B) ueber stable-diffusion.cpp (sdcpp.py) statt ueber ComfyUI: auf Karten
+    ohne CUDA/ROCm ueber Vulkan (ComfyUI rechnet dort nur noch auf dem Prozessor: Ton, Prompt ausbauen), seit 0.5.35 auf
+    Wunsch auch auf NVIDIA (engine.py). Dort gibt ComfyUI vorher den Grafikspeicher frei, sonst teilen sich beide die Karte."""
     p = job.params
-    if p.get("loras"):
-        raise RuntimeError(t("LoRAs gehen mit der Vulkan-Engine noch nicht.",
-                             "LoRAs do not work with the Vulkan engine yet."))
-    mode = gpu.cpu_mode() or {}
-    if mode.get("directml") and await comfy.is_running(timeout=1.0):
-        # torch-directml gibt seinen Speicherpool erst frei, wenn der Prozess endet; ohne das bliebe der Vulkan-Engine
-        # auf einer 8-GB-Karte kaum Grafikspeicher. Der naechste Bild- oder Ton-Auftrag startet ComfyUI wieder (~30 s).
-        proc = comfy.MAIN._proc
-        comfy.MAIN.stop()
-        if proc is not None:
-            try:
-                await asyncio.to_thread(proc.wait, 30)
-            except Exception:  # noqa: BLE001 - beendet sich spaeter, die Engine faengt mit weniger Speicher an
-                pass
-    ctx.progress(0.02, t("generiert (Vulkan)", "generating (Vulkan)"))
+    if kind == "video" and p.get("loras"):
+        raise RuntimeError(t("LoRAs für Video gehen mit stable-diffusion.cpp noch nicht.",
+                             "LoRAs for video do not work with stable-diffusion.cpp yet."))
+    if gpu.cpu_mode() is None:
+        if sdcpp.backend() == "vulkan":
+            # Ueber Vulkan reicht Freigeben nicht: Nach H3-Tiny und PAN 2 hielt ComfyUI trotz /free Speicher, den Windows
+            # dem Vulkan-Prozess nur im Arbeitsspeicher gab; SDXL dekodierte 72 statt 1,6 s (22.11.2026, notizen/gpu.md).
+            # ComfyUI startet beim naechsten eigenen Auftrag von selbst neu (rund 30 s).
+            await comfy.MAIN.shutdown()
+        else:
+            await comfy.free_memory()
+    lora_files = _resolve_loras(p, entry) if kind == "image" else []
+    if lora_files:
+        extra_meta = {**extra_meta, "loras": [
+            {"model_id": lo["model_id"], "strength": lo["strength"]} for lo in lora_files]}
+    ctx.progress(0.02, t(f"generiert ({sdcpp.backend_label()})", f"generating ({sdcpp.backend_label()})"))
 
     def on_progress(frac: float, stage: str) -> None:
         ctx.progress(0.02 + frac * 0.96, stage)
 
-    paths, meta = await sdcpp.run_video(entry, p, on_progress)
+    if kind == "image":
+        paths, meta = await sdcpp.run_image(entry, p, lora_files, on_progress)
+    else:
+        paths, meta = await sdcpp.run_video(entry, p, on_progress)
     ctx.progress(0.99, t("speichert", "saving"))
     return _store_assets(job, entry, paths, meta["seed"], [], {**extra_meta, **meta})
+
+
+async def _run_audiocpp(job: Job, ctx: JobContext, entry: dict[str, Any], extra_meta: dict[str, Any]) -> list[str]:
+    """Karten ohne CUDA/ROCm: Musik und Geraeusche ueber audio.cpp und Vulkan (audiocpp.py, seit 0.5.35)."""
+    from . import audiocpp
+    ctx.progress(0.02, t("erzeugt Ton (Vulkan)", "generating sound (Vulkan)"))
+
+    def on_progress(frac: float, stage: str) -> None:
+        ctx.progress(0.02 + frac * 0.96, stage)
+
+    paths, meta = await audiocpp.run_audio(entry, job.params, on_progress)
+    ctx.progress(0.99, t("speichert", "saving"))
+    return _store_assets(job, entry, paths, meta["seed"], [], {**extra_meta, **meta})
+
+
+async def _tts_vulkan(job: Job, ctx: JobContext, entry: dict[str, Any]) -> list[str]:
+    """Karten ohne CUDA/ROCm: Sprecherstimme ueber audio.cpp und Vulkan (seit 0.5.35), mit denselben Modellordnern wie
+    der CUDA-Weg; gemessen ohne Matrix-Einheiten rund 7 s Sprache in 21 s."""
+    from . import audiocpp
+    import wave
+    p = job.params
+    dirs = {("design" if "VoiceDesign" in f["repo"] else "clone"): registry.file_path(f) for f in entry["files"]}
+    ref_path: Path | None = None
+    if p.get("voice_asset_id"):
+        ref = db.get_asset(p["voice_asset_id"])
+        ref_path = db.asset_file(ref.filename) if ref is not None else None
+        if ref_path is None or not ref_path.exists():
+            raise RuntimeError(t(f"Aufnahme nicht gefunden: {p['voice_asset_id']}",
+                                 f"Recording not found: {p['voice_asset_id']}"))
+
+    def on_progress(frac: float, stage: str) -> None:
+        ctx.progress(0.02 + frac * 0.96, stage)
+
+    out, info = await audiocpp.run_speech(entry, p, dirs, ref_path, on_progress)
+    meta: dict[str, Any] = {"speech": True, "text": p["text"], "voice": p.get("voice") or "", **info}
+    try:
+        with wave.open(str(out)) as w:
+            meta |= {"seconds": round(w.getnframes() / w.getframerate(), 2), "sample_rate": w.getframerate()}
+    except (OSError, wave.Error):
+        pass
+    if ref_path is not None:
+        meta |= {"voice_asset_id": p["voice_asset_id"], "voice_text": p.get("voice_text") or "",
+                 "voice_reference": "text" if (p.get("voice_text") or "").strip() else "x_vector"}
+    asset = db.create_asset(kind="audio", filename=out.name, job_id=job.id, prompt=p["text"], model_id=entry["id"],
+                            meta=meta)
+    return [asset.id]
 
 
 def _store_assets(job: Job, entry: dict[str, Any], paths: list[Path], seed: int, masters: list[Path],
@@ -1949,6 +2005,9 @@ async def _tts(job: Job, ctx: JobContext) -> list[str]:
     Gemessen auf der RTX 5060 Ti: 5,8 s deutsche Sprache in 2,3 s, Laden mit CUDA-Graphen rund 5-15 s."""
     p = job.params
     entry = _resolve_model(p, "speech")
+    from . import audiocpp
+    if audiocpp.handles(entry, "speech"):
+        return await _tts_vulkan(job, ctx, entry)
     worker = mesh_workers.get(entry["workflow"])
     if not worker.is_set_up():
         raise RuntimeError(t("Die Sprecherstimme ist nicht eingerichtet: „NVAI-open reparieren“ im Startmenü "

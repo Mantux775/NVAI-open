@@ -809,10 +809,14 @@ def _best_model(lane: str, kind: str) -> str | None:
     if not want:
         return None
     models = registry.list_models(want[0])
-    if lane == "video" and gpu.cpu_mode():
-        # Karten ohne CUDA/ROCm: nur das für diese Karte vorgeschlagene Videomodell (ältere Radeons: Wan 2.1 1.3B
-        # über die Vulkan-Engine), auch wenn LTX-2.5 geladen ist; es liefe dort nicht.
-        best = next((m for m in models if m.installed and m.runnable and m.recommended), None)
+    if gpu.cpu_mode():
+        # Karten ohne CUDA/ROCm (Vulkan; Nutzer 22.11.: „modell vorauswahl für vulkan karten … in generieren und
+        # studio“): nur, was hier rechnet, die empfohlene Fassung zuerst, auch wenn LTX-2.5 geladen ist
+        here = [m for m in models if m.installed and m.runnable
+                and registry.usable_here(registry.get_entry(m.id) or {"id": m.id})]
+        fam = [m for m in here if m.family == want[1]]
+        best = (next((m for m in fam if m.recommended), None) or next((m for m in here if m.recommended), None)
+                or (fam[0] if fam else here[0] if here else None))
         return best.id if best else None
     cands = [m for m in models if m.family == want[1] and m.installed and m.runnable]
     best = next((m for m in cands if m.recommended), None) or (cands[0] if cands else None)
@@ -2620,6 +2624,9 @@ def _start_image_model(p: dict[str, Any], s: dict[str, Any]) -> str | None:
     refs = [r["model_id"] for cid in (s.get("params") or {}).get("characters") or []
             for r in (chars.get(cid) or {}).get("loras") or []]
     loras = [x for x in (registry.get_entry(r) for r in refs) if x is not None and registry.is_installed(x)]
+    if gpu.cpu_mode():
+        # Karte ohne CUDA/ROCm: das hier lauffaehige Bildmodell (SDXL ueber die Vulkan-Engine, registry.get_active_model)
+        return registry.get_active_model("image")
     best, best_fit = None, -1
     models = registry.list_models("image")
     for family in START_IMAGE_FAMILIES:

@@ -56,6 +56,8 @@ function Get-GpuVendor {
     $names = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
     if (($names -match "NVIDIA") -or (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { return "nvidia" }
     if ($names -match "Radeon|AMD") { return "amd" }
+    # Intel (Arc and integrated graphics, since 0.5.35): no CUDA, no ROCm; images and videos through Vulkan
+    if ($names -match "Intel") { return "intel" }
     return "nvidia"
 }
 
@@ -149,14 +151,16 @@ function New-Venv($dir, $lock, [string[]]$extra = @()) {
     return $py
 }
 
-# Vulkan engine (since 0.5.34): stable-diffusion.cpp for video on cards without CUDA/ROCm, from the project's GitHub
-# release (MIT), checked against this SHA-256 and unpacked to external\sdcpp. The server uses it when it exists
-# (nvai\sdcpp.py); on NVIDIA and supported Radeons nothing is downloaded.
+# Vulkan engine (since 0.5.34, images since 0.5.35): stable-diffusion.cpp for cards without CUDA/ROCm (older Radeons,
+# Intel), from the project's GitHub release (MIT), checked against this SHA-256 and unpacked to external\sdcpp. Only a
+# card of its own counts (uma: 0); integrated graphics stay on the processor. Returns the note for gpu_mode.json
+# ("vulkan": {"ok", "device", "index"}); the index is the card's Vulkan number, which the engines use
+# (GGML_VK_VISIBLE_DEVICES), so a machine with integrated graphics plus a Radeon computes on the Radeon.
 $SdcppUrl = "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip"
 $SdcppSha256 = "3E66222C87CA27074E1FD8CE79706EEF17A8AAF39949906AA1BEE7E060F22ECC"
 
 function Install-VulkanEngine {
-    Step (L "Vulkan-Engine fuer Video (stable-diffusion.cpp, experimentell)" "Vulkan engine for video (stable-diffusion.cpp, experimental)")
+    Step (L "Vulkan-Engine fuer Bilder und Video (stable-diffusion.cpp, experimentell)" "Vulkan engine for images and video (stable-diffusion.cpp, experimental)")
     $dest = Join-Path $App "external\sdcpp"
     $zip = Join-Path $env:TEMP "nvai-sdcpp-$PID.zip"
     try {
@@ -168,15 +172,53 @@ function Install-VulkanEngine {
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Expand-Archive -Path $zip -DestinationPath $dest -Force
         $out = (& (Join-Path $dest "sd-cli.exe") --list-devices 2>&1 | Out-String)
-        if ($out -match "(?m)^Vulkan\d") {
-            Write-Host (L "Vulkan sieht die Karte; Videos mit Wan 2.1 1.3B rechnen darueber." `
-                          "Vulkan sees the card; videos with Wan 2.1 1.3B compute through it.")
+        $dev = [regex]::Match($out, "(?m)^ggml_vulkan: (\d+) = (.+?) \| uma: 0 ")
+        if ($dev.Success) {
+            $name = $dev.Groups[2].Value.Trim()
+            Write-Host (L "Vulkan sieht die Karte ($name); Bilder und Videos rechnen darueber." `
+                          "Vulkan sees the card ($name); images and videos compute through it.")
+            return [ordered]@{ ok = $true; device = $name; index = [int]$dev.Groups[1].Value }
+        }
+        if ($out -match "(?m)^ggml_vulkan: \d+ = .*\| uma: 1 ") { throw "only integrated graphics" }
+        throw "no Vulkan device"
+    } catch {
+        Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)); Bilder und Videos rechnen dann auf dem Prozessor." `
+                         "Vulkan engine not set up ($($_.Exception.Message)); images and videos then compute on the processor.")
+        Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+        return [ordered]@{ ok = $false; error = "$($_.Exception.Message)" }
+    } finally {
+        Remove-Item $zip -ErrorAction SilentlyContinue
+    }
+}
+
+# Sound and voice through Vulkan (since 0.5.35): audio.cpp (Apache-2.0, ShugoAI LLC) from the project's GitHub release,
+# checked against this SHA-256 and unpacked to external\audiocpp. Stable Audio 3 (GGUF) and Qwen3-TTS then compute on the
+# card instead of the processor; the server uses it when it exists (nvai\audiocpp.py).
+$AudiocppUrl = "https://github.com/0xShug0/audio.cpp/releases/download/v0.9.6/audio-v0.9.6-bin-windows-x64-vulkan.zip"
+$AudiocppSha256 = "94C6E1DF6D98176EB5F0E3AD6C16E419F548BCE3C65CCD8DA97ABF4C3966A7AA"
+
+function Install-AudioEngine {
+    Step (L "audio.cpp fuer Ton und Sprache ueber Vulkan (experimentell)" "audio.cpp for sound and voice through Vulkan (experimental)")
+    $dest = Join-Path $App "external\audiocpp"
+    $zip = Join-Path $env:TEMP "nvai-audiocpp-$PID.zip"
+    try {
+        $old = $ProgressPreference
+        $ProgressPreference = "SilentlyContinue"
+        try { Invoke-WebRequest -Uri $AudiocppUrl -OutFile $zip -UseBasicParsing } finally { $ProgressPreference = $old }
+        $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+        if ($hash -ne $AudiocppSha256) { throw "SHA-256 $hash" }
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        Expand-Archive -Path $zip -DestinationPath $dest -Force
+        $out = (& (Join-Path $dest "audiocpp_cli.exe") --list-devices 2>&1 | Out-String)
+        if ($out -match "(?m)^Vulkan:\d") {
+            Write-Host (L "audio.cpp sieht die Karte; Ton und Sprecherstimme rechnen darueber." `
+                          "audio.cpp sees the card; sound and the narrator voice compute through it.")
             return $true
         }
         throw "no Vulkan device"
     } catch {
-        Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)); Video geht auf dieser Karte dann nicht." `
-                         "Vulkan engine not set up ($($_.Exception.Message)); video then does not work on this card.")
+        Write-Warning (L "audio.cpp nicht eingerichtet ($($_.Exception.Message)); Ton rechnet dann auf dem Prozessor." `
+                         "audio.cpp not set up ($($_.Exception.Message)); sound then computes on the processor.")
         Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
         return $false
     } finally {
@@ -184,39 +226,28 @@ function Install-VulkanEngine {
     }
 }
 
-# DirectML for Radeons without ROCm (since 0.5.33, GitHub issue #3): a second ComfyUI venv with PyTorch 2.4.1 and
-# torch-directml (the only PyTorch with a DirectML plugin) plus nvai_directml (PyTorch 2.4.1 compatibility, memory
-# figures from DXGI). Only the image ComfyUI uses it; the CPU venv stays for audio, text and as fallback. Checked with
-# a small matrix product on the card; returns the note for gpu_mode.json ("directml": {"ok", "device", ...}).
-function Install-DirectML([string]$locks, [string]$cpuReason) {
-    Step (L "DirectML fuer die Radeon (PyTorch 2.4.1, experimentell)" "DirectML for the Radeon (PyTorch 2.4.1, experimental)")
-    $venv = Join-Path $App "external\comfyui\.venv-directml"
-    $err = $null
-    try {
-        $py = New-Venv $venv (Join-Path $locks "comfyui-amd-base.lock")
-        Uv pip install --python $py --require-hashes --no-deps -r (Join-Path $locks "comfyui-directml.lock")
-        $site = Join-Path $venv "Lib\site-packages"
-        Copy-Item (Join-Path $App "directml\nvai_directml.py") $site -Force
-        [System.IO.File]::WriteAllText((Join-Path $site "nvai_directml.pth"), "import nvai_directml`n",
-            (New-Object System.Text.UTF8Encoding $false))
-        $check = "import nvai_directml, torch; d = nvai_directml.device(-1); x = torch.ones(256, 256, device=d); " +
-                 "print('NVAI-DML', int((x @ x).sum().item()), nvai_directml.label())"
-        $out = (& $py -I -c $check 2>&1 | Out-String).Trim()
-        Write-Host $out
-        $line = ($out -split "`n" | Where-Object { $_ -match "^NVAI-DML 16777216 " } | Select-Object -First 1)
-        if ($LASTEXITCODE -eq 0 -and $line) {
-            Write-Host (L "DirectML rechnet auf der Karte. Bilder rechnet NVAI-open dort, Audio-Werkzeuge bleiben auf dem Prozessor." `
-                          "DirectML computes on the card. NVAI-open computes images there; the audio tools stay on the processor.")
-            return [ordered]@{ ok = $true; device = ($line -replace "^NVAI-DML 16777216 ", "").Trim(); torch = "2.4.1" }
-        }
-        $err = "check: $out"
-    } catch {
-        $err = $_.Exception.Message
+# Cards without CUDA and ROCm (older Radeons, Intel; GitHub issue #3): ComfyUI with PyTorch for the processor (sound,
+# prompt expansion), images and videos through the Vulkan engine if it finds a card of its own. DirectML (0.5.33 and
+# 0.5.34) is gone since 0.5.35: about 6 minutes per SDXL image on an RX 5700 XT, no video, PyTorch 2.4.1 and patches
+# inside ComfyUI. Writes gpu_mode.json, which the server reads (gpu.cpu_mode); returns the ComfyUI python.
+function Install-NoCudaRocm([string]$reason, [string[]]$cards, [string]$locks) {
+    Step (L "ComfyUI mit PyTorch 2.14 fuer den Prozessor (ohne Grafikkarte)" `
+            "ComfyUI with PyTorch 2.14 for the processor (without graphics card)")
+    # pip sync with the base list removes the ROCm packages first; PyTorch from PyPI is a CPU build on Windows.
+    $py = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $locks "comfyui-amd-base.lock")
+    Uv pip install --python $py --require-hashes --no-deps -r (Join-Path $locks "comfyui-cpu.lock")
+    $vulkan = Install-VulkanEngine
+    $audio = if ($vulkan.ok) { Install-AudioEngine } else { $false }
+    $note = [ordered]@{ mode = "cpu"; reason = $reason; cards = @($cards); vulkan = $vulkan; audio = $audio } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
+    if ($vulkan.ok) {
+        Write-Host (L "NVAI-open rechnet Bilder und Videos ueber Vulkan auf der Karte (experimentell), Ton auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
+                      "NVAI-open computes images and videos through Vulkan on the card (experimental), sound on the processor; a note at the top of the window explains what this means.")
+    } else {
+        Write-Host (L "NVAI-open rechnet auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
+                      "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
     }
-    Write-Warning (L "DirectML rechnet auf dieser Karte nicht ($err). NVAI-open rechnet auf dem Prozessor." `
-                     "DirectML does not compute on this card ($err). NVAI-open computes on the processor.")
-    Remove-Item $venv -Recurse -Force -ErrorAction SilentlyContinue
-    return [ordered]@{ ok = $false; error = "$err".Substring(0, [Math]::Min(300, "$err".Length)) }
+    return $py
 }
 
 try {
@@ -243,7 +274,16 @@ try {
     $gpuModeFile = Join-Path $DataDir "gpu_mode.json"
     Remove-Item $gpuModeFile -ErrorAction SilentlyContinue
     $cpuOnly = $null
-    if ($vendor -eq "amd") {
+    # DirectML (0.5.33, 0.5.34) is gone: its second venv with PyTorch 2.4.1 is not needed any more
+    Remove-Item (Join-Path $App "external\comfyui\.venv-directml") -Recurse -Force -ErrorAction SilentlyContinue
+    if ($vendor -eq "intel") {
+        $cards = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
+                   Where-Object { $_.Name -match "Intel" } | ForEach-Object { $_.Name })
+        Write-Warning (L "Intel-Grafik erkannt: $($cards -join ', '). PyTorch rechnet unter Windows nur mit CUDA (NVIDIA) oder ROCm (Radeon); NVAI-open rechnet Bilder und Videos deshalb ueber Vulkan, wenn Vulkan eine eigene Intel-Karte sieht, sonst auf dem Prozessor." `
+                         "Intel graphics detected: $($cards -join ', '). On Windows, PyTorch computes only with CUDA (NVIDIA) or ROCm (Radeon); NVAI-open therefore computes images and videos through Vulkan if Vulkan sees an Intel card of its own, otherwise on the processor.")
+        $comfyPy = Install-NoCudaRocm "no_cuda_rocm" $cards (Join-Path $App "locks")
+        $torchChecked = $true
+    } elseif ($vendor -eq "amd") {
         $cards = @(Get-AmdCards)
         $targets = @($cards | ForEach-Object { Get-AmdTarget $_ } | Where-Object { $_ } | Select-Object -Unique)
         Write-Host (L "AMD-Grafikkarte erkannt: $($cards -join ', '). Noetig ist ein aktueller AMD-Treiber (Adrenalin)." `
@@ -301,23 +341,8 @@ try {
             }
         }
         if ($cpuOnly) {
-            Step (L "ComfyUI mit PyTorch 2.14 fuer den Prozessor (ohne Grafikkarte)" `
-                    "ComfyUI with PyTorch 2.14 for the processor (without graphics card)")
-            # pip sync with the base list removes the ROCm packages first; PyTorch from PyPI is a CPU build on Windows.
-            $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $comfyLocks "comfyui-amd-base.lock")
-            Uv pip install --python $comfyPy --require-hashes --no-deps -r (Join-Path $comfyLocks "comfyui-cpu.lock")
+            $comfyPy = Install-NoCudaRocm $cpuOnly $cards $comfyLocks
             $torchChecked = $true
-            $dml = Install-DirectML $comfyLocks $cpuOnly
-            $vulkan = Install-VulkanEngine
-            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards); directml = $dml; vulkan = $vulkan } | ConvertTo-Json -Compress
-            [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
-            if ($dml.ok) {
-                Write-Host (L "NVAI-open rechnet Bilder, Videos und Ton ueber DirectML auf der Karte (experimentell); oben im Fenster steht ein Hinweis, was das bedeutet." `
-                              "NVAI-open computes images, videos and audio through DirectML on the card (experimental); a note at the top of the window explains what this means.")
-            } else {
-                Write-Host (L "NVAI-open rechnet auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
-                              "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
-            }
         }
         # NVAI-open asks ROCm again at startup which card to use (gpu.hip_devices); drop the old answer.
         Remove-Item (Join-Path $DataDir "hip_devices.json") -ErrorAction SilentlyContinue

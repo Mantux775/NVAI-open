@@ -131,6 +131,9 @@ TESTED: dict[str, str] = {
     "minimax-h3-turbo-ref2v-4step-v1.0-768p": "Gemessen (9,4 s in 1344 × 576): 8,5 min statt 37,1 ohne LoRA, mit sol-attn 4,8 min",
     "minimax-h3-turbo-fl2v-4step-v1.2-768p": "Gemessen (9,4 s in 1344 × 576): 8,7 min statt 37,3 ohne LoRA, mit sol-attn 4,5 min",
     "minimax-h3-turbo-ref2v-8step-v1.0-768p": "Gemessen (9,4 s in 1344 × 576): 15,7 min statt 37,1 ohne LoRA",
+    # Nicht aus der Reihe oben: eigene Szene (Fuchs im Schnee), 22.11.2026
+    "minimax-h3-pika-flex-fl2va-v1": "Gemessen (5,2 s in 864 × 480, mit sol-attn + INT8): 100 s",
+    "minimax-h3-tiny-17b-fewstep-ref2va": "Gemessen (5,2 s in 864 × 480, eine Referenz, mit sol-attn + INT8): 140 s",
 }
 TESTED_EN: dict[str, str] = {
     MODEL_ID: "Measured (9.4 s at 1344 × 576): 20 steps 37.3 · turbo 8 15.8 · + INT8 8.0 · + sol-attn 8.2 · + sol-attn + INT8 6.9 · + Veda 6.1 · turbo 4 + sol-attn 4.5 min",
@@ -142,6 +145,8 @@ TESTED_EN: dict[str, str] = {
     "minimax-h3-turbo-ref2v-4step-v1.0-768p": "Measured (9.4 s at 1344 × 576): 8.5 min instead of 37.1 without a LoRA, with sol-attn 4.8 min",
     "minimax-h3-turbo-fl2v-4step-v1.2-768p": "Measured (9.4 s at 1344 × 576): 8.7 min instead of 37.3 without a LoRA, with sol-attn 4.5 min",
     "minimax-h3-turbo-ref2v-8step-v1.0-768p": "Measured (9.4 s at 1344 × 576): 15.7 min instead of 37.1 without a LoRA",
+    "minimax-h3-pika-flex-fl2va-v1": "Measured (5.2 s at 864 × 480, with sol-attn + INT8): 100 s",
+    "minimax-h3-tiny-17b-fewstep-ref2va": "Measured (5.2 s at 864 × 480, one reference, with sol-attn + INT8): 140 s",
 }
 # </messreihe>
 FEATURES["tested"] = TESTED.get(MODEL_ID, "")
@@ -189,6 +194,28 @@ FEATURES_FAST: dict[str, Any] = {
     "prompt_hint": (
         "Wie bei der Startbild-Fassung: ein Block in ganzen englischen Sätzen, Szene, Zeitleiste mit Kamera, zuletzt der "
         "Ton. Die Schritte stehen fest auf 8 (der Checkpoint ist darauf destilliert)." + TEMPO_HINT),
+}
+
+# H3-Tiny 17B FewStep Ref2VA v0.1 (Nutzer 22.11.2026: „super baue neue modelle ein“): MiniMax H3
+# Ref2VA ohne Training von 33 auf 17 Mrd. Parameter beschnitten (8 von 50 Bloecken weg, AdaLN Rang 8) und auf wenige
+# Schritte destilliert. Laut README in ComfyUI: Lader "H3-Tiny Few-Step Loader" (Knoten aus dem H3-Tiny-Repo, Apache-2.0,
+# liegt als comfy_nodes/nvai_h3tiny.py bei), Sigmas aus "H3-Tiny Few-Step Sigmas" (6 Schritte, Shift 12 eingebaut),
+# euler, BasicGuider ohne CFG, keine Turbo-LoRA (kein Eintrag in LORA_BASES). Veda nicht: dessen Praediktor ist auf die
+# 50 Bloecke des vollen Modells gelernt.
+MODEL_ID_TINY = "minimax-h3-tiny-17b-fewstep-ref2va"
+WORKFLOW_TINY = "minimax_h3_tiny_fewstep"
+TINY_REPO = "H3-Tiny/MiniMax-H3-Tiny-ComfyUI"
+TINY_STEPS = 6
+FEATURES_TINY: dict[str, Any] = {
+    **FEATURES_REF,
+    "distilled": {"steps": TINY_STEPS, "fixed": True, "sampler": "euler", "sigmas_node": "H3TinyFewStepSigmas"},
+    "sparse_attention": ["sol-attn"],
+    "recommended": {},
+    "tested": TESTED.get(MODEL_ID_TINY, ""),
+    "prompt_hint": (
+        "Wie bei der Referenz-Fassung: Referenzen im Prompt als <Picture 1>, <Picture 2> … ansprechen und sagen, was "
+        "jede vorgibt; dann Szene, Handlung, Kamera und Ton. Kein Startbild. Die Schritte stehen fest auf 6 (der "
+        "Checkpoint ist darauf destilliert)." + TEMPO_HINT),
 }
 
 # Turbo-LoRAs (lightx2v, ModelTC/Minimax-H3-Turbo; v1.1 seit 20.10.2026). Zu jeder gehoeren Schritte, Shift (Video/Ton)
@@ -279,6 +306,26 @@ TURBO_LORAS: list[dict[str, Any]] = [
         "Shift 12 / 3. Als LoRA gewählt rechnet NVAI-open wie lightx2v mit euler; nur mit steps ≤ 8 ohne LoRA-Wahl "
         "nimmt die Startbild-Fassung dieselbe Datei wie ComfyUIs Vorlage (res_multistep)."),
 ]
+
+# Pika H3 Flex (Nutzer 22.11.2026: „super baue neue modelle ein“): Adapter von Pika Labs fuer die
+# FL2VA-Fassung, liegt bei Comfy-Org im MiniMax-H3-Repo. Einstellungen wie ComfyUIs Vorlage video_pika_h3_flex_fl2va:
+# Staerke 1, lcm, BasicGuider ohne CFG, sechs feste Sigmas (statt Shift und Scheduler). Zaehlt als Turbo-LoRA: immer nur
+# eine ist aktiv, Generieren ersetzt die lightx2v-LoRA, wenn Pika gewaehlt wird.
+PIKA_FL2VA = "minimax-h3-pika-flex-fl2va-v1"
+PIKA_SIGMAS = "1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0.0"
+_pika = _turbo_lora(
+    PIKA_FL2VA, REPO, "loras/pika_h3_flex_fl2va_v1_bf16.safetensors", LORA_FL2VA,
+    {"steps": 6, "fixed": True, "sigmas": PIKA_SIGMAS, "sampler": "lcm"},
+    "Pika H3 Flex (Startbild, Pika Labs)",
+    "Natürlichere Bewegung ohne Zeitlupe, Kamerafahrten und Schnitte nach Zeitangabe, in 6 Schritten",
+    "Adapter von Pika Labs (29.10.2026) für die FL2VA-Fassung von MiniMax H3, wie in ComfyUIs Vorlage "
+    "video_pika_h3_flex_fl2va: Stärke 1, sechs feste Schritte, Sampler lcm, ohne CFG. Laut Pika Labs bewegt sich das "
+    "Bild in Echtzeit statt in Zeitlupe, folgt Kamerafahrten und mehreren Einstellungen mit Zeitangaben („0-3 s: …“) "
+    "und erzeugt den Ton dazu. Gilt als Ableger von MiniMax H3 und steht unter dessen Lizenz.")
+_pika.update({"size_gb": 1.96, "source_url": "https://huggingface.co/Pika-Labs/Pika-H3-Flex",
+              "pros": ["6 statt 20 Schritte", "Laut Pika Labs Bewegung in Echtzeit statt Zeitlupe"],
+              "cons": ["Neu in NVAI-open, erst einmal gemessen"]})
+TURBO_LORAS.append(_pika)
 
 MODELS: list[dict[str, Any]] = [
     {
@@ -415,6 +462,48 @@ MODELS: list[dict[str, Any]] = [
                  "Weitere 22 GB", "Etwas schwächere Bewegung und schwächerer Ton (laut ComfyUI)",
                  "Keine Referenzbilder"],
         "features": FEATURES_FAST,
+    },
+    {
+        "id": MODEL_ID_TINY,
+        "name": "MiniMax H3-Tiny 17B, 6 Schritte (Referenz, mit Ton)",
+        "kind": "video",
+        "family": "minimax_h3_tiny",
+        "workflow": WORKFLOW_TINY,
+        "files": [
+            {"repo": TINY_REPO, "file": "minimax_h3_tiny_17b_fewstep_ref2va_bf16.safetensors",
+             "target": "diffusion_models"},
+            # Text-Encoder und VAEs wie MiniMax H3 (laut H3-Tiny-README aus Comfy-Org/MiniMax-H3)
+            {"repo": REPO, "file": "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+             "target": "text_encoders"},
+            {"repo": REPO, "file": "vae/minimax_h3_video_vae_int8_convrot.safetensors", "target": "vae"},
+            {"repo": REPO, "file": "vae/minimax_h3_audio_vae_fp32.safetensors", "target": "vae"},
+        ],
+        "size_gb": 50.58,
+        "model_gb": 31.88,
+        "vram_gb": 14,
+        "license": "MiniMax H3 Community License",
+        "commercial_ok": False,
+        "warning": WARNING,
+        "license_badge": LICENSE_BADGE,
+        "output_badge": OUTPUT_BADGE,
+        "best_for": "Wie die Referenz-Fassung, aber in 6 Schritten: Figur oder Gesicht aus Referenzbildern, mit Ton"
+                    + TEMPO_NOTE,
+        "description": (
+            "H3-Tiny (November 2026): MiniMax H3 Ref2VA, ohne Training von 33 auf 17 Mrd. Parameter beschnitten (8 von "
+            "50 Blöcken entfernt) und auf wenige Schritte destilliert (Version 0.1). Wie die Referenz-Fassung: bis zu 9 "
+            "Referenzbilder legen Figur, Gesicht oder Stil fest, im Prompt als <Picture 1>, <Picture 2> … angesprochen, "
+            "Bild und Stereoton in einem Durchgang, 24 fps, 5 bis 15 s, kein Startbild.\n\n"
+            "Gerechnet wie im H3-Tiny-README: 6 Schritte euler ohne CFG, mit dem Lader und den Sigmas aus dem H3-Tiny-Repo "
+            "(Apache-2.0, bringt NVAI-open mit). Die Gewichte liegen in bf16 vor (34 GB), auf 16 GB rechnet das Modell "
+            "mit Auslagern. Text-Encoder und VAEs teilt es mit MiniMax H3. Die Gewichte sind ein Ableger von MiniMax H3 "
+            "und stehen unter dessen Lizenz."
+        ),
+        "pros": ["6 Schritte statt 20, ohne Turbo-LoRA", "Figur oder Gesicht aus bis zu 9 Referenzbildern",
+                 "Video mit Stereoton in einem Durchgang"],
+        "cons": ["Lizenz: ohne eigene Lizenz von MiniMax in der EU, Großbritannien, Südkorea und den USA verboten, "
+                 "auch privat; Ergebnisse nicht veröffentlichen",
+                 "Weitere 34 GB (bf16)", "Version 0.1, keine LoRAs"],
+        "features": FEATURES_TINY,
     },
 ]
 MODELS += TURBO_LORAS
@@ -578,8 +667,44 @@ EN.update({
         "warning": WARNING_EN, "license_badge": LICENSE_BADGE_EN,
     },
 })
+EN[PIKA_FL2VA] = {
+    "name": "Pika H3 Flex (start image, Pika Labs)",
+    "best_for": "More natural motion without slow motion, camera moves and cuts by time, in 6 steps",
+    "description": (
+        "Adapter by Pika Labs (29 October 2026) for the FL2VA version of MiniMax H3, as in ComfyUI's template "
+        "video_pika_h3_flex_fl2va: strength 1, six fixed steps, the lcm sampler, without CFG. According to Pika Labs "
+        "the picture moves in real time instead of slow motion, follows camera moves and several shots with times "
+        "(\"0-3 s: …\") and creates the sound with it. It is a derivative of MiniMax H3 and under its license."),
+    "pros": ["6 instead of 20 steps", "According to Pika Labs, motion in real time instead of slow motion"],
+    "cons": ["New in NVAI-open, measured once so far"],
+    "warning": WARNING_EN, "license_badge": LICENSE_BADGE_EN,
+}
+EN[MODEL_ID_TINY] = {
+    "name": "MiniMax H3-Tiny 17B, 6 steps (reference, with sound)",
+    "best_for": "Like the reference version, but in 6 steps: a character or face from reference images, with sound"
+                + TEMPO_NOTE_EN,
+    "description": (
+        "H3-Tiny (November 2026): MiniMax H3 Ref2VA pruned without training from 33 to 17 billion parameters (8 of 50 "
+        "blocks removed) and distilled to a few steps (version 0.1). Like the reference version: up to 9 reference "
+        "images set the character, face or style, addressed in the prompt as <Picture 1>, <Picture 2> …, picture and "
+        "stereo sound in one pass, 24 fps, 5 to 15 s, no start image.\n\n"
+        "Run as in the H3-Tiny README: 6 steps of euler without CFG, with the loader and the sigmas from the H3-Tiny "
+        "repository (Apache-2.0, included with NVAI-open). The weights are bf16 (34 GB); on 16 GB the model runs with "
+        "offloading. It shares the text encoder and VAEs with MiniMax H3. The weights are a derivative of MiniMax H3 "
+        "and under its license."),
+    "pros": ["6 steps instead of 20, without a turbo LoRA", "A character or face from up to 9 reference images",
+             "Video with stereo sound in one pass"],
+    "cons": ["License: prohibited in the EU, the UK, South Korea and the USA without a separate license from MiniMax, "
+             "private use included; do not publish results",
+             "Another 34 GB (bf16)", "Version 0.1, no LoRAs"],
+    "features": {"prompt_hint": (
+        "As with the reference version: address the references in the prompt as <Picture 1>, <Picture 2> … and say "
+        "what each one sets; then scene, action, camera and sound. No start image. The steps are fixed at 6 (the "
+        "checkpoint is distilled to them)." + TEMPO_HINT_EN)},
+    "warning": WARNING_EN, "license_badge": LICENSE_BADGE_EN,
+}
 # Gemessene Zeiten auch auf Englisch (registry.localized fuehrt features zusammen)
-for _id in [MODEL_ID, MODEL_ID_REF, MODEL_ID_FAST] + [e["id"] for e in TURBO_LORAS]:
+for _id in [MODEL_ID, MODEL_ID_REF, MODEL_ID_FAST, MODEL_ID_TINY] + [e["id"] for e in TURBO_LORAS]:
     EN[_id].setdefault("features", {})["tested"] = TESTED_EN.get(_id, "")
 
 
@@ -695,8 +820,15 @@ def _tail(g: dict[str, Any], v: dict[str, Any], p: dict[str, Any], model: list[A
     g["9"] = {"class_type": "RandomNoise", "inputs": {"noise_seed": v["seed"]}}
     g["10"] = {"class_type": "KSamplerSelect", "inputs": {
         "sampler_name": v["turbo"].get("sampler") or "res_multistep"}}
-    g["11"] = {"class_type": "BasicScheduler", "inputs": {
-        "model": model, "scheduler": scheduler, "steps": v["steps"], "denoise": 1.0}}
+    if v["turbo"].get("sigmas_node"):
+        # Destillierter Checkpoint mit eigenem Stufenraster (H3-Tiny: linspace(1, 0, n+1) bei Shift 12)
+        g["11"] = {"class_type": v["turbo"]["sigmas_node"], "inputs": {"steps": v["steps"]}}
+    elif v["turbo"].get("sigmas"):
+        # Turbo-LoRA mit eigenen, festen Sigmas (Pika H3 Flex): statt Scheduler und Shift genau diese Stufen
+        g["11"] = {"class_type": "ManualSigmas", "inputs": {"sigmas": v["turbo"]["sigmas"]}}
+    else:
+        g["11"] = {"class_type": "BasicScheduler", "inputs": {
+            "model": model, "scheduler": scheduler, "steps": v["steps"], "denoise": 1.0}}
     g["12"] = {"class_type": "BasicGuider", "inputs": {"model": model, "conditioning": ["8", 0]}}
     g["13"] = {"class_type": "SamplerCustomAdvanced", "inputs": {
         "noise": ["9", 0], "guider": ["12", 0], "sampler": ["10", 0], "sigmas": ["11", 0],
@@ -769,6 +901,14 @@ def build_ref(entry: dict[str, Any], p: dict[str, Any]) -> tuple[dict[str, Any],
     return g, v["seed"]
 
 
+def build_tiny(entry: dict[str, Any], p: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """H3-Tiny FewStep: der Graph der Referenz-Fassung, geladen mit H3TinyFewStepLoader (Intervall-Zeiteinbettung und
+    AdaLN Rang 8 des Checkpoints); die Sigmas setzt _tail aus features.distilled.sigmas_node."""
+    g, seed = build_ref(entry, p)
+    g["1"] = {"class_type": "H3TinyFewStepLoader", "inputs": {"unet_name": g["1"]["inputs"]["unet_name"]}}
+    return g, seed
+
+
 FRAME_GRID = {WORKFLOW: (FRAME_STEP, FRAME_REST), WORKFLOW_REF: (FRAME_STEP, FRAME_REST),
-              WORKFLOW_FAST: (FRAME_STEP, FRAME_REST)}
-BUILDERS = {WORKFLOW: build, WORKFLOW_REF: build_ref, WORKFLOW_FAST: build}
+              WORKFLOW_FAST: (FRAME_STEP, FRAME_REST), WORKFLOW_TINY: (FRAME_STEP, FRAME_REST)}
+BUILDERS = {WORKFLOW: build, WORKFLOW_REF: build_ref, WORKFLOW_FAST: build, WORKFLOW_TINY: build_tiny}

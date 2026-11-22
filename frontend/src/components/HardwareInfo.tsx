@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, type HardwareInfo } from '../api'
+import { EngineChoice, engineShort, useEngine } from './EngineChoice'
 import { t } from '../i18n'
 
 let cache: Promise<HardwareInfo | null> | null = null
@@ -61,11 +62,12 @@ function pathText(path: string | null): string {
 /** Abschnitt „Deine Hardware“ unter „Modelle“, zugeklappt wie die Speicherorte */
 export function HardwareSection() {
   const hw = useHardware()
+  const [engine] = useEngine()
   const [open, setOpen] = useState(false)
   if (!hw) return null
   const d = hw.device
   const summary = d.name
-    ? [d.name.replace(/^NVIDIA GeForce |^NVIDIA |^AMD /, ''), d.vram_gb ? `${Math.round(d.vram_gb)} GB` : '', d.arch ?? ''].filter(Boolean).join(' · ')
+    ? [d.name.replace(/^NVIDIA GeForce |^NVIDIA |^AMD /, ''), d.vram_gb ? `${Math.round(d.vram_gb)} GB` : '', d.arch ?? '', engineShort(engine)].filter(Boolean).join(' · ')
     : t('keine Grafikkarte erkannt', 'no graphics card detected')
   const isRef = d.catalog_id === 'rtx-5060-ti-16'
   return (
@@ -77,6 +79,8 @@ export function HardwareSection() {
       </button>
       {open && (
         <div className="folder-body small">
+          {/* Rechenweg (seit 0.5.35): ComfyUI oder stable-diffusion.cpp über CUDA/Vulkan, nur was hier läuft */}
+          <EngineChoice />
           <p>{d.name
             ? <>{d.name}{d.vram_gb ? `, ${Math.round(d.vram_gb)} GB` : ''}{d.catalog_id ? ` (${t('im Hardware-Katalog', 'in the hardware catalog')}: ${d.arch}${d.laptop ? t(', Laptop', ', laptop') : ''})` : ` (${t('nicht im Katalog', 'not in the catalog')})`}.</>
             : t('Es wurde keine Grafikkarte erkannt.', 'No graphics card was detected.')}</p>

@@ -112,6 +112,8 @@ export interface ModelInfo {
   fits_vram: string
   /** Für die erkannte Kartengeneration empfohlen (RTX 50: NVFP4, sonst INT8). */
   recommended: boolean
+  /** seit 0.5.35: rechnet auf dieser Karte überhaupt (sonst blendet „Nur kompatible anzeigen“ es aus) */
+  usable?: boolean
   /** Hinweis, wenn das Format auf dieser Karte nicht in Hardware rechnet. */
   gpu_note: string
   /** Zensiert oder nicht (Bild und Video); null = unbekannt. Beleg und Quelle dazu (content.py). */
@@ -684,15 +686,32 @@ export interface Health {
   text_backend?: { separate: boolean; running: boolean; loaded: string | null }
   /** Keine Karte, auf der PyTorch rechnet: ComfyUI läuft auf dem Prozessor (GitHub-Issue #3). */
   cpu_mode?: {
-    reason: 'amd_unsupported' | 'no_gpu_compute' | string
+    reason: 'amd_unsupported' | 'no_gpu_compute' | 'no_cuda_rocm' | string
     cards: string[]
-    /** seit 0.5.33: ComfyUI rechnet über DirectML auf der Radeon (GitHub-Issue #3) */
-    directml?: { device: string } | null
-    /** DirectML war eingerichtet, startete aber in dieser Sitzung nicht */
-    directml_failed?: string | null
   } | null
-  /** seit 0.5.34: Video über die Vulkan-Engine (stable-diffusion.cpp) auf Karten ohne CUDA/ROCm */
+  /** seit 0.5.34 Video, seit 0.5.35 auch Bilder über die Vulkan-Engine (stable-diffusion.cpp), Karten ohne CUDA/ROCm */
   vulkan_engine?: boolean
+  /** seit 0.5.35: Ton und Sprecherstimme über audio.cpp (Vulkan) auf Karten ohne CUDA/ROCm */
+  vulkan_audio?: boolean
+  /** seit 0.5.35: was Bilder und Videos rechnet (Wahl unter „Deine Hardware“ bzw. an der Speicher-Anzeige) */
+  engine?: { engine: 'comfyui' | 'sdcpp'; backend: SdcppBackend | null; ready: boolean }
+}
+
+export type EngineId = 'auto' | 'comfyui' | 'sdcpp'
+export type SdcppBackend = 'cuda' | 'vulkan'
+
+/** Rechenweg (seit 0.5.35, server/nvai/engine.py): angeboten wird nur, was auf dieser Karte läuft. */
+export interface EngineState {
+  engine: EngineId
+  sdcpp_backend: 'auto' | SdcppBackend
+  engines: EngineId[]
+  backends: { id: 'auto' | SdcppBackend; installed: boolean; download_mb: number }[]
+  effective: { engine: 'comfyui' | 'sdcpp'; backend: SdcppBackend | null }
+  /** false, solange das Programm des gewählten Wegs noch lädt: bis dahin rechnet ComfyUI */
+  ready: boolean
+  vendor: 'nvidia' | 'amd' | null
+  cpu_mode: boolean
+  install: { backend: SdcppBackend; done: number; total: number; error: string | null } | null
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'
@@ -1085,6 +1104,10 @@ export const api = {
     req<{ assignment: Record<GpuRole, number>; separate_text_backend: boolean; auto?: boolean }>(
       '/api/gpus', { method: 'PUT', body: JSON.stringify(a) },
     ),
+  /** Rechenweg für Bilder und Videos (seit 0.5.35) */
+  engine: () => req<EngineState>('/api/engine'),
+  setEngine: (a: { engine?: EngineId; sdcpp_backend?: 'auto' | SdcppBackend }) =>
+    req<EngineState>('/api/engine', { method: 'PUT', body: JSON.stringify(a) }),
   /** Stoppt den laufenden GPU-Job (Generierung), nicht die Downloads. */
   cancelCurrentJob: () =>
     req<{ ok: boolean; job_id?: string; stopped?: string[]; reason?: string }>(

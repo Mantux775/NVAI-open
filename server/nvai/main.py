@@ -28,7 +28,7 @@ import httpx
 from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio, wizard, hardware
 from .i18n import t
 from . import gpu as gpu_info
-from . import sdcpp
+from . import audiocpp, engine, sdcpp
 from .schemas import (
     Asset,
     DeleteResult,
@@ -385,8 +385,14 @@ async def health() -> dict[str, Any]:
         # Keine Karte, auf der PyTorch rechnet: ComfyUI laeuft auf dem Prozessor (GitHub-Issue #3); die Oberflaeche warnt
         # oben in der Leiste. {"reason": "amd_unsupported" | "no_gpu_compute", "cards": [...]} oder None.
         "cpu_mode": await asyncio.to_thread(gpu_info.cpu_mode),
-        # Karten ohne CUDA/ROCm: Video ueber die Vulkan-Engine (stable-diffusion.cpp, seit 0.5.34)
-        "vulkan_engine": await asyncio.to_thread(sdcpp.active),
+        # Karten ohne CUDA/ROCm: Bilder und Videos ueber die Vulkan-Engine (stable-diffusion.cpp, Video seit 0.5.34,
+        # Bilder seit 0.5.35), Ton und Sprache ueber audio.cpp (seit 0.5.35)
+        "vulkan_engine": await asyncio.to_thread(lambda: sdcpp.backend() == "vulkan"),
+        "vulkan_audio": await asyncio.to_thread(audiocpp.active),
+        # Rechenweg (seit 0.5.35, engine.py): {"engine": "comfyui"|"sdcpp", "backend": "cuda"|"vulkan"|None}; die
+        # Speicher-Anzeige oben zeigt sd.cpp an und oeffnet per Klick die Wahl
+        "engine": await asyncio.to_thread(lambda: {**engine.effective(), "ready": sdcpp.active()
+                                                   or engine.effective()["engine"] == "comfyui"}),
         "text_backend": {
             "separate": gpu_info.separate_text_backend(),
             "running": gpu_info.separate_text_backend() and await comfy.TEXT.is_running(timeout=0.5),
@@ -408,7 +414,7 @@ async def backend_start() -> dict[str, Any]:
     if await comfy.is_running():
         return {"started": False, "reason": t("läuft bereits", "already running")}
     try:
-        # ensure() statt start(): startet ComfyUI mit DirectML nicht, geht es auf dem Prozessor weiter (directml.fail)
+        # ensure() statt start(): wartet, bis ComfyUI antwortet, und meldet sonst das Ende des Logs
         await comfy.MAIN.ensure()
     except RuntimeError:
         return {"started": False}
@@ -477,6 +483,26 @@ async def put_gpus(body: dict[str, Any]) -> dict[str, Any]:
         w.stop()
     return {"assignment": new, "auto": gpu_info.is_auto(),
             "separate_text_backend": gpu_info.separate_text_backend()}
+
+
+@app.get("/api/engine")
+async def get_engine() -> dict[str, Any]:
+    """Rechenweg fuer Bilder und Videos (seit 0.5.35, engine.py): die Wahl (engine, sdcpp_backend), was auf dieser Karte
+    angeboten wird (nur Kompatibles), was gerade rechnet (effective) und ein laufender Download des Programms."""
+    return await asyncio.to_thread(engine.state)
+
+
+@app.put("/api/engine")
+async def put_engine(body: dict[str, Any]) -> dict[str, Any]:
+    """Wahl speichern ({"engine": "auto"|"comfyui"|"sdcpp", "sdcpp_backend": "auto"|"cuda"|"vulkan"}, Teilangaben
+    genuegen). Gilt ab dem naechsten Auftrag; fehlt das Programm, laedt der Server es (state()["install"])."""
+    for key, allowed in (("engine", engine.ENGINES), ("sdcpp_backend", engine.BACKENDS)):
+        if body.get(key) is not None and body[key] not in allowed:
+            raise HTTPException(400, f"{key}: {body[key]}")
+    try:
+        return engine.set_choice(body.get("engine"), body.get("sdcpp_backend"))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/backend/free")
@@ -993,7 +1019,8 @@ async def generate_speech(req: GenerateSpeechRequest) -> Job:
     if entry is None or entry.get("kind") != "speech":
         raise HTTPException(409, t("Kein Sprachmodell installiert. Unter „Modelle“ Qwen3-TTS laden.",
                                    "No speech model installed. Download Qwen3-TTS under “Models”."))
-    if not mesh_workers.get(entry["workflow"]).is_set_up():
+    # Karten ohne CUDA/ROCm sprechen ueber audio.cpp (Vulkan, seit 0.5.35) und brauchen den Qwen3-TTS-Worker nicht
+    if not audiocpp.handles(entry, "speech") and not mesh_workers.get(entry["workflow"]).is_set_up():
         raise HTTPException(409, t("Die Sprecherstimme ist nicht eingerichtet: „NVAI-open reparieren“ im Startmenü "
                                    "ausführen.", "The narrator voice is not set up: run “Repair NVAI-open” from the "
                                    "Start menu."))

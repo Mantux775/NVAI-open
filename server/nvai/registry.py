@@ -240,7 +240,7 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
                               for s in feats["sizes"]]
         if feats.get("min_compute"):
             _hardware_limits(feats)
-        return feats
+        return _vulkan_presets(entry, feats)
     d = workflows.defaults_for(wf)
     base: dict[str, Any] = {
         "steps": d["steps"], "cfg": d["cfg"], "negative_prompt": d["cfg"] > 1.0,
@@ -273,7 +273,30 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     if i18n.lang() != "de" and merged.get("sizes"):
         merged["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
                            for s in merged["sizes"]]
-    return merged
+    return _vulkan_presets(entry, merged)
+
+
+def _vulkan_presets(entry: dict[str, Any], feats: dict[str, Any]) -> dict[str, Any]:
+    """Karten ohne CUDA/ROCm mit Vulkan-Engine: eigene Vorgaben (catalog.VULKAN_RECOMMENDED; Generieren setzt sie beim
+    Modellwechsel, Studio und MCP fuer offene Angaben), und was die Engine nicht kann, faellt aus der Auswahl. Auf NVIDIA
+    mit sd.cpp (Wahl unter „Deine Hardware“) bleibt alles sichtbar: was sd.cpp fehlt, rechnet dort ComfyUI
+    (sdcpp.handles)."""
+    rec = catalog.VULKAN_RECOMMENDED.get(entry.get("id", ""))
+    if rec is None or not gpu.cpu_mode():
+        return feats
+    from . import sdcpp
+    if not sdcpp.active():
+        return feats
+    feats = dict(feats)
+    preset = dict(rec)
+    frames = preset.pop("frames", None)
+    if frames:
+        feats["default_frames"] = frames
+    feats["recommended"] = {**(feats.get("recommended") or {}), **preset}
+    for unsupported in ("controlnet", "slg"):
+        if feats.get(unsupported):
+            feats[unsupported] = False
+    return feats
 
 
 def _custom_texts(entry: dict[str, Any]) -> dict[str, Any]:
@@ -503,6 +526,11 @@ def gpu_advice(entry: dict[str, Any]) -> dict[str, Any]:
     spart Speicher, kostet aber Tempo. FP8 rechnet erst ab RTX 40 (8.9) in Hardware.
     INT8 laeuft ab RTX 20 (7.5) ueberall nativ.
     """
+    mode = gpu.cpu_mode()
+    if mode:
+        # Karte ohne CUDA/ROCm (aeltere Radeon, Intel, seit 0.5.35 ueber Vulkan): vor der Herstellerweiche, sonst
+        # bekaeme eine Intel-Karte gar keinen Hinweis
+        return _no_rocm_advice(entry, mode)
     info = gpu.detect()
     if info and info.get("vendor") == "amd":
         return _amd_advice(entry, info)
@@ -588,7 +616,7 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     if mode:
         return _no_rocm_advice(entry, mode)
     if entry.get("kind") == "3d":
-        return {"recommended": False, "gpu_note": t(
+        return {"recommended": False, "usable": False, "gpu_note": t(
             "3D braucht derzeit eine NVIDIA-Karte: TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen.",
             "3D currently needs an NVIDIA card: TripoSG and TRELLIS.2 use CUDA extensions.")}
     if entry.get("family") == "kandinsky6":
@@ -627,67 +655,103 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fits(entry: dict[str, Any]) -> str:
-    """Passt das Modell in den Grafikspeicher? Unter DirectML gilt für die empfohlenen Modelle die Messung (SDXL lief
-    mit dem Budget einer 8-GB-Karte ganz geladen), nicht die grobe VRAM-Angabe des Katalogs (8 GB = „nein“ auf 8 GB)."""
-    if entry.get("id") in catalog.DIRECTML_GOOD:
-        mode = gpu.cpu_mode()
-        if mode and mode.get("directml"):
+    """Passt das Modell in den Grafikspeicher? Ueber die Vulkan-Engine gilt fuer die empfohlenen Modelle die Messung
+    (SDXL lief mit dem Budget einer 8-GB-Karte), nicht die grobe VRAM-Angabe des Katalogs (8 GB = „nein“ auf 8 GB)."""
+    if entry.get("id") in catalog.VULKAN_GOOD or entry.get("id") in catalog.VULKAN_RECOMMENDED:
+        from . import sdcpp
+        if sdcpp.active():
             return "ja"
+    if entry.get("engine") == "audiocpp":  # gemessen mit dem Budget einer 8-GB-Karte, Musik und Geraeusch in rund 8 s
+        from . import audiocpp
+        if audiocpp.active():
+            return "ja"
+    if gpu.cpu_mode() and not usable_here(entry):
+        return "nein"  # laeuft auf dieser Karte gar nicht; „mit Auslagern“ waere irrefuehrend
     return gpu.fits(entry.get("vram_gb", 0))
 
 
 def _no_rocm_advice(entry: dict[str, Any], mode: dict[str, Any]) -> dict[str, Any]:
-    """Radeon ohne ROCm unter Windows (RX 5000, Vega, Polaris; GitHub-Issue #3). Mit DirectML (seit 0.5.33) rechnen
-    die kleinen fp16-Modelle aus catalog.DIRECTML_GOOD auf der Karte, DIRECTML_SLOW laufen langsam; ohne DirectML
-    rechnet alles auf dem Prozessor. Die übrigen passen nicht in 8 GB oder brauchen CUDA- bzw. ROCm-Kerne."""
-    eid, kind = entry["id"], entry.get("kind")
-    dml = bool(mode.get("directml"))
-    if kind == "lora":
-        return {"recommended": False, "gpu_note": ""}
-    if kind == "3d" or kind == "speech":
-        return {"recommended": False, "gpu_note": t(
-            "Braucht CUDA oder ROCm; auf dieser Radeon nicht verfügbar.",
-            "Needs CUDA or ROCm; not available on this Radeon.")}
-    if eid in catalog.DIRECTML_GOOD:
-        de, en = catalog.DIRECTML_GOOD[eid]
-        if not dml:
-            de, en = ("Rechnet hier auf dem Prozessor und braucht viele Minuten.",
-                      "Computes on the processor here and takes many minutes.")
-        return {"recommended": True, "gpu_note": t(de, en)}
-    if eid in catalog.DIRECTML_SLOW:
-        de, en = catalog.DIRECTML_SLOW[eid]
-        if not dml:
-            de, en = ("Rechnet hier auf dem Prozessor: sehr langsam.", "Computes on the processor here: very slow.")
-        return {"recommended": False, "gpu_note": t(f"Langsam auf dieser Karte. {de}", f"Slow on this card. {en}")}
+    """Karten ohne CUDA und ROCm (aeltere Radeons RX 5000/Vega/Polaris, Intel; GitHub-Issue #3). Seit 0.5.35 rechnen
+    Bilder (catalog.VULKAN_GOOD) und Videos (Wan 2.1 1.3B) ueber die Vulkan-Engine, Ton aus ComfyUI auf dem Prozessor;
+    ohne Vulkan-Engine rechnet alles auf dem Prozessor. Die uebrigen Modelle passen nicht in 8 GB oder brauchen CUDA-
+    bzw. ROCm-Kerne. "usable": laeuft hier ueberhaupt (Vorwahl in get_active_model)."""
     from . import sdcpp
+    eid, kind = entry["id"], entry.get("kind")
     vulkan = sdcpp.active()
-    if vulkan and entry.get("workflow") in sdcpp.WORKFLOWS:
+    if kind == "lora":
+        return {"recommended": False, "gpu_note": "", "usable": True}
+    from . import audiocpp
+    vk_audio = audiocpp.active()
+    if kind == "speech" and vk_audio and entry.get("family") == "qwen3_tts":
+        return {"recommended": True, "usable": True, "gpu_note": t(
+            "Läuft über Vulkan (audio.cpp): rund 7 s Sprache in 21 s auf einer Vergleichskarte ohne Matrix-Einheiten; "
+            "ältere Radeons brauchen länger.",
+            "Runs through Vulkan (audio.cpp): about 7 s of speech in 21 s on a comparison card without matrix units; "
+            "older Radeons take longer.")}
+    if kind in ("3d", "speech"):
+        return {"recommended": False, "usable": False, "gpu_note": t(
+            "Braucht CUDA oder ROCm; auf dieser Karte nicht verfügbar.",
+            "Needs CUDA or ROCm; not available on this card.")}
+    if eid in catalog.VULKAN_GOOD:
+        de, en = catalog.VULKAN_GOOD[eid] if vulkan else (
+            "Rechnet hier auf dem Prozessor und braucht viele Minuten.",
+            "Computes on the processor here and takes many minutes.")
+        return {"recommended": True, "usable": True, "gpu_note": t(de, en)}
+    if kind == "audio" and entry.get("engine") == "audiocpp":
+        return {"recommended": True, "usable": True, "gpu_note": t(
+            "Läuft über Vulkan (audio.cpp). Gemessen auf einer Vergleichskarte ohne Matrix-Einheiten: 6 s Geräusch "
+            "bzw. 30 s Musik in rund 8 s; ältere Radeons brauchen länger.",
+            "Runs through Vulkan (audio.cpp). Measured on a comparison card without matrix units: a 6 s sound effect "
+            "or 30 s of music in about 8 s; older Radeons take longer.")}
+    if kind == "audio":
+        # Ton aus ComfyUI rechnet auf diesen Karten auf dem Prozessor
+        if vk_audio:
+            return {"recommended": False, "usable": True, "gpu_note": t(
+                "Rechnet hier auf dem Prozessor. Schneller über Vulkan: Stable Audio 3 (Vulkan) unter „Modelle“.",
+                "Computes on the processor here. Faster through Vulkan: Stable Audio 3 (Vulkan) under \"Models\".")}
+        return {"recommended": eid in ("stable-audio-open-1.0", "stable-audio-3-medium"), "usable": True,
+                "gpu_note": t("Rechnet auf dem Prozessor und braucht dort länger.",
+                              "Computes on the processor and takes longer there.")}
+    if vulkan and entry.get("workflow") in sdcpp.VIDEO_WORKFLOWS:
         # das Videomodell dieser Karten: vorgeschlagen (Generieren, Studio, Modelle), aber als langsam markiert
-        return {"recommended": True, "gpu_note": t(
+        return {"recommended": True, "usable": True, "gpu_note": t(
             "Langsam auf dieser Karte. Läuft über die Vulkan-Engine (stable-diffusion.cpp): 2 s Video in 832 × 480 "
-            "in rund 3 min auf der Vergleichskarte; auf älteren Radeons dauert es länger.",
+            "in rund 3 min auf der Vergleichskarte; ältere Radeons brauchen länger.",
             "Slow on this card. Runs through the Vulkan engine (stable-diffusion.cpp): 2 s of video at 832 × 480 in "
             "about 3 min on the comparison card; older Radeons take longer.")}
-    if kind == "video" and vulkan:
-        return {"recommended": False, "gpu_note": t(
+    if kind == "video":
+        return {"recommended": False, "usable": False, "gpu_note": t(
             "Video läuft auf dieser Karte nur mit Wan 2.1 T2V 1.3B über die Vulkan-Engine.",
-            "On this card, video runs only with Wan 2.1 T2V 1.3B through the Vulkan engine.")}
-    if kind == "video" and dml:
-        return {"recommended": False, "gpu_note": t(
-            "Video läuft über DirectML noch nicht (Wan 2.1 1.3B bricht in DirectML ab).",
-            "Video does not run through DirectML yet (Wan 2.1 1.3B aborts inside DirectML).")}
-    return {"recommended": False, "gpu_note": t(
+            "On this card, video runs only with Wan 2.1 T2V 1.3B through the Vulkan engine.") if vulkan else t(
+            "Video geht ohne Vulkan-Engine auf dem Prozessor praktisch nicht.",
+            "Without the Vulkan engine, video is practically impossible on the processor.")}
+    return {"recommended": False, "usable": False, "gpu_note": t(
         "Nicht für diese Karte: zu groß für ihren Speicher oder auf NVIDIA- bzw. ROCm-Kerne angewiesen (NVFP4, INT8, "
-        "FP8). Empfohlen sind die markierten SDXL-Modelle und Stable Audio Open.",
+        "FP8). Empfohlen sind die markierten SDXL-Modelle.",
         "Not for this card: too large for its memory or dependent on NVIDIA or ROCm kernels (NVFP4, INT8, FP8). "
-        "Recommended are the marked SDXL models and Stable Audio Open.")}
+        "Recommended are the marked SDXL models.")}
+
+
+def _visible(entry: dict[str, Any]) -> bool:
+    """Eintraege fuer audio.cpp (Vulkan) nur auf Karten ohne CUDA/ROCm, auf denen das Setup audio.cpp eingerichtet hat;
+    sonst rechnen dieselben Modelle schneller ueber ComfyUI und stuenden doppelt in der Liste."""
+    if entry.get("engine") != "audiocpp":
+        return True
+    from . import audiocpp
+    return audiocpp.active()
+
+
+def usable_here(entry: dict[str, Any]) -> bool:
+    """Rechnet das Modell auf dieser Karte? Ohne CUDA/ROCm nur, was ueber Vulkan oder den Prozessor geht."""
+    mode = gpu.cpu_mode()
+    return True if not mode else bool(_no_rocm_advice(entry, mode).get("usable"))
 
 
 def list_models(kind: str | None = None) -> list[ModelInfo]:
     # Favoriten einmal laden statt je Eintrag von der Platte lesen.
     favs = get_favorites()
     shared = installed_files()
-    infos = [to_info(e, favs, shared) for e in all_entries()]
+    infos = [to_info(e, favs, shared) for e in all_entries() if _visible(e)]
     if kind:
         infos = [m for m in infos if m.kind == kind]
     # Favoriten nach oben, sonst Reihenfolge des Katalogs beibehalten.
@@ -1370,9 +1434,15 @@ def get_active_model(kind: str = "image") -> str | None:
         chosen = active.get(kind)
         if chosen:
             entry = get_entry(chosen)
-            if entry and is_installed(entry):
+            if entry and is_installed(entry) and usable_here(entry):
                 return chosen
         runnable = installed_models(kind)
+        if gpu.cpu_mode():
+            # Karte ohne CUDA/ROCm (Vulkan): zuerst ein empfohlenes, sonst irgendein hier lauffaehiges Modell
+            here = [m for m in runnable if usable_here(get_entry(m.id) or {"id": m.id})]
+            pick = next((m for m in here if m.recommended), None) or (here[0] if here else None)
+            if pick is not None:
+                return pick.id
         return runnable[0].id if runnable else None
 
 

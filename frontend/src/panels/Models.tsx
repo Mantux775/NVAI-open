@@ -60,6 +60,15 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
   const [active, setActive] = useState<Record<string, string | null>>({})
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+  // Nur, was auf dieser Karte rechnet (Nutzer 22.11.2026: „es soll nicht kompaktible modelle via default ausblenden
+  // (unter filter "nur Kompaktible anzeigen")“); Vorgabe an, die Wahl bleibt gespeichert
+  const [onlyCompatible, setOnlyCompatible] = useState(() => {
+    try { return localStorage.getItem('nvai-models-compatible') !== '0' } catch { return true }
+  })
+  const toggleCompatible = (on: boolean) => {
+    setOnlyCompatible(on)
+    try { localStorage.setItem('nvai-models-compatible', on ? '1' : '0') } catch { /* nur diese Sitzung */ }
+  }
   const [hfOpen, setHfOpen] = useState(false)
   // Eigene LoRA-Datei hinzufügen (seit 0.5.24) und die LoRA, deren Zuordnung gerade offen ist
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -248,15 +257,18 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
       return next
     })
 
+  const incompatible = useMemo(() => models.filter((m) => m.usable === false).length, [models])
+  const pool = useMemo(() => (onlyCompatible ? models.filter((m) => m.usable !== false) : models),
+    [models, onlyCompatible])
   const shown = useMemo(() => {
     const base =
       filter === 'fav'
-        ? models.filter((m) => m.favorite)
+        ? pool.filter((m) => m.favorite)
         : filter === 'rec'
-          ? models.filter((m) => m.recommended)
+          ? pool.filter((m) => m.recommended)
           : filter === 'all'
-            ? models
-            : models.filter((m) => m.kind === filter)
+            ? pool
+            : pool.filter((m) => m.kind === filter)
     // Jedes Wort muss irgendwo vorkommen: Name, Einsatzzweck, Familie, Lizenz oder Beschreibung.
     const words = query.toLowerCase().split(/\s+/).filter(Boolean)
     const hits = words.length
@@ -273,7 +285,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
       (a, b) =>
         Number(b.favorite) - Number(a.favorite) || Number(b.recommended) - Number(a.recommended),
     )
-  }, [models, filter, query])
+  }, [pool, filter, query])
 
   const favCount = useMemo(() => models.filter((m) => m.favorite).length, [models])
 
@@ -299,17 +311,26 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
               {f.label}
               <span className="count">
                 {f.id === 'all'
-                  ? models.length
+                  ? pool.length
                   : f.id === 'fav'
                     ? favCount
                     : f.id === 'rec'
-                      ? models.filter((m) => m.recommended).length
-                      : models.filter((m) => m.kind === f.id).length}
+                      ? pool.filter((m) => m.recommended).length
+                      : pool.filter((m) => m.kind === f.id).length}
               </span>
             </button>
           ))}
         </div>
         <div className="toolbar-actions">
+          {incompatible > 0 && (
+            <label className="check compat-filter" title={t(
+              'Blendet Modelle aus, die auf dieser Grafikkarte nicht rechnen (der Hinweis auf ihrer Karte sagt, warum).',
+              'Hides models that do not compute on this graphics card (the note on their card says why).')}>
+              <input type="checkbox" checked={onlyCompatible} onChange={(e) => toggleCompatible(e.target.checked)} />
+              {t('Nur kompatible anzeigen', 'Show only compatible')}
+              {onlyCompatible && <span className="muted small"> ({t(`${incompatible} ausgeblendet`, `${incompatible} hidden`)})</span>}
+            </label>
+          )}
           <input
             className="model-search"
             type="search"

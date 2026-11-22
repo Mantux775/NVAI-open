@@ -1421,6 +1421,70 @@ AUDIO_MODELS: list[dict[str, Any]] = [
             "Neu in NVAI-open, noch wenig erprobt",
         ],
     },
+    # Karten ohne CUDA/ROCm (seit 0.5.35): Stable Audio 3 als GGUF ueber audio.cpp und Vulkan (audiocpp.py), nur dort
+    # sichtbar (registry._visible). Gemessen auf der RTX 5060 Ti ohne Matrix-Einheiten, wie eine RX 5700 XT.
+    {
+        "id": "stable-audio-3-small-sfx-gguf",
+        "name": "Stable Audio 3 Small SFX (Vulkan)",
+        "kind": "audio",
+        "family": "stable_audio",
+        "workflow": "audiocpp_stable_audio",
+        "engine": "audiocpp",
+        "files": [{"repo": "audio-cpp/audio.cpp-gguf",
+                   "file": "Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf",
+                   "target": "audiocpp/Stable-Audio-3-Small-SFX-GGUF"}],
+        "size_gb": 1.68,
+        "vram_gb": 3,
+        "license": "Stability AI Community License",
+        "commercial_ok": True,
+        "best_for": "Geräusche auf Karten ohne CUDA und ROCm (über Vulkan)",
+        "description": (
+            "Das kleine Geräuschmodell aus der Familie Stable Audio 3 von Stability AI, als GGUF (Q8) über audio.cpp "
+            "und Vulkan: für ältere Radeons und Intel-Karten, auf denen PyTorch nicht rechnet. Den Klang beschreiben, "
+            "nicht die Szene: Material, Anschlag, Raum."
+        ),
+        "pros": [
+            "Gemessen ohne Matrix-Einheiten: 6 s Geräusch in rund 8 s samt Laden",
+            "Klein: 1,7 GB, wenig Grafikspeicher",
+        ],
+        "cons": [
+            "Community License mit 1-Mio.-USD-Umsatzgrenze",
+            "Ein anderes Modell als Stable Audio Open: Klang und Verhalten beim Prompt weichen ab",
+            "Neu in NVAI-open, noch wenig erprobt",
+        ],
+        "features": {"recommended": {"seconds": 6}},
+    },
+    {
+        "id": "stable-audio-3-medium-gguf",
+        "name": "Stable Audio 3 Medium (Vulkan)",
+        "kind": "audio",
+        "family": "stable_audio3",
+        "workflow": "audiocpp_stable_audio",
+        "engine": "audiocpp",
+        "files": [{"repo": "audio-cpp/audio.cpp-gguf",
+                   "file": "Stable-Audio-3-Medium-GGUF/stable-audio-3-medium-q8_0.gguf",
+                   "target": "audiocpp/Stable-Audio-3-Medium-GGUF"}],
+        "size_gb": 3.58,
+        "vram_gb": 5,
+        "license": "Stability AI Community License",
+        "commercial_ok": True,
+        "best_for": "Instrumentale Musik auf Karten ohne CUDA und ROCm (über Vulkan)",
+        "description": (
+            "Dasselbe Musikmodell wie Stable Audio 3 Medium, als GGUF (Q8) über audio.cpp und Vulkan, für ältere "
+            "Radeons und Intel-Karten. Gattung, Instrumente, Schlagwerk und Stimmung in einem Satz beschreiben, dann "
+            "„BPM: 100.“"
+        ),
+        "pros": [
+            "Gemessen ohne Matrix-Einheiten: 30 s Musik in rund 8 s samt Laden",
+            "3,6 statt 10,4 GB und viel weniger Grafikspeicher als der Weg über ComfyUI",
+        ],
+        "cons": [
+            "Kein Gesang, keine Liedtexte",
+            "Community License mit 1-Mio.-USD-Umsatzgrenze",
+            "Neu in NVAI-open, noch wenig erprobt",
+        ],
+        "features": {"recommended": {"seconds": 30}},
+    },
 ]
 
 # --------------------------------------------------------------- SPRACHE (seit 0.5.21)
@@ -2787,6 +2851,9 @@ ALL_MODELS = ALL_MODELS + _MINIMAX_MODELS
 # Comfyui-Kandinsky-T8, das das Setup mitbringt.
 from .kandinsky6 import MODELS as _KANDINSKY6_MODELS  # noqa: E402
 ALL_MODELS = ALL_MODELS + _KANDINSKY6_MODELS
+# PAN 2 (pan2.py, seit 0.5.35): Weltmodell von MBZUAI, nativ in ComfyUI 0.46.0, Apache-2.0
+from .pan2 import MODELS as _PAN2_MODELS  # noqa: E402
+ALL_MODELS = ALL_MODELS + _PAN2_MODELS
 
 # Vorwahl für das bestmögliche Ergebnis (features.recommended, seit 0.5.18; Nutzer 31.10.2026: „es soll sofort
 # bestmögliches Ergebniss rauskommen“): nur Gemessenes oder die Angabe des Herstellers. Schritte und CFG sind ohnehin
@@ -2837,28 +2904,25 @@ RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-in
 RECOMMENDED_AMD_RDNA4 = ["qwen-image-2512-fp8", "flux3-klein-bf16", "krea2-turbo-fp8", "moss-image-sft-bf16",
                          "z-image", "ltx25-distilled-int8", "seedvr2-7b-fp8"]
 
-# DirectML (Radeons ohne ROCm unter Windows: RX 5000, Vega, Polaris; seit 0.5.33, GitHub-Issue #3, registry.
-# _no_rocm_advice). Gemessen ueber DirectML auf der RTX 5060 Ti mit dem Speicherbudget einer 8-GB-Karte
-# (notizen/gpu.md); eine Radeon ohne Matrix-Einheiten braucht laenger. Wert: Hinweis unter der Modellwahl (DE, EN).
-# Video laeuft unter DirectML noch nicht: Wan 2.1 1.3B bricht in DirectML ab (Tensor mit zu vielen Dimensionen).
-_DML_SDXL = ("Läuft über DirectML. Gemessen auf einer Vergleichskarte mit dem Speicher einer 8-GB-Karte: 1024 × 1024 "
-             "mit 28 Schritten in rund 85 s; auf älteren Radeons dauert es länger.",
-             "Runs through DirectML. Measured on a comparison card limited to the memory of an 8 GB card: "
-             "1024 × 1024 with 28 steps in about 85 s; older Radeons take longer.")
-DIRECTML_GOOD: dict[str, tuple[str, str]] = {
-    "juggernaut-xl-v9": _DML_SDXL, "sdxl-base": _DML_SDXL, "illustrious-xl": _DML_SDXL, "pony-v6-xl": _DML_SDXL,
-    "noobai-xl-v1.1": _DML_SDXL,
-    "stable-audio-open-1.0": ("Läuft über DirectML: 6 s Geräusch in rund 18 s auf der Vergleichskarte, höchstens 3,4 GB.",
-                              "Runs through DirectML: a 6 s sound effect in about 18 s on the comparison card, at "
-                              "most 3.4 GB."),
+# Karten ohne CUDA und ROCm (aeltere Radeons RX 5000/Vega/Polaris, Intel; GitHub-Issue #3, registry._no_rocm_advice).
+# Seit 0.5.35 rechnen Bilder (SDXL) und Videos (Wan 2.1 1.3B) ueber die Vulkan-Engine (sdcpp.py); DirectML (0.5.33,
+# 0.5.34) ist raus: auf einer echten RX 5700 XT 6 min je Pony-Bild 1344 x 768 mit zweitem Durchgang, Video gar nicht.
+# Gemessen auf der RTX 5060 Ti mit dem Budget einer 8-GB-Karte und ohne ihre Matrix-Einheiten, wie eine RX 5700 XT
+# (notizen/gpu.md). Wert: Hinweis unter der Modellwahl (DE, EN).
+_VK_SDXL = ("Läuft über Vulkan (stable-diffusion.cpp). Auf einer Vergleichskarte ohne Matrix-Einheiten: 1024 × 1024 "
+            "mit 28 Schritten in rund 1 min; ältere Radeons brauchen länger.",
+            "Runs through Vulkan (stable-diffusion.cpp). On a comparison card without matrix units: 1024 × 1024 "
+            "with 28 steps in about 1 min; older Radeons take longer.")
+VULKAN_GOOD: dict[str, tuple[str, str]] = {
+    "juggernaut-xl-v9": _VK_SDXL, "sdxl-base": _VK_SDXL, "illustrious-xl": _VK_SDXL, "pony-v6-xl": _VK_SDXL,
+    "noobai-xl-v1.1": _VK_SDXL,
 }
-DIRECTML_SLOW: dict[str, tuple[str, str]] = {
-    "stable-audio-3-medium": ("Läuft über DirectML (30 s Musik in rund 18 s auf der Vergleichskarte), belegt beim "
-                              "Dekodieren aber kurz bis 10 GB: Auf 8 GB lagert Windows dann in den Arbeitsspeicher "
-                              "aus, das kostet Zeit. 10,4 GB Download.",
-                              "Runs through DirectML (30 s of music in about 18 s on the comparison card), but briefly "
-                              "takes up to 10 GB while decoding: on 8 GB Windows then moves memory to system RAM, "
-                              "which costs time. 10.4 GB download."),
+# Vorwahl auf diesen Karten (Nutzer 22.11.: „erstelle recomended settings und modell vorauswahl für vulkan karten“, „in
+# generieren und studio“): features.recommended und default_frames (Generieren setzt sie beim Modellwechsel, Studio und
+# MCP bekommen sie vom Server). Formate, die in 8 GB passen und in vertretbarer Zeit fertig werden: SDXL 1024², Wan 2 s.
+VULKAN_RECOMMENDED: dict[str, dict[str, Any]] = {
+    **{m: {"size": [1024, 1024]} for m in VULKAN_GOOD},
+    "wan21-t2v-1.3b": {"size": [832, 480], "frames": 33},
 }
 
 # Repos, deren Lizenz auf Hugging Face erst angenommen werden muss (Stand 26.10.2026, alle mit Sofortfreigabe).

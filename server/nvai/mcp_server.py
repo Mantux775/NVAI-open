@@ -38,9 +38,13 @@ server = MCPServer(
         "generate_video(wait=False) and job_status. Call health() first: it shows the backend, the "
         "active models and the queue. On an AMD Radeon the -nvfp4 ids below are the wrong choice: use the "
         "versions list_models marks as recommended (FP8 or bf16 on a Radeon RX 9000, INT8 "
-        "on other Radeons; older Radeons such as the RX 5700 XT run images and sound through DirectML, where "
-        "only the recommended SDXL models and Stable Audio Open fit, and video only with wan21-t2v-1.3b "
-        "through the Vulkan engine, slowly: health shows vulkan_engine). "
+        "on other Radeons; older Radeons such as the RX 5700 XT and Intel cards run the recommended SDXL models "
+        "and wan21-t2v-1.3b (video, slow) through the Vulkan engine, and sound (stable-audio-3-small-sfx-gguf, "
+        "stable-audio-3-medium-gguf) and the narrator voice through audio.cpp; health shows vulkan_engine and "
+        "vulkan_audio). The user can also let stable-diffusion.cpp (CUDA or Vulkan) compute the SDXL models and "
+        "wan21-t2v-1.3b on an NVIDIA card (Models -> Your hardware, or compute_engine()); health().engine shows what "
+        "computes, and jobs with features sd.cpp lacks (ControlNet, reference images, video LoRAs) still run in "
+        "ComfyUI. "
         "FLUX 3 and LTX-2.5 need the license accepted on Hugging Face and "
         "a stored token; if download_model reports 'No access ... gated', send the user to "
         "the illustrated guide in the error message instead of retrying.\n\n"
@@ -143,7 +147,14 @@ server = MCPServer(
         "license_confirmed=true. Leave width, height, frames and fps empty to get the model's own values; the "
         "measured fastest settings are applied by default (turbo LoRA 8 steps v1.1 if downloaded, sol-attn, "
         "INT8 attention: 9.4 s at 1344x576 in 6.6-6.9 instead of 37 min). It tends to slow motion: describe the "
-        "pace of every movement.\n\n"
+        "pace of every movement. Derivatives under the same license: the Pika H3 Flex adapter for minimax-h3-fl2va-int8 "
+        "(loras=[{'model_id': 'minimax-h3-pika-flex-fl2va-v1'}]: 6 fixed steps, motion in real time; 5.2 s at "
+        "864x480 in 100 s) and minimax-h3-tiny-17b-fewstep-ref2va (pruned to 17B, 6 fixed steps, reference images "
+        "like the Ref2VA version, no LoRAs; 5.2 s at 864x480 in 140 s).\n"
+        "PAN 2 (pan2-int8, Apache-2.0): a world model that simulates what happens after an action, from text or a "
+        "start image, 24 fps, up to 20 s, no sound. Most precise with a JSON world-state caption (video_style, "
+        "lighting, perspective_view, subjects_lifecycle, events) as the prompt. 50 steps on 29B parameters: slow on "
+        "16 GB, warn the user and start with short clips.\n\n"
         "OLD PHOTOS: restore_image(image_path or image_asset_id) removes damage (repair), colorizes "
         "(colorize) and sharpens with SeedVR2 (sharpen). repair_mode='auto' (default) lets FLUX 3's upsampler "
         "look at the photo first and asks whether it has water stains or crack networks: yes -> 'thorough' "
@@ -362,6 +373,34 @@ async def health() -> dict[str, Any]:
     """NVAI-open status: is the GPU backend running, which model is active, how full is the queue."""
     async with await _client() as c:
         return (await c.get("/api/health")).json()
+
+
+@server.tool()
+async def compute_engine(engine: str | None = None, sdcpp_backend: str | None = None) -> dict[str, Any]:
+    """Reads or sets what computes images and videos (since 0.5.35; the same choice as Models -> Your hardware and
+    the memory bar in the web interface). Call it without arguments to read the state.
+
+    Args:
+        engine: "auto" (ComfyUI where PyTorch runs on the card, i.e. NVIDIA or a Radeon with ROCm, otherwise
+            stable-diffusion.cpp through Vulkan), "comfyui" or "sdcpp". With "sdcpp" the SDXL models and
+            wan21-t2v-1.3b compute in stable-diffusion.cpp; every other model, and jobs with ControlNet, reference
+            images or video LoRAs, stay in ComfyUI.
+        sdcpp_backend: "auto" (CUDA on NVIDIA, otherwise Vulkan), "cuda" or "vulkan".
+
+    Only the options listed in `engines` and `backends` run on this card. A missing program downloads on the first
+    switch (Vulkan 30 MB, CUDA about 1 GB with its runtime): `install` shows the progress and `ready` turns true when
+    it is done; until then ComfyUI computes. Measured on an RTX 5060 Ti 16 GB: SDXL 1024² ComfyUI 14-16 s, sd.cpp CUDA
+    23 s, Vulkan 23-24 s; Wan 2.1 1.3B, 2 s of video, ComfyUI 122-128 s, CUDA 168 s, Vulkan 182 s. Leave it on auto
+    unless the user wants to compare; the choice is the user's, so ask before switching.
+    """
+    async with await _client() as c:
+        if engine is None and sdcpp_backend is None:
+            return (await c.get("/api/engine")).json()
+        body = {k: v for k, v in (("engine", engine), ("sdcpp_backend", sdcpp_backend)) if v is not None}
+        r = await c.put("/api/engine", json=body)
+        if r.status_code >= 400:
+            return {"ok": False, "error": r.json().get("detail", r.text)}
+        return {"ok": True, **r.json()}
 
 
 @server.tool()

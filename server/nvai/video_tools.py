@@ -419,6 +419,82 @@ def pad_audio(src: str, out: str, seconds: float) -> dict[str, Any]:
             "channels": channels}
 
 
+def fit_image(src: str, out: str, width: int, height: int, mode: str) -> dict[str, Any]:
+    """Bild auf die Zielgroesse wie ImageScale im ComfyUI-Weg (mittig beschnitten, Lanczos), fuer die Vulkan-Engine
+    (Start- und Maskenbild; Pillow gibt es nur im ComfyUI-venv)."""
+    from PIL import Image, ImageOps
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert(mode)
+        ImageOps.fit(im, (int(width), int(height)), Image.LANCZOS).save(out)
+    return {"width": int(width), "height": int(height)}
+
+
+def outpaint_image(src: str, img_out: str, mask_out: str, width: int, height: int, left: int, top: int, right: int,
+                   bottom: int, feather: int) -> dict[str, Any]:
+    """Erweitern fuer die Vulkan-Engine wie ImagePadForOutpaint: Rand ergaenzen (grob mit der Farbe des Bildes), Maske
+    weiss im neuen Rand mit weichem Uebergang ins Bild, dann auf die Zielgroesse (ohne Beschnitt)."""
+    from PIL import Image, ImageFilter, ImageOps
+    left, top, right, bottom = (max(0, int(v)) for v in (left, top, right, bottom))
+    with Image.open(src) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        w, h = im.size
+        canvas = Image.new("RGB", (w + left + right, h + top + bottom))
+        canvas.paste(im.resize(canvas.size, Image.BILINEAR))
+        canvas.paste(im, (left, top))
+    mask = Image.new("L", canvas.size, 255)
+    mask.paste(0, (left, top, left + w, top + h))
+    mask = mask.filter(ImageFilter.GaussianBlur(max(1, int(feather)) / 2))
+    for box in ((0, 0, canvas.width, top), (0, top + h, canvas.width, canvas.height), (0, 0, left, canvas.height),
+                (left + w, 0, canvas.width, canvas.height)):
+        if box[2] > box[0] and box[3] > box[1]:
+            mask.paste(255, box)
+    canvas.resize((int(width), int(height)), Image.LANCZOS).save(img_out)
+    mask.resize((int(width), int(height)), Image.BILINEAR).save(mask_out)
+    return {"width": int(width), "height": int(height)}
+
+
+def to_wav(src: str, out: str, seconds: float) -> dict[str, Any]:
+    """Ton als WAV (16 bit, mono, 24 kHz) fuer audio.cpp: Stimmvorlagen aus MP3, MP4 usw., die ersten `seconds`."""
+    import wave
+    audio = _audio_all(src, 24000)
+    if audio is None:
+        raise SystemExit("no audio stream")
+    mono = audio.mean(axis=0)[: int(float(seconds) * 24000)]
+    pcm = (np.clip(mono, -1.0, 1.0) * 32767).astype("<i2")
+    with wave.open(out, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(24000)
+        w.writeframes(pcm.tobytes())
+    return {"seconds": round(len(mono) / 24000, 3)}
+
+
+def finish_audio(src: str, out: str, ceiling_db: float) -> dict[str, Any]:
+    """Ton von audio.cpp wie im ComfyUI-Weg in den Verlauf: Spitzen hoechstens `ceiling_db` (ganzes Stueck leiser,
+    keine Kompression), MP3 mit 320 kbit/s, 44,1 kHz Stereo."""
+    rate = 44100
+    audio = _audio_all(src, rate)
+    if audio is None:
+        raise SystemExit("no audio stream")
+    peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+    limit = 10 ** (float(ceiling_db) / 20)
+    if peak > limit:
+        audio = audio * (limit / peak)
+    with av.open(out, "w", format="mp3") as c:
+        stream = c.add_stream("mp3", rate=rate)
+        stream.bit_rate = 320000
+        stream.layout = "stereo"
+        frame = av.AudioFrame.from_ndarray(np.ascontiguousarray(audio.astype(np.float32)), format="fltp",
+                                           layout="stereo")
+        frame.sample_rate = rate
+        for packet in stream.encode(frame):
+            c.mux(packet)
+        for packet in stream.encode(None):
+            c.mux(packet)
+    return {"seconds": round(audio.shape[1] / rate, 3),
+            "peak_db": round(20 * float(np.log10(max(peak, 1e-9))), 2)}
+
+
 def main(argv: list[str]) -> None:
     cmd = argv[0] if argv else ""
     if cmd == "info" and len(argv) == 2:
@@ -441,6 +517,15 @@ def main(argv: list[str]) -> None:
         result = concat_xfade_master(argv[1], argv[2], argv[3], int(argv[4]))
     elif cmd == "pad-audio" and len(argv) == 4:
         result = pad_audio(argv[1], argv[2], float(argv[3]))
+    elif cmd == "fit-image" and len(argv) == 6:
+        result = fit_image(argv[1], argv[2], int(argv[3]), int(argv[4]), argv[5])
+    elif cmd == "outpaint-image" and len(argv) == 11:
+        result = outpaint_image(argv[1], argv[2], argv[3], int(argv[4]), int(argv[5]), int(argv[6]), int(argv[7]),
+                                int(argv[8]), int(argv[9]), int(argv[10]))
+    elif cmd == "to-wav" and len(argv) == 4:
+        result = to_wav(argv[1], argv[2], float(argv[3]))
+    elif cmd == "finish-audio" and len(argv) == 4:
+        result = finish_audio(argv[1], argv[2], float(argv[3]))
     else:
         raise SystemExit(__doc__)
     print(json.dumps(result))

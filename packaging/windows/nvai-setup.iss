@@ -139,6 +139,14 @@ Source: "{#StageDir}\addon\*"; DestDir: "{app}\addon"; Flags: ignoreversion recu
 ; its entries, desktop shortcut "NV-AI"). Registry key, program and data folders keep their names.
 Type: filesandordirs; Name: "{autoprograms}\NV-AI"
 Type: files; Name: "{autodesktop}\NV-AI.lnk"
+; DirectML (0.5.33, 0.5.34) is gone since 0.5.35: module, its venv with PyTorch 2.4.1 and the backups of its patches
+Type: files; Name: "{app}\server\nvai\directml.py"
+Type: filesandordirs; Name: "{app}\directml"
+Type: files; Name: "{app}\locks\comfyui-directml.lock"
+Type: filesandordirs; Name: "{app}\external\comfyui\.venv-directml"
+Type: files; Name: "{app}\external\comfyui\comfy\*.nvai-orig"
+Type: files; Name: "{app}\external\comfyui\comfy\ldm\modules\*.nvai-orig"
+Type: files; Name: "{app}\external\comfyui\*.nvai-orig"
 
 [Registry]
 ; Connection point for the PhotoCraft bridge and the launcher (nvai\launcher.py).

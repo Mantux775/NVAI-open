@@ -67,6 +67,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     "stable_audio": {"steps": 50, "cfg": 5.0, "sampler": "dpmpp_3m_sde_gpu", "scheduler": "exponential"},
     # Wie ComfyUIs Vorlage audio_stable_audio_3_medium: destilliert, 8 Schritte, CFG 1, lcm.
     "stable_audio_3": {"steps": 8, "cfg": 1.0, "sampler": "lcm", "scheduler": "simple"},
+    # audio.cpp ueber Vulkan (Karten ohne CUDA/ROCm, seit 0.5.35, audiocpp.py): Stable Audio 3 als GGUF, Vorgaben von
+    # audio.cpp (8 Schritte, CFG 1); Sampler und Scheduler waehlt audio.cpp selbst
+    "audiocpp_stable_audio": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "wan_t2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan22_ti2v": {"steps": 30, "cfg": 5.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan_i2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
@@ -99,7 +102,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
 # Workflows, die zwingend ein Startbild brauchen.
 I2V_WORKFLOWS = {"wan_i2v", "wan22_i2v", "hunyuan15_i2v", "kandinsky5_i2v"}
 # Workflows, die ein Startbild nehmen koennen, aber nicht muessen.
-OPTIONAL_START_WORKFLOWS = {"wan22_ti2v", "ltx25", "ltx23"}
+OPTIONAL_START_WORKFLOWS = {"wan22_ti2v", "ltx25", "ltx23"}  # dazu pan2 (unten, aus pan2.py)
 
 DEFAULT_VIDEO_NEGATIVE = (
     "blurry, low quality, static, jpeg artifacts, watermark, text, distorted, "
@@ -1971,3 +1974,15 @@ MODULE_BUILDERS.update(_minimax.BUILDERS)
 from . import kandinsky6 as _kandinsky6  # noqa: E402
 FRAME_GRID.update(_kandinsky6.FRAME_GRID)
 MODULE_BUILDERS.update(_kandinsky6.BUILDERS)
+# PAN 2 (pan2.py): Wan-2.2-Latent mit optionalem Startbild, 4n+1 Bilder
+from . import pan2 as _pan2  # noqa: E402
+FRAME_GRID.update(_pan2.FRAME_GRID)
+MODULE_BUILDERS.update(_pan2.BUILDERS)
+# Schritte und CFG der Module fuer die Angaben am Ergebnis (jobs._store_assets) und die Modellliste; ohne Eintrag
+# fiele defaults_for auf SDXL zurueck (PAN 2 rechnete 50 Schritte mit CFG 2,5, am Ergebnis stand 28 und 6,5).
+DEFAULTS.setdefault(_kandinsky6.WORKFLOW, {"steps": _kandinsky6.STEPS, "cfg": _kandinsky6.CFG,
+                                           "sampler": "euler", "scheduler": "simple"})
+DEFAULTS.setdefault(_pan2.WORKFLOW, {"steps": _pan2.STEPS, "cfg": _pan2.CFG, "sampler": "euler",
+                                     "scheduler": "simple", "shift": _pan2.SHIFT})
+OPTIONAL_START_WORKFLOWS.add(_pan2.WORKFLOW)
+VIDEO_WORKFLOWS.add(_pan2.WORKFLOW)

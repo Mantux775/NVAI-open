@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type GpuInfo, type GpuRole } from '../api'
 import { t } from '../i18n'
+import { EngineChoice } from './EngineChoice'
 
 const ROLE_LABEL: Record<GpuRole, string> = {
   image: t('Bild', 'Image'),
@@ -122,6 +123,9 @@ export function GpuChip({ gpu, onChanged, onError }: {
               'Each task runs on exactly one card. Switching is not possible while a job is running.',
             )}
           </div>
+          {/* Rechenweg (seit 0.5.35), wie an der Speicher-Anzeige bei einer Karte */}
+          <div className="gpu-pop-sep" />
+          <EngineChoice onChanged={onChanged} />
         </div>
       )}
     </span>

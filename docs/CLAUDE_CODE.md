@@ -30,6 +30,7 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | Tool | Purpose |
 |---|---|
 | `health` | Always first: backend, active models, queues |
+| `compute_engine` | Read or set what computes images and videos: ComfyUI or stable-diffusion.cpp through CUDA or Vulkan (since 0.5.35) |
 | `list_models` | Catalog; `kind=` filters, `detailed=true` adds pros, cons and `features` |
 | `download_model` / `delete_model` / `set_active_model` | Model management |
 | `add_lora` / `update_lora` | Add a LoRA file from this computer (e.g. one the user trained) and assign it to its models; change the assignment (since 0.5.24) |
@@ -149,8 +150,8 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 | Restore a photo, 2 variants at 2 MP / with colorizing | FLUX 3 Klein NVFP4 | ~150 s / ~200 s |
 | Sharpen 1024² → 2048² | SeedVR2 7B NVFP4 | ~6 s |
 | Upscale a video ×2, 5 s: 1024 × 576 → 2048 × 1152 / 1080p → 4K | RelayVSR ×2 INT8 | ~38 s / ~104 s |
-| Image 1024², 28 steps / 832 × 1216, CUDA vs DirectML (same card, 8 GB budget) | SDXL (Juggernaut XL v9) | ~16 s vs ~83 s / ~13 s vs ~81 s |
-| Sound effect 6 s / music 30 s, CUDA vs DirectML | Stable Audio Open / Stable Audio 3 | ~8 s vs ~17 s / ~6 s vs ~16 s |
+| Image 1024², 28 steps: CUDA / Vulkan / Vulkan without matrix units (same card, 8 GB budget) | SDXL (Juggernaut XL v9) | ~16 s / ~22 s / ~57 s |
+| Sound effect 6 s / music 30 s through audio.cpp (Vulkan, without matrix units) | Stable Audio 3 Small SFX / Medium (GGUF) | ~8 s / ~8 s |
 | Video 832 × 480, 33 frames, CUDA vs Vulkan (stable-diffusion.cpp, 8 GB budget) | Wan 2.1 T2V 1.3B | ~117 s vs ~194 s |
 | Studio export, 5 s 1080p from the lossless copy | NVENC 24 Mbit/s | ~4 s |
 
@@ -503,6 +504,12 @@ Measured with one character over many comedy clips and an explainer video:
 - **Prompt:** full English sentences, style first, then the scene, several shots as a timeline (`[0s-2s] Shot 1: …`)
   with the camera, the sound last (dialogue in quotation marks with the speaker).
 - Test series and hardware advice: [MODELS.md](MODELS.md#minimax-h3-since-0518).
+- **Derivatives** (since 0.5.35, the same license): the **Pika H3 Flex** adapter by Pika Labs for the FL2VA version
+  (`loras=[{"model_id": "minimax-h3-pika-flex-fl2va-v1"}]` with `minimax-h3-fl2va-int8`): 6 fixed steps, motion in real
+  time instead of slow motion; 5.2 s at 864 × 480 in 100 s with sol-attn and INT8 attention. **H3-Tiny**
+  (`minimax-h3-tiny-17b-fewstep-ref2va`): Ref2VA pruned from 33 to 17 billion parameters and distilled to 6 fixed steps,
+  reference images as above, no LoRAs, bf16 weights (34 GB) with offloading on 16 GB; 5.2 s at 864 × 480 with one
+  reference, sol-attn and INT8 attention in 140 s.
 
 ### Other video models
 
@@ -520,6 +527,11 @@ Measured with one character over many comedy clips and an explainer video:
   the license: the sound is non-commercial (audio VAE CC BY-NC), the video VAE is not licensed in the EU, UK and South
   Korea. Without a start image Pro put black bars at the top and bottom (2 of 2 clips, with and without
   "cinematic"); give it a start image in the video format.
+- **PAN 2** (since 0.5.35, `pan2-int8`, Apache-2.0): a world model that simulates what happens after an action, from
+  text or an optional start image, 1248 × 704 at 24 fps, up to 20 s, no sound. It follows a JSON world-state caption
+  most closely (`video_style`, `lighting`, `perspective_view`, `subjects_lifecycle`, `events` with times); free text
+  works less precisely. 50 steps with CFG 2.5 on 29 billion parameters: 1 s took about 5 minutes on 16 GB, so start
+  short and warn the user.
 - Tested and not built in: the **Restore** IC-LoRA (did not bring a changed face back and added artifacts) and
   **Ingredients** (see above). HunyuanVideo 1.5 is not an option in the EU.
 
@@ -740,10 +752,24 @@ so ask before running both. `GET/PUT /api/gpus` assigns a card per kind.
 
 **AMD Radeon (experimental):** PyTorch with ROCm 10, falling back to 7.2.1. Do not use the `-nvfp4` ids there;
 `list_models` marks the right versions as `recommended` (on a Radeon RX 9000 FP8 and bf16, on others INT8). 3D needs
-NVIDIA. Older Radeons (RX 5000, Vega, Polaris) compute through DirectML since 0.5.33 (`health` → `cpu_mode.directml`):
-only the SDXL models and Stable Audio Open are recommended there, Stable Audio 3 is slow; video runs since 0.5.34 with
-Wan 2.1 T2V 1.3B through a second engine, stable-diffusion.cpp with Vulkan (`health` → `vulkan_engine`), slowly.
-Expect 2 to 6 times the CUDA times. Details: [DIRECTML.md](DIRECTML.md).
+NVIDIA. Older Radeons (RX 5000, Vega, Polaris) and Intel cards compute through Vulkan since 0.5.35 (`health` →
+`vulkan_engine`, `vulkan_audio`): images with the SDXL models and video with `wan21-t2v-1.3b` through
+stable-diffusion.cpp, sound with `stable-audio-3-small-sfx-gguf` / `stable-audio-3-medium-gguf` and the narrator voice
+through audio.cpp. The server preselects these models and their sizes. Details: [DIRECTML.md](DIRECTML.md).
+
+**Choosing the engine (since 0.5.35):** the user can let stable-diffusion.cpp compute the SDXL models and
+`wan21-t2v-1.3b` on an NVIDIA card too, through CUDA or Vulkan (Models → Your hardware, or a click on the memory bar).
+`compute_engine()` reads the choice, `compute_engine(engine="sdcpp", sdcpp_backend="cuda")` sets it (REST
+`GET/PUT /api/engine`); only the options it lists run on the card. `health().engine` shows what computes. Jobs with
+ControlNet, reference images or video LoRAs still run in ComfyUI. The first switch downloads the program (Vulkan 30 MB,
+CUDA about 1 GB); until `ready` is true, ComfyUI computes.
+
+| Job (RTX 5060 Ti 16 GB, model loading included) | ComfyUI | sd.cpp CUDA | sd.cpp Vulkan |
+|---|---|---|---|
+| SDXL 1024², 28 steps | 14–16 s | 23 s | 23–24 s |
+| Wan 2.1 T2V 1.3B, 832 × 480, 33 frames | 122–128 s | 168 s | 182 s |
+
+ComfyUI stays the fastest on NVIDIA, so leave it on `auto` unless the user wants to compare, and ask before switching.
 
 ## Licenses
 

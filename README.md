@@ -15,6 +15,9 @@ Install, open, download a model under "Models", generate. The setup brings every
 
 November 2026: NVAI-open 0.5.34 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.34))
 
+- **Choose the engine** (0.5.35): under Models → Your hardware, or with a click on the memory bar, ComfyUI or stable-diffusion.cpp through CUDA or Vulkan computes images and videos. Auto keeps the fastest way for the card, and only what runs on it is offered. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
+- **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice now compute on the Radeon RX 5000, Vega and Polaris and on Intel cards through Vulkan, with stable-diffusion.cpp and audio.cpp instead of DirectML. On a real RX 5700 XT an SDXL image with the second pass took 6 minutes through DirectML; through Vulkan we expect about 3.5. [Details](docs/DIRECTML.md)
+- **Generate, tidier** (0.5.35): optional parts such as reference images, LoRAs, end image, extending a video and given sound fold away, the model info sits under the tip, extending an image has its own button and needs no prompt, the width of the settings can be dragged, and the Generate button stays in view.
 - **Video on older Radeons through Vulkan** (0.5.34, experimental): Wan 2.1 T2V 1.3B now computes on the Radeon RX 5000, Vega and Polaris through a second engine, stable-diffusion.cpp with Vulkan; on the same card it was 1.7 times slower than CUDA and six times faster than DirectML. [Details](docs/DIRECTML.md#video-through-vulkan)
 - **Older Radeons through DirectML** (0.5.33, experimental): the Radeon RX 5000, Vega and Polaris, which AMD's PyTorch for Windows does not support, now compute images and sound on the card instead of the processor; the SDXL models and Stable Audio Open are marked as recommended. [Details](docs/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks, which the Mac (0.5.13) now stores bit-exact. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
@@ -264,7 +267,7 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 ### More
 
 - [docs/INSTALL.md](docs/INSTALL.md): installing, building from source, the PhotoCraft add-on
-- [docs/DIRECTML.md](docs/DIRECTML.md): older Radeons through DirectML and Vulkan, with measurements
+- [docs/DIRECTML.md](docs/DIRECTML.md): older Radeons and Intel cards through Vulkan, with measurements
 - [docs/MODELS.md](docs/MODELS.md): the models in detail, prompt tips, test results
 - [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md): from a photo to a video, step by step
 - [docs/STUDIO.md](docs/STUDIO.md): the Studio, whole videos from scenes
@@ -332,6 +335,9 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 November 2026: NVAI-open 0.5.34 für Windows ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.34))
 
+- **Rechenweg wählen** (0.5.35): Unter Modelle → Deine Hardware oder mit einem Klick auf die Speicher-Anzeige rechnet ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan Bilder und Videos. Auto nimmt den schnellsten Weg für die Karte, und zur Wahl steht nur, was dort läuft. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
+- **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme rechnen jetzt auf der Radeon RX 5000, Vega und Polaris und auf Intel-Karten über Vulkan, mit stable-diffusion.cpp und audio.cpp statt DirectML. Auf einer echten RX 5700 XT brauchte ein SDXL-Bild mit zweitem Durchgang über DirectML 6 Minuten; über Vulkan erwarten wir rund 3,5. [Einzelheiten](docs/de/DIRECTML.md)
+- **Generieren aufgeräumt** (0.5.35): Optionales wie Referenzbilder, LoRAs, Endbild, Video verlängern und Ton vorgeben ist zugeklappt, die Modell-Infos stehen unter dem Tipp, Bild erweitern hat einen eigenen Knopf und braucht keinen Prompt, die Breite der Einstellungen lässt sich ziehen, und der Knopf „Generieren“ bleibt sichtbar.
 - **Video auf älteren Radeons über Vulkan** (0.5.34, experimentell): Wan 2.1 T2V 1.3B rechnet jetzt auf der Radeon RX 5000, Vega und Polaris über eine zweite Engine, stable-diffusion.cpp mit Vulkan; auf derselben Karte war es 1,7-mal langsamer als CUDA und sechsmal schneller als DirectML. [Einzelheiten](docs/de/DIRECTML.md#video-über-vulkan)
 - **Ältere Radeons über DirectML** (0.5.33, experimentell): Die Radeon RX 5000, Vega und Polaris, die AMDs PyTorch für Windows nicht kennt, rechnen Bilder und Ton jetzt auf der Karte statt auf dem Prozessor; die SDXL-Modelle und Stable Audio Open sind als empfohlen markiert. [Einzelheiten](docs/de/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl, die der Mac (0.5.13) jetzt bitgenau speichert. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
@@ -568,7 +574,7 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 ### Weiterlesen
 
 - [docs/de/INSTALL.md](docs/de/INSTALL.md): Installation, Bauen aus dem Quelltext, PhotoCraft-Add-on
-- [docs/de/DIRECTML.md](docs/de/DIRECTML.md): ältere Radeons über DirectML und Vulkan, mit Messungen
+- [docs/de/DIRECTML.md](docs/de/DIRECTML.md): ältere Radeons und Intel-Karten über Vulkan, mit Messungen
 - [docs/de/MODELLE.md](docs/de/MODELLE.md): die Modelle im Detail, Prompt-Tipps, Testergebnisse
 - [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md): vom Foto zum Video, Schritt für Schritt
 - [docs/de/STUDIO.md](docs/de/STUDIO.md): das Studio, ganze Videos aus Szenen

@@ -249,12 +249,11 @@ diesen Werten: FP4-Durchsatz für RTX 50, INT8 für ältere NVIDIA-Karten, FP8 o
 Gegengeprüft an einer zweiten Messung: Für eine RTX 4060 sagt sie 3,1-mal langsamer als die 5060 Ti voraus, gemessen
 wurde mit FLUX 3 3,2-mal. Sobald du ein paar Aufträge gerechnet hast, nimmt der Assistent deine echten Zeiten.
 
-**Ältere Radeons** (RX 5000, Vega, Polaris) rechnen seit 0.5.33 über DirectML, empfohlen sind dort die SDXL-Modelle und
-Stable Audio Open. Zum Vergleich dieselben Aufträge auf der RTX 5060 Ti, einmal mit CUDA, einmal über DirectML mit dem
-Speicher einer 8-GB-Karte: SDXL 1024² mit 28 Schritten 16 s / 83 s, ein 6-s-Geräusch mit Stable Audio Open 8 s / 17 s,
-30 s Musik mit Stable Audio 3 6 s / 16 s. Video rechnet dort eine zweite Engine, stable-diffusion.cpp mit Vulkan: Wan 2.1
-T2V 1.3B, 2 s in 832 × 480, brauchte mit CUDA 117 s und über Vulkan 194 s (DirectML brach ab). Einzelheiten:
-[DIRECTML.md](DIRECTML.md)
+**Ältere Radeons und Intel-Karten** (RX 5000, Vega, Polaris, Intel Arc) rechnen seit 0.5.35 über Vulkan: SDXL-Modelle
+für Bilder, Wan 2.1 T2V 1.3B für Video, Stable Audio 3 (Vulkan) für Ton und Qwen3-TTS für die Stimme; Generieren und
+Studio wählen sie von selbst. Auf der RTX 5060 Ti mit dem Speicher einer 8-GB-Karte und ohne ihre Matrix-Einheiten,
+wie bei einer RX 5700 XT: SDXL 1024² mit 28 Schritten in 57 s (CUDA 16 s, DirectML bis 0.5.34: 83 s), 30 s Musik in
+8 s. Einzelheiten: [DIRECTML.md](DIRECTML.md)
 
 ### NVFP4 oder INT8
 
@@ -395,6 +394,17 @@ bietet NVAI-open dort keinen der beiden Schalter an.
 
 </details>
 
+**Ableger (seit 0.5.35), unter derselben Lizenz:** der Adapter **Pika H3 Flex** von Pika Labs für die Startbild-Fassung:
+neben MiniMax H3 als LoRA wählen; er rechnet fest 6 Schritte und bewegt sich in Echtzeit statt in Zeitlupe (5,2 s in
+864 × 480 in 100 s mit sol-attn und INT8-Attention). **H3-Tiny** (`minimax-h3-tiny-17b-fewstep-ref2va`) ist die
+Referenz-Fassung, auf 17 Milliarden Parameter beschnitten und auf fest 6 Schritte destilliert: Referenzbilder wie oben,
+keine LoRAs, 34 GB in bf16 (5,2 s in 864 × 480 mit einer Referenz in 140 s). Es bringt zwei eigene ComfyUI-Knoten mit
+(Apache-2.0), die NVAI-open einrichtet.
+
+```
+curl -X POST http://127.0.0.1:8100/api/generate/video -H "Content-Type: application/json" -d '{"model_id": "minimax-h3-fl2va-int8", "prompt": "...", "fps": 24, "loras": [{"model_id": "minimax-h3-pika-flex-fl2va-v1", "strength": 1.0}]}'
+```
+
 ### Weitere Videomodelle
 
 | Modell | Wofür | Gemessen | Lizenz |
@@ -404,6 +414,7 @@ bietet NVAI-open dort keinen der beiden Schalter an.
 | LTX-2.3 (`ltx23-nvfp4`) | die Basis, für die die meisten Community-LoRAs für LTX gemacht sind | 4 s in 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | Text zu Video mit weicher Bewegung | 49 Bilder in 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | kleines Videomodell, 5 s | 768 × 512 in rund 300 s (destilliert) | MIT, VAE unter Tencents Lizenz |
+| PAN 2 (`pan2-int8`, seit 0.5.35) | Weltmodell: was nach einer Handlung passiert, aus Text oder Startbild, 1248 × 704, 24 fps, bis 20 s, ohne Ton | 1 s in 280 s (50 Schritte) | Apache-2.0 |
 | Kandinsky 6 Pro / Lite, destilliert (seit 0.5.25) | Bild und Ton in einem Durchgang, 5 s in 864 × 480, aus Text oder Startbild; Pro, wenn LTX-2.5 die Handlung nicht trifft | Pro rund 17 min, Lite rund 5 min für 5 s | MIT; Ton nicht kommerziell, Video-VAE in der EU nicht lizenziert |
 
 **Kandinsky 6** (nur NVIDIA) läuft über die ComfyUI-Knoten Kandinsky T8, die das Setup mitbringt. Im Prompt das Bild
@@ -412,6 +423,11 @@ ausdrücklich. Die Schritte stehen fest auf 10 mit CFG 1, der Negativprompt wirk
 Pro schwarze Balken oben und unten (2 von 2 Clips), mit Startbild im Videoformat nicht. Pro hielt im Test Handlung und Gesicht, bei Lite zerfielen Gegenstände (ein Schmied hielt das
 glühende Eisen mit bloßer Hand). Der Ton ist nicht kommerziell nutzbar (Ton-VAE CC BY-NC), die Video-VAE (Tencent) gilt
 nicht in der EU, in Großbritannien und Südkorea.
+
+**PAN 2** von MBZUAI simuliert, wie sich eine Szene nach einer Handlung verändert. Am genauesten folgt es einer
+strukturierten Zustandsbeschreibung, einem JSON mit `video_style`, `lighting`, `perspective_view`, `subjects_lifecycle`
+und `events` mit Zeiten, wie in seiner Modellkarte; freier Text geht, trifft aber weniger genau. 29 Milliarden Parameter
+und 50 Schritte machen es auf 16 GB langsam: mit kurzen Clips anfangen.
 
 Getestet und nicht aufgenommen: die **IC-LoRAs Restore und Ingredients für LTX-2.5** (keines hielt eine echte Person
 erkennbar).

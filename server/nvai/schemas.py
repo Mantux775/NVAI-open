@@ -565,6 +565,10 @@ class ModelInfo(BaseModel):
     recommended: bool = False
     # Hinweis, wenn das Format auf dieser Karte nicht in Hardware rechnet; sonst leer
     gpu_note: str = ""
+    # Rechnet das Modell auf dieser Karte ueberhaupt (seit 0.5.35)? Nein etwa auf Karten ohne CUDA/ROCm fuer alles, was
+    # nicht ueber Vulkan oder den Prozessor geht, und fuer 3D auf AMD. Die Modellseite blendet es mit „Nur kompatible
+    # anzeigen“ aus, Generieren bietet es nicht an.
+    usable: bool = True
     # Zensiert oder nicht (Bild und Video): "uncensored" | "partial" | "censored", None = unbekannt.
     # Mit Beleg und Quelle -- siehe content.py
     content: str | None = None

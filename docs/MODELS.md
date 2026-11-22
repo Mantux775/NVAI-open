@@ -244,12 +244,11 @@ RTX 50, INT8 for older NVIDIA cards, FP8 or FP16 with a discount for Radeon. Che
 an RTX 4060 it predicts 3.1 times slower than the 5060 Ti, measured with FLUX 3 was 3.2 times. Once you have run a few
 jobs, the assistant uses your real times instead.
 
-**Older Radeons** (RX 5000, Vega, Polaris) compute through DirectML since 0.5.33, with the SDXL models and Stable
-Audio Open as recommended models. For comparison, the same jobs on the RTX 5060 Ti, once with CUDA and once through
-DirectML limited to the memory of an 8 GB card: SDXL 1024² with 28 steps 16 s / 83 s, a 6 s sound effect with
-Stable Audio Open 8 s / 17 s, 30 s of music with Stable Audio 3 6 s / 16 s. Video runs there through a second engine,
-stable-diffusion.cpp with Vulkan: Wan 2.1 T2V 1.3B, 2 s at 832 × 480, took 117 s with CUDA and 194 s through Vulkan
-(DirectML stopped). Details: [DIRECTML.md](DIRECTML.md)
+**Older Radeons and Intel cards** (RX 5000, Vega, Polaris, Intel Arc) compute through Vulkan since 0.5.35: the SDXL
+models for images, Wan 2.1 T2V 1.3B for video, Stable Audio 3 (Vulkan) for sound and Qwen3-TTS for the voice;
+Generate and the Studio pick them by themselves. On the RTX 5060 Ti limited to an 8 GB card and without its matrix
+units, like an RX 5700 XT: SDXL 1024² with 28 steps in 57 s (CUDA 16 s, DirectML until 0.5.34: 83 s), 30 s of music in
+8 s. Details: [DIRECTML.md](DIRECTML.md)
 
 ### NVFP4 or INT8
 
@@ -388,6 +387,17 @@ switch there.
 
 </details>
 
+**Derivatives (since 0.5.35), under the same license:** the **Pika H3 Flex** adapter by Pika Labs for the start-image
+version: pick it as a LoRA next to MiniMax H3; it runs 6 fixed steps and moves in real time instead of slow motion
+(5.2 s at 864 × 480 in 100 s with sol-attn and INT8 attention). **H3-Tiny** (`minimax-h3-tiny-17b-fewstep-ref2va`) is
+the reference version pruned to 17 billion parameters and distilled to 6 fixed steps: reference images as above, no
+LoRAs, 34 GB in bf16 (5.2 s at 864 × 480 with one reference in 140 s). It brings its own two ComfyUI nodes (Apache-2.0),
+which NVAI-open installs.
+
+```
+curl -X POST http://127.0.0.1:8100/api/generate/video -H "Content-Type: application/json" -d '{"model_id": "minimax-h3-fl2va-int8", "prompt": "...", "fps": 24, "loras": [{"model_id": "minimax-h3-pika-flex-fl2va-v1", "strength": 1.0}]}'
+```
+
 ### Other video models
 
 | Model | Use for | Measured | License |
@@ -397,6 +407,7 @@ switch there.
 | LTX-2.3 (`ltx23-nvfp4`) | the base most community LTX LoRAs are made for | 4 s at 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | text to video with smooth motion | 49 frames at 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | small video model, 5 s | 768 × 512 in about 300 s (distilled) | MIT, VAE under Tencent's license |
+| PAN 2 (`pan2-int8`, since 0.5.35) | world model: what happens after an action, from text or a start image, 1248 × 704, 24 fps, up to 20 s, no sound | 1 s in 280 s (50 steps) | Apache-2.0 |
 | Kandinsky 6 Pro / Lite, distilled (since 0.5.25) | picture and sound in one pass, 5 s at 864 × 480, from text or a start image; Pro when LTX-2.5 misses the action | Pro about 17 min, Lite about 5 min for 5 s | MIT; sound non-commercial, video VAE not licensed in the EU |
 
 **Kandinsky 6** (NVIDIA only) runs through the ComfyUI nodes Kandinsky T8, which the setup brings along. Describe the
@@ -406,6 +417,11 @@ Without a start image Pro put black bars at the top and bottom (2 of 2 clips), w
 it did not. Pro kept action and face in the test, Lite let objects fall apart (a
 blacksmith held the glowing iron with his bare hand). The sound may not be used commercially (audio VAE CC BY-NC), and
 the video VAE (Tencent) is not licensed in the EU, the UK and South Korea.
+
+**PAN 2** by MBZUAI simulates how a scene changes after an action. It follows a structured world-state caption most
+closely, a JSON with `video_style`, `lighting`, `perspective_view`, `subjects_lifecycle` and `events` with times, as on
+its model card; free text works, less precisely. 29 billion parameters and 50 steps make it slow on 16 GB: start with
+short clips.
 
 Tested and not included: the **LTX-2.5 IC-LoRAs Restore and Ingredients** (neither kept a real person recognizable).
 

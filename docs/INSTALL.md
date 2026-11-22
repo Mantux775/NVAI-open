@@ -41,14 +41,14 @@ The setup checks the graphics card and the driver and warns if it finds no suita
   GPU" shows the matching versions: FP8 and bf16 on a Radeon RX 9000, INT8 on other Radeons. 3D needs NVIDIA. Nothing is
   measured on a real Radeon yet, so feedback in [#2](https://github.com/Mantux775/NVAI-open/issues/2) helps a lot.
   `install-runtime.ps1 -Gpu amd|nvidia` or `-Rocm 10.0|7.2` forces a choice.
-- **Older Radeons** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 and older) are not supported by AMD's PyTorch for
-  Windows. Since 0.5.33 the setup gives them DirectML instead (experimental): images and sound compute on the card,
-  the top bar says "DirectML (experimental)", and under "Models" the SDXL models and Stable Audio Open are marked as
-  recommended. Since 0.5.34 video (Wan 2.1 T2V 1.3B) computes through a second engine, stable-diffusion.cpp with
-  Vulkan, which the setup downloads for these cards. Details and measurements: [DIRECTML.md](DIRECTML.md). If DirectML does not work, or PyTorch cannot
-  compute on the card at all, NVAI-open computes on the processor and warns at the top of the window ("Running on the
-  CPU", the tooltip explains it): images take very long, the narrator voice and 3D do not work, Studio editing and
-  export work normally. With a supported card or a current driver, "Repair NVAI-open" sets up the graphics card again.
+- **Older Radeons and Intel cards** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 and older; Intel Arc) have no
+  PyTorch with CUDA or ROCm on Windows. Since 0.5.35 the setup gives them Vulkan instead (experimental):
+  stable-diffusion.cpp computes images and videos, audio.cpp sound and the narrator voice, the top bar says "Vulkan
+  (experimental)", and Generate and the Studio pick the models that run on the card. Details and measurements:
+  [DIRECTML.md](DIRECTML.md). If Vulkan does not see a card of its own (only integrated graphics, for example),
+  NVAI-open computes on the processor and warns at the top of the window ("Running on the CPU", the tooltip explains
+  it): images take very long, the narrator voice and 3D do not work, Studio editing and export work normally. With a
+  supported card or a current driver, "Repair NVAI-open" sets up the graphics card again.
 - **Several NVIDIA cards:** everything runs on the strongest card. Under "Models" → "Graphics cards" (or with a click on
   a card in the header) you can give image models, language models and 3D a card of their own; the choice is stored in
   `gpus.json` in the data folder. In our test with two cards, splitting the work brought no gain
