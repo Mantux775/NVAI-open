@@ -149,6 +149,41 @@ function New-Venv($dir, $lock, [string[]]$extra = @()) {
     return $py
 }
 
+# DirectML for Radeons without ROCm (since 0.5.33, GitHub issue #3): a second ComfyUI venv with PyTorch 2.4.1 and
+# torch-directml (the only PyTorch with a DirectML plugin) plus nvai_directml (PyTorch 2.4.1 compatibility, memory
+# figures from DXGI). Only the image ComfyUI uses it; the CPU venv stays for audio, text and as fallback. Checked with
+# a small matrix product on the card; returns the note for gpu_mode.json ("directml": {"ok", "device", ...}).
+function Install-DirectML([string]$locks, [string]$cpuReason) {
+    Step (L "DirectML fuer die Radeon (PyTorch 2.4.1, experimentell)" "DirectML for the Radeon (PyTorch 2.4.1, experimental)")
+    $venv = Join-Path $App "external\comfyui\.venv-directml"
+    $err = $null
+    try {
+        $py = New-Venv $venv (Join-Path $locks "comfyui-amd-base.lock")
+        Uv pip install --python $py --require-hashes --no-deps -r (Join-Path $locks "comfyui-directml.lock")
+        $site = Join-Path $venv "Lib\site-packages"
+        Copy-Item (Join-Path $App "directml\nvai_directml.py") $site -Force
+        [System.IO.File]::WriteAllText((Join-Path $site "nvai_directml.pth"), "import nvai_directml`n",
+            (New-Object System.Text.UTF8Encoding $false))
+        $check = "import nvai_directml, torch; d = nvai_directml.device(-1); x = torch.ones(256, 256, device=d); " +
+                 "print('NVAI-DML', int((x @ x).sum().item()), nvai_directml.label())"
+        $out = (& $py -I -c $check 2>&1 | Out-String).Trim()
+        Write-Host $out
+        $line = ($out -split "`n" | Where-Object { $_ -match "^NVAI-DML 16777216 " } | Select-Object -First 1)
+        if ($LASTEXITCODE -eq 0 -and $line) {
+            Write-Host (L "DirectML rechnet auf der Karte. Bilder rechnet NVAI-open dort, Audio-Werkzeuge bleiben auf dem Prozessor." `
+                          "DirectML computes on the card. NVAI-open computes images there; the audio tools stay on the processor.")
+            return [ordered]@{ ok = $true; device = ($line -replace "^NVAI-DML 16777216 ", "").Trim(); torch = "2.4.1" }
+        }
+        $err = "check: $out"
+    } catch {
+        $err = $_.Exception.Message
+    }
+    Write-Warning (L "DirectML rechnet auf dieser Karte nicht ($err). NVAI-open rechnet auf dem Prozessor." `
+                     "DirectML does not compute on this card ($err). NVAI-open computes on the processor.")
+    Remove-Item $venv -Recurse -Force -ErrorAction SilentlyContinue
+    return [ordered]@{ ok = $false; error = "$err".Substring(0, [Math]::Min(300, "$err".Length)) }
+}
+
 try {
     Write-Host (L "NVAI-open wird eingerichtet. Beim ersten Mal laedt das rund 3 GB (vor allem PyTorch)." `
                   "Setting up NVAI-open. The first time this downloads about 3 GB (mostly PyTorch).")
@@ -237,10 +272,16 @@ try {
             $comfyPy = New-Venv (Join-Path $App "external\comfyui\.venv") (Join-Path $comfyLocks "comfyui-amd-base.lock")
             Uv pip install --python $comfyPy --require-hashes --no-deps -r (Join-Path $comfyLocks "comfyui-cpu.lock")
             $torchChecked = $true
-            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards) } | ConvertTo-Json -Compress
+            $dml = Install-DirectML $comfyLocks $cpuOnly
+            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards); directml = $dml } | ConvertTo-Json -Compress
             [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
-            Write-Host (L "NVAI-open rechnet auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
-                          "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
+            if ($dml.ok) {
+                Write-Host (L "NVAI-open rechnet Bilder, Videos und Ton ueber DirectML auf der Karte (experimentell); oben im Fenster steht ein Hinweis, was das bedeutet." `
+                              "NVAI-open computes images, videos and audio through DirectML on the card (experimental); a note at the top of the window explains what this means.")
+            } else {
+                Write-Host (L "NVAI-open rechnet auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
+                              "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
+            }
         }
         # NVAI-open asks ROCm again at startup which card to use (gpu.hip_devices); drop the old answer.
         Remove-Item (Join-Path $DataDir "hip_devices.json") -ErrorAction SilentlyContinue

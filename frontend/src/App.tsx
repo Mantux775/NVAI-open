@@ -345,6 +345,20 @@ export function App() {
  * es auf der CPU läuft, und mouse over Hinweis, was es für ihn bedeutet und was zu machen wäre“; GitHub-Issue #3). */
 function CpuModeChip({ mode }: { mode: NonNullable<Health['cpu_mode']> }) {
   const cards = mode.cards.length ? mode.cards.join(', ') : t('die Grafikkarte', 'the graphics card')
+  if (mode.directml) {
+    // DirectML (seit 0.5.33, GitHub-Issue #3): Bilder, Videos und Ton aus ComfyUI rechnen auf der Radeon
+    const dmlWhy = t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt. NVAI-open rechnet deshalb über DirectML auf der Karte (experimentell, PyTorch 2.4.1).`,
+      `${cards} is not supported by AMD's PyTorch for Windows (ROCm). NVAI-open therefore computes through DirectML on the card (experimental, PyTorch 2.4.1).`)
+    const dmlMeans = t('Was das heißt: Gedacht sind die Modelle, die unter „Modelle“ als empfohlen markiert sind: SDXL-Modelle wie Juggernaut XL, Pony oder Illustrious und Stable Audio Open; Stable Audio 3 läuft, aber langsam. Video geht über DirectML noch nicht, große Modelle wie Qwen-Image, FLUX 3 oder LTX-2.5 passen nicht. Audio-Werkzeuge und Ton-Forensik rechnen auf dem Prozessor; Sprecherstimme und 3D gehen nicht.',
+      'What this means: the models marked as recommended under "Models" are meant for it: SDXL models such as Juggernaut XL, Pony or Illustrious, and Stable Audio Open; Stable Audio 3 runs, but slowly. Video does not work through DirectML yet, and large models such as Qwen-Image, FLUX 3 or LTX-2.5 do not fit. The audio tools and audio forensics compute on the processor; the narrator voice and 3D do not work.')
+    const dmlTodo = t('Läuft etwas nicht oder ist es sehr langsam: bitte über „Problem melden“ (oben rechts) berichten, der Bericht enthält die Zeiten.',
+      'If something does not work or is very slow: please tell us via "Report a problem" (top right); the report includes the timings.')
+    return (
+      <span className="cpu-mode" title={`${dmlWhy}\n\n${dmlMeans}\n\n${dmlTodo}`}>
+        ⚠ {t('DirectML (experimentell)', 'DirectML (experimental)')}
+      </span>
+    )
+  }
   const why = mode.reason === 'amd_unsupported'
     ? t(`${cards} wird von AMDs PyTorch für Windows (ROCm) nicht unterstützt. Deshalb rechnet NVAI-open auf dem Prozessor.`,
       `${cards} is not supported by AMD's PyTorch for Windows (ROCm), so NVAI-open computes on the processor.`)
@@ -357,8 +371,13 @@ function CpuModeChip({ mode }: { mode: NonNullable<Health['cpu_mode']> }) {
       'What helps: an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 6000 experimental), then run "Repair NVAI-open" from the Start menu.')
     : t('Was hilft: den aktuellen Grafiktreiber installieren (bei AMD Adrenalin 26.2.2 oder neuer), danach im Startmenü „NVAI-open reparieren“ ausführen.',
       'What helps: install the current graphics driver (for AMD, Adrenalin 26.2.2 or newer), then run "Repair NVAI-open" from the Start menu.')
+  // DirectML war eingerichtet, startete aber in dieser Sitzung nicht (Rückfall auf den Prozessor)
+  const failed = mode.directml_failed
+    ? t(`DirectML startete nicht, deshalb rechnet NVAI-open bis zum nächsten Start auf dem Prozessor. Grund: ${mode.directml_failed}`,
+      `DirectML did not start, so NVAI-open computes on the processor until the next start. Reason: ${mode.directml_failed}`)
+    : ''
   return (
-    <span className="cpu-mode" title={`${why}\n\n${means}\n\n${todo}`}>
+    <span className="cpu-mode" title={`${why}\n\n${means}\n\n${todo}${failed ? `\n\n${failed}` : ''}`}>
       ⚠ {t('Rechnet auf dem Prozessor', 'Running on the CPU')}
     </span>
   )

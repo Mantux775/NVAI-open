@@ -22,7 +22,7 @@ import websockets
 
 from urllib.parse import urlparse
 
-from . import config, gpu
+from . import config, directml, gpu
 from .i18n import t
 
 ProgressCb = Callable[[float, str], None]
@@ -117,6 +117,7 @@ class Backend:
         self.port = urlparse(url).port or 8188
         self.log_path = config.DATA_DIR / ("comfyui.log" if key == "main" else f"comfyui-{key}.log")
         self._proc: subprocess.Popen | None = None
+        self._directml = False  # zuletzt mit DirectML gestartet (directml.py, GitHub-Issue #3)
         # Welches Modell zuletzt an dieses ComfyUI ging. ComfyUI selbst verraet das
         # nicht ueber die API, also fuehren wir Buch: gesetzt beim Start eines Jobs,
         # geloescht beim Freigeben oder Beenden.
@@ -157,7 +158,18 @@ class Backend:
         """
         if self._proc is not None and self._proc.poll() is None:
             return self._proc
-        py = comfy_python()
+        mode = gpu.cpu_mode()
+        # DirectML nur fuer das Bild-ComfyUI: eigenes venv (PyTorch 2.4.1 + torch-directml), vorher DirectML wieder in
+        # ComfyUI einsetzen (ComfyUI hat es in 0.46.0 entfernt). Passt der Einsatz nicht, rechnet es auf dem Prozessor.
+        dml = bool(mode and mode.get("directml")) and self.key == "main"
+        if dml:
+            try:
+                directml.patch_comfyui()
+            except (directml.PatchError, OSError) as e:
+                directml.fail(t(f"DirectML ließ sich nicht in ComfyUI {installed_version() or ''} einsetzen: {e}",
+                                f"DirectML could not be added to ComfyUI {installed_version() or ''}: {e}"))
+                dml = False
+        py = directml.venv_python() if dml else comfy_python()
         if not py.exists():
             raise RuntimeError(t(
                 f"ComfyUI-venv fehlt: {py}\nBitte scripts/setup_comfyui.ps1 ausfuehren.",
@@ -177,7 +189,12 @@ class Backend:
         if config.MODEL_DIR_OVERRIDE:
             args += ["--models-directory", str(config.COMFY_MODEL_DIR)]
         env = None
-        if gpu.cpu_mode():
+        if dml:
+            # Radeon ohne ROCm ueber DirectML. Ohne gpu.CPU_ENV: PyTorch 2.4.1 ist ein CPU-Bau und fragt weder CUDA noch
+            # ROCm, und mit CUDA_VISIBLE_DEVICES=-1 stuerzte DirectML auf einer NVIDIA-Karte im VAE ab (access
+            # violation in einer 2D-Faltung; der Treiber nutzt CUDA offenbar intern), von Hand gestartet nicht.
+            args += directml.COMFY_ARGS
+        elif mode:
             # Keine Karte, auf der PyTorch rechnet (gpu.cpu_mode, GitHub-Issue #3): ComfyUI rechnet auf dem Prozessor,
             # und ROCm/CUDA sehen die Karte nicht (sonst stuerzte torch.cuda.is_available auf einer RX 5700 XT ab).
             args.append("--cpu")
@@ -207,6 +224,7 @@ class Backend:
             # Ohne das oeffnet sich unter pythonw (installierte Fassung) ein Konsolenfenster.
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
+        self._directml = dml
         return self._proc
 
     def log_tail(self, lines: int = 40) -> str:
@@ -228,15 +246,24 @@ class Backend:
         while loop.time() < deadline:
             if await self.is_running():
                 return True
+            if self._proc is not None and self._proc.poll() is not None:
+                return False  # beendet, statt bis zum Ablauf zu warten
             await asyncio.sleep(1.5)
         return False
 
     async def ensure(self) -> None:
-        """Laeuft er nicht, starten und warten. Wirft mit dem Log-Ende, wenn er nicht kommt."""
+        """Laeuft er nicht, starten und warten. Wirft mit dem Log-Ende, wenn er nicht kommt. Kommt ComfyUI mit DirectML
+        nicht hoch, startet es einmal auf dem Prozessor neu (directml.fail; die Leiste nennt den Grund)."""
         if await self.is_running():
             return
         self.start()
-        if not await self.wait_until_ready():
+        ready = await self.wait_until_ready()
+        if not ready and self._directml:
+            directml.fail(self.log_tail(12))
+            self.stop()
+            self.start()
+            ready = await self.wait_until_ready()
+        if not ready:
             raise RuntimeError(t(
                 f"ComfyUI ({self.key}) kam nicht hoch. Letzte Logzeilen:\n{self.log_tail(15)}",
                 f"ComfyUI ({self.key}) did not come up. Last log lines:\n{self.log_tail(15)}",

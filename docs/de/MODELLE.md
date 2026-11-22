@@ -249,6 +249,11 @@ diesen Werten: FP4-Durchsatz für RTX 50, INT8 für ältere NVIDIA-Karten, FP8 o
 Gegengeprüft an einer zweiten Messung: Für eine RTX 4060 sagt sie 3,1-mal langsamer als die 5060 Ti voraus, gemessen
 wurde mit FLUX 3 3,2-mal. Sobald du ein paar Aufträge gerechnet hast, nimmt der Assistent deine echten Zeiten.
 
+**Ältere Radeons** (RX 5000, Vega, Polaris) rechnen seit 0.5.33 über DirectML, empfohlen sind dort die SDXL-Modelle und
+Stable Audio Open. Zum Vergleich dieselben Aufträge auf der RTX 5060 Ti, einmal mit CUDA, einmal über DirectML mit dem
+Speicher einer 8-GB-Karte: SDXL 1024² mit 28 Schritten 16 s / 83 s, ein 6-s-Geräusch mit Stable Audio Open 8 s / 17 s,
+30 s Musik mit Stable Audio 3 6 s / 16 s. Einzelheiten: [DIRECTML.md](DIRECTML.md)
+
 ### NVFP4 oder INT8
 
 Nur RTX 50 rechnet NVFP4 in Hardware; RTX 20, 30 und 40 rechnen INT8. NVAI-open markiert die passende Fassung als

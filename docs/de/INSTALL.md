@@ -44,9 +44,11 @@ Das Setup prüft Grafikkarte und Treiber und warnt, wenn es keine passende Karte
   [#2](https://github.com/Mantux775/NVAI-open/issues/2) helfen deshalb sehr. `install-runtime.ps1 -Gpu amd|nvidia` oder
   `-Rocm 10.0|7.2` erzwingt eine Wahl.
 - **Ältere Radeons** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 und älter) kennt AMDs PyTorch für Windows nicht.
-  Das Setup sagt das gleich und richtet NVAI-open für den Prozessor ein, ebenso wenn PyTorch auf der Karte gar nicht
-  rechnet. NVAI-open startet dann normal und warnt oben im Fenster („Rechnet auf dem Prozessor“, der Tooltip erklärt
-  es): Bilder und Videos dauern sehr lange, Sprecherstimme und 3D gehen nicht, Studio-Schnitt und Export laufen normal.
+  Seit 0.5.33 richtet das Setup für sie DirectML ein (experimentell): Bilder und Ton rechnen auf der Karte, oben steht
+  „DirectML (experimentell)“, und unter „Modelle“ sind die SDXL-Modelle und Stable Audio Open als empfohlen markiert.
+  Einzelheiten und Messungen: [DIRECTML.md](DIRECTML.md). Geht DirectML nicht oder rechnet PyTorch auf der Karte gar
+  nicht, rechnet NVAI-open auf dem Prozessor und warnt oben im Fenster („Rechnet auf dem Prozessor“, der Tooltip
+  erklärt es): Bilder dauern sehr lange, Sprecherstimme und 3D gehen nicht, Studio-Schnitt und Export laufen normal.
   Mit einer unterstützten Karte oder einem aktuellen Treiber richtet „NVAI-open reparieren“ die Grafikkarte wieder ein.
 - **Mehrere NVIDIA-Karten:** Alles rechnet auf der stärksten Karte. Unter „Modelle“ → „Grafikkarten“ (oder per Klick
   auf eine Karte in der Kopfzeile) bekommen Bildmodelle, Sprachmodelle und 3D auf Wunsch eine eigene Karte; die Wahl

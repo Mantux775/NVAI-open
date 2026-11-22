@@ -2837,6 +2837,30 @@ RECOMMENDED_OLDER = ["qwen-image-2512-int8", "flux3-klein-int8", "krea2-turbo-in
 RECOMMENDED_AMD_RDNA4 = ["qwen-image-2512-fp8", "flux3-klein-bf16", "krea2-turbo-fp8", "moss-image-sft-bf16",
                          "z-image", "ltx25-distilled-int8", "seedvr2-7b-fp8"]
 
+# DirectML (Radeons ohne ROCm unter Windows: RX 5000, Vega, Polaris; seit 0.5.33, GitHub-Issue #3, registry.
+# _no_rocm_advice). Gemessen ueber DirectML auf der RTX 5060 Ti mit dem Speicherbudget einer 8-GB-Karte
+# (notizen/gpu.md); eine Radeon ohne Matrix-Einheiten braucht laenger. Wert: Hinweis unter der Modellwahl (DE, EN).
+# Video laeuft unter DirectML noch nicht: Wan 2.1 1.3B bricht in DirectML ab (Tensor mit zu vielen Dimensionen).
+_DML_SDXL = ("Läuft über DirectML. Gemessen auf einer Vergleichskarte mit dem Speicher einer 8-GB-Karte: 1024 × 1024 "
+             "mit 28 Schritten in rund 85 s; auf älteren Radeons dauert es länger.",
+             "Runs through DirectML. Measured on a comparison card limited to the memory of an 8 GB card: "
+             "1024 × 1024 with 28 steps in about 85 s; older Radeons take longer.")
+DIRECTML_GOOD: dict[str, tuple[str, str]] = {
+    "juggernaut-xl-v9": _DML_SDXL, "sdxl-base": _DML_SDXL, "illustrious-xl": _DML_SDXL, "pony-v6-xl": _DML_SDXL,
+    "noobai-xl-v1.1": _DML_SDXL,
+    "stable-audio-open-1.0": ("Läuft über DirectML: 6 s Geräusch in rund 18 s auf der Vergleichskarte, höchstens 3,4 GB.",
+                              "Runs through DirectML: a 6 s sound effect in about 18 s on the comparison card, at "
+                              "most 3.4 GB."),
+}
+DIRECTML_SLOW: dict[str, tuple[str, str]] = {
+    "stable-audio-3-medium": ("Läuft über DirectML (30 s Musik in rund 18 s auf der Vergleichskarte), belegt beim "
+                              "Dekodieren aber kurz bis 10 GB: Auf 8 GB lagert Windows dann in den Arbeitsspeicher "
+                              "aus, das kostet Zeit. 10,4 GB Download.",
+                              "Runs through DirectML (30 s of music in about 18 s on the comparison card), but briefly "
+                              "takes up to 10 GB while decoding: on 8 GB Windows then moves memory to system RAM, "
+                              "which costs time. 10.4 GB download."),
+}
+
 # Repos, deren Lizenz auf Hugging Face erst angenommen werden muss (Stand 26.10.2026, alle mit Sofortfreigabe).
 # registry prüft je Repo, ob der hinterlegte Token Zugriff hat; die Oberfläche verlinkt die Anleitung.
 GATED_REPOS = {

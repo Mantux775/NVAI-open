@@ -6,21 +6,22 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.32.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-Setup-0.5.32.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.33.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.33/NVAI-open-Setup-0.5.33.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.13.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-0.5.13.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.32 for Windows and 0.5.13 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
+November 2026: NVAI-open 0.5.33 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.33))
 
+- **Older Radeons through DirectML** (0.5.33, experimental): the Radeon RX 5000, Vega and Polaris, which AMD's PyTorch for Windows does not support, now compute images and sound on the card instead of the processor; the SDXL models and Stable Audio Open are marked as recommended. [Details](docs/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks, which the Mac (0.5.13) now stores bit-exact. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Bug fixes** (0.5.31, Mac 0.5.12): five independent reviews went through everything since 0.5.20. Among the fixes: a speaking clip in the Studio no longer ends mid-word, sound effects get their own track instead of cutting holes into the music, a LoRA training interrupted by a restart can be resumed, notes in audio forensics no longer get lost, and the Mac's speech recognition no longer misses talk while the radio is on. [All fixes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
-- **Studio, scenes by hand:** a new scene starts like one from the assistant, with the best model of its lane, "Expand prompt", "Generate start image" and notes when a clip is too long for the card or a face would be invented. [Details](docs/STUDIO.md#step-by-step)
 
 <details><summary><kbd>&nbsp;Read more&nbsp;▾&nbsp;</kbd></summary>
 
+- **Older Radeons through DirectML** (0.5.33, experimental): the setup gives the Radeon RX 5000, Vega and Polaris a second ComfyUI environment with PyTorch 2.4.1 and Microsoft's torch-directml and checks it on the card. Recommended are the SDXL models and Stable Audio Open, Stable Audio 3 is marked as slow, video does not run yet. On the same card DirectML was 2 to 6 times slower than CUDA (SDXL 1024²: 83 instead of 16 s). [Details and measurements](docs/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): bit-identical results for Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 and Stable Audio 3 in a comparison with the same seeds; reading from the middle of MP3 and MPEG-TS files at the right time; the review app reads 32-bit integer tracks. [Release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Bug fixes** (0.5.31, Mac 0.5.12): fixes from five independent reviews of the Studio, LoRA training, audio forensics, the web interface and the Mac app; the full list is in the [release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31).
 - **Scenes by hand in the Studio** (0.5.30, Mac 0.5.11): a new scene gets the best downloaded model of its lane (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), music as long as the film and sound effects 4 s. "Expand prompt" turns a few words into a full English description, and "Generate start image" makes two start images from the prompt as the assistant does (with the characters of the scene, without black bars). Notes under the properties warn about a clip longer than 6 s at 1080p on a card with 16 GB, a character without a start image, a prompt not in English and a voice line under a video that makes its own sound. [Details](docs/STUDIO.md#step-by-step)
@@ -262,6 +263,7 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 ### More
 
 - [docs/INSTALL.md](docs/INSTALL.md): installing, building from source, the PhotoCraft add-on
+- [docs/DIRECTML.md](docs/DIRECTML.md): older Radeons through DirectML, with measurements
 - [docs/MODELS.md](docs/MODELS.md): the models in detail, prompt tips, test results
 - [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md): from a photo to a video, step by step
 - [docs/STUDIO.md](docs/STUDIO.md): the Studio, whole videos from scenes
@@ -327,14 +329,15 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.32 für Windows und 0.5.13 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
+November 2026: NVAI-open 0.5.33 für Windows ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.33))
 
+- **Ältere Radeons über DirectML** (0.5.33, experimentell): Die Radeon RX 5000, Vega und Polaris, die AMDs PyTorch für Windows nicht kennt, rechnen Bilder und Ton jetzt auf der Karte statt auf dem Prozessor; die SDXL-Modelle und Stable Audio Open sind als empfohlen markiert. [Einzelheiten](docs/de/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl, die der Mac (0.5.13) jetzt bitgenau speichert. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Fünf unabhängige Durchsichten haben alles seit 0.5.20 geprüft. Unter anderem endet ein sprechender Clip im Studio nicht mehr mitten im Wort, Geräusche bekommen eine eigene Spur, statt Löcher in die Musik zu schneiden, ein durch einen Neustart unterbrochenes LoRA-Training lässt sich fortsetzen, Notizen in der Ton-Forensik gehen nicht mehr verloren, und die Spracherkennung auf dem Mac überhört kein Gespräch mehr, während Funk läuft. [Alle Korrekturen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
-- **Studio, Szenen von Hand:** Eine neue Szene beginnt wie eine aus dem Assistenten, mit dem besten Modell ihrer Bahn, „Prompt ausbauen“, „Startbild erzeugen“ und Hinweisen, wenn ein Clip zu lang für die Karte ist oder ein Gesicht erfunden würde. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 
 <details><summary><kbd>&nbsp;Weiterlesen&nbsp;▾&nbsp;</kbd></summary>
 
+- **Ältere Radeons über DirectML** (0.5.33, experimentell): Das Setup gibt der Radeon RX 5000, Vega und Polaris eine zweite ComfyUI-Umgebung mit PyTorch 2.4.1 und Microsofts torch-directml und prüft sie auf der Karte. Empfohlen sind die SDXL-Modelle und Stable Audio Open, Stable Audio 3 ist als langsam markiert, Video läuft noch nicht. Auf derselben Karte war DirectML 2- bis 6-mal langsamer als CUDA (SDXL 1024²: 83 statt 16 s). [Einzelheiten und Messungen](docs/de/DIRECTML.md)
 - **ComfyUI 0.46.0** (0.5.32): bitgleiche Ergebnisse für Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 und Stable Audio 3 im Vergleich mit gleichen Seeds; Lesen aus der Mitte von MP3- und MPEG-TS-Dateien an der richtigen Stelle; die Prüf-App liest Spuren mit 32-Bit-Ganzzahl. [Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Korrekturen aus fünf unabhängigen Durchsichten von Studio, LoRA-Training, Ton-Forensik, Weboberfläche und Mac-App; die ganze Liste steht in den [Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31).
 - **Szenen von Hand im Studio** (0.5.30, Mac 0.5.11): Eine neue Szene bekommt das beste geladene Modell ihrer Bahn (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), Musik so lang wie der Film, Geräusche 4 s. „Prompt ausbauen“ macht aus ein paar Worten eine volle englische Beschreibung, und „Startbild erzeugen“ macht wie der Assistent zwei Startbilder aus dem Prompt (mit den Figuren der Szene, ohne schwarze Balken). Hinweise unter den Eigenschaften warnen vor einem Clip über 6 s in 1080p auf einer Karte mit 16 GB, einer Figur ohne Startbild, einem Prompt nicht auf Englisch und einem Sprechersatz unter einem Video, das eigenen Ton macht. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
@@ -563,6 +566,7 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 ### Weiterlesen
 
 - [docs/de/INSTALL.md](docs/de/INSTALL.md): Installation, Bauen aus dem Quelltext, PhotoCraft-Add-on
+- [docs/de/DIRECTML.md](docs/de/DIRECTML.md): ältere Radeons über DirectML, mit Messungen
 - [docs/de/MODELLE.md](docs/de/MODELLE.md): die Modelle im Detail, Prompt-Tipps, Testergebnisse
 - [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md): vom Foto zum Video, Schritt für Schritt
 - [docs/de/STUDIO.md](docs/de/STUDIO.md): das Studio, ganze Videos aus Szenen

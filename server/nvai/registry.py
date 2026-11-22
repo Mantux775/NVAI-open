@@ -430,7 +430,7 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
         partially_installed=partial,
         disk_gb=round(sum(f.size_gb or 0 for f in files), 2),
         runnable=installed and entry.get("workflow") is not None,
-        fits_vram=gpu.fits(entry.get("vram_gb", 0)),
+        fits_vram=_fits(entry),
         features=features_for(text),
         lora_bases=list(loras.bases_for(entry)),
         trigger=entry.get("trigger", ""),
@@ -584,6 +584,9 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     bf16-Fassungen (catalog.RECOMMENDED_AMD_RDNA4: FP8 rechnet dort in Hardware, NVFP4 nicht, für INT8-ConvRot
     gibt es auf gfx1201 Berichte über schwarze Bilder); RDNA3 und kleinere Karten die INT8-Fassungen, die
     comfy-kitchen dort mit eigenen Kernen rechnet. Ungetestet auf echter AMD-Hardware."""
+    mode = gpu.cpu_mode()
+    if mode:
+        return _no_rocm_advice(entry, mode)
     if entry.get("kind") == "3d":
         return {"recommended": False, "gpu_note": t(
             "3D braucht derzeit eine NVIDIA-Karte: TripoSG und TRELLIS.2 nutzen CUDA-Erweiterungen.",
@@ -621,6 +624,50 @@ def _amd_advice(entry: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
                  f"{info['name']} (RDNA3) has no FP8 units: the model is upcast and runs slower. The INT8 "
                  "version is meant for this card.")
     return {"recommended": entry["id"] in picks, "gpu_note": note}
+
+
+def _fits(entry: dict[str, Any]) -> str:
+    """Passt das Modell in den Grafikspeicher? Unter DirectML gilt für die empfohlenen Modelle die Messung (SDXL lief
+    mit dem Budget einer 8-GB-Karte ganz geladen), nicht die grobe VRAM-Angabe des Katalogs (8 GB = „nein“ auf 8 GB)."""
+    if entry.get("id") in catalog.DIRECTML_GOOD:
+        mode = gpu.cpu_mode()
+        if mode and mode.get("directml"):
+            return "ja"
+    return gpu.fits(entry.get("vram_gb", 0))
+
+
+def _no_rocm_advice(entry: dict[str, Any], mode: dict[str, Any]) -> dict[str, Any]:
+    """Radeon ohne ROCm unter Windows (RX 5000, Vega, Polaris; GitHub-Issue #3). Mit DirectML (seit 0.5.33) rechnen
+    die kleinen fp16-Modelle aus catalog.DIRECTML_GOOD auf der Karte, DIRECTML_SLOW laufen langsam; ohne DirectML
+    rechnet alles auf dem Prozessor. Die übrigen passen nicht in 8 GB oder brauchen CUDA- bzw. ROCm-Kerne."""
+    eid, kind = entry["id"], entry.get("kind")
+    dml = bool(mode.get("directml"))
+    if kind == "lora":
+        return {"recommended": False, "gpu_note": ""}
+    if kind == "3d" or kind == "speech":
+        return {"recommended": False, "gpu_note": t(
+            "Braucht CUDA oder ROCm; auf dieser Radeon nicht verfügbar.",
+            "Needs CUDA or ROCm; not available on this Radeon.")}
+    if eid in catalog.DIRECTML_GOOD:
+        de, en = catalog.DIRECTML_GOOD[eid]
+        if not dml:
+            de, en = ("Rechnet hier auf dem Prozessor und braucht viele Minuten.",
+                      "Computes on the processor here and takes many minutes.")
+        return {"recommended": True, "gpu_note": t(de, en)}
+    if eid in catalog.DIRECTML_SLOW:
+        de, en = catalog.DIRECTML_SLOW[eid]
+        if not dml:
+            de, en = ("Rechnet hier auf dem Prozessor: sehr langsam.", "Computes on the processor here: very slow.")
+        return {"recommended": False, "gpu_note": t(f"Langsam auf dieser Karte. {de}", f"Slow on this card. {en}")}
+    if kind == "video" and dml:
+        return {"recommended": False, "gpu_note": t(
+            "Video läuft über DirectML noch nicht (Wan 2.1 1.3B bricht in DirectML ab).",
+            "Video does not run through DirectML yet (Wan 2.1 1.3B aborts inside DirectML).")}
+    return {"recommended": False, "gpu_note": t(
+        "Nicht für diese Karte: zu groß für ihren Speicher oder auf NVIDIA- bzw. ROCm-Kerne angewiesen (NVFP4, INT8, "
+        "FP8). Empfohlen sind die markierten SDXL-Modelle und Stable Audio Open.",
+        "Not for this card: too large for its memory or dependent on NVIDIA or ROCm kernels (NVFP4, INT8, FP8). "
+        "Recommended are the marked SDXL models and Stable Audio Open.")}
 
 
 def list_models(kind: str | None = None) -> list[ModelInfo]:

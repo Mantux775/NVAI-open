@@ -404,9 +404,12 @@ async def health() -> dict[str, Any]:
 async def backend_start() -> dict[str, Any]:
     if await comfy.is_running():
         return {"started": False, "reason": t("läuft bereits", "already running")}
-    comfy.start()
-    ready = await comfy.wait_until_ready()
-    return {"started": ready}
+    try:
+        # ensure() statt start(): startet ComfyUI mit DirectML nicht, geht es auf dem Prozessor weiter (directml.fail)
+        await comfy.MAIN.ensure()
+    except RuntimeError:
+        return {"started": False}
+    return {"started": True}
 
 
 @app.get("/api/backend/log")

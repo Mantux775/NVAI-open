@@ -30,6 +30,12 @@ Narrator voice (Qwen3-TTS, since 0.5.21)
   https://github.com/QwenLM/Qwen3-TTS), transformers (Apache-2.0) and others; exact versions in
   locks\qwen3tts.lock. It uses the PyTorch of the ComfyUI environment.
 
+DirectML for Radeons without ROCm (since 0.5.33) - torch-directml, MIT, Microsoft Corporation
+  https://github.com/microsoft/directml - only on Radeons that AMD's PyTorch for Windows does not
+  support (RX 5000, Vega, Polaris): downloaded during setup with PyTorch 2.4.1 into
+  external\comfyui\.venv-directml (exact versions in locks\comfyui-directml.lock). It brings
+  DirectML.dll; its LICENSE and NOTICE files are in its *.dist-info folder after installation.
+
 Python (python-build-standalone) - Python Software Foundation License
   Downloaded by uv during setup into python\, license included there.
 

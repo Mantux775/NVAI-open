@@ -683,7 +683,14 @@ export interface Health {
   /** Eigenes ComfyUI für die Sprachmodelle, wenn sie auf einer anderen Karte liegen. */
   text_backend?: { separate: boolean; running: boolean; loaded: string | null }
   /** Keine Karte, auf der PyTorch rechnet: ComfyUI läuft auf dem Prozessor (GitHub-Issue #3). */
-  cpu_mode?: { reason: 'amd_unsupported' | 'no_gpu_compute' | string; cards: string[] } | null
+  cpu_mode?: {
+    reason: 'amd_unsupported' | 'no_gpu_compute' | string
+    cards: string[]
+    /** seit 0.5.33: ComfyUI rechnet über DirectML auf der Radeon (GitHub-Issue #3) */
+    directml?: { device: string } | null
+    /** DirectML war eingerichtet, startete aber in dieser Sitzung nicht */
+    directml_failed?: string | null
+  } | null
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'

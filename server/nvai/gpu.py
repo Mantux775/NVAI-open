@@ -138,23 +138,37 @@ def amd_unsupported(name: str) -> bool:
 
 
 def cpu_mode() -> dict[str, Any] | None:
-    """Rechnet ComfyUI auf dem Prozessor? {"reason", "cards"} oder None. reason "amd_unsupported": alle eigenen Radeons
+    """Rechnet ComfyUI ohne CUDA/ROCm? {"reason", "cards"} oder None. reason "amd_unsupported": alle eigenen Radeons
     (ohne eigene: alle) sind ohne ROCm unter Windows und es steckt keine NVIDIA im Rechner; "no_gpu_compute": das Setup
-    fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json)."""
+    fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json).
+
+    Hat das Setup DirectML eingerichtet (seit 0.5.33, GitHub-Issue #3), steht dazu "directml": {"device"}: Bilder,
+    Videos und Ton aus ComfyUI rechnen dann ueber DirectML auf der Radeon (eigenes venv mit PyTorch 2.4.1, nur das
+    Bild-ComfyUI); alles andere bleibt wie ohne Karte (Audio-Werkzeuge, Prompt-Ausbau, Sprecherstimme, 3D).
+    "directml_failed": Grund, wenn DirectML in dieser Sitzung nicht startete."""
+    from . import directml
+    mode: dict[str, Any] | None = None
     cards = list_gpus()
     if cards and all(c.get("vendor") == "amd" for c in cards):
         names = [str(c.get("name") or "") for c in cards]
         own = [n for n in names if _is_discrete(n)] or names
         if all(amd_unsupported(n) for n in own):
-            return {"reason": "amd_unsupported", "cards": own}
-    try:
-        saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError):
-        return None
-    if isinstance(saved, dict) and saved.get("mode") == "cpu":
-        return {"reason": str(saved.get("reason") or "no_gpu_compute"),
+            mode = {"reason": "amd_unsupported", "cards": own}
+    if mode is None:
+        try:
+            saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            return None
+        if not (isinstance(saved, dict) and saved.get("mode") == "cpu"):
+            return None
+        mode = {"reason": str(saved.get("reason") or "no_gpu_compute"),
                 "cards": [str(c) for c in saved.get("cards") or [c.get("name") for c in cards] if c]}
-    return None
+    dml = directml.active()
+    if dml:
+        mode["directml"] = dml
+    elif directml.FAILED:
+        mode["directml_failed"] = directml.FAILED
+    return mode
 
 
 def amd_arch(name: str) -> str | None:

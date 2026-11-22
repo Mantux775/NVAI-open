@@ -244,6 +244,11 @@ RTX 50, INT8 for older NVIDIA cards, FP8 or FP16 with a discount for Radeon. Che
 an RTX 4060 it predicts 3.1 times slower than the 5060 Ti, measured with FLUX 3 was 3.2 times. Once you have run a few
 jobs, the assistant uses your real times instead.
 
+**Older Radeons** (RX 5000, Vega, Polaris) compute through DirectML since 0.5.33, with the SDXL models and Stable
+Audio Open as recommended models. For comparison, the same jobs on the RTX 5060 Ti, once with CUDA and once through
+DirectML limited to the memory of an 8 GB card: SDXL 1024² with 28 steps 16 s / 83 s, a 6 s sound effect with
+Stable Audio Open 8 s / 17 s, 30 s of music with Stable Audio 3 6 s / 16 s. Details: [DIRECTML.md](DIRECTML.md)
+
 ### NVFP4 or INT8
 
 Only RTX 50 computes NVFP4 in hardware; RTX 20, 30 and 40 compute INT8. NVAI-open marks the right version as

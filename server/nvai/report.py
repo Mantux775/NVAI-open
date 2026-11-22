@@ -188,6 +188,16 @@ def build(description: str) -> dict[str, Any]:
     ]
     if len(gpus) > 1:
         out.append(f"Assignment:   {gpu.assignment()} (separate text backend: {gpu.separate_text_backend()})")
+    mode = gpu.cpu_mode()
+    if mode:
+        # Radeon ohne ROCm (GitHub-Issue #3): Prozessor oder DirectML (seit 0.5.33, eigenes venv mit PyTorch 2.4.1)
+        if mode.get("directml"):
+            compute = f"DirectML ({mode['directml'].get('device') or '?'}, PyTorch 2.4.1)"
+        elif mode.get("directml_failed"):
+            compute = f"processor; DirectML failed: {mode['directml_failed'][-300:]}"
+        else:
+            compute = "processor"
+        out.append(f"Compute:      {compute} (reason: {mode.get('reason')})")
     active = registry.get_active_models()
     installed = sorted(e["id"] for e in registry.all_entries() if registry.is_installed(e))
     out += [
