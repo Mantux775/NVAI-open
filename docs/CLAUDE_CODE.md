@@ -116,6 +116,8 @@ both in step when a new finding comes in.
 | A recognizable person in video | start image with FLUX 3 from a frontal, sharp reference, face 250 px or more, few extras, an end image or `loop=True`, no extending; most faithful: the real photo outpainted to the video size | face similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 with the start image only |
 | A face from a photo in a new scene on the Mac | FLUX.2 Klein 4B with the photo in `reference_asset_ids` (not `image_asset_id`); name gender, age and hair, describe the new scene, no "keep … exactly" | a woman as ship captain: a man in 2 of 2 without the description, herself in 12 of 12 with it |
 | Video from several shots | Studio: one scene per shot, `chain` marker where shots must join, conform, export `youtube-1080p` | the chained clip went on with the same knight in the same pose |
+| Camera and motion from a rough 3D layout | LTX-2.5 with `guide_asset_id` (grey layout video, 24 fps) and as `image_asset_id` a picture FLUX 3 painted from its first frame (the grey frame as reference, `upsample_prompt=False`) | 57 frames at 1280 × 704 in 101 s; the red ball rolled where the grey sphere rolled, the look of the start image held |
+| A character from one image on a small or non-NVIDIA card | `wan21-vace-1.3b` with one `reference_asset_ids` image, 832 × 480 | 2 s in 207 s with ComfyUI, 276 s through Vulkan; the rabbit from the reference kept his grin and blue nose |
 | Zoom on a clip | `clip.update` with `anchor` [x, y] on the subject, then `clip.key` at the start (1.0) and the end (e.g. 1.5) | the focus point stayed within 0.5 px in the export |
 | Quality through editing | leave `master` on (default); YouTube 1080p at 24 Mbit/s | export from the lossless copy 42.3 dB instead of 37.7 from the MP4 |
 | MiniMax H3 (only with a separate license in the EU, UK, South Korea and USA; never publish its results) | the preselection: turbo LoRA 8 steps v1.1 + `sparse_attention="sol-attn"` + `int8_attention=True`; describe the pace of every movement | 9.4 s at 1344 × 576 in 6.6–6.9 instead of 37 min; it moves about half as much as LTX-2.5 |
@@ -527,6 +529,13 @@ Measured with one character over many comedy clips and an explainer video:
   the license: the sound is non-commercial (audio VAE CC BY-NC), the video VAE is not licensed in the EU, UK and South
   Korea. Without a start image Pro put black bars at the top and bottom (2 of 2 clips, with and without
   "cinematic"); give it a start image in the video format.
+- **Wan 2.1 VACE 1.3B** (since 0.5.36, `wan21-vace-1.3b`, Apache-2.0): one `reference_asset_ids` image sets the
+  character, the prompt the scene; 832 × 480 at 16 fps, 2 s in 207 s with ComfyUI. It also runs through Vulkan on
+  older Radeons and Intel cards (2 s in 276 s on the same card); there it encodes its context in tiles.
+- **Layout to render** (since 0.5.36, LTX-2.5, `guide_asset_id`): a rough grey layout video (clay render or blocky
+  playblast, 24 fps) sets the camera and the motion; pass an image painted from its first frame as `image_asset_id` for
+  the look. No sound, at most as long as the layout; not with an end image, loop, given sound, extending or DFR. The
+  first job downloads two nodes by Lightricks from GitHub (LTX-2 Community License) and restarts ComfyUI once.
 - **PAN 2** (since 0.5.35, `pan2-int8`, Apache-2.0): a world model that simulates what happens after an action, from
   text or an optional start image, 1248 × 704 at 24 fps, up to 20 s, no sound. It follows a JSON world-state caption
   most closely (`video_style`, `lighting`, `perspective_view`, `subjects_lifecycle`, `events` with times); free text

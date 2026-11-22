@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from . import nodepacks  # noqa: E402  (Layout-To-Render: Knoten bei Bedarf von GitHub)
 from . import (comfy, config, db, flux3_prompt, gpu, i18n, imagesize, kandinsky6, loras, mesh_workers, minimax,
                prompt_targets, registry, sdcpp, workflows)
 
@@ -1796,6 +1797,40 @@ async def _prepare_chain(job: Job, p: dict[str, Any], entry: dict[str, Any]) -> 
     return source
 
 
+async def _prepare_layout(ctx: JobContext, p: dict[str, Any], entry: dict[str, Any], frames: int) -> int:
+    """Layout-To-Render (seit 0.5.36): Layout-Video nach ComfyUIs input/, Laenge hoechstens die des Videos (8n+1), und
+    die zwei Knoten von Lightricks bei Bedarf von GitHub (nodepacks); ComfyUI startet dann neu, um sie zu laden."""
+    if entry["workflow"] != "ltx25" or not registry.features_for(entry).get("layout"):
+        raise RuntimeError(t(
+            "Layout-To-Render braucht LTX-2.5 mit der Layout-To-Render-LoRA (unter „Modelle“ bei LTX-2.5 "
+            "„Zusätze laden“).",
+            "Layout-To-Render needs LTX-2.5 with the Layout-To-Render LoRA (“Download extras” for LTX-2.5 under "
+            "“Models”)."))
+    if (p.get("end_image_asset_id") or p.get("loop") or p.get("audio_asset_id") or p.get("extend_asset_id")
+            or p.get("chain_asset_id") or p.get("quality") == "dfr"):
+        raise RuntimeError(t(
+            "Layout-To-Render geht nicht zusammen mit Endbild, Schleife, vorgegebenem Ton, Verlängern oder DFR.",
+            "Layout-To-Render does not combine with an end image, loop, given sound, extending or DFR."))
+    asset = db.get_asset(p["guide_asset_id"])
+    path = config.ASSET_DIR / asset.filename if asset else None
+    if path is None or not path.exists():
+        raise RuntimeError(t(f"Layout-Video nicht gefunden: {p['guide_asset_id']}",
+                             f"Layout video not found: {p['guide_asset_id']}"))
+    info = await _video_tool("info", str(path))
+    have = int(info.get("frames") or 0)
+    if have >= 9:
+        frames = min(frames, (have - 1) // 8 * 8 + 1)
+    p["frames"] = frames
+    p["auto_duration"] = False
+    p["guide_video"] = comfy.stage_input(path)
+    ctx.progress(0.01, t("prüft die Layout-Knoten von Lightricks", "checking the Lightricks layout nodes"))
+    if await nodepacks.ensure_ltxv_iclora():
+        await comfy.MAIN.shutdown()  # startet beim Auftrag mit den neuen Knoten
+    elif await comfy.MAIN.is_running(timeout=1.0) and not await comfy.has_node(nodepacks.LTXV_NODES[0]):
+        await comfy.MAIN.shutdown()  # lief schon, bevor die Knoten dalagen
+    return frames
+
+
 @register("txt2video")
 async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     p = job.params
@@ -1824,6 +1859,8 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
             f"{_name(entry)} ist ein Bild-zu-Video-Modell — bitte ein Startbild angeben.",
             f"{_name(entry)} is an image-to-video model — please provide a start image.",
         ))
+    if p.get("guide_asset_id"):
+        frames = await _prepare_layout(ctx, p, entry, frames)
     # Referenzbilder (Figur, Gesicht, Stil) nur fuer Videomodelle, deren Katalogeintrag sie nennt (features.references).
     refs = [a for a in (p.get("reference_asset_ids") or []) if a]
     if refs:
@@ -1876,6 +1913,7 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
         "audio_asset_id": p.get("audio_asset_id"),
         "motion_speed": float(p.get("motion_speed") or 1.0),
         "extend_asset_id": p.get("extend_asset_id"),
+        "guide_asset_id": p.get("guide_asset_id"),
         # Latent-Kette: so viele Bilder am Anfang stammen vom Video chain_asset_id (das Studio blendet darueber)
         "chain_asset_id": p.get("chain_asset_id") if extension is None else None,
         "carry_frames": carry or None,

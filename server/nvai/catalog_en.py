@@ -1618,6 +1618,20 @@ SIZE_LABELS: dict[str, str] = {
     "2560 × 1440 — 4 MP 16:9, Panorama": "2560 × 1440 — 4 MP 16:9, panorama",
 }
 
+EN["wan21-vace-1.3b"] = {
+    "name": "Wan 2.1 VACE 1.3B (reference to video)",
+    "best_for": "Bring a character from a reference image into a video, small enough for 8 GB",
+    "description": (
+        "The VACE version of the small Wan 2.1 takes a reference image and puts its character into a scene the prompt "
+        "describes: 832 × 480, 16 fps, a few seconds. It shares the text encoder and VAE with Wan 2.1 T2V 1.3B, so only "
+        "another 4.3 GB download. Through stable-diffusion.cpp it also runs on older Radeons and Intel cards with 8 GB."),
+    "pros": ["A character from a reference image, no start image needed", "Apache-2.0, free for commercial use",
+             "Runs on 8 GB cards, through Vulkan as well"],
+    "cons": ["480p and a few seconds", "Details flicker as with the T2V 1.3B",
+             "One reference image; the scene comes from the text"],
+    "features": {"prompt_hint": "The reference image sets the character, best cut out on a plain background. In the prompt describe the style, scene, action and camera and name the character with its features; describe the motion explicitly."},
+}
+
 # MiniMax H3 (minimax.py, since 0.5.18): English texts and size labels.
 from .minimax import EN as _MINIMAX_EN, SIZE_LABELS as _MINIMAX_SIZE_LABELS  # noqa: E402
 EN.update(_MINIMAX_EN)

@@ -71,6 +71,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # audio.cpp (8 Schritte, CFG 1); Sampler und Scheduler waehlt audio.cpp selbst
     "audiocpp_stable_audio": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple"},
     "wan_t2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
+    "wan_vace":   {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan22_ti2v": {"steps": 30, "cfg": 5.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     "wan_i2v":    {"steps": 30, "cfg": 6.0, "sampler": "uni_pc",   "scheduler": "simple", "shift": 8.0},
     # Wan 2.2 A14B: zwei Experten teilen sich die Schritte an "boundary".
@@ -1108,6 +1109,11 @@ def ltx_frames_for_seconds(seconds: float, fps: float, at_least: bool = False) -
     return max(9, min(LTX25_MAX_FRAMES, 1 + n * 8))
 
 
+# Layout-To-Render: Sigmas der zwei Stufen aus Lightricks' Workflow (destilliert, 8 und 3 Schritte)
+LAYOUT_SIGMAS_1 = "1.0, 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0"
+LAYOUT_SIGMAS_2 = "0.909375, 0.725, 0.421875, 0.0"
+
+
 class _LTX:
     """Graph fuer LTX-2.5 (und LTX-2.3): Bild und Ton in einem Latent, nach ComfyUIs Vorlagen.
 
@@ -1190,6 +1196,65 @@ class _LTX:
             enc = self.add("LTXVAudioVAEEncode", audio=[trim, 0], audio_vae=self.audio_vae)
             self.frozen_audio = [self.add("LTXVFreezeLatent", latent=[enc, 0]), 0]
             self.audio_in = [trim, 0]
+
+    def layout(self, start_image: str | None) -> Graph:
+        """Layout-To-Render (IC-LoRA, seit 0.5.36) wie Lightricks' Workflow LTX-2.5_ICLoRA_Layout_To_Render_Two_Stage
+        _Distilled: Das Layout-Video (grobe Ton- oder Kloetzchen-Animation) gibt Kamera, Bewegung und Lage vor und geht
+        an Bild 0 ein (frame_idx 0, gestreckt), das Startbild als Einzelbild-Referenz (frame_idx -1, mittig) Look,
+        Licht und Material. Stufe 1 in halber Groesse mit dem Verkleinerungsfaktor, den der Lader aus der LoRA liest,
+        8 Sigmas; Stufe 2 nach dem x2-Latent-Upscaler mit Faktor 1 und 3 Sigmas; euler_ancestral, CFG 1, Fuehrungen nach
+        jeder Stufe abgeschnitten, gekachelt dekodiert. Ohne Ton (der Workflow erzeugt keinen)."""
+        self._common()
+        e, p = self.entry, self.p
+        lora = self.add("LTXICLoRALoaderModelOnly", model=self.model,
+                        lora_name=_file_by_target(e, "loras", "layout-to-render"), strength_model=1.0)
+        model, factor = [lora, 0], [lora, 1]
+        cond = self.add("LTXVConditioning", positive=[self.pos_text, 0], negative=[self.neg_text, 0],
+                        frame_rate=self.cond_fps)
+        w1, h1 = self.w // 2, self.h // 2
+        video = self.add("LoadVideo", file=p["guide_video"])
+        comps = self.add("GetVideoComponents", video=[video, 0])
+        cut = self.add("ImageFromBatch", image=[comps, 0], batch_index=0, length=self.frames)
+        layout = [self.add("ImageScale", image=[cut, 0], upscale_method="lanczos", width=w1, height=h1,
+                           crop="center"), 0]
+        look = [self.add("LoadImage", image=start_image), 0] if start_image else None
+
+        def guides(pos: Ref, neg: Ref, latent: Ref, ldf: Ref | float) -> tuple[Ref, Ref, Ref]:
+            common = {"vae": self.vae, "strength": 1.0, "latent_downscale_factor": ldf, "use_tiled_encode": False,
+                      "tile_size": 256, "tile_overlap": 64, "use_streaming": False, "tile_frames": 97}
+            g = self.add("LTXAddVideoICLoRAGuide", positive=pos, negative=neg, latent=latent, image=layout,
+                         frame_idx=0, crop="disabled", **common)
+            pos, neg, latent = [g, 0], [g, 1], [g, 2]
+            if look is not None:
+                g = self.add("LTXAddVideoICLoRAGuide", positive=pos, negative=neg, latent=latent, image=look,
+                             frame_idx=-1, crop="center", **common)
+                pos, neg, latent = [g, 0], [g, 1], [g, 2]
+            return pos, neg, latent
+
+        noise = self.add("RandomNoise", noise_seed=self.seed)
+        sampler = self.add("KSamplerSelect", sampler_name="euler_ancestral")
+        empty = self.add("EmptyLTXVLatentVideo", width=w1, height=h1, length=self.frames, batch_size=1)
+        pos, neg, lat = guides([cond, 0], [cond, 1], [empty, 0], factor)
+        guider = self.add("CFGGuider", model=model, positive=pos, negative=neg, cfg=1.0)
+        sig1 = self.add("ManualSigmas", sigmas=LAYOUT_SIGMAS_1)
+        out1 = self.add("SamplerCustomAdvanced", noise=[noise, 0], guider=[guider, 0], sampler=[sampler, 0],
+                        sigmas=[sig1, 0], latent_image=lat)
+        crop1 = self.add("LTXVCropGuides", positive=pos, negative=neg, latent=[out1, 0])
+        up = self.add("LTXVLatentUpsampler", samples=[crop1, 2], upscale_model=[self.upscaler, 0], vae=self.vae)
+        pos2, neg2, lat2 = guides([cond, 0], [cond, 1], [up, 0], 1.0)
+        guider2 = self.add("CFGGuider", model=model, positive=pos2, negative=neg2, cfg=1.0)
+        sig2 = self.add("ManualSigmas", sigmas=LAYOUT_SIGMAS_2)
+        out2 = self.add("SamplerCustomAdvanced", noise=[noise, 0], guider=[guider2, 0], sampler=[sampler, 0],
+                        sigmas=[sig2, 0], latent_image=lat2)
+        crop2 = self.add("LTXVCropGuides", positive=pos2, negative=neg2, latent=[out2, 0])
+        dec = self.add("VAEDecodeTiled", samples=[crop2, 2], vae=self.vae, tile_size=512, overlap=64,
+                       temporal_size=128, temporal_overlap=32)
+        vid = self.add("CreateVideo", images=[dec, 0], fps=self.fps)
+        crf = p.get("crf")
+        self.add("SaveVideo", video=[vid, 0], filename_prefix="nvai_video", format="mp4",
+                 **{"format.codec": "h264", "format.codec.encoding": "re-encode",
+                    "format.codec.encoding.crf": float(VIDEO_CRF if crf is None else crf)})
+        return self.g
 
     def length(self) -> Ref | int:
         """Frames als Zahl oder, mit auto_duration, vom Laengenkopf aus dem Prompt (8n+1)."""
@@ -1320,7 +1385,7 @@ class _LTX:
         length = self.length()
         cond = self.conditioning()
         detail = self.add("LoraLoaderModelOnly", model=self.model,
-                          lora_name=_file_by_target(e, "loras", "ic-lora"), strength_model=1.0)
+                          lora_name=_file_by_target(e, "loras", "pixel-spatial"), strength_model=1.0)
         euler = self.add("KSamplerSelect", sampler_name="euler")
         # Startbild: Stufe 1 vorverarbeitet wie im Standardweg, Stufe 2 und 3 unverarbeitet in
         # voller Aufloesung. Anders als ComfyUIs Vorlage, die in allen Stufen ein Viertel des
@@ -1410,6 +1475,8 @@ class _LTX:
 def _build_ltx2(entry, p, seed, width, height, frames, fps, start_image) -> tuple[Graph, int]:
     """LTX-2.5 (alle Wege, siehe _LTX) und LTX-2.3 (Standardweg). Ausgabe: MP4 mit Ton."""
     b = _LTX(entry, p, seed, width, height, frames, fps)
+    if entry["workflow"] == "ltx25" and p.get("guide_video"):
+        return b.layout(start_image), seed
     if entry["workflow"] == "ltx25" and p.get("end_image"):
         return b.keyframes(start_image, p["end_image"]), seed
     if entry["workflow"] == "ltx25" and p.get("quality") == "full":
@@ -1605,6 +1672,24 @@ def build_video(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         graph["12"] = {"class_type": "VAEDecode",
                        "inputs": {"samples": ["11", 0], "vae": ["3", 0]}}
         graph["13"] = save("12")
+        return graph, seed
+
+    if wf == "wan_vace":
+        # VACE (Referenz zu Video) wie ComfyUIs Vorlage video_wan_vace_14B_ref2v: WanVaceToVideo liefert Conditioning,
+        # Leerlatent und die Zahl der Referenz-Latents, die TrimVideoLatent nach dem Abtasten wieder abschneidet.
+        vace: dict[str, Any] = {
+            "positive": ["4", 0], "negative": ["5", 0], "vae": ["3", 0], "width": width, "height": height,
+            "length": frames, "batch_size": 1, "strength": float(p.get("vace_strength") or 1.0)}
+        refs = p.get("reference_images") or []
+        if refs:
+            graph["12"] = {"class_type": "LoadImage", "inputs": {"image": refs[0]}}
+            vace["reference_image"] = ["12", 0]
+        graph["7"] = {"class_type": "WanVaceToVideo", "inputs": vace}
+        graph["8"] = {"class_type": "KSampler", "inputs": {
+            **sampler, "model": ["6", 0], "positive": ["7", 0], "negative": ["7", 1], "latent_image": ["7", 2]}}
+        graph["13"] = {"class_type": "TrimVideoLatent", "inputs": {"samples": ["8", 0], "trim_amount": ["7", 3]}}
+        graph["9"] = {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["3", 0]}}
+        graph["10"] = save("9")
         return graph, seed
 
     if wf == "wan22_ti2v":
@@ -1891,7 +1976,7 @@ IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zim
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 # ACE-Step (v1 und 1.5) am 26.10.2026 entfernt, Nutzer: „es ist einfach immer schlecht“
 AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3"}
-VIDEO_WORKFLOWS = {"wan_t2v", "wan22_ti2v", "wan_i2v", "wan22_i2v",
+VIDEO_WORKFLOWS = {"wan_t2v", "wan_vace", "wan22_ti2v", "wan_i2v", "wan22_i2v",
                    "hunyuan15_t2v", "hunyuan15_i2v", "ltxv_t2v", "ltx25", "ltx23",
                    "kandinsky5_t2v", "kandinsky5_t2v_distilled", "kandinsky5_i2v", "mochi"}
 

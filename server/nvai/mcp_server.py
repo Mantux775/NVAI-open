@@ -1063,6 +1063,7 @@ async def generate_video(
     motion_speed: float = 1.0,
     crf: float | None = None,
     extend_asset_id: str | None = None,
+    guide_asset_id: str | None = None,
     chain_asset_id: str | None = None,
     master: bool = True,
     project_id: str | None = None,
@@ -1171,7 +1172,8 @@ async def generate_video(
         model_id: Force a model; otherwise the active video model.
         seed: For reproducible results.
         image_asset_id: Asset ID of the start image for image-to-video.
-        reference_asset_ids: Only for models with features.references (minimax-h3-ref2va-int8: up to 9):
+        reference_asset_ids: Only for models with features.references (minimax-h3-ref2va-int8: up to 9,
+            wan21-vace-1.3b: one; it puts the character of the reference into the scene of the prompt):
             image assets that set a character, a face or a style, not the first frame; address them in the
             prompt as <Picture 1>, <Picture 2> ... in this order.
         sparse_attention: 'sol-attn' (or 'veda' where the model lists it) for models with
@@ -1228,6 +1230,12 @@ async def generate_video(
             veil.
         crf: LTX-2.5: H.264 quality of the MP4 (CRF, lower = better and larger). Empty =
             12; ComfyUI's own default of 18 gave only 6 to 13 Mbit/s at 1080p.
+        guide_asset_id: LTX-2.5 Layout-To-Render (since 0.5.36): asset ID of a rough layout video (a grey clay
+            render or a blocky playblast of simple shapes, e.g. from Blender; 24 fps, sides divisible by 64). It
+            sets the camera, the motion and where things sit; pass an image painted from the layout's first frame
+            as image_asset_id for the look (never the grey frame itself). No sound; the clip is at most as long as
+            the layout. Not with an end image, loop, given sound, extending or quality="dfr". The first job
+            downloads two nodes by Lightricks (LTX-2 Community License) from GitHub.
         extend_asset_id: LTX-2.5: continue an existing video (asset ID of a video). Since 0.5.17 as a
             latent chain: its last 25 frames are pinned at the start of the new part (1 s of motion
             instead of one still frame), and the new part is appended with a crossfade over those
@@ -1269,6 +1277,7 @@ async def generate_video(
         "quality": quality, "temporal_upscale": temporal_upscale,
         "auto_duration": auto_duration, "audio_asset_id": audio_asset_id,
         "motion_speed": motion_speed, "crf": crf, "extend_asset_id": extend_asset_id,
+        "guide_asset_id": guide_asset_id,
         "chain_asset_id": chain_asset_id, "master": master,
         "project_id": project_id, "audio_prompt": audio_prompt,
     }

@@ -196,6 +196,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const voiceFileRef = useRef<HTMLInputElement>(null)
   // Video verlängern (seit 0.5.10): ein vorhandenes Video fortsetzen, sein letzter Frame wird Startbild
   const [extendId, setExtendId] = useState('')
+  // Layout-To-Render (seit 0.5.36): Layout-Video (erzeugt oder hochgeladen)
+  const [guideId, setGuideId] = useState('')
+  const [layoutUploads, setLayoutUploads] = useState<Asset[]>([])
+  const videoInput = useRef<HTMLInputElement>(null)
   // Breite der Einstellungen ziehen wie die Spalten im Studio (Nutzer 22.11.2026: „den abstand zwischen linken und
   // rechten bereich im generieren … verschieben können wie in studio fenstern“); Doppelklick stellt sie zurück
   const splitRef = useRef<HTMLDivElement>(null)
@@ -665,6 +669,11 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   useEffect(() => {
     if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
     if (isLtx25) api.assets('video', 30).then(setVideoAssets).catch(() => setVideoAssets([]))
+    if (isLtx25) {
+      api.assets('upload', 60)
+        .then((up) => setLayoutUploads(up.filter((a) => /\.(mp4|mov|mkv|webm|avi)$/i.test(a.filename))))
+        .catch(() => setLayoutUploads([]))
+    }
   }, [isLtx25, results])
   // Aufnahmen, aus denen sich eine Stimme übernehmen lässt: Ton (auch eigene Sprecherzeilen), Videos mit Ton, Uploads
   useEffect(() => {
@@ -1259,7 +1268,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             auto_duration: autoDuration && !audioId,
             audio_asset_id: extendId ? null : audioId || null,
             motion_speed: motionSpeed,
-            extend_asset_id: extendId || null,
+            extend_asset_id: guideId ? null : extendId || null,
+            guide_asset_id: vfeat?.layout && guideId ? guideId : null,
           } : {}),
         })
       } else {
@@ -2423,6 +2433,72 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     'DFR: sharp over the whole clip, about three times the time.')}
                   {!vfeat?.dfr && missingNote('dfr')}
                 </p>
+
+                {/* Layout-To-Render (seit 0.5.36): ein grobes Layout-Video gibt Kamera, Bewegung und Lage vor, das
+                    Startbild Look, Licht und Material; die zwei Knoten dazu lädt der Server beim ersten Mal von GitHub */}
+                <details className="lora-picker layout-picker" open={!!guideId || undefined}>
+                  <summary>
+                    {t('Layout-Video (Layout to Render)', 'Layout video (layout to render)')}{' '}
+                    <span className="muted small">{guideId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
+                  </summary>
+                  {vfeat?.layout ? (
+                    <>
+                      <input ref={videoInput} type="file" accept="video/*" style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]
+                          e.target.value = ''
+                          if (!f) return
+                          try {
+                            const a = await api.upload(f)
+                            setLayoutUploads((list) => [a, ...list])
+                            setGuideId(a.id)
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : String(err))
+                          }
+                        }} />
+                      <div className="row">
+                        <select value={guideId} onChange={(e) => {
+                          setGuideId(e.target.value)
+                          if (e.target.value) {
+                            // geht nicht zusammen mit Endbild, Schleife, Ton, Verlängern und DFR
+                            setEndId('')
+                            setLoop(false)
+                            setAudioId('')
+                            setExtendId('')
+                            if (quality === 'dfr') chooseQuality('standard')
+                          }
+                        }}>
+                          <option value="">{t('— kein Layout —', '— no layout —')}</option>
+                          {[...layoutUploads, ...videoAssets].map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {String(a.meta?.original_name || a.prompt || a.filename).slice(0, 60)}
+                            </option>
+                          ))}
+                        </select>
+                        <button type="button" className="btn small ghost" onClick={() => videoInput.current?.click()}>
+                          {t('Video hochladen', 'Upload video')}
+                        </button>
+                      </div>
+                      <p className="hint small">
+                        {t('Eine grobe Ton- oder Klötzchen-Animation, etwa aus Blender mit 24 fps, gibt Kamera, Bewegung '
+                            + 'und Lage der Dinge vor. Als Startbild ein Bild wählen, das aus dem ersten Bild des Layouts '
+                            + 'gemalt ist, nicht das graue Bild selbst: Es gibt Look, Licht und Material. Ohne Ton, '
+                            + 'höchstens so lang wie das Layout. Der erste Auftrag lädt zwei Knoten von Lightricks (LTX-2 '
+                            + 'Community License) von GitHub.',
+                          'A rough clay or blocky animation, for example from Blender at 24 fps, sets the camera, the '
+                            + 'motion and where things sit. As the start image pick a picture painted from the first frame '
+                            + 'of the layout, not the grey frame itself: it sets the look, light and materials. No sound, '
+                            + 'at most as long as the layout. The first job downloads two nodes by Lightricks (LTX-2 '
+                            + 'Community License) from GitHub.')}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="hint small">
+                      {t('Braucht die Layout-To-Render-LoRA.', 'Needs the Layout-To-Render LoRA.')}
+                      {missingNote('layout')}
+                    </p>
+                  )}
+                </details>
 
                 {/* Klappmenue wie Endbild und Referenzbilder (Nutzer 22.11.2026: „Extend a video optional auch“) */}
                 <details className="lora-picker extend-picker" open={!!extendId || undefined}>

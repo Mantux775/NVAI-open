@@ -26,7 +26,7 @@ from . import config, db, gpu, workflows
 from .i18n import t
 
 # Was die Engine rechnet (Workflow-Namen des Katalogs)
-VIDEO_WORKFLOWS = {"wan_t2v"}
+VIDEO_WORKFLOWS = {"wan_t2v", "wan_vace"}  # VACE 1.3B seit 0.5.35: Referenzbild ueber -i
 IMAGE_WORKFLOWS = {"sdxl"}
 WORKFLOWS = VIDEO_WORKFLOWS | IMAGE_WORKFLOWS
 LOG = config.DATA_DIR / "sdcpp.log"
@@ -49,6 +49,13 @@ SCHEDULERS = {
 # Was sd.cpp nicht kann: rechnet PyTorch auf der Karte (NVIDIA, ROCm), uebernimmt ComfyUI solche Auftraege
 UNSUPPORTED = (("controlnet", "ControlNet", "ControlNet"), ("reference_asset_ids", "Referenzbilder", "reference images"),
                ("slg", "Skip-Layer-Guidance", "skip-layer guidance"))
+
+
+def _unsupported(workflow: str | None) -> tuple[tuple[str, str, str], ...]:
+    """Was sd.cpp bei diesem Workflow nicht kann; VACE nimmt ein Referenzbild."""
+    if workflow == "wan_vace":
+        return tuple(u for u in UNSUPPORTED if u[0] != "reference_asset_ids")
+    return UNSUPPORTED
 
 
 def backend() -> str | None:
@@ -88,8 +95,8 @@ def handles(entry: dict[str, Any], kind: str, p: dict[str, Any] | None = None) -
         return False
     if not active():
         return False
-    # Rechnet PyTorch auf der Karte, macht ComfyUI, was sd.cpp fehlt, statt den Auftrag abzulehnen
-    if p and gpu.cpu_mode() is None and (any(p.get(key) for key, _, _ in UNSUPPORTED)
+    # Rechnet PyTorch auf der Karte, macht ComfyUI, was sd.cpp fehlt, statt den Auftrag abzulehnen (VACE nimmt Referenzen)
+    if p and gpu.cpu_mode() is None and (any(p.get(key) for key, _, _ in _unsupported(wf))
                                          or (kind == "video" and p.get("loras"))):
         return False
     return True
@@ -116,8 +123,9 @@ def _budget(args: list[str], video: bool = False) -> list[str]:
 
 
 def video_args(entry: dict[str, Any], p: dict[str, Any], out: Path) -> tuple[list[str], dict[str, Any]]:
-    """Aufruf fuer Wan 2.1 T2V und die Angaben fuer die Asset-Metadaten. Formate und Laengen wie im ComfyUI-Weg
-    (workflows.build_video): 832 x 480, Bilder 4n+1, 16 fps, Negativprompt und Shift aus den Vorgaben."""
+    """Aufruf fuer Wan 2.1 T2V und VACE 1.3B und die Angaben fuer die Asset-Metadaten. Formate und Laengen wie im
+    ComfyUI-Weg (workflows.build_video): 832 x 480, Bilder 4n+1, 16 fps, Negativprompt und Shift aus den Vorgaben. VACE
+    bekommt das Referenzbild ueber -i (sd.cpp-Doku docs/models/wan.md, „R2V“)."""
     wf = entry["workflow"]
     d = workflows.defaults_for(wf)
     seed = int(p["seed"]) if p.get("seed") is not None else int.from_bytes(os.urandom(4), "big") >> 1
@@ -138,6 +146,14 @@ def video_args(entry: dict[str, Any], p: dict[str, Any], out: Path) -> tuple[lis
             "--steps", str(steps), "--seed", str(seed), "-o", str(out), "-v"]
     meta = {"engine": f"stable-diffusion.cpp ({backend_label()})", "seed": seed, "width": width, "height": height,
             "frames": frames, "fps": fps, "steps": steps, "cfg": cfg, "sampler": "euler", "shift": shift}
+    refs = [a for a in (p.get("reference_asset_ids") or []) if a]
+    if wf == "wan_vace":
+        if refs:
+            args += ["-i", str(_asset_file(refs[0], ("Referenzbild", "Reference image")))]
+        # VACE kodiert seinen Kontext mit dem VAE: am Stück 10,2 GB, mit 7 GiB Budget brach es ab („cannot make enough
+        # memory available“); in Kacheln liefen 33 Bilder in 276 s über Vulkan (22.11.2026)
+        args += ["--vae-tiling"]
+        meta["vae_tiling"] = True
     return _budget(args, video=True), meta
 
 

@@ -333,6 +333,17 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Kamera und Bewegung aus einem Layout', 'Camera and motion from a layout'),
+      text: t(
+        'Bei LTX-2.5 unter „Layout-Video“ eine graue Klötzchen-Animation (24 fps) wählen und als Startbild ein Bild, '
+          + 'das FLUX 3 aus ihrem ersten Bild gemalt hat (das graue Bild als Referenz). 57 Bilder in 1280 × 704 in '
+          + '101 s: Der Ball rollte, wo die graue Kugel rollte, der Look des Startbilds blieb.',
+        'With LTX-2.5 pick a grey blocky animation (24 fps) under “Layout video” and as the start image a picture '
+          + 'FLUX 3 painted from its first frame (the grey frame as reference). 57 frames at 1280 × 704 in 101 s: '
+          + 'the ball rolled where the grey sphere rolled, the look of the start image held.',
+      ),
+    },
+    {
       head: t('Verlustfreie Kopie anlassen', 'Keep the lossless copy on'),
       text: t(
         'Der YouTube-Export im Studio hatte daraus 42,3 statt 37,7 dB PSNR (aus dem MP4), Anschluss-Startbilder '

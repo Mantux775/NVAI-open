@@ -284,6 +284,7 @@ made of several clips.
 | Extend | `extend_asset_id` | 5 s + 4 s at 1920 × 1088 in 255 s, no visible seam |
 | Chain | `chain_asset_id` | the new clip takes over the last second of the given one and continues its motion |
 | Automatic length | `auto_duration=True` | a door that opens slowly: 3 s |
+| Layout to render (since 0.5.36) | `guide_asset_id` | a grey blocking animation, 57 frames at 1280 × 704, in 101 s |
 
 - **Best quality (DFR)** (`quality="dfr"`): the default once Lightricks' detail LoRA is installed. Faces and fabric
   stay sharp over the whole clip (edge sharpness after 2 s 625 instead of 211), at about three times the time (5 s at
@@ -301,6 +302,13 @@ made of several clips.
   `motion_speed` alone does not. Fantasy Anime and Painterly change the look clearly, Paper Cut-Out at strength 1.5.
 - **48 fps** with `temporal_upscale`, **bitrate** CRF 12 (about 16 Mbit/s at 1080p; the softness comes from the
   model, not from the encoder).
+- **Layout to render** (since 0.5.36): a rough grey animation, a clay render or a blocky playblast from Blender, sets
+  the camera, the motion and where things sit; an image painted from its first frame (not the grey frame itself) sets the
+  look, light and materials. Upload the layout under "Layout video", pick the painted image as the start image. Lightricks'
+  Layout-To-Render IC-LoRA does the work; the first job downloads its two nodes from GitHub (LTX-2 Community License, not
+  shipped with NVAI-open). No sound, at most as long as the layout.
+
+  ![A grey blocking layout, the start image painted from its first frame, and the result where the red ball rolls like the grey sphere](images/layout-to-render.jpg)
 - **Person from a photo:** FLUX 3 keeps the face from a photo and makes four start images in a role you describe
   (95–98 s), which LTX-2.5 brings to life: [PHOTO_TO_VIDEO.md](PHOTO_TO_VIDEO.md). The voice is never the person's real
   one.
@@ -407,6 +415,7 @@ curl -X POST http://127.0.0.1:8100/api/generate/video -H "Content-Type: applicat
 | LTX-2.3 (`ltx23-nvfp4`) | the base most community LTX LoRAs are made for | 4 s at 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | text to video with smooth motion | 49 frames at 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | small video model, 5 s | 768 × 512 in about 300 s (distilled) | MIT, VAE under Tencent's license |
+| Wan 2.1 VACE 1.3B (`wan21-vace-1.3b`, since 0.5.36) | a character from one reference image in the scene of the prompt, 832 × 480, 16 fps; runs on 8 GB cards and through Vulkan | 2 s in 207 s with ComfyUI, in 276 s through Vulkan | Apache-2.0 |
 | PAN 2 (`pan2-int8`, since 0.5.35) | world model: what happens after an action, from text or a start image, 1248 × 704, 24 fps, up to 20 s, no sound | 1 s in 280 s (50 steps) | Apache-2.0 |
 | Kandinsky 6 Pro / Lite, distilled (since 0.5.25) | picture and sound in one pass, 5 s at 864 × 480, from text or a start image; Pro when LTX-2.5 misses the action | Pro about 17 min, Lite about 5 min for 5 s | MIT; sound non-commercial, video VAE not licensed in the EU |
 

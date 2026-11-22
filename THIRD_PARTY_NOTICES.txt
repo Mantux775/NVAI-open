@@ -24,6 +24,11 @@ Kandinsky T8 ComfyUI nodes (Comfyui-Kandinsky-T8, since 0.5.25) - MIT
   are downloaded on request; their audio decoder (MMAudio) is CC BY-NC 4.0 and the video VAE
   (HunyuanVideo) is under the Tencent Hunyuan Community License (see the model list).
 
+Lightricks ComfyUI-LTXVideo, IC-LoRA nodes (since 0.5.36) - LTX-2 Community License
+  NOT included in NVAI-open: for Layout-To-Render the first job downloads iclora.py and the four
+  files it needs, with their LICENSE, from https://github.com/Lightricks/ComfyUI-LTXVideo at a pinned
+  commit with checked SHA-256 into external\comfyui\custom_nodes\nvai_ltxv_iclora.
+
 MiniMax H3-Tiny ComfyUI nodes (since 0.5.35) - Apache-2.0
   https://github.com/fuyi25/MiniMax-H3-Tiny (comfyui/__init__.py), copied unchanged as
   external\comfyui\custom_nodes\nvai_h3tiny.py with a header naming the source. The H3-Tiny

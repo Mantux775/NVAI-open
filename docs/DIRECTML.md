@@ -46,7 +46,8 @@ Generate and the Studio pick the models that run on the card by themselves, with
 
 - **Images:** the SDXL models (Juggernaut XL v9, SDXL base, Pony V6 XL, Illustrious XL, NoobAI XL), preset to
   1024 × 1024. LoRAs, a start image, masks, extending and the second pass work; ControlNet and reference images do not.
-- **Video:** Wan 2.1 T2V 1.3B, preset to 832 × 480 and 2 s, marked as slow.
+- **Video:** Wan 2.1 T2V 1.3B, preset to 832 × 480 and 2 s, marked as slow. Since 0.5.36 also Wan 2.1 VACE 1.3B,
+  which puts the character of a reference image into the scene of the prompt.
 - **Sound:** Stable Audio 3 Small SFX (Vulkan) for sound effects, Stable Audio 3 Medium (Vulkan) for music.
 - **Narrator voice:** Qwen3-TTS, from a description or from a recording, with the same model as on NVIDIA.
 - **Not yet:** large models such as Qwen-Image, FLUX 3, Krea 2 or LTX-2.5 (too large for 8 GB or dependent on NVIDIA
@@ -59,13 +60,13 @@ Generate and the Studio pick the models that run on the card by themselves, with
 DirectML's plugin for PyTorch only handled tensors with up to five dimensions, and video models need more in a few
 places: Wan 2.1 rebuilds its frames in eight. stable-diffusion.cpp computes directly through Vulkan, with the same model
 files as ComfyUI (Wan 2.1 T2V 1.3B with its text encoder and VAE), and keeps the text encoder and the VAE in system RAM,
-the video model on the card.
+the video model on the card. Wan 2.1 VACE 1.3B (since 0.5.36) takes a reference image as well; it encodes its context in
+tiles, otherwise the VAE would need about 10 GB for it.
 
-![Somi drives a lawnmower through a field of frightened faces, black ink with blue ears](images/vulkan-somi.gif)
+![Somi grins with shark teeth in a moonlit graveyard, black ink with blue ears](images/vulkan-somi.gif)
 
-<sub>Somi, the rabbit from our short film, mows a field of frightened faces: Wan 2.1 1.3B through Vulkan, 3 s at
-832 × 480 in 5.5 minutes on the comparison card. Without a LoRA Wan draws him from the description alone, here black
-instead of white.</sub>
+<sub>Somi, the rabbit from our short film, in a moonlit graveyard: Wan 2.1 VACE 1.3B through Vulkan with Somi from his
+own dataset as the reference image, 3 s at 832 × 480 in 7 minutes on the comparison card.</sub>
 
 ## Measured on the same card
 

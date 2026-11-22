@@ -625,6 +625,8 @@ export interface ModelFeatures {
   auto_duration: boolean
   dfr: boolean
   temporal_upscale: boolean
+  /** Layout-To-Render (seit 0.5.36): das IC-LoRA ist geladen, ein Layout-Video ist moeglich */
+  layout?: boolean
   motion_speed: boolean
   multishot: boolean
   fps: number
@@ -932,6 +934,10 @@ export interface VideoParams {
   master?: boolean
   /** Studio-Projekt: das Ergebnis gleich in seinen Ordner statt in den Verlauf (seit 0.5.15) */
   project_id?: string | null
+  /** LTX-2.5: ein vorhandenes Video fortsetzen */
+  extend_asset_id?: string | null
+  /** LTX-2.5 Layout-To-Render (seit 0.5.36): grobes Layout-Video gibt Kamera und Bewegung vor */
+  guide_asset_id?: string | null
 }
 
 /** POST /api/image/restore (server: schemas.RestoreImageRequest). */

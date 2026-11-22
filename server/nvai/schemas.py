@@ -261,6 +261,12 @@ class GenerateVideoRequest(BaseModel):
     master: bool = Field(
         True, description="Zusaetzlich verlustfrei speichern (FFV1 in MKV, Ton als Float-PCM, meta.master am "
                           "Asset): Ausgangsmaterial fuer Schnitt und Studio-Export ohne Kompressionsverlust")
+    guide_asset_id: str | None = Field(
+        None, description="LTX-2.5 Layout-To-Render (seit 0.5.36): ein grobes Layout-Video (Ton- oder Kloetzchen-"
+                          "Animation, z. B. aus Blender) gibt Kamera, Bewegung und Lage der Dinge vor, das Startbild "
+                          "(aus dem ersten Bild des Layouts gemalt, nicht das graue Bild selbst) Look, Licht und "
+                          "Material. Ohne Ton; Laenge hoechstens die des Layout-Videos. Der erste Auftrag laedt zwei "
+                          "Knoten von Lightricks (LTX-2 Community License) von GitHub nach.")
     extend_asset_id: str | None = Field(
         None, description="LTX-2.5: ein vorhandenes Video fortsetzen (seit 0.5.10). Seit 0.5.17 als Latent-Kette: "
                           "Seine letzten 25 Bilder stehen fest am Anfang des neuen Stuecks, das mit einer "

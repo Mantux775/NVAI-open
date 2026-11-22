@@ -46,7 +46,8 @@ Generieren und Studio wählen von selbst die Modelle, die auf der Karte laufen, 
 
 - **Bilder:** die SDXL-Modelle (Juggernaut XL v9, SDXL base, Pony V6 XL, Illustrious XL, NoobAI XL), vorgewählt mit
   1024 × 1024. LoRAs, Startbild, Masken, Erweitern und der zweite Durchgang gehen; ControlNet und Referenzbilder nicht.
-- **Video:** Wan 2.1 T2V 1.3B, vorgewählt mit 832 × 480 und 2 s, als langsam markiert.
+- **Video:** Wan 2.1 T2V 1.3B, vorgewählt mit 832 × 480 und 2 s, als langsam markiert. Seit 0.5.36 auch Wan 2.1
+  VACE 1.3B, das die Figur eines Referenzbilds in die Szene des Prompts bringt.
 - **Ton:** Stable Audio 3 Small SFX (Vulkan) für Geräusche, Stable Audio 3 Medium (Vulkan) für Musik.
 - **Sprecherstimme:** Qwen3-TTS, aus einer Beschreibung oder aus einer Aufnahme, mit demselben Modell wie auf NVIDIA.
 - **Noch nicht:** große Modelle wie Qwen-Image, FLUX 3, Krea 2 oder LTX-2.5 (zu groß für 8 GB oder auf NVIDIA- bzw.
@@ -59,13 +60,13 @@ Generieren und Studio wählen von selbst die Modelle, die auf der Karte laufen, 
 Die DirectML-Erweiterung für PyTorch verarbeitete nur Tensoren mit höchstens fünf Dimensionen, und Videomodelle brauchen
 an einigen Stellen mehr: Wan 2.1 setzt seine Bilder in acht zusammen. stable-diffusion.cpp rechnet direkt über Vulkan,
 mit denselben Modelldateien wie ComfyUI (Wan 2.1 T2V 1.3B mit Text-Encoder und VAE), und hält Text-Encoder und VAE im
-Arbeitsspeicher, das Videomodell auf der Karte.
+Arbeitsspeicher, das Videomodell auf der Karte. Wan 2.1 VACE 1.3B (seit 0.5.36) nimmt zusätzlich ein
+Referenzbild; seinen Kontext kodiert es in Kacheln, sonst bräuchte das VAE dafür rund 10 GB.
 
-![Somi fährt mit dem Rasenmäher durch ein Feld verängstigter Gesichter, schwarze Tusche mit blauen Ohren](../images/vulkan-somi.gif)
+![Somi grinst mit Haifischzähnen auf einem Friedhof im Mondlicht, schwarze Tusche mit blauen Ohren](../images/vulkan-somi.gif)
 
-<sub>Somi, der Hase aus unserem Kurzfilm, mäht ein Feld verängstigter Gesichter: Wan 2.1 1.3B über Vulkan, 3 s in
-832 × 480 in 5,5 Minuten auf der Vergleichskarte. Ohne LoRA zeichnet Wan ihn nur nach der Beschreibung, hier schwarz
-statt weiß.</sub>
+<sub>Somi, der Hase aus unserem Kurzfilm, auf einem Friedhof im Mondlicht: Wan 2.1 VACE 1.3B über Vulkan mit Somi aus
+seinem eigenen Datensatz als Referenzbild, 3 s in 832 × 480 in 7 Minuten auf der Vergleichskarte.</sub>
 
 ## Gemessen auf derselben Karte
 

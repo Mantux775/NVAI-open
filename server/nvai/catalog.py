@@ -1572,6 +1572,11 @@ LTX25_SHARED_FILES: list[dict[str, Any]] = [
     {"repo": "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
      "file": "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
      "target": "loras", "optional": "dfr"},
+    # Layout-To-Render (seit 0.5.36): IC-LoRA, das ein grobes Layout-Video in eine fertige Einstellung verwandelt;
+    # die zwei Knoten dazu laedt nodepacks.py beim ersten Auftrag von GitHub (LTX-2 Community License)
+    {"repo": "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render",
+     "file": "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
+     "target": "loras", "optional": "layout"},
 ]
 
 # Breite und Hoehe auf Vielfachen von 64 (die erste Stufe rechnet auf halber Groesse).
@@ -1590,7 +1595,7 @@ LTX25_SIZES = [
 # setzt registry.features_for auf False, solange die optionalen Dateien fehlen.
 LTX25_FEATURES: dict[str, Any] = {
     "start_image": "optional", "end_image": True, "loop": True, "audio_input": True,
-    "auto_duration": True, "dfr": True, "temporal_upscale": True, "motion_speed": True,
+    "auto_duration": True, "dfr": True, "temporal_upscale": True, "motion_speed": True, "layout": True,
     "multishot": True, "fps": 24, "max_seconds": 20, "sizes": LTX25_SIZES,
     "prompt_hint": (
         "Ein Absatz im Präsens, 4 bis 8 Sätze: Einstellung, Ort und Licht, die Handlung von Anfang "
@@ -1748,6 +1753,41 @@ VIDEO_MODELS: list[dict[str, Any]] = [
             "Details flimmern, Text im Bild zerfällt",
             "Dreiteiliger Download (Modell + Encoder + VAE)",
         ],
+    },
+    {
+        # Wan 2.1 VACE 1.3B (seit 0.5.35): Referenz zu Video mit demselben Text-Encoder und VAE wie das T2V-1.3B; klein
+        # genug für 8-GB-Karten und über stable-diffusion.cpp auch auf älteren Radeons und Intel-Karten
+        "id": "wan21-vace-1.3b",
+        "name": "Wan 2.1 VACE 1.3B (Referenz zu Video)",
+        "kind": "video",
+        "family": "wan_vace",
+        "workflow": "wan_vace",
+        "files": [
+            {"repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+             "file": "split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+             "target": "diffusion_models"},
+            {"repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+             "file": "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+             "target": "text_encoders"},
+            {"repo": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+             "file": "split_files/vae/wan_2.1_vae.safetensors", "target": "vae"},
+        ],
+        "size_gb": 10.62,
+        "vram_gb": 8,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Eine Figur aus einem Referenzbild ins Video bringen, klein genug für 8 GB",
+        "description": (
+            "Die VACE-Fassung des kleinen Wan 2.1 nimmt ein Referenzbild und bringt dessen Figur in eine Szene, die der "
+            "Prompt beschreibt: 832 × 480, 16 fps, wenige Sekunden. Text-Encoder und VAE teilt sie mit Wan 2.1 T2V "
+            "1.3B, geladen werden nur weitere 4,3 GB. Über stable-diffusion.cpp läuft sie auch auf älteren Radeons und "
+            "Intel-Karten mit 8 GB."),
+        "pros": ["Figur aus einem Referenzbild, ohne Startbild", "Apache-2.0, uneingeschränkt kommerziell",
+                 "Läuft auf 8-GB-Karten, auch über Vulkan"],
+        "cons": ["480p und wenige Sekunden", "Details flimmern wie beim T2V-1.3B",
+                 "Ein Referenzbild; die Szene entsteht aus dem Text"],
+        "features": {"references": 1, "default_frames": 33, "frame_rule": "4n+1",
+                     "prompt_hint": "Das Referenzbild legt die Figur fest, am besten freigestellt auf schlichtem Grund. Im Prompt Stil, Szene, Handlung und Kamera beschreiben und die Figur mit ihren Merkmalen nennen; Bewegung ausdrücklich beschreiben."},
     },
     {
         "id": "wan22-ti2v-5b",
@@ -2923,6 +2963,7 @@ VULKAN_GOOD: dict[str, tuple[str, str]] = {
 VULKAN_RECOMMENDED: dict[str, dict[str, Any]] = {
     **{m: {"size": [1024, 1024]} for m in VULKAN_GOOD},
     "wan21-t2v-1.3b": {"size": [832, 480], "frames": 33},
+    "wan21-vace-1.3b": {"size": [832, 480], "frames": 33},
 }
 
 # Repos, deren Lizenz auf Hugging Face erst angenommen werden muss (Stand 26.10.2026, alle mit Sofortfreigabe).
@@ -2931,6 +2972,7 @@ GATED_REPOS = {
     "black-forest-labs/flux-3-image-klein-comfy",
     "Lightricks/LTX-2.5",
     "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+    "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render",
     "Lightricks/LTX-2.5-22b-LoRA-Cinemagraph",
     "Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control",
 }

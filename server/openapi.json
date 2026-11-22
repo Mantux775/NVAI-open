@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.35",
+  "version": "0.5.36",
   "x-api-version": 1
  },
  "paths": {
@@ -8405,6 +8405,18 @@
       "title": "Master",
       "description": "Zusaetzlich verlustfrei speichern (FFV1 in MKV, Ton als Float-PCM, meta.master am Asset): Ausgangsmaterial fuer Schnitt und Studio-Export ohne Kompressionsverlust",
       "default": true
+     },
+     "guide_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guide Asset Id",
+      "description": "LTX-2.5 Layout-To-Render (seit 0.5.36): ein grobes Layout-Video (Ton- oder Kloetzchen-Animation, z. B. aus Blender) gibt Kamera, Bewegung und Lage der Dinge vor, das Startbild (aus dem ersten Bild des Layouts gemalt, nicht das graue Bild selbst) Look, Licht und Material. Ohne Ton; Laenge hoechstens die des Layout-Videos. Der erste Auftrag laedt zwei Knoten von Lightricks (LTX-2 Community License) von GitHub nach."
      },
      "extend_asset_id": {
       "anyOf": [

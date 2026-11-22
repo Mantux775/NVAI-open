@@ -6,15 +6,16 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.35.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-Setup-0.5.35.exe) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.36.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.36/NVAI-open-Setup-0.5.36.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.14.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-0.5.14.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.35 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.35))
+November 2026: NVAI-open 0.5.36 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.36))
 
+- **Layout to render and VACE** (0.5.36): a rough grey animation from Blender sets the camera and motion of an LTX-2.5 shot, a painted first frame its look (Lightricks' IC-LoRA; the first job downloads its nodes from GitHub). Wan 2.1 VACE 1.3B puts a character from a reference image into a video, also through Vulkan on older Radeons and Intel cards. [Details](docs/MODELS.md)
 - **Choose the engine** (0.5.35): under Models → Your hardware, or with a click on the memory bar, ComfyUI or stable-diffusion.cpp through CUDA or Vulkan computes images and videos. Auto keeps the fastest way for the card, and only what runs on it is offered. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
 - **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice now compute on the Radeon RX 5000, Vega and Polaris and on Intel cards through Vulkan, with stable-diffusion.cpp and audio.cpp instead of DirectML. On a real RX 5700 XT an SDXL image with the second pass took 6 minutes through DirectML; through Vulkan we expect about 3.5. [Details](docs/DIRECTML.md)
 - **Generate, tidier** (0.5.35): optional parts such as reference images, LoRAs, end image, extending a video and given sound fold away, the model info sits under the tip, extending an image has its own button and needs no prompt, the width of the settings can be dragged, and the Generate button stays in view.
@@ -333,8 +334,9 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.35 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.35))
+November 2026: NVAI-open 0.5.36 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.36))
 
+- **Layout to Render und VACE** (0.5.36): Eine grobe graue Animation aus Blender gibt Kamera und Bewegung einer LTX-2.5-Einstellung vor, ein gemaltes erstes Bild den Look (IC-LoRA von Lightricks; der erste Auftrag lädt seine Knoten von GitHub). Wan 2.1 VACE 1.3B bringt eine Figur aus einem Referenzbild ins Video, auch über Vulkan auf älteren Radeons und Intel-Karten. [Einzelheiten](docs/de/MODELLE.md)
 - **Rechenweg wählen** (0.5.35): Unter Modelle → Deine Hardware oder mit einem Klick auf die Speicher-Anzeige rechnet ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan Bilder und Videos. Auto nimmt den schnellsten Weg für die Karte, und zur Wahl steht nur, was dort läuft. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
 - **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme rechnen jetzt auf der Radeon RX 5000, Vega und Polaris und auf Intel-Karten über Vulkan, mit stable-diffusion.cpp und audio.cpp statt DirectML. Auf einer echten RX 5700 XT brauchte ein SDXL-Bild mit zweitem Durchgang über DirectML 6 Minuten; über Vulkan erwarten wir rund 3,5. [Einzelheiten](docs/de/DIRECTML.md)
 - **Generieren aufgeräumt** (0.5.35): Optionales wie Referenzbilder, LoRAs, Endbild, Video verlängern und Ton vorgeben ist zugeklappt, die Modell-Infos stehen unter dem Tipp, Bild erweitern hat einen eigenen Knopf und braucht keinen Prompt, die Breite der Einstellungen lässt sich ziehen, und der Knopf „Generieren“ bleibt sichtbar.

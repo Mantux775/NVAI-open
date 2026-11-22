@@ -290,6 +290,7 @@ machen; längere Szenen entstehen aus mehreren Clips.
 | Verlängern | `extend_asset_id` | 5 s + 4 s in 1920 × 1088 in 255 s, keine sichtbare Naht |
 | Anschluss | `chain_asset_id` | der neue Clip übernimmt die letzte Sekunde des angegebenen und setzt dessen Bewegung fort |
 | Länge automatisch | `auto_duration=True` | eine Tür, die langsam aufgeht: 3 s |
+| Layout to Render (seit 0.5.36) | `guide_asset_id` | eine graue Blocking-Animation, 57 Bilder in 1280 × 704, in 101 s |
 
 - **Höchste Qualität (DFR)** (`quality="dfr"`): Vorgabe, sobald das Detail-LoRA von Lightricks installiert ist.
   Gesichter und Stoffe bleiben über den ganzen Clip scharf (Kantenschärfe nach 2 s 625 statt 211), dafür rund dreimal so
@@ -307,6 +308,13 @@ machen; längere Szenen entstehen aus mehreren Clips.
   `motion_speed` allein tut das nicht. Fantasy Anime und Painterly ändern den Look deutlich, Paper Cut-Out mit Stärke 1,5.
 - **48 fps** mit `temporal_upscale`, **Bitrate** CRF 12 (rund 16 Mbit/s bei 1080p; das Weiche kommt aus dem Modell,
   nicht vom Encoder).
+- **Layout to Render** (seit 0.5.36): Eine grobe graue Animation, ein Ton-Render oder ein Klötzchen-Playblast aus
+  Blender, gibt Kamera, Bewegung und Lage der Dinge vor; ein aus ihrem ersten Bild gemaltes Bild (nicht das graue Bild
+  selbst) gibt Look, Licht und Material. Das Layout unter „Layout-Video“ hochladen, das gemalte Bild als Startbild wählen.
+  Die Arbeit macht Lightricks' IC-LoRA Layout-To-Render; der erste Auftrag lädt seine zwei Knoten von GitHub (LTX-2
+  Community License, nicht im Lieferumfang von NVAI-open). Ohne Ton, höchstens so lang wie das Layout.
+
+  ![Ein graues Blocking-Layout, das aus seinem ersten Bild gemalte Startbild und das Ergebnis, in dem der rote Ball wie die graue Kugel rollt](../images/layout-to-render-de.jpg)
 - **Person aus einem Foto:** FLUX 3 übernimmt das Gesicht aus einem Foto und macht vier Startbilder in einer Rolle, die
   du beschreibst (95–98 s), und LTX-2.5 erweckt sie zum Leben: [FOTO_ZU_VIDEO.md](FOTO_ZU_VIDEO.md). Die Stimme ist nie die
   echte.
@@ -414,6 +422,7 @@ curl -X POST http://127.0.0.1:8100/api/generate/video -H "Content-Type: applicat
 | LTX-2.3 (`ltx23-nvfp4`) | die Basis, für die die meisten Community-LoRAs für LTX gemacht sind | 4 s in 1280 × 704 in 101 s | LTX-2 Community |
 | Mochi 1 preview | Text zu Video mit weicher Bewegung | 49 Bilder in 848 × 480 in 351 s | Apache-2.0 |
 | Kandinsky 5.0 Video Lite | kleines Videomodell, 5 s | 768 × 512 in rund 300 s (destilliert) | MIT, VAE unter Tencents Lizenz |
+| Wan 2.1 VACE 1.3B (`wan21-vace-1.3b`, seit 0.5.36) | eine Figur aus einem Referenzbild in der Szene des Prompts, 832 × 480, 16 fps; läuft auf 8-GB-Karten und über Vulkan | 2 s in 207 s mit ComfyUI, in 276 s über Vulkan | Apache-2.0 |
 | PAN 2 (`pan2-int8`, seit 0.5.35) | Weltmodell: was nach einer Handlung passiert, aus Text oder Startbild, 1248 × 704, 24 fps, bis 20 s, ohne Ton | 1 s in 280 s (50 Schritte) | Apache-2.0 |
 | Kandinsky 6 Pro / Lite, destilliert (seit 0.5.25) | Bild und Ton in einem Durchgang, 5 s in 864 × 480, aus Text oder Startbild; Pro, wenn LTX-2.5 die Handlung nicht trifft | Pro rund 17 min, Lite rund 5 min für 5 s | MIT; Ton nicht kommerziell, Video-VAE in der EU nicht lizenziert |
 
