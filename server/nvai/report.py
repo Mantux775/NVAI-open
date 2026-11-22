@@ -29,6 +29,7 @@ LOGS = [
     ("comfyui-text.log", 100),
     ("triposg.log", 80),
     ("trellis2.log", 80),
+    ("sdcpp.log", 80),  # Vulkan-Engine (stable-diffusion.cpp, seit 0.5.34): Aufrufe, Fehler, Zeiten
     ("install.log", 120),
 ]
 
@@ -197,6 +198,9 @@ def build(description: str) -> dict[str, Any]:
             compute = f"processor; DirectML failed: {mode['directml_failed'][-300:]}"
         else:
             compute = "processor"
+        from . import sdcpp
+        if sdcpp.active():
+            compute += "; video through the Vulkan engine (stable-diffusion.cpp)"
         out.append(f"Compute:      {compute} (reason: {mode.get('reason')})")
     active = registry.get_active_models()
     installed = sorted(e["id"] for e in registry.all_entries() if registry.is_installed(e))

@@ -691,6 +691,8 @@ export interface Health {
     /** DirectML war eingerichtet, startete aber in dieser Sitzung nicht */
     directml_failed?: string | null
   } | null
+  /** seit 0.5.34: Video über die Vulkan-Engine (stable-diffusion.cpp) auf Karten ohne CUDA/ROCm */
+  vulkan_engine?: boolean
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'

@@ -36,6 +36,12 @@ DirectML for Radeons without ROCm (since 0.5.33) - torch-directml, MIT, Microsof
   external\comfyui\.venv-directml (exact versions in locks\comfyui-directml.lock). It brings
   DirectML.dll; its LICENSE and NOTICE files are in its *.dist-info folder after installation.
 
+Vulkan engine (since 0.5.34) - stable-diffusion.cpp, MIT, Copyright (c) 2023 leejet; ggml, MIT,
+  Copyright (c) 2023-2026 The ggml authors; libwebp, BSD-3-Clause, Google
+  https://github.com/leejet/stable-diffusion.cpp - only on cards without CUDA or ROCm: its Windows
+  Vulkan release is downloaded during setup into external\sdcpp (pinned SHA-256 in
+  install-runtime.ps1), with the license texts stable-diffusion.cpp.txt and ggml.txt.
+
 Python (python-build-standalone) - Python Software Foundation License
   Downloaded by uv during setup into python\, license included there.
 

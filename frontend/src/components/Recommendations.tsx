@@ -773,13 +773,24 @@ const TIP_BY_MODE: Partial<Record<RecommendationMode, string>> = {
 }
 
 /** Kurzer Tipp, was am besten funktioniert, immer sichtbar unter der Modellwahl (beim Restaurieren immer der Fotos-Tipp). */
-export function ModelTip({ mode, model }: { mode: RecommendationMode; model?: { id: string; family: string } | null }) {
+export function ModelTip({ mode, model }: {
+  mode: RecommendationMode
+  model?: { id: string; family: string; gpu_note?: string } | null
+}) {
   const text = mode === 'restore' ? TIP_BY_MODE.restore
     : (model && (TIP_BY_ID[model.id] ?? TIP_BY_FAMILY[model.family])) || TIP_BY_MODE[mode]
-  if (!text) return null
+  // Hinweis zur eigenen Karte (registry.gpu_advice): z. B. ältere Radeons „läuft über Vulkan, langsam“ oder
+  // „Video nur mit Wan 2.1 1.3B“, Karten ohne FP4-Einheiten; steht so auch unter „Modelle“.
+  const note = model?.gpu_note
+  if (!text && !note) return null
   return (
-    <p className="model-tip">
-      <strong>{t('Tipp', 'Tip')}:</strong> {text}
-    </p>
+    <>
+      {text && (
+        <p className="model-tip">
+          <strong>{t('Tipp', 'Tip')}:</strong> {text}
+        </p>
+      )}
+      {note && <p className="warn-text small">{note}</p>}
+    </>
   )
 }

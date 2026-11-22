@@ -252,7 +252,9 @@ wurde mit FLUX 3 3,2-mal. Sobald du ein paar Aufträge gerechnet hast, nimmt der
 **Ältere Radeons** (RX 5000, Vega, Polaris) rechnen seit 0.5.33 über DirectML, empfohlen sind dort die SDXL-Modelle und
 Stable Audio Open. Zum Vergleich dieselben Aufträge auf der RTX 5060 Ti, einmal mit CUDA, einmal über DirectML mit dem
 Speicher einer 8-GB-Karte: SDXL 1024² mit 28 Schritten 16 s / 83 s, ein 6-s-Geräusch mit Stable Audio Open 8 s / 17 s,
-30 s Musik mit Stable Audio 3 6 s / 16 s. Einzelheiten: [DIRECTML.md](DIRECTML.md)
+30 s Musik mit Stable Audio 3 6 s / 16 s. Video rechnet dort eine zweite Engine, stable-diffusion.cpp mit Vulkan: Wan 2.1
+T2V 1.3B, 2 s in 832 × 480, brauchte mit CUDA 117 s und über Vulkan 194 s (DirectML brach ab). Einzelheiten:
+[DIRECTML.md](DIRECTML.md)
 
 ### NVFP4 oder INT8
 
@@ -323,8 +325,8 @@ as in the first frame.“ hielt); dünne Gegenstände wie Gewehre, die Personen 
 > **⚠️ Ohne eigene Lizenz von MiniMax in der EU, in Großbritannien, Südkorea und den USA nicht erlaubt.** Die
 > MiniMax H3 Community License schließt diese Gebiete aus (Abschnitt I.3 und I.5) und verbietet dort jede Nutzung der
 > Gewichte und ihrer Ergebnisse, auch privat (Abschnitt V.4). **Videos und Bilder daraus dürfen nicht veröffentlicht
-> werden**, auch keine Standbilder oder Screenshots; deshalb steht hier kein Bild. Lizenzanfrage:
-> <https://platform.minimax.io/h3-license>. Die App markiert das Modell und jedes Ergebnis rot („Nicht
+> werden**, auch keine Standbilder oder Screenshots; deshalb steht hier kein Bild. Lizenzanfrage, auch als Privatperson
+> (Pflichtfeld Firma z. B. „Private“): <https://platform.minimax.io/h3-license>. Die App markiert das Modell und jedes Ergebnis rot („Nicht
 > veröffentlichen“), bis unter „Modelle“ der Haken „Ich habe eine Genehmigung erworben“ gesetzt ist. Wer Dritten ein
 > Werkzeug zum Erzeugen mit MiniMax anbietet, muss laut Lizenz (Abschnitt V.5) verbotene Inhalte verhindern; NVAI-open
 > filtert nichts.

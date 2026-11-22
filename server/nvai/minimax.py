@@ -60,16 +60,14 @@ SIZE_LABELS = {
 
 # Lizenz I.3/I.5 und V.4 sichtbar machen; das Antragsformular gilt laut MiniMax' Modellkarte "only for USA/EU/UK/South
 # Korea". Die Warnung verschwindet erst, wenn der Nutzer unter "Modelle" eine eigene Genehmigung bestaetigt.
-WARNING = ("Ohne eigene Lizenz von MiniMax in der EU, in Großbritannien, Südkorea und den USA nicht erlaubt: Die "
-           "MiniMax H3 Community License (Abschnitt V.4) verbietet dort jede Nutzung, auch privat, und das gilt auch "
-           "für alles damit Erzeugte. Videos und Bilder daraus dürfen nicht veröffentlicht werden, auch keine "
-           "Standbilder oder Screenshots. Lizenzanfrage: platform.minimax.io/h3-license. Wer eine Genehmigung hat, "
-           "setzt unter „Modelle“ den Haken.")
-WARNING_EN = ("Not allowed in the EU, the UK, South Korea or the USA without a separate license from MiniMax: the "
-              "MiniMax H3 Community License (section V.4) prohibits any use there, private use included, and that "
-              "covers everything made with it. Videos and images from it must not be published, stills and "
-              "screenshots included. License request: platform.minimax.io/h3-license. With a permission of your own, "
-              "tick the box under “Models”.")
+WARNING = ("Ohne eigene Lizenz von MiniMax in der EU, in Großbritannien, Südkorea und den USA nicht erlaubt, auch "
+           "privat und für alles damit Erzeugte (Lizenz V.4): nichts davon veröffentlichen, auch keine Standbilder. "
+           "Lizenz anfragen, auch als Privatperson (Pflichtfeld Firma z. B. „Private“): "
+           "https://platform.minimax.io/h3-license. Mit Genehmigung unter „Modelle“ den Haken setzen.")
+WARNING_EN = ("Not allowed in the EU, the UK, South Korea or the USA without a license of your own from MiniMax, "
+              "private use and everything made with it included (license V.4): publish nothing from it, not even "
+              "stills. Request a license, also as a private person (required company field, e.g. “Private”): "
+              "https://platform.minimax.io/h3-license. With a permission, tick the box under “Models”.")
 # Rote Marken (schemas.ModelInfo): am Modell und an jedem Ergebnis im Verlauf und im Studio.
 LICENSE_BADGE = "In EU, UK, Südkorea und USA nicht erlaubt"
 LICENSE_BADGE_EN = "Not allowed in the EU, UK, South Korea or USA"

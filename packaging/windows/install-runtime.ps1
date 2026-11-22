@@ -149,6 +149,41 @@ function New-Venv($dir, $lock, [string[]]$extra = @()) {
     return $py
 }
 
+# Vulkan engine (since 0.5.34): stable-diffusion.cpp for video on cards without CUDA/ROCm, from the project's GitHub
+# release (MIT), checked against this SHA-256 and unpacked to external\sdcpp. The server uses it when it exists
+# (nvai\sdcpp.py); on NVIDIA and supported Radeons nothing is downloaded.
+$SdcppUrl = "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip"
+$SdcppSha256 = "3E66222C87CA27074E1FD8CE79706EEF17A8AAF39949906AA1BEE7E060F22ECC"
+
+function Install-VulkanEngine {
+    Step (L "Vulkan-Engine fuer Video (stable-diffusion.cpp, experimentell)" "Vulkan engine for video (stable-diffusion.cpp, experimental)")
+    $dest = Join-Path $App "external\sdcpp"
+    $zip = Join-Path $env:TEMP "nvai-sdcpp-$PID.zip"
+    try {
+        $old = $ProgressPreference
+        $ProgressPreference = "SilentlyContinue"   # the progress bar slows Invoke-WebRequest down a lot
+        try { Invoke-WebRequest -Uri $SdcppUrl -OutFile $zip -UseBasicParsing } finally { $ProgressPreference = $old }
+        $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+        if ($hash -ne $SdcppSha256) { throw "SHA-256 $hash" }
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        Expand-Archive -Path $zip -DestinationPath $dest -Force
+        $out = (& (Join-Path $dest "sd-cli.exe") --list-devices 2>&1 | Out-String)
+        if ($out -match "(?m)^Vulkan\d") {
+            Write-Host (L "Vulkan sieht die Karte; Videos mit Wan 2.1 1.3B rechnen darueber." `
+                          "Vulkan sees the card; videos with Wan 2.1 1.3B compute through it.")
+            return $true
+        }
+        throw "no Vulkan device"
+    } catch {
+        Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)); Video geht auf dieser Karte dann nicht." `
+                         "Vulkan engine not set up ($($_.Exception.Message)); video then does not work on this card.")
+        Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    } finally {
+        Remove-Item $zip -ErrorAction SilentlyContinue
+    }
+}
+
 # DirectML for Radeons without ROCm (since 0.5.33, GitHub issue #3): a second ComfyUI venv with PyTorch 2.4.1 and
 # torch-directml (the only PyTorch with a DirectML plugin) plus nvai_directml (PyTorch 2.4.1 compatibility, memory
 # figures from DXGI). Only the image ComfyUI uses it; the CPU venv stays for audio, text and as fallback. Checked with
@@ -273,7 +308,8 @@ try {
             Uv pip install --python $comfyPy --require-hashes --no-deps -r (Join-Path $comfyLocks "comfyui-cpu.lock")
             $torchChecked = $true
             $dml = Install-DirectML $comfyLocks $cpuOnly
-            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards); directml = $dml } | ConvertTo-Json -Compress
+            $vulkan = Install-VulkanEngine
+            $note = [ordered]@{ mode = "cpu"; reason = $cpuOnly; cards = @($cards); directml = $dml; vulkan = $vulkan } | ConvertTo-Json -Compress
             [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
             if ($dml.ok) {
                 Write-Host (L "NVAI-open rechnet Bilder, Videos und Ton ueber DirectML auf der Karte (experimentell); oben im Fenster steht ein Hinweis, was das bedeutet." `

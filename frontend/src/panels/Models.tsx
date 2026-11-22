@@ -1,3 +1,4 @@
+import { LinkText } from '../components/LinkText'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   api, KIND_LABEL, LORA_BASE_LABEL, type LoraUploadResult, type ModelInfo, type ModelKind, type ServerEvent,
@@ -528,7 +529,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
                 {m.features?.tested && <p className="hint small tested">{m.features.tested}</p>}
                 {/* Harte Lizenzgrenze: Warnung immer sichtbar, nicht erst unter „Details“, bis der Nutzer eine eigene
                     Genehmigung bestätigt */}
-                {licenseBlocked(m) && m.warning && <p className="warn-banner">{m.warning}</p>}
+                {licenseBlocked(m) && m.warning && <p className="warn-banner"><LinkText text={m.warning} /></p>}
                 {m.license_badge && (
                   <label
                     className="license-confirm small"
@@ -700,7 +701,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
 
             {open && (
               <div className="model-detail">
-                {m.warning && !m.license_badge && <p className="warn-banner">{m.warning}</p>}
+                {m.warning && !m.license_badge && <p className="warn-banner"><LinkText text={m.warning} /></p>}
                 <p className="description">{m.description}</p>
                 <div className="proscons">
                   <div>

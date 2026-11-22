@@ -35,7 +35,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Callable
 
-from . import comfy, config, db, i18n, jobs, registry, workflows
+from . import comfy, config, db, gpu, i18n, jobs, registry, workflows
 from .i18n import t
 from .loras import compatible as lora_fits
 from .schemas import GenerateAudioRequest, GenerateImageRequest, GenerateSpeechRequest, GenerateVideoRequest, Job
@@ -808,8 +808,18 @@ def _best_model(lane: str, kind: str) -> str | None:
     want = BEST_FAMILY.get((lane, kind))
     if not want:
         return None
-    cands = [m for m in registry.list_models(want[0]) if m.family == want[1] and m.installed and m.runnable]
+    models = registry.list_models(want[0])
+    if lane == "video" and gpu.cpu_mode():
+        # Karten ohne CUDA/ROCm: nur das für diese Karte vorgeschlagene Videomodell (ältere Radeons: Wan 2.1 1.3B
+        # über die Vulkan-Engine), auch wenn LTX-2.5 geladen ist; es liefe dort nicht.
+        best = next((m for m in models if m.installed and m.runnable and m.recommended), None)
+        return best.id if best else None
+    cands = [m for m in models if m.family == want[1] and m.installed and m.runnable]
     best = next((m for m in cands if m.recommended), None) or (cands[0] if cands else None)
+    if best is None:
+        # Familie nicht geladen (z. B. ältere Radeons: Video nur mit Wan 2.1 1.3B über Vulkan): das für diese Karte
+        # vorgeschlagene geladene Modell der Art
+        best = next((m for m in models if m.installed and m.runnable and m.recommended), None)
     return best.id if best else None
 
 

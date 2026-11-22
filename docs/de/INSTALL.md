@@ -46,7 +46,8 @@ Das Setup prüft Grafikkarte und Treiber und warnt, wenn es keine passende Karte
 - **Ältere Radeons** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 und älter) kennt AMDs PyTorch für Windows nicht.
   Seit 0.5.33 richtet das Setup für sie DirectML ein (experimentell): Bilder und Ton rechnen auf der Karte, oben steht
   „DirectML (experimentell)“, und unter „Modelle“ sind die SDXL-Modelle und Stable Audio Open als empfohlen markiert.
-  Einzelheiten und Messungen: [DIRECTML.md](DIRECTML.md). Geht DirectML nicht oder rechnet PyTorch auf der Karte gar
+  Seit 0.5.34 rechnet Video (Wan 2.1 T2V 1.3B) über eine zweite Engine, stable-diffusion.cpp mit Vulkan, die das
+  Setup für diese Karten lädt. Einzelheiten und Messungen: [DIRECTML.md](DIRECTML.md). Geht DirectML nicht oder rechnet PyTorch auf der Karte gar
   nicht, rechnet NVAI-open auf dem Prozessor und warnt oben im Fenster („Rechnet auf dem Prozessor“, der Tooltip
   erklärt es): Bilder dauern sehr lange, Sprecherstimme und 3D gehen nicht, Studio-Schnitt und Export laufen normal.
   Mit einer unterstützten Karte oder einem aktuellen Treiber richtet „NVAI-open reparieren“ die Grafikkarte wieder ein.

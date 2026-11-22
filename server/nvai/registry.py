@@ -659,6 +659,19 @@ def _no_rocm_advice(entry: dict[str, Any], mode: dict[str, Any]) -> dict[str, An
         if not dml:
             de, en = ("Rechnet hier auf dem Prozessor: sehr langsam.", "Computes on the processor here: very slow.")
         return {"recommended": False, "gpu_note": t(f"Langsam auf dieser Karte. {de}", f"Slow on this card. {en}")}
+    from . import sdcpp
+    vulkan = sdcpp.active()
+    if vulkan and entry.get("workflow") in sdcpp.WORKFLOWS:
+        # das Videomodell dieser Karten: vorgeschlagen (Generieren, Studio, Modelle), aber als langsam markiert
+        return {"recommended": True, "gpu_note": t(
+            "Langsam auf dieser Karte. Läuft über die Vulkan-Engine (stable-diffusion.cpp): 2 s Video in 832 × 480 "
+            "in rund 3 min auf der Vergleichskarte; auf älteren Radeons dauert es länger.",
+            "Slow on this card. Runs through the Vulkan engine (stable-diffusion.cpp): 2 s of video at 832 × 480 in "
+            "about 3 min on the comparison card; older Radeons take longer.")}
+    if kind == "video" and vulkan:
+        return {"recommended": False, "gpu_note": t(
+            "Video läuft auf dieser Karte nur mit Wan 2.1 T2V 1.3B über die Vulkan-Engine.",
+            "On this card, video runs only with Wan 2.1 T2V 1.3B through the Vulkan engine.")}
     if kind == "video" and dml:
         return {"recommended": False, "gpu_note": t(
             "Video läuft über DirectML noch nicht (Wan 2.1 1.3B bricht in DirectML ab).",

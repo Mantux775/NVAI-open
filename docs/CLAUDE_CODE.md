@@ -151,6 +151,7 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 | Upscale a video ×2, 5 s: 1024 × 576 → 2048 × 1152 / 1080p → 4K | RelayVSR ×2 INT8 | ~38 s / ~104 s |
 | Image 1024², 28 steps / 832 × 1216, CUDA vs DirectML (same card, 8 GB budget) | SDXL (Juggernaut XL v9) | ~16 s vs ~83 s / ~13 s vs ~81 s |
 | Sound effect 6 s / music 30 s, CUDA vs DirectML | Stable Audio Open / Stable Audio 3 | ~8 s vs ~17 s / ~6 s vs ~16 s |
+| Video 832 × 480, 33 frames, CUDA vs Vulkan (stable-diffusion.cpp, 8 GB budget) | Wan 2.1 T2V 1.3B | ~117 s vs ~194 s |
 | Studio export, 5 s 1080p from the lossless copy | NVENC 24 Mbit/s | ~4 s |
 
 ## Images
@@ -740,8 +741,9 @@ so ask before running both. `GET/PUT /api/gpus` assigns a card per kind.
 **AMD Radeon (experimental):** PyTorch with ROCm 10, falling back to 7.2.1. Do not use the `-nvfp4` ids there;
 `list_models` marks the right versions as `recommended` (on a Radeon RX 9000 FP8 and bf16, on others INT8). 3D needs
 NVIDIA. Older Radeons (RX 5000, Vega, Polaris) compute through DirectML since 0.5.33 (`health` → `cpu_mode.directml`):
-only the SDXL models and Stable Audio Open are recommended there, Stable Audio 3 is slow, video does not run yet;
-expect 2 to 6 times the CUDA times. Details: [DIRECTML.md](DIRECTML.md).
+only the SDXL models and Stable Audio Open are recommended there, Stable Audio 3 is slow; video runs since 0.5.34 with
+Wan 2.1 T2V 1.3B through a second engine, stable-diffusion.cpp with Vulkan (`health` → `vulkan_engine`), slowly.
+Expect 2 to 6 times the CUDA times. Details: [DIRECTML.md](DIRECTML.md).
 
 ## Licenses
 

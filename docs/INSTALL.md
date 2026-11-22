@@ -44,7 +44,8 @@ The setup checks the graphics card and the driver and warns if it finds no suita
 - **Older Radeons** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 and older) are not supported by AMD's PyTorch for
   Windows. Since 0.5.33 the setup gives them DirectML instead (experimental): images and sound compute on the card,
   the top bar says "DirectML (experimental)", and under "Models" the SDXL models and Stable Audio Open are marked as
-  recommended. Details and measurements: [DIRECTML.md](DIRECTML.md). If DirectML does not work, or PyTorch cannot
+  recommended. Since 0.5.34 video (Wan 2.1 T2V 1.3B) computes through a second engine, stable-diffusion.cpp with
+  Vulkan, which the setup downloads for these cards. Details and measurements: [DIRECTML.md](DIRECTML.md). If DirectML does not work, or PyTorch cannot
   compute on the card at all, NVAI-open computes on the processor and warns at the top of the window ("Running on the
   CPU", the tooltip explains it): images take very long, the narrator voice and 3D do not work, Studio editing and
   export work normally. With a supported card or a current driver, "Repair NVAI-open" sets up the graphics card again.

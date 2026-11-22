@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from . import (comfy, config, db, flux3_prompt, gpu, i18n, imagesize, kandinsky6, loras, mesh_workers, minimax,
-               prompt_targets, registry, workflows)
+               prompt_targets, registry, sdcpp, workflows)
 
 # Modellname in der Sprache der Anfrage (catalog_en.py), fuer Meldungen und Asset-Meta.
 _name = registry.display_name
@@ -466,6 +466,8 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     ausfuehren, Ergebnisse in die Library legen."""
     p = job.params
     entry = _resolve_model(p, kind)
+    if sdcpp.handles(entry, kind):
+        return await _run_sdcpp(job, ctx, entry, extra_meta)
     await _ensure_backend(ctx)
     if kind == "video" and p.get("master", True) and not await comfy.has_node(workflows.MASTER_NODE):
         # ComfyUI lief schon, bevor der Knoten dazukam: diesmal nur das MP4, ab dem naechsten Start mit Master
@@ -501,7 +503,40 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
     if not paths:
         raise RuntimeError(t("ComfyUI lieferte keine Ausgabedatei zurueck.",
                              "ComfyUI returned no output file."))
+    return _store_assets(job, entry, paths, seed, masters, extra_meta)
 
+
+async def _run_sdcpp(job: Job, ctx: JobContext, entry: dict[str, Any], extra_meta: dict[str, Any]) -> list[str]:
+    """Karten ohne CUDA/ROCm: der Auftrag laeuft ueber die Vulkan-Engine (sdcpp.py) statt ueber ComfyUI."""
+    p = job.params
+    if p.get("loras"):
+        raise RuntimeError(t("LoRAs gehen mit der Vulkan-Engine noch nicht.",
+                             "LoRAs do not work with the Vulkan engine yet."))
+    mode = gpu.cpu_mode() or {}
+    if mode.get("directml") and await comfy.is_running(timeout=1.0):
+        # torch-directml gibt seinen Speicherpool erst frei, wenn der Prozess endet; ohne das bliebe der Vulkan-Engine
+        # auf einer 8-GB-Karte kaum Grafikspeicher. Der naechste Bild- oder Ton-Auftrag startet ComfyUI wieder (~30 s).
+        proc = comfy.MAIN._proc
+        comfy.MAIN.stop()
+        if proc is not None:
+            try:
+                await asyncio.to_thread(proc.wait, 30)
+            except Exception:  # noqa: BLE001 - beendet sich spaeter, die Engine faengt mit weniger Speicher an
+                pass
+    ctx.progress(0.02, t("generiert (Vulkan)", "generating (Vulkan)"))
+
+    def on_progress(frac: float, stage: str) -> None:
+        ctx.progress(0.02 + frac * 0.96, stage)
+
+    paths, meta = await sdcpp.run_video(entry, p, on_progress)
+    ctx.progress(0.99, t("speichert", "saving"))
+    return _store_assets(job, entry, paths, meta["seed"], [], {**extra_meta, **meta})
+
+
+def _store_assets(job: Job, entry: dict[str, Any], paths: list[Path], seed: int, masters: list[Path],
+                  extra_meta: dict[str, Any]) -> list[str]:
+    """Ergebnisse als Assets eintragen (ComfyUI- und Vulkan-Weg)."""
+    p = job.params
     d = workflows.defaults_for(entry["workflow"])
     asset_ids = []
     for i, path in enumerate(paths):

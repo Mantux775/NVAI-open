@@ -28,6 +28,7 @@ import httpx
 from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio, wizard, hardware
 from .i18n import t
 from . import gpu as gpu_info
+from . import sdcpp
 from .schemas import (
     Asset,
     DeleteResult,
@@ -384,6 +385,8 @@ async def health() -> dict[str, Any]:
         # Keine Karte, auf der PyTorch rechnet: ComfyUI laeuft auf dem Prozessor (GitHub-Issue #3); die Oberflaeche warnt
         # oben in der Leiste. {"reason": "amd_unsupported" | "no_gpu_compute", "cards": [...]} oder None.
         "cpu_mode": await asyncio.to_thread(gpu_info.cpu_mode),
+        # Karten ohne CUDA/ROCm: Video ueber die Vulkan-Engine (stable-diffusion.cpp, seit 0.5.34)
+        "vulkan_engine": await asyncio.to_thread(sdcpp.active),
         "text_backend": {
             "separate": gpu_info.separate_text_backend(),
             "running": gpu_info.separate_text_backend() and await comfy.TEXT.is_running(timeout=0.5),

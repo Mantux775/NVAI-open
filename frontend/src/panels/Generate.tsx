@@ -1,3 +1,4 @@
+import { LinkText } from '../components/LinkText'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, LORA_BASE_LABEL, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type LoraUploadResult, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
 import { LoraUpload } from '../components/LoraFile'
@@ -1729,7 +1730,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         )}
         {/* Harte Lizenzgrenze: roter Kasten, bis der Nutzer unter „Modelle“ eine Genehmigung bestätigt; danach keiner */}
         {selected?.license_badge ? (
-          licenseBlocked(selected) && selected.warning && <p className="warn-banner">{selected.warning}</p>
+          licenseBlocked(selected) && selected.warning && <p className="warn-banner"><LinkText text={selected.warning} /></p>
         ) : (mode === 'image' || (mode === 'video' && selected?.commercial_ok === false)) && selected?.warning && (
           <p className="hint small warn">{selected.warning}</p>
         )}
