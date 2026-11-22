@@ -7,7 +7,7 @@ the Dock as profiles and switches between them by keyboard shortcut. Claude Code
 with Stable Audio 3 in NVAI-open, the title cards with a small script, the screen recordings automated on a Mac mini,
 the cut in the NVAI-open Studio. The last trim was done by hand in the Studio. Everything ran locally, the music on an
 RTX 5060 Ti, the recordings on a Mac mini M1. The video on YouTube:
-[youtube.com/watch?v=zeig-Rml4gA](https://www.youtube.com/watch?v=zeig-Rml4gA).
+[youtube.com/watch?v=t4dyqInjm1M](https://www.youtube.com/watch?v=t4dyqInjm1M).
 
 ![Six frames from the video: title card, a profile switch by shortcut, the main window, the editor, the menu bar menu zoomed in, end card](images/dock-organizer-video.jpg)
 

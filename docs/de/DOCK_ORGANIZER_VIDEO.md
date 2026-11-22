@@ -7,7 +7,7 @@ macOS-App, die das Dock als Profile speichert und per Tastenkürzel zwischen ihn
 einer Sitzung gemacht: die Musik mit Stable Audio 3 in NVAI-open, die Titeltafeln mit einem kleinen Skript, die
 Bildschirmaufnahmen automatisch auf einem Mac mini, den Schnitt im Studio von NVAI-open. Den letzten Feinschnitt gab
 es von Hand im Studio. Alles lief lokal, die Musik auf einer RTX 5060 Ti, die Aufnahmen auf einem Mac mini M1. Das
-Video auf YouTube: [youtube.com/watch?v=zeig-Rml4gA](https://www.youtube.com/watch?v=zeig-Rml4gA).
+Video auf YouTube: [youtube.com/watch?v=t4dyqInjm1M](https://www.youtube.com/watch?v=t4dyqInjm1M).
 
 ![Sechs Bilder aus dem Video: Titeltafel, ein Profilwechsel per Tastenkürzel, das Hauptfenster, der Editor, das Menü in der Menüleiste herangezoomt, Schlusstafel](../images/dock-organizer-video.jpg)
 

@@ -276,12 +276,12 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 ## Video
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=zeig-Rml4gA"><img src="https://i.ytimg.com/vi/zeig-Rml4gA/maxresdefault.jpg" width="480" alt="YouTube: Dock Organizer for macOS, a promo video made with NVAI-open"></a>
+  <a href="https://www.youtube.com/watch?v=t4dyqInjm1M"><img src="https://i.ytimg.com/vi/t4dyqInjm1M/maxresdefault.jpg" width="480" alt="YouTube: Dock Organizer for macOS, a promo video made with NVAI-open"></a>
 </p>
 
 <p align="center">A promo video for the Mac app Dock Organizer: music from Stable Audio 3, cut in the Studio, on YouTube (<a href="docs/DOCK_ORGANIZER_VIDEO.md">how it was made</a>).<br>
 Ein Werbevideo für die Mac-App Dock Organizer: Musik von Stable Audio 3, geschnitten im Studio, auf YouTube (<a href="docs/de/DOCK_ORGANIZER_VIDEO.md">wie es entstand</a>).<br>
-<a href="https://www.youtube.com/watch?v=zeig-Rml4gA">youtube.com/watch?v=zeig-Rml4gA</a></p>
+<a href="https://www.youtube.com/watch?v=t4dyqInjm1M">youtube.com/watch?v=t4dyqInjm1M</a></p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=cDhmiLMU6WQ"><img src="https://i.ytimg.com/vi/cDhmiLMU6WQ/maxresdefault.jpg" width="480" alt="YouTube: a short film with the rabbit Somi, made in the NVAI Studio"></a>
