@@ -46,7 +46,9 @@ $comfy = Join-Path $repo "external\comfyui"
 # 0.41.3: erste Fassung mit FLUX 3 Image Klein (CLIPLoader-Typ flux3, TextGenerate).
 # 0.42.1: Qwen3.5-Chat-Template im Upsampler repariert (PR 17121), Textgenerierung raeumt auf.
 # 0.45.0: comfy-kitchen 0.2.41, Qwen-3.x schneller, RelayVSR (Video hochskalieren); A/B 11.11.2026 ohne Befund.
-$comfyTag = "v0.45.0"
+# 0.46.0: Ablaufplan wechselt nicht mehr zwischen Modellen (CORE-716), Frontend 1.59.6, comfy-kitchen bleibt
+#         0.2.41; A/B 22.11.2026 siehe notizen/bilder.md.
+$comfyTag = "v0.46.0"
 if (Test-Path (Join-Path $comfy ".git")) {
     $have = (git -C $comfy describe --tags 2>$null)
     if ($have -eq $comfyTag) {

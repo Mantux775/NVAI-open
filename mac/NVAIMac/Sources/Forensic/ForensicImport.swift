@@ -143,7 +143,9 @@ enum ForensicImport {
                     return parts.isEmpty ? t("Original", "Original") : parts.joined(separator: " · ")
                 }
                 let base = doneSamples
-                let result = try decode(item.asset, src, fall: fall, firstIndex: tracks.count, isCancelled: isCancelled) { pos in
+                let result = try decode(item.asset, src, fall: fall, firstIndex: tracks.count,
+                                        onlyTrack: item.audio.count == 1 && item.video == nil,
+                                        isCancelled: isCancelled) { pos in
                     let f = (base + Double(pos)) / max(1, totalSamples)
                     progress(0.08 + 0.84 * min(1, f), t("liest den Ton", "reading the audio")
                              + (assets.count > 1 ? " (\(fi + 1)/\(assets.count))" : ""))
@@ -331,11 +333,27 @@ enum ForensicImport {
 
     /// Eine Tonspur lesen und je Kanal alles schreiben. Die Zeit folgt den Zeitstempeln der Datei: Beginnt der Ton
     /// später als das Bild oder hat er Lücken, kommt Stille hinein (das Bild bleibt synchron).
-    private static func decode(_ asset: AVURLAsset, _ src: SourceAudio, fall: URL, firstIndex: Int,
+    /// 32-Bit-Ganzzahl-Datei für den bitgenauen Leseweg, wenn AVAudioFile sie mit passenden Kanälen und Rate öffnet.
+    private static func int32File(_ url: URL, channels: Int, sr: Int) -> AVAudioFile? {
+        guard let f = try? AVAudioFile(forReading: url, commonFormat: .pcmFormatInt32, interleaved: true),
+              Int(f.processingFormat.channelCount) == channels, Int(f.fileFormat.sampleRate.rounded()) == sr,
+              f.length > 0 else { return nil }
+        return f
+    }
+
+    private static func decode(_ asset: AVURLAsset, _ src: SourceAudio, fall: URL, firstIndex: Int, onlyTrack: Bool,
                                isCancelled: () -> Bool, progress: (Int) -> Void) throws -> DecodeResult {
         let reader = try AVAssetReader(asset: asset)
+        // 32-Bit-Ganzzahl als Ganzzahl lesen: Als Float (24 Bit Mantisse) fehlten im Originalton die untersten 8 Bit.
+        // Spektrogramm, Vorschau und Wellenform bekommen dieselben Proben als Float. Der AVAssetReader rechnet auch bei
+        // angeforderter Ganzzahl über Float (gemessen 22.11.2026: bis ±27 daneben), AVAudioFile liest sie unverändert;
+        // das geht nur bei reinen Tondateien mit einer Spur (WAV, AIFF, CAF, FLAC, ALAC), Ton in Videos bleibt beim
+        // AVAssetReader.
+        let intPath = src.wavKind == .int32
+        let intFile = intPath && onlyTrack ? int32File(asset.url, channels: src.channels, sr: src.sr) : nil
+        let intBuf = intFile.flatMap { AVAudioPCMBuffer(pcmFormat: $0.processingFormat, frameCapacity: 1 << 16) }
         var settings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: true,
+            AVFormatIDKey: kAudioFormatLinearPCM, AVLinearPCMBitDepthKey: 32, AVLinearPCMIsFloatKey: !intPath,
             AVLinearPCMIsBigEndianKey: false, AVLinearPCMIsNonInterleaved: false,
             AVSampleRateKey: src.sr, AVNumberOfChannelsKey: src.channels,
         ]
@@ -353,30 +371,57 @@ enum ForensicImport {
         }
         var ok = false
         defer { if !ok { sinks.forEach { $0.discard() } } }
-        guard reader.startReading() else {
+        guard intBuf != nil || reader.startReading() else {
             throw ForensicError(t("Ton nicht lesbar: \(reader.error?.localizedDescription ?? "?")",
                                   "Audio not readable: \(reader.error?.localizedDescription ?? "?")"))
         }
         let chans = src.channels
         var identical = [Bool](repeating: true, count: chans)
         var interleaved: [Float] = []
+        var interleavedInt: [Int32] = []
         var planes = [[Float]](repeating: [], count: chans)
+        var planesInt = [[Int32]](repeating: [], count: intPath ? chans : 0)
         var position = 0
         var lastReport = Date.distantPast
-        while let sb = output.copyNextSampleBuffer() {
+        while true {
             if isCancelled() { reader.cancelReading(); throw CancellationError() }
-            let n = CMSampleBufferGetNumSamples(sb)
-            guard n > 0, let block = CMSampleBufferGetDataBuffer(sb) else { continue }
-            let total = n * chans
-            if interleaved.count < total { interleaved = [Float](repeating: 0, count: total) }
-            let status = interleaved.withUnsafeMutableBytes { raw in
-                CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: total * 4, destination: raw.baseAddress!)
+            let n: Int
+            var seconds = Double.nan
+            if let f = intFile, let fb = intBuf {
+                // reine Tondatei mit 32-Bit-Ganzzahl: ohne Zeitstempel, lückenlos
+                if f.framePosition >= f.length { break }
+                try f.read(into: fb, frameCount: fb.frameCapacity)
+                n = Int(fb.frameLength)
+                if n == 0 { break }
+                let total = n * chans
+                if interleavedInt.count < total { interleavedInt = [Int32](repeating: 0, count: total) }
+                interleavedInt.withUnsafeMutableBytes { raw in
+                    _ = memcpy(raw.baseAddress!, fb.int32ChannelData![0], total * 4)
+                }
+            } else {
+                guard let sb = output.copyNextSampleBuffer() else { break }
+                let m = CMSampleBufferGetNumSamples(sb)
+                guard m > 0, let block = CMSampleBufferGetDataBuffer(sb) else { continue }
+                n = m
+                let total = n * chans
+                let status: OSStatus
+                if intPath {
+                    if interleavedInt.count < total { interleavedInt = [Int32](repeating: 0, count: total) }
+                    status = interleavedInt.withUnsafeMutableBytes { raw in
+                        CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: total * 4, destination: raw.baseAddress!)
+                    }
+                } else {
+                    if interleaved.count < total { interleaved = [Float](repeating: 0, count: total) }
+                    status = interleaved.withUnsafeMutableBytes { raw in
+                        CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: total * 4, destination: raw.baseAddress!)
+                    }
+                }
+                guard status == 0 else { continue }   // 0 = kein Fehler
+                let pts = CMSampleBufferGetPresentationTimeStamp(sb)
+                seconds = pts.isValid ? CMTimeGetSeconds(pts) : .nan
             }
-            guard status == 0 else { continue }   // 0 = kein Fehler
             // Lage nach Zeitstempel: Lücke → Stille, Überlappung → doppelte Proben weg, ±2 Proben gelten als nahtlos
-            let pts = CMSampleBufferGetPresentationTimeStamp(sb)
             var skip = 0
-            let seconds = pts.isValid ? CMTimeGetSeconds(pts) : .nan
             // unplausible Zeitstempel (beschädigte Datei) nicht in Proben umrechnen: Int() stürzte bei Überlauf ab
             if seconds.isFinite, abs(seconds) < 1e9 {
                 let start = Int((seconds * Double(src.sr)).rounded())
@@ -392,23 +437,56 @@ enum ForensicImport {
             guard count > 0 else { continue }
             for c in 0..<chans {
                 if planes[c].count < count { planes[c] = [Float](repeating: 0, count: count) }
+                if intPath, planesInt[c].count < count { planesInt[c] = [Int32](repeating: 0, count: count) }
             }
-            interleaved.withUnsafeBufferPointer { src in
-                for c in 0..<chans {
-                    let from = src.baseAddress! + skip * chans + c
-                    planes[c].withUnsafeMutableBufferPointer { dst in
-                        for i in 0..<count { dst[i] = from[i * chans] }
+            if intPath {
+                interleavedInt.withUnsafeBufferPointer { src in
+                    for c in 0..<chans {
+                        let from = src.baseAddress! + skip * chans + c
+                        planesInt[c].withUnsafeMutableBufferPointer { di in
+                            planes[c].withUnsafeMutableBufferPointer { df in
+                                for i in 0..<count {
+                                    let v = from[i * chans]
+                                    di[i] = v
+                                    df[i] = Float(v) / 2_147_483_648
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                interleaved.withUnsafeBufferPointer { src in
+                    for c in 0..<chans {
+                        let from = src.baseAddress! + skip * chans + c
+                        planes[c].withUnsafeMutableBufferPointer { dst in
+                            for i in 0..<count { dst[i] = from[i * chans] }
+                        }
                     }
                 }
             }
+            // bitgleiche Kanäle an den gelesenen Proben vergleichen (bei 32-Bit-Ganzzahl nicht am Float, das die
+            // untersten 8 Bit nicht unterscheidet)
             for c in 1..<max(1, chans) where identical[c] {
-                identical[c] = planes[c].withUnsafeBytes { a in
-                    planes[0].withUnsafeBytes { b in memcmp(a.baseAddress!, b.baseAddress!, count * 4) == 0 }
+                if intPath {
+                    identical[c] = planesInt[c].withUnsafeBytes { a in
+                        planesInt[0].withUnsafeBytes { b in memcmp(a.baseAddress!, b.baseAddress!, count * 4) == 0 }
+                    }
+                } else {
+                    identical[c] = planes[c].withUnsafeBytes { a in
+                        planes[0].withUnsafeBytes { b in memcmp(a.baseAddress!, b.baseAddress!, count * 4) == 0 }
+                    }
                 }
             }
             for c in 0..<chans {
                 try planes[c].withUnsafeBufferPointer { p in
-                    try sinks[c].add(UnsafeBufferPointer(rebasing: p[0..<count]))
+                    if intPath {
+                        try planesInt[c].withUnsafeBufferPointer { q in
+                            try sinks[c].add(UnsafeBufferPointer(rebasing: p[0..<count]),
+                                             raw: UnsafeBufferPointer(rebasing: q[0..<count]))
+                        }
+                    } else {
+                        try sinks[c].add(UnsafeBufferPointer(rebasing: p[0..<count]))
+                    }
                 }
             }
             position += count
@@ -454,12 +532,12 @@ enum ForensicImport {
             let bits = Int(a.mBitsPerChannel)
             if float { return (bits == 64 ? "pcm_f64le" : "pcm_f32le", .float32) }
             return ("pcm_s\(bits)\(bits > 8 ? (a.mFormatFlags & kAudioFormatFlagIsBigEndian != 0 ? "be" : "le") : "")",
-                    bits <= 16 ? .int16 : bits <= 24 ? .int24 : .float32)
+                    bits <= 16 ? .int16 : bits <= 24 ? .int24 : .int32)
         case kAudioFormatFLAC, kAudioFormatAppleLossless:
             let codec = a.mFormatID == kAudioFormatFLAC ? "flac" : "alac"
             switch a.mFormatFlags {
             case 1: return (codec, .int16)                 // 16 Bit
-            case 4: return (codec, .float32)               // 32 Bit
+            case 4: return (codec, .int32)                 // 32 Bit (Ganzzahl)
             default: return (codec, .int24)                // 20 und 24 Bit (und unbekannt: 24 Bit fasst 16 verlustfrei)
             }
         default:
@@ -518,8 +596,10 @@ final class ChannelSink {
         }
     }
 
-    func add(_ x: UnsafeBufferPointer<Float>) throws {
-        try wav.add(x)
+    /// `raw`: dieselben Proben als 32-Bit-Ganzzahl (Quelle mit 32 Bit Ganzzahl); dann schreibt der Originalton sie
+    /// bitgenau, alles andere nimmt die Float-Fassung.
+    func add(_ x: UnsafeBufferPointer<Float>, raw: UnsafeBufferPointer<Int32>? = nil) throws {
+        if let raw { try wav.add(raw) } else { try wav.add(x) }
         try proxy.add(x)
         peaks.add(x)
         try spec.add(x)
@@ -573,10 +653,17 @@ final class ChannelSink {
 /// lange Bänder); die Prüf-App liest beides (`frontend/src/review/wav.ts`).
 final class WavWriter {
     enum Kind {
-        case int16, int24, float32
+        case int16, int24, int32, float32
 
         var bits: Int { self == .int16 ? 16 : self == .int24 ? 24 : 32 }
-        var subtype: String { self == .int16 ? "PCM_16" : self == .int24 ? "PCM_24" : "FLOAT" }
+        var subtype: String {
+            switch self {
+            case .int16: return "PCM_16"
+            case .int24: return "PCM_24"
+            case .int32: return "PCM_32"
+            case .float32: return "FLOAT"
+            }
+        }
     }
 
     let url: URL
@@ -651,7 +738,34 @@ final class WavWriter {
                 bytes[3 * i + 2] = UInt8(truncatingIfNeeded: v >> 16)
             }
             try bytes.withUnsafeBytes { try writer.write(UnsafeRawBufferPointer(rebasing: $0[0..<(n * 3)])) }
+        case .int32:   // nur Stille kommt hier als Float an; die Proben selbst über add(_: Int32)
+            if bytes.count < n * 4 { bytes = [UInt8](repeating: 0, count: n * 4) }
+            bytes.withUnsafeMutableBytes { raw in
+                let out = raw.bindMemory(to: Int32.self)
+                for i in 0..<n {
+                    let v = (Double(x[i]) * 2_147_483_648).rounded()
+                    out[i] = Int32(max(-2_147_483_648, min(2_147_483_647, v))).littleEndian
+                }
+            }
+            try bytes.withUnsafeBytes { try writer.write(UnsafeRawBufferPointer(rebasing: $0[0..<(n * 4)])) }
         }
+        frames += Int64(n)
+    }
+
+    /// 32-Bit-Ganzzahl bitgenau (Quelle mit 32 Bit Ganzzahl, siehe ForensicImport.decode).
+    func add(_ x: UnsafeBufferPointer<Int32>) throws {
+        guard kind == .int32 else {
+            let f = x.map { Float($0) / 2_147_483_648 }
+            try f.withUnsafeBufferPointer { try add($0) }
+            return
+        }
+        let n = x.count
+        if bytes.count < n * 4 { bytes = [UInt8](repeating: 0, count: n * 4) }
+        bytes.withUnsafeMutableBytes { raw in
+            let out = raw.bindMemory(to: Int32.self)
+            for i in 0..<n { out[i] = x[i].littleEndian }
+        }
+        try bytes.withUnsafeBytes { try writer.write(UnsafeRawBufferPointer(rebasing: $0[0..<(n * 4)])) }
         frames += Int64(n)
     }
 

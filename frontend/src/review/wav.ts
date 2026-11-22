@@ -91,6 +91,13 @@ export function toFloat(buf: ArrayBuffer, info: WavInfo): Float32Array {
     }
     return out
   }
+  if (info.bits === 32) {
+    // 32-Bit-Ganzzahl (Mac-Fälle aus solchen Quellen, seit Mac 0.5.13 bitgenau)
+    const s = new Int32Array(buf, 0, Math.floor(buf.byteLength / 4))
+    const out = new Float32Array(s.length)
+    for (let i = 0; i < s.length; i++) out[i] = s[i] / 2147483648
+    return out
+  }
   throw new Error(t(`WAV mit ${info.bits} Bit wird nicht unterstützt.`, `WAV with ${info.bits} bit is not supported.`))
 }
 

@@ -6,21 +6,22 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.31.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.31/NVAI-open-Setup-0.5.31.exe) |
+| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.32.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-Setup-0.5.32.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.12.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.31/NVAI-open-0.5.12.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.31 for Windows and 0.5.12 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31))
+November 2026: NVAI-open 0.5.32 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
 
+- **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Bug fixes** (0.5.31, Mac 0.5.12): five independent reviews went through everything since 0.5.20. Among the fixes: a speaking clip in the Studio no longer ends mid-word, sound effects get their own track instead of cutting holes into the music, a LoRA training interrupted by a restart can be resumed, notes in audio forensics no longer get lost, and the Mac's speech recognition no longer misses talk while the radio is on. [All fixes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
 - **Studio, scenes by hand:** a new scene starts like one from the assistant, with the best model of its lane, "Expand prompt", "Generate start image" and notes when a clip is too long for the card or a face would be invented. [Details](docs/STUDIO.md#step-by-step)
-- **Mac 0.5.11:** audio forensics on the Mac itself: new cases from recordings and VDR exports, speech recognition with Whisper large-v3 and translation with Qwen3.5. [Details](docs/AUDIO.md#review-package-and-review-app)
 
 <details><summary><kbd>&nbsp;Read more&nbsp;▾&nbsp;</kbd></summary>
 
+- **ComfyUI 0.46.0** (0.5.32): bit-identical results for Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 and Stable Audio 3 in a comparison with the same seeds; reading from the middle of MP3 and MPEG-TS files at the right time; the review app reads 32-bit integer tracks. [Release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Bug fixes** (0.5.31, Mac 0.5.12): fixes from five independent reviews of the Studio, LoRA training, audio forensics, the web interface and the Mac app; the full list is in the [release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31).
 - **Scenes by hand in the Studio** (0.5.30, Mac 0.5.11): a new scene gets the best downloaded model of its lane (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), music as long as the film and sound effects 4 s. "Expand prompt" turns a few words into a full English description, and "Generate start image" makes two start images from the prompt as the assistant does (with the characters of the scene, without black bars). Notes under the properties warn about a clip longer than 6 s at 1080p on a card with 16 GB, a character without a start image, a prompt not in English and a voice line under a video that makes its own sound. [Details](docs/STUDIO.md#step-by-step)
 - **Mac 0.5.11, audio forensics:** "New case …" makes a case from audio or video files, "Import VDR export …" from a voyage data recorder (VR-7000) with heading, speed, alarms, AIS and radar pictures; it shows the space the case needs first and stops before the drive runs full. "Recognise speech" runs Whisper large-v3 (Core ML) where Silero VAD hears speech, "Translate" uses Qwen3.5 (9B from 16 GB of memory, otherwise 4B). Everything runs on the Mac. [Details](docs/AUDIO.md#review-package-and-review-app)
@@ -326,14 +327,15 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.31 für Windows und 0.5.12 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31))
+November 2026: NVAI-open 0.5.32 für Windows ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
 
+- **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Fünf unabhängige Durchsichten haben alles seit 0.5.20 geprüft. Unter anderem endet ein sprechender Clip im Studio nicht mehr mitten im Wort, Geräusche bekommen eine eigene Spur, statt Löcher in die Musik zu schneiden, ein durch einen Neustart unterbrochenes LoRA-Training lässt sich fortsetzen, Notizen in der Ton-Forensik gehen nicht mehr verloren, und die Spracherkennung auf dem Mac überhört kein Gespräch mehr, während Funk läuft. [Alle Korrekturen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
 - **Studio, Szenen von Hand:** Eine neue Szene beginnt wie eine aus dem Assistenten, mit dem besten Modell ihrer Bahn, „Prompt ausbauen“, „Startbild erzeugen“ und Hinweisen, wenn ein Clip zu lang für die Karte ist oder ein Gesicht erfunden würde. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
-- **Mac 0.5.11:** Ton-Forensik auf dem Mac selbst: neue Fälle aus Aufnahmen und VDR-Exporten, Spracherkennung mit Whisper large-v3 und Übersetzung mit Qwen3.5. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
 
 <details><summary><kbd>&nbsp;Weiterlesen&nbsp;▾&nbsp;</kbd></summary>
 
+- **ComfyUI 0.46.0** (0.5.32): bitgleiche Ergebnisse für Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 und Stable Audio 3 im Vergleich mit gleichen Seeds; Lesen aus der Mitte von MP3- und MPEG-TS-Dateien an der richtigen Stelle; die Prüf-App liest Spuren mit 32-Bit-Ganzzahl. [Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Korrekturen aus fünf unabhängigen Durchsichten von Studio, LoRA-Training, Ton-Forensik, Weboberfläche und Mac-App; die ganze Liste steht in den [Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31).
 - **Szenen von Hand im Studio** (0.5.30, Mac 0.5.11): Eine neue Szene bekommt das beste geladene Modell ihrer Bahn (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), Musik so lang wie der Film, Geräusche 4 s. „Prompt ausbauen“ macht aus ein paar Worten eine volle englische Beschreibung, und „Startbild erzeugen“ macht wie der Assistent zwei Startbilder aus dem Prompt (mit den Figuren der Szene, ohne schwarze Balken). Hinweise unter den Eigenschaften warnen vor einem Clip über 6 s in 1080p auf einer Karte mit 16 GB, einer Figur ohne Startbild, einem Prompt nicht auf Englisch und einem Sprechersatz unter einem Video, das eigenen Ton macht. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 - **Mac 0.5.11, Ton-Forensik:** „Neuer Fall …“ legt einen Fall aus Audio- oder Videodateien an, „VDR-Export einlesen …“ aus einem Schiffsdatenschreiber (VR-7000) mit Kurs, Geschwindigkeit, Alarmen, AIS und Radarbildern; vorher zeigt es den Platzbedarf und bricht ab, bevor der Datenträger voll ist. „Sprache erkennen“ lässt Whisper large-v3 (Core ML) dort hören, wo Silero VAD Sprache findet, „Übersetzen“ nimmt Qwen3.5 (ab 16 GB Speicher 9B, sonst 4B). Alles läuft auf dem Mac. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)

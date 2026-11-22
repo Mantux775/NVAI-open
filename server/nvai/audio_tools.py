@@ -91,8 +91,12 @@ def decode_blocks(path: str, sr: int, channels: int, block_seconds: float = BLOC
     bad = good = 0
     with av.open(path) as c:
         a = next(s for s in c.streams if s.type == "audio")
+        # Zeit 0 = erste Probe der Spur. Die Zeitstempel beginnen bei der Startzeit des Tonstroms: bei MP3 der Vorlauf
+        # des Kodierers (1105 Proben, ffmpeg schneidet ihn per LAME-Tag ab), bei MPEG-TS z. B. 1,4 s. Ohne Abzug lag
+        # ein Ausschnitt ab 2 s um diese Zeit falsch (MP3: 23 ms bei 48 kHz), der Lauf von vorn nicht.
+        t0 = float(a.start_time * a.time_base) if a.start_time is not None and a.time_base else 0.0
         if start > 2:
-            c.seek(int(max(0.0, start - 1) / a.time_base), stream=a, any_frame=False, backward=True)
+            c.seek(int((max(0.0, start - 1) + t0) / a.time_base), stream=a, any_frame=False, backward=True)
         res = av.AudioResampler(format="flt", layout=layout, rate=sr)
         buf: list[np.ndarray] = []
         n = 0
@@ -124,7 +128,7 @@ def decode_blocks(path: str, sr: int, channels: int, block_seconds: float = BLOC
 
         for frame in frames():
             if frame is not None and not isinstance(frame, int) and not started:
-                pos = int(round(float(frame.pts * frame.time_base) * sr)) if frame.pts is not None else 0
+                pos = int(round((float(frame.pts * frame.time_base) - t0) * sr)) if frame.pts is not None else 0
                 started = True
             for arr in chunks(frame):
                 lo, hi = pos, pos + len(arr)
