@@ -6,14 +6,14 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.34.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.34/NVAI-open-Setup-0.5.34.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.13.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-0.5.13.dmg) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.35.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-Setup-0.5.35.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.14.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-0.5.14.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.34 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.34))
+November 2026: NVAI-open 0.5.35 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.35))
 
 - **Choose the engine** (0.5.35): under Models → Your hardware, or with a click on the memory bar, ComfyUI or stable-diffusion.cpp through CUDA or Vulkan computes images and videos. Auto keeps the fastest way for the card, and only what runs on it is offered. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
 - **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice now compute on the Radeon RX 5000, Vega and Polaris and on Intel cards through Vulkan, with stable-diffusion.cpp and audio.cpp instead of DirectML. On a real RX 5700 XT an SDXL image with the second pass took 6 minutes through DirectML; through Vulkan we expect about 3.5. [Details](docs/DIRECTML.md)
@@ -333,7 +333,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.34 für Windows ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.34))
+November 2026: NVAI-open 0.5.35 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.35))
 
 - **Rechenweg wählen** (0.5.35): Unter Modelle → Deine Hardware oder mit einem Klick auf die Speicher-Anzeige rechnet ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan Bilder und Videos. Auto nimmt den schnellsten Weg für die Karte, und zur Wahl steht nur, was dort läuft. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
 - **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme rechnen jetzt auf der Radeon RX 5000, Vega und Polaris und auf Intel-Karten über Vulkan, mit stable-diffusion.cpp und audio.cpp statt DirectML. Auf einer echten RX 5700 XT brauchte ein SDXL-Bild mit zweitem Durchgang über DirectML 6 Minuten; über Vulkan erwarten wir rund 3,5. [Einzelheiten](docs/de/DIRECTML.md)
