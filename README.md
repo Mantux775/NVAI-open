@@ -7,15 +7,15 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 | | |
 |---|---|
 | Windows 10/11, NVIDIA or AMD Radeon | [NVAI-open-Setup-0.5.32.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-Setup-0.5.32.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.12.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.31/NVAI-open-0.5.12.dmg) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.13.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.32/NVAI-open-0.5.13.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.32 for Windows ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
+November 2026: NVAI-open 0.5.32 for Windows and 0.5.13 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
 
-- **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
+- **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks, which the Mac (0.5.13) now stores bit-exact. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Bug fixes** (0.5.31, Mac 0.5.12): five independent reviews went through everything since 0.5.20. Among the fixes: a speaking clip in the Studio no longer ends mid-word, sound effects get their own track instead of cutting holes into the music, a LoRA training interrupted by a restart can be resumed, notes in audio forensics no longer get lost, and the Mac's speech recognition no longer misses talk while the radio is on. [All fixes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
 - **Studio, scenes by hand:** a new scene starts like one from the assistant, with the best model of its lane, "Expand prompt", "Generate start image" and notes when a clip is too long for the card or a face would be invented. [Details](docs/STUDIO.md#step-by-step)
 
@@ -327,9 +327,9 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.32 für Windows ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
+November 2026: NVAI-open 0.5.32 für Windows und 0.5.13 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32))
 
-- **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
+- **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl, die der Mac (0.5.13) jetzt bitgenau speichert. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 - **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Fünf unabhängige Durchsichten haben alles seit 0.5.20 geprüft. Unter anderem endet ein sprechender Clip im Studio nicht mehr mitten im Wort, Geräusche bekommen eine eigene Spur, statt Löcher in die Musik zu schneiden, ein durch einen Neustart unterbrochenes LoRA-Training lässt sich fortsetzen, Notizen in der Ton-Forensik gehen nicht mehr verloren, und die Spracherkennung auf dem Mac überhört kein Gespräch mehr, während Funk läuft. [Alle Korrekturen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.31)
 - **Studio, Szenen von Hand:** Eine neue Szene beginnt wie eine aus dem Assistenten, mit dem besten Modell ihrer Bahn, „Prompt ausbauen“, „Startbild erzeugen“ und Hinweisen, wenn ein Clip zu lang für die Karte ist oder ein Gesicht erfunden würde. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 
