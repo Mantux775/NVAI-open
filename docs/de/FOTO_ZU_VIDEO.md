@@ -48,11 +48,15 @@ rechten weiter. Mit einem echten Foto diesen Schritt überspringen und das Foto 
 
 Auf „Video“ wechseln und das Porträt in der Liste „Startbild“ anklicken oder das Foto dort mit „Bild
 hochladen“ hochladen. Am besten eignet sich ein Bild, das nur Kopf und Schultern zeigt, denn FLUX 3
-übernimmt daraus das Gesicht. Zeigt das Foto mehr, unter „Person aus einem Foto“ (nächster Schritt) auf „Zuschneiden“
-klicken: Eine gestrichelte Kontur zeigt, wie viel von Kopf und Schultern zu sehen sein sollte, der Ausschnitt wird als
-neues Foto gespeichert.
+übernimmt daraus das Gesicht.
 
 ![Startbild: das Porträt ist ausgewählt](../images/photo-video-1-de.jpg)
+
+Zeigt das Foto mehr, unter „Person aus einem Foto“ (nächster Schritt) auf „Zuschneiden“ klicken. Den Rahmen so
+verschieben, dass Kopf und Schultern in der gestrichelten Kontur sitzen und die Augen etwa auf der feinen Linie; der
+Ausschnitt wird als neues Foto gespeichert.
+
+![Zuschneiden: der Rahmen mit der gestrichelten Kontur über Kopf und Schultern](../images/photo-video-crop-de.jpg)
 
 ## Schritt 3: die Rolle beschreiben
 
@@ -61,7 +65,7 @@ Kleidung, Ort, Stil, auf Deutsch oder Englisch. Dann auf „Vier Startbilder erz
 vorgewählt; die Liste bietet auch andere installierte Modelle mit Referenzbildern an (Qwen-Image-Edit-2511 traf ein
 echtes Gesicht weniger gut).
 
-![Person aus einem Foto: die Rolle ist beschrieben](../images/photo-video-2-de.jpg)
+![Person aus einem Foto: das Foto mit „Zuschneiden“, das Modell und die Rolle](../images/photo-video-2-de.jpg)
 
 Kleidung und Umgebung ausdrücklich nennen. Was offen bleibt, erfindet FLUX 3.
 
