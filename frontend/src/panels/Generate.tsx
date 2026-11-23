@@ -26,6 +26,7 @@ import { LicenseBadge, OutputBadge, licenseBlocked } from '../components/License
 import { ModelTip, Recommendations } from '../components/Recommendations'
 import { ModelEstimate } from '../components/HardwareInfo'
 import { Lightbox } from '../components/Lightbox'
+import { PhotoCrop } from '../components/PhotoCrop'
 import { locale, t } from '../i18n'
 import { I2V_WORKFLOWS, OPTIONAL_START_WORKFLOWS } from '../videoStart'
 
@@ -77,6 +78,27 @@ const VIDEO_SIZES = [
   { label: t('480 × 832 (Hochformat)', '480 × 832 (portrait)'), w: 480, h: 832 },
   { label: t('1280 × 720 (720p, langsam)', '1280 × 720 (720p, slow)'), w: 1280, h: 720 },
 ]
+
+// Person aus einem Foto: Ergebnisse erkennt man am festen Anfang des Prompts, ihr Gesicht stammt aus
+// meta.reference_asset_ids[0]. Neue Versuche nehmen immer dieses Foto und nie ein Ergebnis (Nutzer 23.11.2026: „jedes
+// weitere Versuch macht er nur schlimmer“: das erste Ergebnis wurde Startbild und damit Vorlage, FLUX malte jedes Mal
+// die Runde davor nach, das Gesicht verlor mit jedem Durchgang, zuerst die Augen).
+const PERSON_HEAD = 'Cinematic film still. The person from the first image'
+const isPersonResult = (a?: Asset | null) => !!a && a.kind === 'image' && (a.prompt || '').startsWith(PERSON_HEAD)
+
+// Personen brauchen Pixel: In 864 × 480 ist der Kopf in einer Halbtotalen nur ~150 px hoch, die Augen verformen sich.
+// Startbilder für kleine Videoformate deshalb mit mindestens ~0,9 MP im selben Seitenverhältnis;
+// die Videomodelle ziehen das Startbild selbst auf ihr Format (ImageScale, lanczos).
+function personSize(w: number, h: number): { w: number; h: number } {
+  if (w * h >= 880_000) return { w, h }
+  for (const k of [1.25, 1.5, 1.75, 2, 2.5, 3]) {
+    const W = w * k
+    const H = h * k
+    if (Number.isInteger(W / 16) && Number.isInteger(H / 16) && W * H >= 880_000) return { w: W, h: H }
+  }
+  const k = Math.sqrt(921_600 / (w * h))
+  return { w: Math.round((w * k) / 16) * 16, h: Math.round((h * k) / 16) * 16 }
+}
 
 const PLACEHOLDER: Record<Mode, string> = {
   image: 'stylized fantasy sword, game asset, orthographic, clean background',
@@ -279,6 +301,18 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const [multishot, setMultishot] = useState(false)
   // Person aus einem Foto (seit 0.5.8): Rolle, in der FLUX 3 die Person aus dem Startbild zeigen soll
   const [roleText, setRoleText] = useState('')
+  // Modell dafür (seit 23.11.2026 wählbar, Nutzer: „auch andere modelle als flux3 auswählen können“), das Foto mit dem
+  // Gesicht (aufgelöst aus dem Startbild) und der Dialog zum Zuschneiden
+  const [personModelId, setPersonModelId] = useState(() => {
+    try {
+      return localStorage.getItem('nvai-person-model') || ''
+    } catch {
+      return ''
+    }
+  })
+  const [facePhoto, setFacePhoto] = useState<{ id: string; asset: Asset | null } | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [personJobId, setPersonJobId] = useState<string | null>(null)
   const [steps, setSteps] = useState('')
   const [seed, setSeed] = useState('')
   const [batch, setBatch] = useState(1)
@@ -325,6 +359,13 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   // 3D
   const [sourceImages, setSourceImages] = useState<Asset[]>([])
   const [sourceId, setSourceId] = useState<string>('')
+  // Vom Laden vorgewählt (neuestes Bild), nicht vom Nutzer: Unter Video gilt das nicht als Startbild (Nutzer 23.11.2026
+  // nach dem Neuladen: „Nichts vorauswählen“; sonst stand bei „Person aus einem Foto“ schon ein Foto)
+  const sourceAuto = useRef(false)
+  const pickSource = (id: string) => {
+    sourceAuto.current = false
+    setSourceId(id)
+  }
   const [faces, setFaces] = useState('')
   const [textureSize, setTextureSize] = useState(2048)
   const [bgMode, setBgMode] = useState<'birefnet' | 'flood' | 'alpha'>('birefnet')
@@ -384,7 +425,13 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       const all = merged.slice(0, limit)
       setSourceMore(merged.length > limit)
       setSourceImages(all)
-      setSourceId((cur) => cur || all[0]?.id || '')
+      // Unter Video ohne eigene Wahl kein Startbild (reines Text-zu-Video, „Person aus einem Foto“ leer); sonst das
+      // neueste Bild als automatische Wahl
+      setSourceId((cur) => {
+        if (cur || mode === 'video') return cur
+        sourceAuto.current = !!all[0]
+        return all[0]?.id || ''
+      })
     }).catch(() => { /* die Auswahl bleibt, wie sie war; der nächste Abgleich holt sie */ })
   }
   const loadMoreSources = () => {
@@ -400,6 +447,11 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   // Bilder werden überall gebraucht: als Mesh-Quelle, als Video-Startbild, als
   // Vorlage zum Überarbeiten und als ControlNet-Referenz.
   useEffect(() => {
+    // Ein in einem anderen Modus automatisch vorgewähltes Bild ist unter Video kein Startbild
+    if (mode === 'video' && sourceAuto.current) {
+      sourceAuto.current = false
+      setSourceId('')
+    }
     loadSources()
   }, [mode])
 
@@ -408,7 +460,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       setResults(assets)
       // 3D aus Text und Person aus einem Foto: das frische Bild gleich als Quell- bzw. Startbild auswählen.
       if ((mode === '3d' || mode === 'video') && assets[0]?.kind === 'image') {
-        setSourceId(assets[0].id)
+        pickSource(assets[0].id)
         loadSources()
       }
     })
@@ -772,8 +824,12 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       await api.deleteAsset(asset.id)
       setSourceImages((list) => {
         const rest = list.filter((a) => a.id !== asset.id)
-        // War das ausgewählte Bild dabei, rückt das nächste nach.
-        if (sourceId === asset.id) setSourceId(rest[0]?.id ?? '')
+        // War das ausgewählte Bild dabei, rückt das nächste nach (unter Video keins: dort nichts vorauswählen).
+        if (sourceId === asset.id) {
+          const next = mode === 'video' ? '' : rest[0]?.id ?? ''
+          sourceAuto.current = !!next
+          setSourceId(next)
+        }
         return rest
       })
     } catch (e) {
@@ -808,7 +864,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     try {
       const asset = await api.upload(file)
       setSourceImages((s) => [asset, ...s])
-      setSourceId(asset.id)
+      pickSource(asset.id)
       // Bei FLUX 3 und der Referenz-Fassung von MiniMax ist ein hochgeladenes Bild fast immer als Referenz gemeint.
       if ((mode === 'image' || mode === 'video') && maxRefs > 0) {
         setRefIds((r) => (r.length < maxRefs ? [...r, asset.id] : r))
@@ -924,16 +980,58 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     }
   }
 
-  // Person aus einem Foto: FLUX 3 nimmt das gewählte Startbild als Referenz, behält das Gesicht und
-  // erzeugt vier Startbilder im Videoformat. Gemessen 24.10.: ~95 s für vier Bilder bei 1280 × 704,
-  // 242–247 s bei 1920 × 1088 (mit zwei Referenzen);
-  // das Gesicht trifft FLUX besser, wenn das Foto nur Kopf und Schultern zeigt.
-  const refModel = models
+  // Person aus einem Foto: ein Bildmodell mit Referenzbildern nimmt das Foto als Vorlage, behält das Gesicht und
+  // erzeugt vier Startbilder im Videoformat (kleine Formate größer, siehe personSize). Gemessen 24.10. mit FLUX 3:
+  // ~95 s für vier Bilder bei 1280 × 704, 242–247 s bei 1920 × 1088 (mit zwei Referenzen); das Gesicht trifft es
+  // besser, wenn das Foto nur Kopf und Schultern zeigt (dafür „Zuschneiden“). Stilvorlagen (Krea 2) halten kein Gesicht.
+  const personModels = models
     .filter((m) => m.kind === 'image' && m.runnable && (m.features?.references ?? 0) > 0
       && m.features?.reference_kind !== 'style')
-    .sort((a, b) => Number(b.recommended) - Number(a.recommended) || Number(b.family === 'flux3') - Number(a.family === 'flux3'))[0]
+    .sort((a, b) => Number(b.recommended) - Number(a.recommended) || Number(b.family === 'flux3') - Number(a.family === 'flux3'))
+  const personModel = personModels.find((m) => m.id === personModelId) ?? personModels[0]
+  const choosePersonModel = (id: string) => {
+    setPersonModelId(id)
+    try {
+      localStorage.setItem('nvai-person-model', id)
+    } catch {
+      /* privates Fenster */
+    }
+  }
+  // Weitere geeignete Modelle, die noch fehlen: je Familie eines, als Hinweis auf „Modelle“
+  const morePersonModels = [...new Map(models
+    .filter((m) => m.kind === 'image' && !m.installed && (m.features?.references ?? 0) > 0
+      && m.features?.reference_kind !== 'style' && !personModels.some((p) => p.family === m.family))
+    .map((m) => [m.family, m.name.replace(/\s*\(.*\)\s*$/, '')])).values()]
+  const personWork = personSize(vidSize.w, vidSize.h)
+  const personMinutes = personModel?.family === 'flux3'
+    ? (personWork.w * personWork.h > 1_500_000 ? 4 : 1.5)
+    : personModel?.family === 'qwenimageedit' ? (personWork.w * personWork.h > 1_500_000 ? 5 : 2.5) : null
+  // Das Gesicht kommt aus dem Startbild; ist das ein Ergebnis dieser Funktion, aus dessen Vorlage (bis zum Foto
+  // zurück). asset=null: Das Foto ist inzwischen gelöscht.
+  useEffect(() => {
+    let alive = true
+    const find = async (id: string) => sourceImages.find((a) => a.id === id) ?? await api.asset(id).catch(() => null)
+    ;(async () => {
+      if (!sourceId) {
+        setFacePhoto(null)
+        return
+      }
+      let id = sourceId
+      let a = await find(id)
+      for (let i = 0; i < 20 && isPersonResult(a); i++) {
+        const ref = a?.meta?.reference_asset_ids?.[0]
+        if (typeof ref !== 'string' || !ref) break
+        id = ref
+        a = await find(ref)
+      }
+      if (alive) setFacePhoto({ id, asset: a ?? null })
+    })()
+    return () => {
+      alive = false
+    }
+  }, [sourceId, sourceImages])
   const personImages = async () => {
-    if (busy || !roleText.trim() || !sourceId || !refModel) return
+    if (busy || !roleText.trim() || !facePhoto?.asset || !personModel) return
     setError(null)
     setResults([])
     setProgress(0)
@@ -941,13 +1039,14 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     const role = roleText.trim().replace(/[ .]+$/, '')
     try {
       const job = await api.generateImage({
-        prompt: `Cinematic film still. The person from the first image, with exactly the same face, eyes, nose, `
+        prompt: `${PERSON_HEAD}, with exactly the same face, eyes, nose, `
           + `mouth and hair color: ${role}. Medium shot from the waist up, the face clearly visible, `
           + `free space above the head.`,
-        negative_prompt: '', model_id: refModel.id, steps: null, seed: seed ? Number(seed) : null,
-        width: vidSize.w, height: vidSize.h, batch_size: 4, reference_asset_ids: [sourceId],
+        negative_prompt: '', model_id: personModel.id, steps: null, seed: seed ? Number(seed) : null,
+        width: personWork.w, height: personWork.h, batch_size: 4, reference_asset_ids: [facePhoto.id],
         project_id: projectId || null,
       })
+      setPersonJobId(job.id)
       setJobId(job.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -1314,7 +1413,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               <button
                 className={sourceId ? 'source none' : 'source none selected'}
                 title={t('Ohne Startbild — reines Text-zu-Video', 'No start image — pure text-to-video')}
-                onClick={() => setSourceId('')}
+                onClick={() => pickSource('')}
               >
                 {t('ohne', 'none')}
               </button>
@@ -1325,7 +1424,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 className={sourceId === a.id ? 'source selected' : 'source'}
                 title={a.prompt || a.filename}
               >
-                <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => setSourceId(a.id)} />
+                <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => pickSource(a.id)} />
                 {/* Bilder in Projektordnern gehören dem Studio (Startbilder, Takes): hier nicht löschbar */}
                 {!a.folder && (
                   <button
@@ -1618,15 +1717,84 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 <details className="mesh-from-text" open={!!roleText.trim()}>
                   <summary>{t('Person aus einem Foto (optional)', 'Person from a photo (optional)')}</summary>
                   <p className="hint small">
-                    {t('Das Foto oben als Startbild wählen oder hochladen, am besten nur Kopf und Schultern. Hier '
-                      + 'beschreiben, wer die Person sein soll: Stil, Kleidung, Ort. FLUX 3 behält das Gesicht und '
-                      + 'erzeugt vier Startbilder im Videoformat. Die vier in voller Größe vergleichen (anklicken), '
-                      + 'das ähnlichste oben auswählen, dann unten Bewegung und Gesprochenes beschreiben.',
-                    'Pick or upload the photo as the start image above, head and shoulders work best. Describe here '
-                      + 'who the person should be: style, clothing, place. FLUX 3 keeps the face and creates four start '
-                      + 'images in the video format. Compare the four at full size (click them), pick the most similar '
-                      + 'one above, then describe the motion and what is said below.')}
+                    {t('Das Foto oben als Startbild wählen oder hochladen und hier auf Kopf und Schultern '
+                      + 'zuschneiden. Dann beschreiben, wer die Person sein soll: Stil, Kleidung, Ort. Das Modell behält '
+                      + 'das Gesicht und erzeugt vier Startbilder im Videoformat. Die vier in voller Größe vergleichen '
+                      + '(anklicken), das ähnlichste oben auswählen, dann unten Bewegung und Gesprochenes beschreiben.',
+                    'Pick or upload the photo as the start image above and crop it to head and shoulders here. Then '
+                      + 'describe who the person should be: style, clothing, place. The model keeps the face and creates '
+                      + 'four start images in the video format. Compare the four at full size (click them), pick the '
+                      + 'most similar one above, then describe the motion and what is said below.')}
                   </p>
+                  {facePhoto && (
+                    <div className="person-photo">
+                      {facePhoto.asset
+                        ? <img src={facePhoto.asset.thumb_url || facePhoto.asset.url} alt="" />
+                        : <span className="person-photo-gone">?</span>}
+                      <div>
+                        <span className="small">{t('Gesicht aus diesem Foto', 'Face from this photo')}</span>
+                        {!facePhoto.asset ? (
+                          <p className="hint small warn">
+                            {t('Das Foto zu diesem Startbild ist gelöscht. Oben dein Foto wählen oder neu hochladen.',
+                              'The photo behind this start image was deleted. Pick your photo above or upload it again.')}
+                          </p>
+                        ) : facePhoto.id !== sourceId && (
+                          <p className="muted small">
+                            {t('Neue Versuche nehmen immer dieses Foto, nicht das gewählte Startbild: sonst malt das '
+                              + 'Modell jedes Mal das letzte Ergebnis nach, und das Gesicht wird von Runde zu Runde schlechter.',
+                            'New attempts always use this photo, not the selected start image: otherwise the model repaints '
+                              + 'the last result each time and the face gets worse with every round.')}
+                          </p>
+                        )}
+                        <button className="btn small ghost" disabled={!facePhoto.asset || busy}
+                          onClick={() => setCropOpen(true)}
+                          title={t('Ausschnitt mit Kopf und Schultern wählen, mit Beispielkontur',
+                            'Choose a head-and-shoulders crop, with an example outline')}>
+                          {t('Zuschneiden', 'Crop')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {personModels.length > 0 && (
+                    <label className="person-model">
+                      <span className="small">{t('Modell', 'Model')}</span>
+                      <select value={personModel?.id ?? ''} onChange={(e) => choosePersonModel(e.target.value)}>
+                        {personModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}{m.commercial_ok ? '' : t(' – nicht kommerziell', ' – non-commercial')}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {personModel && (
+                    <p className="hint small">
+                      {personModel.family === 'flux3'
+                        ? t('FLUX 3 hielt im Test vom 24.10. das Gesicht. Lizenz: kommerziell nur unter 5 Mio. US-$ '
+                          + 'Umsatz, jedes Bild vor dem Veröffentlichen prüfen.',
+                        'FLUX 3 kept the face in the test of 24 Oct. License: commercial use only below US$5M '
+                          + 'revenue, review every image before publishing.')
+                        : personModel.family === 'qwenimageedit'
+                          ? t('Qwen-Image-Edit-2511 (Apache-2.0, ohne Umsatzgrenze): Im Test vom 23.11. waren die '
+                            + 'Augen sauber, das Gesicht aber weniger getroffen als mit FLUX 3, eher eine ähnliche Person. '
+                            + 'Gut für Figuren; für echte Personen FLUX 3.',
+                          'Qwen-Image-Edit-2511 (Apache-2.0, no revenue limit): in the test of 23 Nov the eyes were clean, '
+                            + 'but the face was matched less well than with FLUX 3, more of a similar-looking person. Good for '
+                            + 'characters; for real people use FLUX 3.')
+                          : t(`${personModel.name}: mit echten Gesichtern hier nicht gemessen.`,
+                            `${personModel.name}: not measured here with real faces.`)}
+                      {personWork.w !== vidSize.w && t(` Gerechnet in ${personWork.w} × ${personWork.h}, damit das `
+                        + 'Gesicht genug Pixel hat; das Video zieht es auf sein Format.',
+                      ` Rendered at ${personWork.w} × ${personWork.h} so the face gets enough pixels; the video scales `
+                        + 'it to its format.')}
+                    </p>
+                  )}
+                  {morePersonModels.length > 0 && (
+                    <p className="muted small">
+                      {t(`Weitere mit Referenzbildern unter „Modelle“: ${morePersonModels.join(', ')}.`,
+                        `More with reference images under “Models”: ${morePersonModels.join(', ')}.`)}
+                    </p>
+                  )}
                   <textarea
                     value={roleText}
                     onChange={(e) => setRoleText(e.target.value)}
@@ -1639,26 +1807,34 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                   <button
                     className="btn small full"
                     onClick={personImages}
-                    disabled={busy || !roleText.trim() || !sourceId || !refModel}
-                    title={!refModel
-                      ? t('Braucht FLUX 3 Image Klein', 'Needs FLUX 3 Image Klein')
-                      : !sourceId
+                    disabled={busy || !roleText.trim() || !facePhoto?.asset || !personModel}
+                    title={!personModel
+                      ? t('Braucht ein Bildmodell mit Referenzbildern', 'Needs an image model with reference images')
+                      : !facePhoto?.asset
                         ? t('Erst oben das Foto als Startbild wählen', 'First pick the photo as the start image above')
-                        : vidSize.w * vidSize.h > 1_500_000
-                          ? t(`Vier Bilder mit ${refModel.name} in 1080p, rund 4 Minuten`,
-                            `Four images with ${refModel.name} at 1080p, about 4 minutes`)
-                          : t(`Vier Bilder mit ${refModel.name}, rund 1,5 Minuten`,
-                            `Four images with ${refModel.name}, about 1.5 minutes`)}
+                        : t(`Vier Bilder mit ${personModel.name} in ${personWork.w} × ${personWork.h}`
+                          + (personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''),
+                        `Four images with ${personModel.name} at ${personWork.w} × ${personWork.h}`
+                          + (personMinutes ? `, about ${personMinutes} minutes` : ''))}
                   >
                     {t('Vier Startbilder erzeugen', 'Create four start images')}
                   </button>
-                  {!refModel && (
+                  {!personModel && (
                     <p className="hint small warn">
-                      {t('Braucht FLUX 3 Image Klein: unter „Modelle“ laden.',
-                        'Needs FLUX 3 Image Klein: download it under “Models”.')}
+                      {t('Braucht ein Bildmodell mit Referenzbildern, z. B. FLUX 3 Image Klein: unter „Modelle“ laden.',
+                        'Needs an image model with reference images, e.g. FLUX 3 Image Klein: download it under “Models”.')}
                     </p>
                   )}
                 </details>
+                {cropOpen && facePhoto?.asset && (
+                  <PhotoCrop url={facePhoto.asset.url}
+                    name={String(facePhoto.asset.meta?.original_name || facePhoto.asset.filename)}
+                    onDone={async (file) => {
+                      await upload(file)
+                      setCropOpen(false)
+                    }}
+                    onClose={() => setCropOpen(false)} />
+                )}
                 {/* Als Klappmenue wie die Referenzbilder, standardmaessig zu (Nutzer 22.11.2026: „End image optional beim
                     viedeo auch als klapp menü“); die Kopfzeile zeigt, ob schon etwas gewaehlt ist */}
                 {isLtx25 && vfeat?.end_image && sourceImages.length > 0 && (
@@ -2823,7 +2999,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             <div className="muted small progress-line">
               <span>
                 {stage} · {Math.round(progress * 100)} %
-                {mode === 'video' && t(' · Video dauert mehrere Minuten', ' · video takes several minutes')}
+                {mode === 'video' && (jobId === personJobId
+                  ? t(` · vier Startbilder${personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''}`,
+                    ` · four start images${personMinutes ? `, about ${personMinutes} minutes` : ''}`)
+                  : t(' · Video dauert mehrere Minuten', ' · video takes several minutes'))}
                 {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
                 {mode === 'restore' && t(' · meist 1–3 Minuten', ' · usually 1–3 minutes')}
               </span>

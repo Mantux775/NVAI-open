@@ -6,22 +6,22 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.36.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.36/NVAI-open-Setup-0.5.36.exe) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.37.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.37/NVAI-open-Setup-0.5.37.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.14.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-0.5.14.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.36 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.36))
+November 2026: NVAI-open 0.5.37 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.37))
 
+- **Vulkan on older Radeons and Intel cards, fixed** (0.5.37): the setups of 0.5.34 to 0.5.36 never set up the Vulkan engines, because Windows PowerShell 5.1 stopped at the first line of the device list, so everything computed on the processor. The setup now reads the list properly, and if it still cannot set them up, NVAI-open downloads them itself on the next start. [Details](docs/DIRECTML.md#setup)
+- **Person from a photo** (0.5.37): every new attempt takes the face from the photo, not from the selected result, so it no longer drifts from round to round. Small video formats get larger start images, the photo can be cropped to head and shoulders along an outline, and other installed models with reference images can be chosen besides FLUX 3 (Qwen-Image-Edit-2511, Apache-2.0, matched a real face less well). [Details](docs/PHOTO_TO_VIDEO.md)
 - **Layout to render and VACE** (0.5.36): a rough grey animation from Blender sets the camera and motion of an LTX-2.5 shot, a painted first frame its look (Lightricks' IC-LoRA; the first job downloads its nodes from GitHub). Wan 2.1 VACE 1.3B puts a character from a reference image into a video, also through Vulkan on older Radeons and Intel cards. [Details](docs/MODELS.md)
 - **Choose the engine** (0.5.35): under Models → Your hardware, or with a click on the memory bar, ComfyUI or stable-diffusion.cpp through CUDA or Vulkan computes images and videos. Auto keeps the fastest way for the card, and only what runs on it is offered. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
 - **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice now compute on the Radeon RX 5000, Vega and Polaris and on Intel cards through Vulkan, with stable-diffusion.cpp and audio.cpp instead of DirectML. On a real RX 5700 XT an SDXL image with the second pass took 6 minutes through DirectML; through Vulkan we expect about 3.5. [Details](docs/DIRECTML.md)
 - **Generate, tidier** (0.5.35): optional parts such as reference images, LoRAs, end image, extending a video and given sound fold away, the model info sits under the tip, extending an image has its own button and needs no prompt, the width of the settings can be dragged, and the Generate button stays in view.
 - **Video on older Radeons through Vulkan** (0.5.34, experimental): Wan 2.1 T2V 1.3B now computes on the Radeon RX 5000, Vega and Polaris through a second engine, stable-diffusion.cpp with Vulkan; on the same card it was 1.7 times slower than CUDA and six times faster than DirectML. [Details](docs/DIRECTML.md#video-through-vulkan)
-- **Older Radeons through DirectML** (0.5.33, experimental): the Radeon RX 5000, Vega and Polaris, which AMD's PyTorch for Windows does not support, now compute images and sound on the card instead of the processor; the SDXL models and Stable Audio Open are marked as recommended. [Details](docs/DIRECTML.md)
-- **ComfyUI 0.46.0** (0.5.32): NVAI-open runs on the latest ComfyUI; compared with the same seeds, the recommended image, video and audio models came out bit-identical. Audio read from the middle of an MP3 file is no longer 23 ms late, and the review app reads 32-bit integer tracks, which the Mac (0.5.13) now stores bit-exact. [Details](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 
 <details><summary><kbd>&nbsp;Read more&nbsp;▾&nbsp;</kbd></summary>
 
@@ -119,7 +119,7 @@ Step by step: [docs/STUDIO.md](docs/STUDIO.md)
 
 1. **Generate → Image:** create a portrait, or use a photo of someone who agreed to it.
 2. **Generate → Video:** pick the portrait as the start image.
-3. **Person from a photo:** describe the role. FLUX 3 keeps the face and makes four start images; pick the one that looks most alike.
+3. **Person from a photo:** crop the photo to head and shoulders ("Crop" shows an outline), describe the role. FLUX 3 keeps the face and makes four start images; pick the one that looks most alike. New attempts always start from the photo.
 4. **Prompt:** describe what moves, what the camera does and what the person says. LTX-2.5 makes the video with speech and sound.
 5. **Keep the face:** tick "Loop" (with a still camera) or give an end image. Without one, the face changed after a second in our test. The price: water and smoke stand still too.
 
@@ -334,15 +334,15 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.36 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.36))
+November 2026: NVAI-open 0.5.37 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.37))
 
+- **Vulkan auf älteren Radeons und Intel-Karten, behoben** (0.5.37): Die Setups von 0.5.34 bis 0.5.36 richteten die Vulkan-Engines nie ein, weil Windows PowerShell 5.1 an der ersten Zeile der Geräteliste abbrach; also rechnete alles auf dem Prozessor. Das Setup liest die Liste jetzt richtig, und klappt es trotzdem nicht, lädt NVAI-open sie beim nächsten Start selbst. [Einzelheiten](docs/de/DIRECTML.md#einrichten)
+- **Person aus einem Foto** (0.5.37): Jeder neue Versuch nimmt das Gesicht aus dem Foto, nicht aus dem gewählten Ergebnis, damit es nicht mehr von Runde zu Runde abdriftet. Kleine Videoformate bekommen größere Startbilder, das Foto lässt sich entlang einer Kontur auf Kopf und Schultern zuschneiden, und neben FLUX 3 sind andere installierte Modelle mit Referenzbildern wählbar (Qwen-Image-Edit-2511, Apache-2.0, traf ein echtes Gesicht weniger gut). [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md)
 - **Layout to Render und VACE** (0.5.36): Eine grobe graue Animation aus Blender gibt Kamera und Bewegung einer LTX-2.5-Einstellung vor, ein gemaltes erstes Bild den Look (IC-LoRA von Lightricks; der erste Auftrag lädt seine Knoten von GitHub). Wan 2.1 VACE 1.3B bringt eine Figur aus einem Referenzbild ins Video, auch über Vulkan auf älteren Radeons und Intel-Karten. [Einzelheiten](docs/de/MODELLE.md)
 - **Rechenweg wählen** (0.5.35): Unter Modelle → Deine Hardware oder mit einem Klick auf die Speicher-Anzeige rechnet ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan Bilder und Videos. Auto nimmt den schnellsten Weg für die Karte, und zur Wahl steht nur, was dort läuft. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
 - **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme rechnen jetzt auf der Radeon RX 5000, Vega und Polaris und auf Intel-Karten über Vulkan, mit stable-diffusion.cpp und audio.cpp statt DirectML. Auf einer echten RX 5700 XT brauchte ein SDXL-Bild mit zweitem Durchgang über DirectML 6 Minuten; über Vulkan erwarten wir rund 3,5. [Einzelheiten](docs/de/DIRECTML.md)
 - **Generieren aufgeräumt** (0.5.35): Optionales wie Referenzbilder, LoRAs, Endbild, Video verlängern und Ton vorgeben ist zugeklappt, die Modell-Infos stehen unter dem Tipp, Bild erweitern hat einen eigenen Knopf und braucht keinen Prompt, die Breite der Einstellungen lässt sich ziehen, und der Knopf „Generieren“ bleibt sichtbar.
 - **Video auf älteren Radeons über Vulkan** (0.5.34, experimentell): Wan 2.1 T2V 1.3B rechnet jetzt auf der Radeon RX 5000, Vega und Polaris über eine zweite Engine, stable-diffusion.cpp mit Vulkan; auf derselben Karte war es 1,7-mal langsamer als CUDA und sechsmal schneller als DirectML. [Einzelheiten](docs/de/DIRECTML.md#video-über-vulkan)
-- **Ältere Radeons über DirectML** (0.5.33, experimentell): Die Radeon RX 5000, Vega und Polaris, die AMDs PyTorch für Windows nicht kennt, rechnen Bilder und Ton jetzt auf der Karte statt auf dem Prozessor; die SDXL-Modelle und Stable Audio Open sind als empfohlen markiert. [Einzelheiten](docs/de/DIRECTML.md)
-- **ComfyUI 0.46.0** (0.5.32): NVAI-open läuft auf dem neuesten ComfyUI; mit gleichen Seeds verglichen, kamen die empfohlenen Bild-, Video- und Tonmodelle bitgleich heraus. Ton aus der Mitte einer MP3-Datei liegt nicht mehr 23 ms zu spät, und die Prüf-App liest Spuren mit 32-Bit-Ganzzahl, die der Mac (0.5.13) jetzt bitgenau speichert. [Einzelheiten](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
 
 <details><summary><kbd>&nbsp;Weiterlesen&nbsp;▾&nbsp;</kbd></summary>
 
@@ -426,7 +426,7 @@ Schritt für Schritt: [docs/de/STUDIO.md](docs/de/STUDIO.md)
 
 1. **Generieren → Bild:** ein Porträt erzeugen oder das Foto eines Menschen nehmen, der damit einverstanden ist.
 2. **Generieren → Video:** das Porträt als Startbild wählen.
-3. **Person aus einem Foto:** die Rolle beschreiben. FLUX 3 übernimmt das Gesicht und macht vier Startbilder; das ähnlichste auswählen.
+3. **Person aus einem Foto:** das Foto auf Kopf und Schultern zuschneiden („Zuschneiden“ zeigt eine Kontur), die Rolle beschreiben. FLUX 3 übernimmt das Gesicht und macht vier Startbilder; das ähnlichste auswählen. Neue Versuche gehen immer vom Foto aus.
 4. **Prompt:** beschreiben, was sich bewegt, was die Kamera macht und was die Person sagt. LTX-2.5 macht daraus das Video mit Sprache und Ton.
 5. **Gesicht halten:** „Schleife“ anhaken (mit ruhiger Kamera) oder ein Endbild mitgeben. Ohne veränderte sich das Gesicht im Test nach einer Sekunde. Der Preis: Wasser und Rauch stehen dann auch still.
 

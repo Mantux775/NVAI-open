@@ -57,7 +57,8 @@ def handles(entry: dict[str, Any], kind: str) -> bool:
 
 
 def _env() -> dict[str, str] | None:
-    device = gpu.vulkan_device()
+    from . import engine  # Vulkan-Nummer vom Setup, sonst aus der Reparatur des Servers (engine.json)
+    device = engine.vulkan_index()
     return {**os.environ, "GGML_VK_VISIBLE_DEVICES": str(device)} if device is not None else None
 
 

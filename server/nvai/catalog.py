@@ -60,6 +60,19 @@ HIDREAM_O1_SIZES = [
     {"label": "2496 × 1664 — 4 MP 3:2, Fahrzeuge", "w": 2496, "h": 1664},
     {"label": "2560 × 1440 — 4 MP 16:9, Panorama", "w": 2560, "h": 1440},
 ]
+# Qwen-Image-Edit-2511 (seit 23.11.2026 auch zum Generieren, Nutzer: „auch andere modelle als flux3 auswählen
+# können“ bei „Person aus einem Foto“): dieselben Dateien wie lora_train.EDIT_FILES (Bilder aus der Vorlage im
+# LoRA-Assistenten), Text-Encoder und VAE wie Qwen-Image-2512
+QWEN_EDIT_2511_FILES = [
+    {"repo": "Comfy-Org/Qwen-Image-Edit_ComfyUI",
+     "file": "split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors", "target": "diffusion_models"},
+    {"repo": "lightx2v/Qwen-Image-Edit-2511-Lightning",
+     "file": "Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors", "target": "loras"},
+    {"repo": "Comfy-Org/Qwen-Image_ComfyUI",
+     "file": "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors", "target": "text_encoders"},
+    {"repo": "Comfy-Org/Qwen-Image_ComfyUI",
+     "file": "split_files/vae/qwen_image_vae.safetensors", "target": "vae"},
+]
 BOOGU_FILES_SHARED = [
     {"repo": "Comfy-Org/Boogu-Image", "file": "text_encoders/qwen3vl_8b_fp8_scaled.safetensors",
      "target": "text_encoders"},
@@ -1320,6 +1333,42 @@ IMAGE_MODELS: list[dict[str, Any]] = [
         "pros": ["Apache-2.0-Alternative zum Bearbeiten mit FLUX 3", "Anweisung in Alltagssprache"],
         "cons": ["Braucht ein Referenzbild", "Version 0.1, laut Hersteller Forschungsprojekt",
                  "Zensur nicht dokumentiert"],
+    },
+    {
+        "id": "qwen-image-edit-2511",
+        "name": "Qwen-Image-Edit-2511 (FP8, Lightning, Bearbeiten)",
+        "kind": "image",
+        "family": "qwenimageedit",
+        "workflow": "qwen_image_edit",
+        "files": QWEN_EDIT_2511_FILES,
+        "size_gb": 31.0,
+        "model_gb": 20.5,
+        "vram_gb": 16,
+        "license": "Apache-2.0",
+        "commercial_ok": True,
+        "best_for": "Dieselbe Person oder Figur in neuer Haltung und Szene — Apache-2.0",
+        "description": (
+            "Das Bearbeitungsmodell von Qwen (Alibaba), Fassung 2511, mit der Lightning-LoRA in 8 Schritten "
+            "(cfg 1). Bis zu drei Referenzbilder gehen über das Bildverständnis von Qwen2.5-VL und als Referenz "
+            "ein; die Ausgabegröße ist frei. Darauf trainiert, dieselbe Person oder Figur in neue Haltungen und "
+            "Szenen zu setzen: Der LoRA-Assistent baut damit seine Datensätze (eine Figur in 24 Haltungen).\n\n"
+            "Dieselben Dateien wie „Bilder aus der Vorlage“ im LoRA-Assistenten: Löschen entfernt sie auch dort, "
+            "der Assistent lädt sie bei Bedarf neu. Text-Encoder und VAE teilt es mit Qwen-Image-2512. Das "
+            "fp8-Modell (20,5 GB) passt nicht ganz in 16 GB, ComfyUI lagert Teile aus. Gemessen auf einer "
+            "RTX 5060 Ti: rund 44 s je Bild im LoRA-Assistenten, vier Bilder in 1296 × 720 in 144 s samt Laden.\n\n"
+            "Person aus einem Foto (Test 23.11.2026, dasselbe Foto und derselbe Text wie mit FLUX 3): Augen in "
+            "allen vier Bildern sauber, das Gesicht aber weniger getroffen als mit FLUX 3, eher eine ähnliche "
+            "Person. Für echte Personen deshalb FLUX 3. Apache-2.0."
+        ),
+        "features": {"references": 3, "img2img": False, "mask": False, "hires": False, "negative_prompt": False,
+                     "prompt_hint": ("Ganze englische Sätze: was gleich bleibt (Gesicht, Haare, Kleidung) und was "
+                                     "neu ist (Haltung, Ort, Licht). Referenzbilder heißen im Prompt „the first "
+                                     "image“, „the second image“. Der Negativprompt wirkt hier nicht (cfg 1).")},
+        "pros": ["Apache-2.0, ohne Umsatzgrenze",
+                 "Hält dieselbe Figur über viele Haltungen (LoRA-Assistent: 24 Haltungen aus einer Vorlage)",
+                 "Bis zu drei Referenzbilder, Ausgabegröße frei"],
+        "cons": ["20,5-GB-Modell auf 16 GB: Teile werden ausgelagert, langsamer als FLUX 3",
+                 "Negativprompt wirkungslos (cfg 1)", "Zensur nicht dokumentiert"],
     },
     {
         "id": "sdxl-vae-fp16",

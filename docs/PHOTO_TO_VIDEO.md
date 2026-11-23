@@ -48,14 +48,16 @@ with the right one. With a real photo, skip this step and upload the photo in st
 
 Switch to "Video" and click the portrait in the "Start image" list, or upload the photo there with
 "Upload image". A picture that shows only head and shoulders works best, because FLUX 3 takes the face
-from it.
+from it. If the photo shows more, click "Crop" under "Person from a photo" (next step): a dashed outline shows how much
+of the head and shoulders should be visible, and the crop is saved as a new photo.
 
 ![Start image: the portrait is selected](images/photo-video-1.jpg)
 
 ## Step 3: describe the role
 
 Below the start images, open "Person from a photo" and write who the person should be: clothing,
-place, style, in English or German. Then click "Create four start images".
+place, style, in English or German. Then click "Create four start images". FLUX 3 is preselected as the model; the
+list also offers other installed models with reference images (Qwen-Image-Edit-2511 matched a real face less well).
 
 ![Person from a photo: the role is described](images/photo-video-2.jpg)
 
@@ -65,7 +67,9 @@ Name clothing and surroundings explicitly. Whatever you leave open, FLUX 3 inven
 
 About a minute and a half later four start images in the video format are at the front of the list,
 and the first one is selected. Click the one that looks most like the person, and look at them at
-full resolution: FLUX 3 tends to make faces a little slimmer and younger.
+full resolution: FLUX 3 tends to make faces a little slimmer and younger. For another role, change the text and
+click again: new attempts always start from the photo, not from the selected result, so the face does not drift from
+round to round. Small video formats are rendered larger for the start images, so the face gets enough pixels.
 
 ![Four start images, the chosen one is marked](images/photo-video-3.jpg)
 

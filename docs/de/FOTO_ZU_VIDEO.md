@@ -48,14 +48,18 @@ rechten weiter. Mit einem echten Foto diesen Schritt überspringen und das Foto 
 
 Auf „Video“ wechseln und das Porträt in der Liste „Startbild“ anklicken oder das Foto dort mit „Bild
 hochladen“ hochladen. Am besten eignet sich ein Bild, das nur Kopf und Schultern zeigt, denn FLUX 3
-übernimmt daraus das Gesicht.
+übernimmt daraus das Gesicht. Zeigt das Foto mehr, unter „Person aus einem Foto“ (nächster Schritt) auf „Zuschneiden“
+klicken: Eine gestrichelte Kontur zeigt, wie viel von Kopf und Schultern zu sehen sein sollte, der Ausschnitt wird als
+neues Foto gespeichert.
 
 ![Startbild: das Porträt ist ausgewählt](../images/photo-video-1-de.jpg)
 
 ## Schritt 3: die Rolle beschreiben
 
 Unter den Startbildern „Person aus einem Foto“ aufklappen und beschreiben, wer die Person sein soll:
-Kleidung, Ort, Stil, auf Deutsch oder Englisch. Dann auf „Vier Startbilder erzeugen“ klicken.
+Kleidung, Ort, Stil, auf Deutsch oder Englisch. Dann auf „Vier Startbilder erzeugen“ klicken. Als Modell ist FLUX 3
+vorgewählt; die Liste bietet auch andere installierte Modelle mit Referenzbildern an (Qwen-Image-Edit-2511 traf ein
+echtes Gesicht weniger gut).
 
 ![Person aus einem Foto: die Rolle ist beschrieben](../images/photo-video-2-de.jpg)
 
@@ -65,7 +69,9 @@ Kleidung und Umgebung ausdrücklich nennen. Was offen bleibt, erfindet FLUX 3.
 
 Nach gut anderthalb Minuten stehen vier Startbilder im Videoformat vorn in der Liste, das erste ist
 ausgewählt. Das anklicken, das der Person am meisten ähnelt, und dabei in voller Auflösung ansehen:
-FLUX 3 macht Gesichter gern etwas schmaler und jünger.
+FLUX 3 macht Gesichter gern etwas schmaler und jünger. Für eine andere Rolle den Text ändern und noch einmal
+klicken: Neue Versuche gehen immer vom Foto aus, nicht vom gewählten Ergebnis, damit das Gesicht nicht von Runde zu
+Runde abdriftet. Kleine Videoformate rechnet die App für die Startbilder größer, damit das Gesicht genug Pixel hat.
 
 ![Vier Startbilder, das gewählte ist markiert](../images/photo-video-3-de.jpg)
 

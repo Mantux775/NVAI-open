@@ -130,6 +130,9 @@ export function EngineChoice({ onChanged }: { onChanged?: () => void }) {
   const backend: BackendChoice = st.backends.some((b) => b.id === st.sdcpp_backend) ? st.sdcpp_backend : 'auto'
   const showBackend = st.backends.length > 0 && (engine === 'sdcpp' || st.effective.engine === 'sdcpp')
   const inst = st.install
+  // Ohne CUDA/ROCm lädt der Server auch audio.cpp nach, wenn das Setup die Vulkan-Engines nicht einrichten konnte
+  const instName = !inst ? '' : inst.backend === 'audio' ? 'audio.cpp (Vulkan)'
+    : `stable-diffusion.cpp (${inst.backend === 'cuda' ? 'CUDA' : 'Vulkan'})`
 
   return (
     <div className="engine-choice">
@@ -155,8 +158,8 @@ export function EngineChoice({ onChanged }: { onChanged?: () => void }) {
       )}
       {inst && !inst.error && (
         <div className="engine-install">
-          <span>{t(`Lädt stable-diffusion.cpp (${inst.backend === 'cuda' ? 'CUDA' : 'Vulkan'}): ${Math.round(inst.done / 1e6)} von ${Math.round(inst.total / 1e6)} MB`,
-            `Downloading stable-diffusion.cpp (${inst.backend === 'cuda' ? 'CUDA' : 'Vulkan'}): ${Math.round(inst.done / 1e6)} of ${Math.round(inst.total / 1e6)} MB`)}</span>
+          <span>{t(`Lädt ${instName}: ${Math.round(inst.done / 1e6)} von ${Math.round(inst.total / 1e6)} MB`,
+            `Downloading ${instName}: ${Math.round(inst.done / 1e6)} of ${Math.round(inst.total / 1e6)} MB`)}</span>
           <span className="vram-bar"><span className="vram-fill" style={{ width: `${Math.min(100, (inst.done / Math.max(1, inst.total)) * 100)}%` }} /></span>
         </div>
       )}

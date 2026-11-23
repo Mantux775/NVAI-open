@@ -16,6 +16,11 @@ Angeboten wird nur, was auf der Karte laeuft (compatible): CUDA nur mit NVIDIA, 
 Die Programme kommen aus dem festen Release von stable-diffusion.cpp (MIT) mit den SHA-256 von GitHub: Vulkan (30 MB)
 nach external/sdcpp wie im Setup, CUDA 12 (412 MB plus CUDA-Laufzeit 563 MB) nach external/sdcpp-cuda; geladen beim
 ersten Wechsel. Ein Setup-Update laesst external/ stehen (nur die Deinstallation loescht es).
+
+Reparatur (seit 0.5.37, GitHub-Issue #3): Konnte das Setup auf einer Karte ohne CUDA/ROCm die Vulkan-Engine nicht
+pruefen (Download, Pruefsumme, in 0.5.34 und 0.5.35 der Abbruch beim Lesen der Geraeteliste), laedt der Server beim Start
+sd.cpp und audio.cpp selbst und prueft die Karte wie das Setup (start_repair). Steht fest, dass keine eigene Karte da
+ist, laedt er nichts.
 """
 from __future__ import annotations
 
@@ -50,9 +55,17 @@ PACKAGES: dict[str, dict[str, Any]] = {
          "b087219145a382cc1b1e826318289e1f672b9bb6965977734ef0deb85fe2d03a", 412365497),
         ("cudart-sd-bin-win-cu12-x64.zip",
          "fe20366827d357c00797eebb58244dddab7fd9a348d70090c3871004c320f38d", 563452046)]},
+    # audio.cpp (Apache-2.0) fuer Ton und Stimme ohne CUDA/ROCm, dieselbe Datei wie im Setup; nur fuer die Reparatur
+    "audio": {"dir": "audiocpp", "exe": "audiocpp_cli.exe",
+              "url": "https://github.com/0xShug0/audio.cpp/releases/download/v0.9.6/", "files": [
+        ("audio-v0.9.6-bin-windows-x64-vulkan.zip",
+         "94c6e1df6d98176eb5f0e3ad6c16e419f548bce3c65ccd8da97abf4c3966a7aa", 87148788)]},
 }
 # Tests: Programme ausserhalb der Installation
-OVERRIDES = {"vulkan": "NVAI_SDCPP", "cuda": "NVAI_SDCPP_CUDA"}
+OVERRIDES = {"vulkan": "NVAI_SDCPP", "cuda": "NVAI_SDCPP_CUDA", "audio": "NVAI_AUDIOCPP"}
+# Was das Setup sicher weiss: keine eigene Karte (install-runtime.ps1, Install-VulkanEngine). Jeder andere Fehler dort
+# heisst nur „nicht geprueft“.
+SETUP_NO_CARD = ("only integrated graphics", "no Vulkan device")
 
 _install: dict[str, Any] = {}  # laufender oder zuletzt gescheiterter Download: backend, done, total, error
 _task: asyncio.Task[None] | None = None
@@ -63,7 +76,8 @@ def load() -> dict[str, Any]:
     try:
         saved = json.loads(FILE.read_text(encoding="utf-8"))
         if isinstance(saved, dict):
-            s.update({k: v for k, v in saved.items() if k in ("engine", "sdcpp_backend", "vulkan_index")})
+            s.update({k: v for k, v in saved.items()
+                      if k in ("engine", "sdcpp_backend", "vulkan_index", "vulkan_no_card", "audio_no_card")})
     except (OSError, ValueError):
         pass
     return s
@@ -87,7 +101,7 @@ def compatible() -> dict[str, list[str]]:
     backends: list[str] = []
     if vendor == "nvidia" and cpu is None:
         backends.append("cuda")
-    if (cpu is None and vendor in ("nvidia", "amd")) or (cpu is not None and _setup_vulkan()):
+    if (cpu is None and vendor in ("nvidia", "amd")) or (cpu is not None and (_setup_vulkan() or _vulkan_unchecked())):
         backends.append("vulkan")
     if backends:
         engines.append("sdcpp")
@@ -95,16 +109,75 @@ def compatible() -> dict[str, list[str]]:
     return {"engines": engines, "backends": backends}
 
 
-def _setup_vulkan() -> bool:
-    """Hat das Setup auf einer Karte ohne CUDA/ROCm die Vulkan-Engine eingerichtet (gpu_mode.json) oder liegt sie da?"""
+def _setup_note() -> Any:
+    """Eintrag "vulkan" des Setups in gpu_mode.json: {"ok", "device", "index"}, {"ok": false, "error"} oder None."""
     try:
         saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
-        v = saved.get("vulkan")
-        if v is True or (isinstance(v, dict) and v.get("ok")):
-            return True
-    except (OSError, ValueError, AttributeError):
-        pass
+        return saved.get("vulkan") if isinstance(saved, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _setup_vulkan() -> bool:
+    """Hat das Setup auf einer Karte ohne CUDA/ROCm die Vulkan-Engine eingerichtet (gpu_mode.json) oder liegt sie da?"""
+    v = _setup_note()
+    if v is True or (isinstance(v, dict) and v.get("ok")):
+        return True
     return installed("vulkan")
+
+
+def _vulkan_unchecked() -> bool:
+    """Konnte das Setup Vulkan nicht pruefen, ohne dass feststand, dass keine eigene Karte da ist? In 0.5.34 und 0.5.35
+    brach es beim Lesen der Geraeteliste auf jeder Karte ab (Issue #3); dann laedt der Server die Engines (start_repair)."""
+    v = _setup_note()
+    if not isinstance(v, dict) or v.get("ok") or load().get("vulkan_no_card"):
+        return False
+    return not any(e in str(v.get("error") or "") for e in SETUP_NO_CARD)
+
+
+def repair_todo() -> list[str]:
+    """Was der Server ohne CUDA/ROCm nachlaedt: die Vulkan-Engine, wenn das Setup sie nicht pruefen konnte, und audio.cpp,
+    wenn es neben ihr fehlt (wie im Setup). Was die eigene Pruefung schon verneint hat, nie wieder."""
+    if sys.platform != "win32" or gpu.cpu_mode() is None:
+        return []
+    todo: list[str] = []
+    if not installed("vulkan"):
+        if not _vulkan_unchecked():
+            return []
+        todo.append("vulkan")
+    if not installed("audio") and not load().get("audio_no_card"):
+        todo.append("audio")
+    return todo
+
+
+def start_repair() -> None:
+    """Beim Serverstart und bei „Erneut versuchen“: fehlende Vulkan-Engines im Hintergrund laden (repair_todo); die
+    Oberflaeche zeigt den Fortschritt wie beim Wechsel des Rechenwegs."""
+    global _task, _install
+    todo = repair_todo()
+    if not todo or (_task is not None and not _task.done()):
+        return
+    _install = {"backend": todo[0], "done": 0, "error": None,
+                "total": sum(f[2] for b in todo for f in PACKAGES[b]["files"])}
+    _task = asyncio.get_running_loop().create_task(_repair_task(todo))
+
+
+async def _repair_task(todo: list[str]) -> None:
+    try:
+        for backend in todo:
+            _install["backend"] = backend
+            await install(backend)
+        _install.clear()
+    except Exception as exc:  # noqa: BLE001 - die Oberflaeche zeigt den Grund
+        _install["error"] = str(exc) or exc.__class__.__name__
+
+
+def _no_card(key: str) -> None:
+    """Ohne CUDA/ROCm das Nein der eigenen Pruefung merken, damit der Server sie nicht bei jedem Start wiederholt."""
+    if gpu.cpu_mode() is not None:
+        s = load()
+        s[key] = True
+        _save(s)
 
 
 def effective() -> dict[str, Any]:
@@ -126,7 +199,7 @@ def exe(backend: str) -> Path:
     override = os.getenv(OVERRIDES.get(backend, ""), "") if backend in OVERRIDES else ""
     if override:
         return Path(override)
-    return config.ROOT / "external" / PACKAGES[backend]["dir"] / "sd-cli.exe"
+    return config.ROOT / "external" / PACKAGES[backend]["dir"] / PACKAGES[backend].get("exe", "sd-cli.exe")
 
 
 def installed(backend: str) -> bool:
@@ -158,7 +231,9 @@ def set_choice(engine: str | None, backend: str | None) -> dict[str, Any]:
         s["sdcpp_backend"] = backend
     _save(s)
     eff = effective()
-    if eff["engine"] == "sdcpp" and not installed(eff["backend"]):
+    if repair_todo():
+        start_repair()
+    elif eff["engine"] == "sdcpp" and not installed(eff["backend"]):
         start_install(eff["backend"])
     return state()
 
@@ -199,6 +274,7 @@ async def install(backend: str) -> None:
     """Release-Dateien laden, SHA-256 pruefen, in einen frischen Ordner entpacken, mit --list-devices pruefen, ob das
     Programm eine Karte sieht (Vulkan: eine eigene, uma 0), dann an seinen Platz legen."""
     pkg = PACKAGES[backend]
+    cli_name = pkg.get("exe", "sd-cli.exe")
     dest = config.ROOT / "external" / pkg["dir"]
     tmp_dir = config.DATA_DIR / "downloads" / f"sdcpp-{backend}"
     new = dest.with_name(dest.name + ".new")
@@ -210,7 +286,7 @@ async def install(backend: str) -> None:
             for name, sha, size in pkg["files"]:
                 part = tmp_dir / name
                 h = hashlib.sha256()
-                async with client.stream("GET", RELEASE + name) as r:
+                async with client.stream("GET", pkg.get("url", RELEASE) + name) as r:
                     r.raise_for_status()
                     with part.open("wb") as f:
                         async for chunk in r.aiter_bytes(1 << 20):
@@ -221,21 +297,26 @@ async def install(backend: str) -> None:
                     raise RuntimeError(t(f"{name}: Prüfsumme stimmt nicht", f"{name}: checksum mismatch"))
                 await asyncio.to_thread(_unzip, part, new)
                 part.unlink(missing_ok=True)
-        cli = next(new.rglob("sd-cli.exe"), None)
+        cli = next(new.rglob(cli_name), None)
         if cli is None:
-            raise RuntimeError(t("sd-cli.exe fehlt im Paket", "sd-cli.exe is missing from the package"))
+            raise RuntimeError(t(f"{cli_name} fehlt im Paket", f"{cli_name} is missing from the package"))
         if cli.parent != new:  # Paket mit Unterordner: Inhalt nach oben holen
             for item in cli.parent.iterdir():
                 shutil.move(str(item), new / item.name)
-        out = await asyncio.to_thread(_list_devices, new / "sd-cli.exe")
+        out = await asyncio.to_thread(_list_devices, new / cli_name)
         if backend == "vulkan":
             m = re.search(r"(?m)^ggml_vulkan: (\d+) = (.+?) \| uma: 0 ", out)
             if not m:
+                _no_card("vulkan_no_card")
                 raise RuntimeError(t("Vulkan sieht keine eigene Grafikkarte.", "Vulkan sees no dedicated graphics card."))
             if gpu.vulkan_device() is None:
                 s = load()
                 s["vulkan_index"] = int(m.group(1))
                 _save(s)
+        elif backend == "audio":
+            if not re.search(r"(?m)^Vulkan:\d", out):
+                _no_card("audio_no_card")
+                raise RuntimeError(t("audio.cpp sieht keine Karte über Vulkan.", "audio.cpp sees no card through Vulkan."))
         elif not re.search(r"found \d+ CUDA devices|CUDA[0-9]?\s*:|Device 0:", out):
             raise RuntimeError(t("Die CUDA-Fassung findet keine NVIDIA-Karte.", "The CUDA build finds no NVIDIA card."))
         shutil.rmtree(dest, ignore_errors=True)

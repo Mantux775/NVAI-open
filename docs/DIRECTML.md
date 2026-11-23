@@ -39,6 +39,11 @@ hovering over it explains what that means.
 If Vulkan does not see the card, NVAI-open computes on the processor as before; the top bar then says "Running on the
 CPU". "Repair NVAI-open" in the Start menu sets everything up again.
 
+The setups of 0.5.34 to 0.5.36 never set up the Vulkan engines, whatever the card: Windows PowerShell 5.1 stopped at the
+first line of the device list, so everything computed on the processor. Since 0.5.37 the setup reads the list properly.
+If it still cannot set the engines up (no connection, say), NVAI-open downloads them itself on the next start, checks the
+card the same way and shows the progress under Models → Your hardware.
+
 ## Which models
 
 Generate and the Studio pick the models that run on the card by themselves, with sizes that fit into 8 GB. Under

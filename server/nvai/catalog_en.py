@@ -682,6 +682,33 @@ EN: dict[str, dict[str, Any]] = {
         "features": {"prompt_hint": ("Say what should change and what should stay. Best with one "
                                      "reference image; several are allowed.")},
     },
+    "qwen-image-edit-2511": {
+        "name": "Qwen-Image-Edit-2511 (FP8, Lightning, editing)",
+        "best_for": "The same person or character in a new pose and scene — Apache-2.0",
+        "description": (
+            "Qwen's (Alibaba) editing model, version 2511, with the Lightning LoRA in 8 steps (cfg 1). Up to three "
+            "reference images go in through Qwen2.5-VL's visual understanding and as a reference; the output size "
+            "is free. Trained to put the same person or character into new poses and scenes: the LoRA assistant "
+            "builds its datasets with it (one character in 24 poses).\n\n"
+            "The same files as \"Images from the template\" in the LoRA assistant: deleting removes them there "
+            "too, the assistant downloads them again when needed. Text encoder and VAE are shared with "
+            "Qwen-Image-2512. The fp8 model (20.5 GB) does not quite fit into 16 GB, ComfyUI offloads parts of it. "
+            "Measured on an RTX 5060 Ti: about 44 s per image in the LoRA assistant, four images at 1296 × 720 in "
+            "144 s including loading.\n\n"
+            "Person from a photo (test of 23 Nov 2026, same photo and text as with FLUX 3): the eyes were clean in "
+            "all four images, but the face was matched less well than with FLUX 3, more of a similar-looking person. For real "
+            "people use FLUX 3. Apache-2.0."
+        ),
+        "pros": ["Apache-2.0, no revenue limit",
+                 "Keeps the same character across many poses (LoRA assistant: 24 poses from one template)",
+                 "Up to three reference images, free output size"],
+        "cons": ["20.5 GB model on 16 GB: parts are offloaded, slower than FLUX 3",
+                 "Negative prompt has no effect (cfg 1)", "Content filtering not documented"],
+        "features": {"prompt_hint": ("Full English sentences: what stays the same (face, hair, clothing) and what "
+                                     "is new (pose, place, light). In the prompt the reference images are \"the "
+                                     "first image\", \"the second image\". The negative prompt has no effect here "
+                                     "(cfg 1).")},
+    },
     "longcat-image": {
         "best_for": "Scenes with several objects and an action",
         "description": (

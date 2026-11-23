@@ -39,6 +39,11 @@ steht dann „Vulkan (experimentell)“; mit der Maus darüber steht, was das be
 Sieht Vulkan die Karte nicht, rechnet NVAI-open wie bisher auf dem Prozessor; oben steht dann „Rechnet auf dem
 Prozessor“. „NVAI-open reparieren“ im Startmenü richtet alles neu ein.
 
+Die Setups von 0.5.34 bis 0.5.36 richteten die Vulkan-Engines auf keiner Karte ein: Windows PowerShell 5.1 brach an der
+ersten Zeile der Geräteliste ab, also rechnete alles auf dem Prozessor. Seit 0.5.37 liest das Setup die Liste richtig.
+Kann es die Engines trotzdem nicht einrichten (etwa ohne Verbindung), lädt NVAI-open sie beim nächsten Start selbst,
+prüft die Karte genauso und zeigt den Fortschritt unter Modelle → Deine Hardware.
+
 ## Welche Modelle
 
 Generieren und Studio wählen von selbst die Modelle, die auf der Karte laufen, mit Formaten, die in 8 GB passen. Unter

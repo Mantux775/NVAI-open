@@ -713,7 +713,8 @@ export interface EngineState {
   ready: boolean
   vendor: 'nvidia' | 'amd' | null
   cpu_mode: boolean
-  install: { backend: SdcppBackend; done: number; total: number; error: string | null } | null
+  /** Laufender oder gescheiterter Download; "audio" = audio.cpp aus der Reparatur ohne CUDA/ROCm (seit 0.5.37) */
+  install: { backend: SdcppBackend | 'audio'; done: number; total: number; error: string | null } | null
 }
 
 export type GpuRole = 'image' | 'text' | 'mesh'

@@ -76,6 +76,11 @@ async def lifespan(app: FastAPI):
         traceback.print_exc()
     await jobs.start()
     lora_train.start_scheduler()  # vorgemerkte LoRA-Trainings zur Startzeit einreihen
+    # Ohne CUDA/ROCm: Vulkan-Engines nachladen, die das Setup nicht einrichten konnte (GitHub-Issue #3)
+    try:
+        engine.start_repair()
+    except Exception:  # noqa: BLE001 - der Server soll trotzdem starten
+        traceback.print_exc()
     yield
     await jobs.shutdown()
     comfy.stop()

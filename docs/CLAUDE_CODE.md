@@ -439,6 +439,12 @@ from a photo").
    waist up, the face clearly visible, free space above the head.", in the video size with `batch_size=4` (1280 × 704:
    95–98 s). Crop the photo to head and shoulders and name the clothing. FLUX makes faces a little slimmer and younger,
    so compare the four with the photo at full resolution.
+   **Always reference the original photo, never a generated result:** every pass repaints the face, and over five
+   rounds of result-from-result the skin, hair and eyes drifted visibly; three rounds from the photo stayed clean.
+   Small video sizes get too few pixels for a face (864 × 480: the head about 150 px), so render the start images at
+   about 0.9 MP or more in the same aspect ratio (864 × 480 → 1296 × 720); the video models scale the start image to
+   their size. `qwen-image-edit-2511` (Apache-2.0) also takes the photo as a reference, but matched a real face less
+   well than FLUX 3.
 2. **Video with LTX-2.5** from the chosen image: motion only, the line in quotation marks with the voice, then the
    sounds; to keep the face, `loop=True` (still camera) or the same image as `end_image_asset_id`.
 

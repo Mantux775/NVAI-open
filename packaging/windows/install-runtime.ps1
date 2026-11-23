@@ -159,6 +159,16 @@ function New-Venv($dir, $lock, [string[]]$extra = @()) {
 $SdcppUrl = "https://github.com/leejet/stable-diffusion.cpp/releases/download/master-1106-532d2c1/sd-master-532d2c1-bin-win-vulkan-x64.zip"
 $SdcppSha256 = "3E66222C87CA27074E1FD8CE79706EEF17A8AAF39949906AA1BEE7E060F22ECC"
 
+# Device list of sd.cpp or audio.cpp as plain text. Both write it to stderr, and Windows PowerShell 5.1 turns every
+# redirected stderr line into an error record: with $ErrorActionPreference = "Stop" the first one ended the call. So
+# "ggml_vulkan: Found 1 Vulkan devices:" aborted the check on every card and the Vulkan engines were never set up
+# (GitHub issue #3). Here the preference is "Continue" for this call only and every line becomes a string.
+function Get-DeviceList([string]$exe) {
+    $ErrorActionPreference = "Continue"
+    $lines = @(& $exe --list-devices 2>&1 | ForEach-Object { "$_" })
+    return ($lines -join "`n")
+}
+
 function Install-VulkanEngine {
     Step (L "Vulkan-Engine fuer Bilder und Video (stable-diffusion.cpp, experimentell)" "Vulkan engine for images and video (stable-diffusion.cpp, experimental)")
     $dest = Join-Path $App "external\sdcpp"
@@ -171,7 +181,7 @@ function Install-VulkanEngine {
         if ($hash -ne $SdcppSha256) { throw "SHA-256 $hash" }
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Expand-Archive -Path $zip -DestinationPath $dest -Force
-        $out = (& (Join-Path $dest "sd-cli.exe") --list-devices 2>&1 | Out-String)
+        $out = Get-DeviceList (Join-Path $dest "sd-cli.exe")
         $dev = [regex]::Match($out, "(?m)^ggml_vulkan: (\d+) = (.+?) \| uma: 0 ")
         if ($dev.Success) {
             $name = $dev.Groups[2].Value.Trim()
@@ -209,7 +219,7 @@ function Install-AudioEngine {
         if ($hash -ne $AudiocppSha256) { throw "SHA-256 $hash" }
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Expand-Archive -Path $zip -DestinationPath $dest -Force
-        $out = (& (Join-Path $dest "audiocpp_cli.exe") --list-devices 2>&1 | Out-String)
+        $out = Get-DeviceList (Join-Path $dest "audiocpp_cli.exe")
         if ($out -match "(?m)^Vulkan:\d") {
             Write-Host (L "audio.cpp sieht die Karte; Ton und Sprecherstimme rechnen darueber." `
                           "audio.cpp sees the card; sound and the narrator voice compute through it.")

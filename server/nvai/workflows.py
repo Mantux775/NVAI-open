@@ -56,6 +56,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     # 25 Schritte mit cfg 3,5 und shift 3,16 (nur fuer die Sigmas, wie in der Vorlage).
     "boogu_turbo": {"steps": 4, "cfg": 1.0, "sampler": "lcm", "scheduler": "sgm_uniform"},
     "boogu":      {"steps": 25, "cfg": 3.5, "sampler": "dpmpp_2m", "scheduler": "simple", "shift": 3.16},
+    # Qwen-Image-Edit-2511 mit der Lightning-LoRA: wie ComfyUIs Vorlage image_qwen_image_edit_2511 (Shift 3,1,
+    # CFGNorm) und lora_train._edit_graph, 8 Schritte bei cfg 1
+    "qwen_image_edit": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple", "shift": 3.1},
     # HiDream-O1: Werte aus image_hidream_o1{,_dev}.json. Pixelraum-Modell, Text-Encoder und
     # VAE stecken im Checkpoint; trainiert um 4 Megapixel (darunter deutlich schlechter).
     "hidream_o1_dev": {"steps": 28, "cfg": 1.0, "sampler": "lcm", "scheduler": "normal",
@@ -798,6 +801,50 @@ def build_boogu(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     return graph, seed
 
 
+def build_qwen_image_edit(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
+    """Qwen-Image-Edit-2511 mit der Lightning-LoRA, gebaut wie lora_train._edit_graph (dort seit 15.11. im Einsatz)
+    nach ComfyUIs Vorlage image_qwen_image_edit_2511: Shift 3,1, CFGNorm, Referenzlatent mit index_timestep_zero.
+    Bis zu drei Referenzbilder gehen über TextEncodeQwenImageEditPlus ein (Bildverständnis und Referenzlatent), die
+    Ausgabegröße kommt aus einem leeren Latent. Ohne Referenz zeichnet es nur nach dem Text."""
+    d = defaults_for(entry["workflow"])
+    seed = _seed(p)
+    ids = _Ids()
+    width, height = int(p.get("width", 1024)), int(p.get("height", 1024))
+    graph: Graph = {
+        "1": {"class_type": "UNETLoader", "inputs": {
+            "unet_name": _file_by_target(entry, "diffusion_models"), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {
+            "clip_name": _file_by_target(entry, "text_encoders"), "type": "qwen_image", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": _file_by_target(entry, "vae")}},
+        "5": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": d.get("shift", 3.1)}},
+        "6": {"class_type": "CFGNorm", "inputs": {"model": ["5", 0], "strength": 1.0}},
+        "7": {"class_type": "LoraLoaderModelOnly", "inputs": {
+            "model": ["6", 0], "lora_name": _file_by_target(entry, "loras"), "strength_model": 1.0}},
+    }
+    images: dict[str, Ref] = {}
+    for i, name in enumerate((p.get("reference_images") or [])[:3]):
+        load, scale = ids(), ids()
+        graph[load] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        graph[scale] = {"class_type": "FluxKontextImageScale", "inputs": {"image": [load, 0]}}
+        images[f"image{i + 1}"] = [scale, 0]
+    for node, text in (("12", p["prompt"]), ("13", "")):
+        graph[node] = {"class_type": "TextEncodeQwenImageEditPlus", "inputs": {
+            "clip": ["2", 0], "vae": ["3", 0], "prompt": text, **images}}
+    for node, cond in (("14", "12"), ("15", "13")):
+        graph[node] = {"class_type": "FluxKontextMultiReferenceLatentMethod", "inputs": {
+            "conditioning": [cond, 0], "reference_latents_method": "index_timestep_zero"}}
+    graph["16"] = {"class_type": "EmptySD3LatentImage", "inputs": {
+        "width": width, "height": height, "batch_size": int(p.get("batch_size", 1))}}
+    graph["17"] = {"class_type": "KSampler", "inputs": {
+        "model": ["7", 0], "positive": ["14", 0], "negative": ["15", 0], "latent_image": ["16", 0],
+        "seed": seed, "steps": int(_pick(p, d, "steps")), "cfg": _pick(p, d, "cfg"),
+        "sampler_name": p.get("sampler") or d["sampler"], "scheduler": p.get("scheduler") or d["scheduler"],
+        "denoise": 1.0}}
+    graph["18"] = {"class_type": "VAEDecode", "inputs": {"samples": ["17", 0], "vae": ["3", 0]}}
+    graph["19"] = {"class_type": "SaveImage", "inputs": {"images": ["18", 0], "filename_prefix": "nvai"}}
+    return graph, seed
+
+
 def build_hidream_o1(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
     """HiDream-O1-Image: 8-Mrd.-Pixelraum-Modell; Text-Encoder und VAE stecken im Checkpoint.
 
@@ -923,6 +970,8 @@ def build_image(entry: dict[str, Any], p: dict[str, Any]) -> tuple[Graph, int]:
         return build_boogu(entry, p)
     if wf in HIDREAM_O1_WORKFLOWS:
         return build_hidream_o1(entry, p)
+    if wf == "qwen_image_edit":
+        return build_qwen_image_edit(entry, p)
     if wf == "chroma":
         return build_chroma(entry, p)
     if wf == "longcat":
@@ -1972,7 +2021,8 @@ FLUX3_WORKFLOWS = {"flux3_klein", "flux3_klein_base"}
 BOOGU_WORKFLOWS = {"boogu", "boogu_turbo"}
 HIDREAM_O1_WORKFLOWS = {"hidream_o1", "hidream_o1_dev"}
 IMAGE_WORKFLOWS = ({"sdxl", "flux", "flux-dev", "sd3", "chroma", "longcat", "zimage",
-                    "qwen_image", "qwen_image_lightning", "qwen_image21", "krea2_turbo", "moss_image"}
+                    "qwen_image", "qwen_image_lightning", "qwen_image21", "qwen_image_edit", "krea2_turbo",
+                    "moss_image"}
                    | FLUX3_WORKFLOWS | BOOGU_WORKFLOWS | HIDREAM_O1_WORKFLOWS)
 # ACE-Step (v1 und 1.5) am 26.10.2026 entfernt, Nutzer: „es ist einfach immer schlecht“
 AUDIO_WORKFLOWS = {"stable_audio", "stable_audio_3"}
