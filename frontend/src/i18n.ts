@@ -1,23 +1,23 @@
-// Sprache der Oberflaeche: Englisch, Deutsch auf Wunsch.
+// Supported languages: English, German, Chinese, French.
 //
-// Die Wahl liegt in localStorage unter 'nvai-lang'. Ohne gueltigen Eintrag gilt Englisch,
-// auch in einem deutschen Browser -- so will es der Nutzer. Die Sprache wird einmal beim
-// Laden gelesen; ein Wechsel laedt die Seite neu. Deshalb duerfen Konstanten, die beim
-// Modul-Laden ausgewertet werden (Tabs, Formate, KIND_LABEL), t() benutzen.
+// The choice is stored in localStorage under 'nvai-lang'. Without a valid entry, English is used,
+// even in a German/Chinese/French browser -- it is up to the user. The language is read once on
+// load; switching reloads the page. Therefore, constants evaluated at module load time (Tabs, Formats, KIND_LABEL)
+// should use t().
 //
-// Was vom Server kommt (Modellbeschreibungen, Prompt-Hinweise, Fehlermeldungen), ist dort
-// schon uebersetzt: api.ts schickt die Sprache als Accept-Language mit.
+// Text from the server (Model descriptions, Prompt hints, Error messages) is already translated:
+// api.ts sends the selected language as Accept-Language.
 
-export type Lang = 'en' | 'de'
+export type Lang = 'en' | 'de' | 'zh' | 'fr'
 
 const STORAGE_KEY = 'nvai-lang'
 
 function readStored(): Lang {
   try {
     const v = localStorage.getItem(STORAGE_KEY)
-    if (v === 'en' || v === 'de') return v
+    if (v === 'en' || v === 'de' || v === 'zh' || v === 'fr') return v
   } catch {
-    /* Speicher gesperrt (privates Fenster, Richtlinie): Standard nehmen */
+    /* Storage blocked (private window, policy): use default */
   }
   return 'en'
 }
@@ -25,14 +25,14 @@ function readStored(): Lang {
 let current: Lang = readStored()
 const listeners = new Set<(l: Lang) => void>()
 
-/** Sprache ohne Neuladen wechseln (Prüf-App: Ein Neuladen schlösse den geöffneten Fallordner). Wer neu zeichnet, hört
- * über onLang mit; Konstanten, die beim Laden ausgewertet wurden, bleiben bis zum nächsten Laden in der alten Sprache. */
+/** Switch language without reload (Review App: one reload would close the open folder). Components that redraw
+ * hear via onLang; constants evaluated at load time remain in the old language until the next load. */
 export function setLangLive(l: Lang): void {
   current = l
   try {
     localStorage.setItem(STORAGE_KEY, l)
   } catch {
-    /* nicht speicherbar: gilt bis zum Schließen */
+    /* not storable: applies until close */
   }
   document.documentElement.lang = l
   for (const f of listeners) f(l)
@@ -47,22 +47,32 @@ export function getLang(): Lang {
   return current
 }
 
-/** Speichert die Wahl und laedt neu, damit jede Komponente in der neuen Sprache rendert. */
+/** Save the choice and reload, so every component renders in the new language. */
 export function setLang(l: Lang): void {
   try {
     localStorage.setItem(STORAGE_KEY, l)
   } catch {
-    /* nicht speicherbar: der Neuladen zeigt dann wieder den Standard */
+    /* not storable: reload then shows default again */
   }
   window.location.reload()
 }
 
-/** Text in der aktuellen Sprache. Reihenfolge wie in den anderen Apps: Deutsch, Englisch. */
-export function t(de: string, en: string): string {
-  return current === 'de' ? de : en
+/** Text in the current language. Order: English, German, Chinese, French. */
+export function t(en: string, de: string, zh: string, fr: string): string {
+  switch (current) {
+    case 'de': return de
+    case 'zh': return zh
+    case 'fr': return fr
+    default: return en
+  }
 }
 
-/** Fuer toLocaleString und Intl: Zahlen und Daten im Format der gewaehlten Sprache. */
+/** Force toLocaleString and Intl: numbers and dates in the format of the selected language. */
 export function locale(): string {
-  return current === 'de' ? 'de-DE' : 'en-US'
+  switch (current) {
+    case 'de': return 'de-DE'
+    case 'zh': return 'zh-CN'
+    case 'fr': return 'fr-FR'
+    default: return 'en-US'
+  }
 }
