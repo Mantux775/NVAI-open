@@ -17,7 +17,7 @@ enum StudioPackage {
         var ids = Set(p.clips.map(\.assetID))
         for s in p.scenes {
             ids.formUnion(s.takes)
-            for key in ["image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id"] {
+            for key in ["image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id", "guide_asset_id"] {
                 if let v = s.params[key]?.stringValue, !v.isEmpty { ids.insert(v) }
             }
             ids.formUnion((s.params["reference_asset_ids"]?.arrayValue ?? []).compactMap(\.stringValue))

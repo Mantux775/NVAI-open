@@ -13,10 +13,12 @@ struct StudioView: View {
     @AppStorage("studio.split") private var split = 0.44
     @AppStorage("studio.binWidth") private var binWidth = 240.0
     /// Eigenschaften rechts (Nutzer 31.10.2026: „die rechte Panele … soll auch wie die linke Panelle mit Medien breiten
-    /// verstellbar sein“): 260–640 px, der Monitor behält mindestens 320 px.
+    /// verstellbar sein“), ab 260 px; seit 0.5.15 so breit, bis der Monitor noch 200 px hat (Nutzer 25.11.2026: „soll sich
+    /// noch viel weiter breiter machen lassen“, vorher höchstens 640 px).
     @AppStorage("studio.sideWidth") private var sideWidth = 330.0
     @State private var confirmCancel = false
     @State private var dragStart: Double?  // Wert eines Teilers zu Beginn des Ziehens
+    @State private var dragOther = 0.0     // Breite der anderen Spalte zu Beginn: sie weicht und kommt zurück
     // Assistent (seit Mac 0.5.6): Frage beim Start und bei neuen Projekten, der Assistent selbst, Hinweise danach
     @State private var showAsk = false
     @State private var showWizard = false
@@ -114,30 +116,33 @@ struct StudioView: View {
     private var panes: some View {
         GeometryReader { geo in
             let timeline = geo.size.height * min(0.75, max(0.2, split))
-            // Der Monitor behält mindestens 320 px: Reicht die Breite nicht, geben erst die Eigenschaften nach (bis 260 px),
-            // dann die Materialliste (bis 180 px); zwei Teiler zu je 5 px
-            let spare = geo.size.width - 10 - 320
-            let side = min(640, max(260, min(sideWidth, spare - 180)))
-            let maxBin = max(180, spare - side)
-            let maxSide = min(640, max(260, spare - min(maxBin, max(180, binWidth))))
+            // Der Monitor behält mindestens 200 px: Reicht die Breite nicht, geben erst die Eigenschaften nach (bis 260 px),
+            // dann die Materialliste (bis 180 px); zwei Teiler zu je 5 px. Beim Ziehen weicht die andere Spalte.
+            let spare = Double(geo.size.width) - 10 - 200
+            let side = max(260, min(sideWidth, spare - 180))
+            let bin = max(180, min(binWidth, spare - side))
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    StudioMaterial(model: model).frame(width: min(maxBin, max(180, binWidth)), alignment: .leading).clipped()
+                    StudioMaterial(model: model).frame(width: bin, alignment: .leading).clipped()
                     // Teiler: Startwert plus Weg in festen Koordinaten (vorher wurde der ganze Weg bei jedem Schritt
                     // erneut addiert bzw. mit dem wandernden Teiler gemessen)
                     splitter(vertical: true)
                         .gesture(DragGesture(coordinateSpace: .global).onChanged { g in
-                            let start = dragStart ?? min(maxBin, max(180, binWidth))
+                            if dragStart == nil { dragOther = side }
+                            let start = dragStart ?? bin
                             dragStart = start
-                            binWidth = min(maxBin, max(180, start + g.translation.width))
+                            binWidth = max(180, min(spare - 260, start + Double(g.translation.width)))
+                            sideWidth = max(260, min(dragOther, spare - binWidth))
                         }.onEnded { _ in dragStart = nil })
                         .onTapGesture(count: 2) { binWidth = 240 }
                     StudioMonitor(model: model).frame(maxWidth: .infinity)
                     splitter(vertical: true)
                         .gesture(DragGesture(coordinateSpace: .global).onChanged { g in
+                            if dragStart == nil { dragOther = bin }
                             let start = dragStart ?? side
                             dragStart = start
-                            sideWidth = min(maxSide, max(260, start - g.translation.width))
+                            sideWidth = max(260, min(spare - 180, start - Double(g.translation.width)))
+                            binWidth = max(180, min(dragOther, spare - sideWidth))
                         }.onEnded { _ in dragStart = nil })
                         .onTapGesture(count: 2) { sideWidth = 330 }
                     StudioInspector(model: model).frame(width: side)

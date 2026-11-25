@@ -75,6 +75,10 @@ def _environment() -> tuple[dict[str, str], int]:
 
 
 def _version(port: int) -> dict | None:
+    # Erst der schnelle Portcheck: Unter Windows wartet ein Verbindungsversuch auf einen geschlossenen Port rund 2 s.
+    # Damit ging vor jedem Start und bei jeder Abfrage danach Zeit verloren (gemessen 25.11.2026: 2,5 von 5,2 s).
+    if not _port_busy(port):
+        return None
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/version", timeout=2) as r:
             return json.loads(r.read())
@@ -85,7 +89,7 @@ def _version(port: int) -> dict | None:
 def _port_busy(port: int) -> bool:
     import socket
     with socket.socket() as s:
-        s.settimeout(0.5)
+        s.settimeout(0.2)  # nur dieser Rechner: ein offener Port antwortet sofort
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
@@ -161,7 +165,7 @@ def start(open_browser: bool) -> int:
                             f"NVAI-open is not reachable after {START_TIMEOUT:.0f} s.\n"
                             f"Log: {Path(data_dir) / 'nvai-server.log'}"))
                 return 1
-            time.sleep(0.5)
+            time.sleep(0.1)
     if open_browser:
         webbrowser.open(f"http://127.0.0.1:{port}/")
     return 0

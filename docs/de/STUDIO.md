@@ -87,6 +87,13 @@ still. Das Foto bleibt auf deinem Rechner.
    der Szene, ohne schwarze Balken); das erste wird das Startbild, das andere liegt im Projektordner. So bleiben eine
    Figur oder ein Ort über mehrere Einstellungen gleich. Ein Anschluss hat Vorrang: Dann
    beginnt der Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
+   „Vorlagen und Zusätze“ darunter (seit 0.5.40) bietet wie im Reiter „Generieren“ an, was das gewählte Modell kann:
+   **Referenzbilder** (FLUX 3, Qwen-Image-Edit, Krea 2 als Stilvorlage, Wan VACE), **Endbild** oder Schleife und ein
+   **Layout-Video** mit LTX-2.5, eine Tonbeschreibung mit Kandinsky 6. Aus dem Material ziehen oder aus dem Projektordner
+   wählen; ein Klick entfernt sie. Auf dem Mac (seit 0.5.15) gibt es Referenzbilder für Standbilder mit FLUX.2 Klein.
+
+   ![Vorlagen und Zusätze einer Szene mit FLUX 3](../images/studio-extras-de.jpg)
+
 3. **Marker setzen:** Doppelklick auf die Markerzeile oder M für eine Notiz am Abspielkopf.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine
    Anschluss-Szene wartet auf die Szene davor, eine Sprecher-Szene auf die Stimme, die sie übernimmt. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
@@ -106,7 +113,8 @@ verschiebt es in den Papierkorb des Studios (`studio\papierkorb` im Datenordner)
 Die Liste links zeigt dein Material, neueste zuerst, als Liste oder als Kacheln, mit Filter und einer Suche über alle
 Ordner. ◆ zeigt ein Video mit verlustfreier Kopie, ● Material, das im Schnitt liegt. Die Linie neben der Liste macht
 sie breiter, wenn du sie ziehst; die Eigenschaften rechts lassen sich genauso ziehen, ein Doppelklick stellt sie
-zurück. Der Monitor behält immer mindestens 320 Pixel, so geht das Studio auch auf einem 14-Zoll-Notebook.
+zurück. Seit 0.5.40 (Mac 0.5.15) gehen beide so weit, bis der Monitor noch 200 Pixel hat, die andere Spalte macht Platz;
+eine breite Liste zeigt mehrere Spalten.
 
 **Jedes Projekt hat seinen eigenen Ordner** unter `assets\Studio\<Projektname>` im Datenordner. Takes, Exporte, die
 letzten Bilder für Anschlüsse und was du hochlädst, landen dort. Im Reiter „Generieren“ schickt „Ablegen in“ über dem

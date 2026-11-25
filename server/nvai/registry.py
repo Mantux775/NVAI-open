@@ -487,6 +487,11 @@ def to_info(entry: dict[str, Any], favorites: set[str] | None = None,
 # ------------------------------------------------------------ Gesperrte Repos (seit 0.5.12)
 
 _ACCESS: dict[tuple[str, str], tuple[float, str]] = {}
+# Laufende Abfragen je Repo. Bei langsamem Hugging Face wartete die Modellliste bis 0.5.39 bis zu 8 s je Repo
+# nacheinander; jetzt hoechstens _ACCESS_WAIT ab Beginn der Abfrage, der Rest laeuft im Hintergrund weiter.
+_ACCESS_RUNNING: dict[tuple[str, str], tuple[float, threading.Event]] = {}
+_ACCESS_LOCK = threading.Lock()
+_ACCESS_WAIT = 1.5
 
 
 def gated_info(entry: dict[str, Any], installed: bool) -> dict[str, Any]:
@@ -503,25 +508,54 @@ def gated_info(entry: dict[str, Any], installed: bool) -> dict[str, Any]:
 def gated_access(repo: str, file: str) -> str:
     """Hat der hinterlegte Token Zugriff auf `repo`? Fragt eine Datei des Repos per HEAD ab (ohne sie zu laden):
     Weiterleitung oder 200 = "granted", 401/403 = "missing". Ohne Token "no_token", bei Netzfehlern "unknown".
-    Ergebnisse gelten 10 Minuten, fehlender Zugriff nur 20 Sekunden (die Freigabe kommt sofort nach der Zustimmung)."""
+    Ergebnisse gelten 10 Minuten, fehlender Zugriff nur 20 Sekunden (die Freigabe kommt sofort nach der Zustimmung).
+    Antwortet Hugging Face nicht schnell, gilt der letzte bekannte Stand, sonst "unknown"."""
     import hashlib
-    import httpx
 
     token = hf_token()
     if not token:
         return "no_token"
     key = (hashlib.sha256(token.encode()).hexdigest()[:16], repo)
-    hit = _ACCESS.get(key)
-    if hit and time.time() - hit[0] < (600 if hit[1] == "granted" else 20):
-        return hit[1]
+    with _ACCESS_LOCK:
+        hit = _ACCESS.get(key)
+        if hit and time.time() - hit[0] < (600 if hit[1] == "granted" else 20):
+            return hit[1]
+        run = _ACCESS_RUNNING.get(key)
+        if run is None:
+            run = _ACCESS_RUNNING[key] = (time.monotonic(), threading.Event())
+            threading.Thread(target=_probe_access, args=(key, repo, file, token, run[1]), daemon=True,
+                             name="nvai-hf-access").start()
+    run[1].wait(max(0.0, run[0] + _ACCESS_WAIT - time.monotonic()))
+    hit = _ACCESS.get(key) or hit
+    return hit[1] if hit else "unknown"
+
+
+def _probe_access(key: tuple[str, str], repo: str, file: str, token: str, done: threading.Event) -> None:
+    import httpx
+
+    state = "unknown"
     try:
         r = httpx.head(f"https://huggingface.co/{repo}/resolve/main/{file}",
                        headers={"Authorization": f"Bearer {token}"}, follow_redirects=False, timeout=8)
         state = "granted" if r.status_code < 400 else "missing" if r.status_code in (401, 403) else "unknown"
-    except httpx.HTTPError:
-        state = "unknown"
-    _ACCESS[key] = (time.time(), state)
-    return state
+    except (httpx.HTTPError, OSError):
+        pass
+    finally:
+        with _ACCESS_LOCK:
+            _ACCESS[key] = (time.time(), state)
+            _ACCESS_RUNNING.pop(key, None)
+        done.set()
+
+
+def prefetch_access() -> None:
+    """Beim Start im Hintergrund: alle noetigen Abfragen gleichzeitig anstossen, damit die Modellliste sie fertig
+    vorfindet, statt sie beim ersten Oeffnen nacheinander zu machen."""
+    if not hf_token():
+        return
+    todo = {f["repo"]: f["file"] for e in all_entries() if not is_installed(e) for f in e.get("files", [])
+            if not f.get("optional") and f.get("repo") in catalog.GATED_REPOS}
+    for repo, file in todo.items():
+        threading.Thread(target=gated_access, args=(repo, file), daemon=True, name="nvai-hf-prefetch").start()
 
 
 def _precision(entry: dict[str, Any]) -> str | None:
@@ -775,7 +809,12 @@ def list_models(kind: str | None = None) -> list[ModelInfo]:
 
 
 def installed_models(kind: str) -> list[ModelInfo]:
-    return [m for m in list_models(kind) if m.runnable]
+    """Lauffaehige Modelle einer Art. Baut nur diese auf: Ueber list_models entstand jedes Mal der ganze Katalog, und
+    fuer nicht geladene gesperrte Modelle fragte schon /api/health beim Start Hugging Face (bis 0.5.39)."""
+    favs = get_favorites()
+    infos = [to_info(e, favs) for e in all_entries()
+             if e["kind"] == kind and e.get("workflow") is not None and _visible(e) and is_installed(e)]
+    return sorted((m for m in infos if m.runnable), key=lambda m: not m.favorite)
 
 
 # ------------------------------------------------------------ Download

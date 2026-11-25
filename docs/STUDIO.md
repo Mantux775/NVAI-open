@@ -86,7 +86,14 @@ photo stays on your computer.
    "Generate start image" makes two from the prompt as the assistant does (with the characters of the scene, without
    black bars); the first becomes the start image, the other waits in the project folder. That keeps a character or a
    place the same across shots. A chain comes first: then the clip begins with the end of the scene
-   before. An image dropped onto the scene itself still becomes a take.
+   before. An image dropped onto the scene itself still becomes a take. "References and extras" below it (since 0.5.40)
+   offers what the chosen model can do, as under Generate: **reference images** (FLUX 3, Qwen-Image-Edit, Krea 2 as a
+   style template, Wan VACE), an **end image** or a loop and a **layout video** with LTX-2.5, a sound description with
+   Kandinsky 6. Drag them from the media list or pick them from the project folder; a click removes one. On the Mac
+   (since 0.5.15) still images offer reference images with FLUX.2 Klein.
+
+   ![References and extras of a scene with FLUX 3](images/studio-extras.jpg)
+
 3. **Set markers:** double-click the marker row, or press M for a note at the playhead.
 4. **Generate scenes:** makes every scene that has no take yet. Sound and still images come first, then the videos; a
    chained scene waits for the one before it, a voice scene for the voice it
@@ -106,8 +113,9 @@ Studio's trash folder (`studio\papierkorb` in the data folder).
 
 The list on the left shows your media, newest first, as a list or as tiles, with a filter and a search across all
 folders. ◆ marks a video with a lossless copy, ● media that lies in the edit. Drag the line next to the list to make it
-wider; the properties on the right can be dragged the same way, and a double-click resets them. The monitor always
-keeps at least 320 pixels, so the Studio also works on a 14-inch notebook.
+wider; the properties on the right can be dragged the same way, and a double-click resets them. Since 0.5.40 (Mac
+0.5.15) both go as far as the monitor keeps 200 pixels, and the other column makes room; a wide list shows several
+columns.
 
 **Every project has its own folder** under `assets\Studio\<project name>` in the data folder. Takes, exports, the
 last frames for chains and your uploads land there. In the Generate tab, "Save to" above the Generate button sends

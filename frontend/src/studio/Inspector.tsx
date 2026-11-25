@@ -349,6 +349,7 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
         return <ModelTip mode={mode} model={chosen ?? null} />
       })()}
       {s.lane === 'video' && s.kind === 'video' && <StartImage p={p} s={s} models={models} active={active} update={update} />}
+      {s.lane === 'video' && <SceneExtras key={s.id} p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
       {s.lane === 'video' && <SceneCharacters p={p} s={s} models={models} active={active} update={update} />}
       {s.lane === 'video' && s.kind === 'video' && (
@@ -515,7 +516,8 @@ function ExpandPrompt({ p, s, models, active, update }: {
     try {
       const r = await api.expandPrompt({
         prompt: sent, target, width: p.settings.width, height: p.settings.height,
-        ...(image && target === 'video_start' ? { reference_asset_ids: [image] } : {}),
+        ...(image && target === 'video_start' ? { reference_asset_ids: [image] }
+          : target === 'image' && s.params?.reference_asset_ids?.length ? { reference_asset_ids: s.params.reference_asset_ids } : {}),
       })
       // Nur übernehmen, wenn der Prompt inzwischen nicht geändert wurde (vorher ersetzte das Ergebnis neue Eingaben)
       const now = latest.current.scenes.find((x) => x.id === s.id)
@@ -661,6 +663,199 @@ function StartImage({ p, s, models, active, update }: {
             : t('Der Clip beginnt mit diesem Bild. So sieht eine Figur in jeder Einstellung gleich aus.', 'The clip begins with this image, so a character looks the same in every shot.')}
       </span>
     </div>
+  )
+}
+
+/** Bilder oder Videos des Projekts wählen: aus dem Material hierher ziehen oder aus dem Projektordner. Mit `max` 1 ersetzt
+ * die neue Wahl die alte; 0 heißt, das Modell nimmt keine (dann nur noch entfernen). */
+function AssetPicker({ p, media, ids, max, label, empty, onChange }: {
+  p: StudioProject
+  media: 'image' | 'video'
+  ids: string[]
+  max: number
+  label: string
+  empty: string
+  onChange: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [list, setList] = useState<Asset[] | null>(null)
+  const [over, setOver] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    api.assetPage({ media, folder: p.folder ?? '', limit: 60, offset: 0 })
+      .then((found) => alive && setList(found))
+      .catch(() => alive && setList([]))
+    return () => { alive = false }
+  }, [open, media, p.folder])
+  const add = (id: string) => {
+    if (max === 1) onChange([id])
+    else if (!ids.includes(id) && ids.length < max) onChange([...ids, id])
+  }
+  const accept = (e: RDragEvent) => {
+    if (max < 1 || !e.dataTransfer.types.includes(ASSET_MIME)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setOver(true)
+  }
+  const drop = (e: RDragEvent) => {
+    setOver(false)
+    const raw = e.dataTransfer.getData(ASSET_MIME)
+    if (!raw || max < 1) return
+    e.preventDefault()
+    const dropped = JSON.parse(raw) as { id: string; kind: string | null }
+    if (dropped.kind === media) add(dropped.id)
+  }
+  const picture = (x: { url: string; thumb_url?: string | null }) => media === 'video'
+    ? <video src={`${x.url}#t=0.1`} preload="metadata" muted />
+    : <img src={x.thumb_url || x.url} alt="" loading="lazy" />
+  return (
+    <div className="st-field">
+      <span>{label}{max > 1 ? ` (${ids.length}/${max})` : ''}</span>
+      <div className={`st-drop${over ? ' st-over' : ''}`} onDragOver={accept} onDragEnter={accept}
+        onDragLeave={() => setOver(false)} onDrop={drop}>
+        {ids.length === 0 ? <span className="small">{empty}</span> : (
+          <div className="st-takes">
+            {ids.map((id) => {
+              const a = p.assets[id]
+              return (
+                <button key={id} type="button" className="st-take" onClick={() => onChange(ids.filter((x) => x !== id))}
+                  title={t('Klick entfernt es', 'Click to remove it')}>
+                  {a ? picture(a) : <span className="warn-text small">{t('fehlt', 'missing')}</span>}
+                  <span className="st-take-x">✕</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+      {max > 0 && (
+        <div className="st-start-actions">
+          <button type="button" className="btn small ghost" onClick={() => setOpen((x) => !x)}>
+            {open ? t('Auswahl schließen', 'Close the selection') : t('Aus dem Projektordner wählen …', 'Choose from the project folder …')}
+          </button>
+        </div>
+      )}
+      {open && max > 0 && (list === null
+        ? <span className="small">{t('Lädt …', 'Loading …')}</span>
+        : list.length === 0
+          ? <span className="small">{t('Im Projektordner liegt noch nichts Passendes.', 'There is nothing suitable in the project folder yet.')}</span>
+          : (
+            <div className="st-takes st-start-grid">
+              {list.map((x) => (
+                <button key={x.id} type="button" className={`st-take${ids.includes(x.id) ? ' st-sel' : ''}`} title={assetLabel(x)}
+                  onClick={() => { add(x.id); if (max === 1) setOpen(false) }}>
+                  {picture(x)}
+                </button>
+              ))}
+            </div>
+          ))}
+    </div>
+  )
+}
+
+/** Vorlagen und Zusätze einer Bild- oder Videoszene (seit 0.5.40; Nutzer 25.11.2026: „stelle sicher dass die neuen modelle
+ * und features auch im studio aktuell sind“): was das gewählte Modell laut Katalog kann, wie im Reiter Generieren.
+ * Referenzbilder, Endbild und Schleife, Layout-Video (Layout to Render), eigene Tonbeschreibung. Zugeklappt, solange nichts
+ * gewählt ist. Passt etwas Gewähltes nicht mehr zum Modell, bleibt es sichtbar und lässt sich entfernen. */
+function SceneExtras({ p, s, models, active, update }: {
+  p: StudioProject
+  s: StudioScene
+  models: ModelInfo[]
+  active: Props['active']
+  update: (fields: Record<string, unknown>) => void
+}) {
+  const still = s.kind === 'image'
+  const model = models.find((m) => m.id === (s.model_id || active?.[still ? 'image' : 'video']))
+  const f = model?.features
+  const params = s.params ?? {}
+  const refs: string[] = params.reference_asset_ids ?? []
+  const end: string | null = params.end_image_asset_id || null
+  const guide: string | null = params.guide_asset_id || null
+  const loop = !!params.loop
+  const sound = String(params.audio_prompt ?? '')
+  const maxRefs = Number(f?.references ?? 0)
+  const ltx = !still && model?.family === 'ltx25'
+  const showRefs = maxRefs > 0 || refs.length > 0
+  const showEnd = !still && (!!f?.end_image || !!end || loop)
+  const showLayout = !still && (ltx || !!guide)
+  const showSound = !still && (!!f?.audio_prompt || !!sound)
+  if (!showRefs && !showEnd && !showLayout && !showSound) return null
+  const set = (fields: Record<string, unknown>) => update({ params: fields })
+  const name = model?.name ?? t('Dieses Modell', 'This model')
+  const count = refs.length + (end ? 1 : 0) + (loop ? 1 : 0) + (guide ? 1 : 0) + (sound ? 1 : 0)
+  const needsRefs = maxRefs > 0 && refs.length === 0
+    && (still ? model?.workflow === 'qwen_image_edit' : !!model && startImageUse(model) === null)
+  return (
+    <details className="lora-picker st-extras" open={count > 0 || needsRefs || undefined}>
+      <summary>
+        {t('Vorlagen und Zusätze', 'References and extras')}{' '}
+        <span className="muted small">{count ? t(`— ${count} gewählt`, `— ${count} selected`) : t('— optional', '— optional')}</span>
+      </summary>
+      {showRefs && (
+        <>
+          <AssetPicker p={p} media="image" ids={refs} max={maxRefs}
+            label={f?.reference_kind === 'style' ? t('Stilvorlage', 'Style template') : t('Referenzbilder', 'Reference images')}
+            empty={t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
+            onChange={(ids) => set({ reference_asset_ids: ids })} />
+          {maxRefs === 0 || refs.length > maxRefs
+            ? <p className="warn-text small">{maxRefs === 0
+              ? t(`${name} nimmt keine Referenzbilder: entfernen oder ein anderes Modell wählen.`, `${name} takes no reference images: remove them or choose another model.`)
+              : t(`${name} nimmt höchstens ${maxRefs}.`, `${name} takes at most ${maxRefs}.`)}</p>
+            : needsRefs
+              ? <p className="warn-text small">{t(`${name} braucht ein Referenzbild.`, `${name} needs a reference image.`)}</p>
+              : f?.reference_kind === 'style'
+                ? <p className="small">{t('Gibt nur den Stil vor, nicht den Inhalt.', 'Sets the style only, not the content.')}</p>
+                : <p className="small">{t('Im Prompt nennen: „The person from the first image …“ zeigt die Person aus einem Foto, „the first image“ eine Figur oder ein Ding.',
+                  'Name them in the prompt: "The person from the first image …" shows the person from a photo, "the first image" a character or an object.')}</p>}
+        </>
+      )}
+      {showEnd && (
+        <>
+          <AssetPicker p={p} media="image" ids={end ? [end] : []} max={f?.end_image && !loop ? 1 : 0}
+            label={t('Endbild', 'End image')}
+            empty={loop ? t('Die Schleife endet mit dem Startbild.', 'The loop ends with the start image.') : t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
+            onChange={(ids) => set({ end_image_asset_id: ids[0] ?? null, ...(ids[0] ? { loop: false, guide_asset_id: null } : {}) })} />
+          {f?.loop || loop ? (
+            <label className="st-check">
+              <input type="checkbox" checked={loop} disabled={!loop && !params.image_asset_id}
+                onChange={(e) => set({ loop: e.target.checked, ...(e.target.checked ? { end_image_asset_id: null, guide_asset_id: null } : {}) })} />
+              <span>{t('Schleife (endet mit dem Startbild)', 'Loop (ends with the start image)')}</span>
+            </label>
+          ) : null}
+          {!f?.end_image && (end || loop)
+            ? <p className="warn-text small">{t(`${name} nimmt kein Endbild: entfernen oder LTX-2.5 wählen.`, `${name} takes no end image: remove it or choose LTX-2.5.`)}</p>
+            : <p className="small">{t('Mit Endbild oder Schleife rechnet LTX-2.5 ohne DFR.', 'With an end image or a loop, LTX-2.5 renders without DFR.')}</p>}
+        </>
+      )}
+      {showLayout && (
+        <>
+          <AssetPicker p={p} media="video" ids={guide ? [guide] : []} max={ltx && f?.layout ? 1 : 0}
+            label={t('Layout-Video (Layout to Render)', 'Layout video (layout to render)')}
+            empty={ltx && !f?.layout
+              ? t('Braucht die Layout-To-Render-LoRA: unter „Modelle“ bei LTX-2.5 „Zusätze laden“.', 'Needs the Layout-To-Render LoRA: "Download extras" for LTX-2.5 under "Models".')
+              : t('Video aus dem Material hierher ziehen', 'Drag a video from the media here')}
+            onChange={(ids) => set({ guide_asset_id: ids[0] ?? null, ...(ids[0] ? { end_image_asset_id: null, loop: false } : {}) })} />
+          {guide && !ltx && <p className="warn-text small">{t(`${name} nimmt kein Layout-Video; es bleibt hier unbenutzt.`, `${name} takes no layout video; it stays unused here.`)}</p>}
+          {guide && ltx && (params.audio_from || params.audio_asset_id) && (
+            <p className="warn-text small">{t('Ein Layout geht nicht zusammen mit Ton aus einer Sprecher-Szene.', 'A layout does not combine with sound from a voice scene.')}</p>
+          )}
+          {ltx && f?.layout && (
+            <p className="small">{t('Eine grobe graue Animation (24 fps) gibt Kamera und Bewegung vor, das Startbild Look und Licht. Ohne Ton und DFR, höchstens so lang wie das Layout. Der erste Auftrag lädt zwei Knoten von Lightricks.',
+              'A rough grey animation (24 fps) sets camera and motion, the start image look and light. No sound, no DFR, at most as long as the layout. The first job downloads two nodes by Lightricks.')}</p>
+          )}
+        </>
+      )}
+      {showSound && (
+        <>
+          <Field label={t('Ton (was zu hören ist)', 'Sound (what is heard)')} value={sound} area rows={2}
+            placeholder={f?.audio_placeholder} onCommit={(v) => set({ audio_prompt: v })} />
+          {!f?.audio_prompt && sound && (
+            <p className="small">{t(`${name} nimmt keine eigene Tonbeschreibung; sie bleibt hier unbenutzt.`, `${name} takes no separate sound description; it stays unused here.`)}</p>
+          )}
+        </>
+      )}
+    </details>
   )
 }
 
@@ -945,7 +1140,9 @@ function ProjectProps({ p, models, onCommand }: { p: StudioProject; models: Mode
         {t('Eine Figur bündelt Aussehen (LoRA, etwa selbst trainiert) und Stimme. Bild- und Videoszenen wählen unter „Figuren im Bild“, wer zu sehen ist, Sprecher-Szenen unter „Stimme“, wer spricht. Eine Videoszene mit „Ton aus Sprecher-Szene“ spricht deren Satz mit den Lippen.',
           'A character bundles a look (LoRA, e.g. one you trained) and a voice. Picture scenes choose under "Characters in the picture" who is seen, voice scenes under "Voice" who speaks. A video scene with "Sound from voice scene" speaks that line with its lips.')}
       </p>
-      {(p.characters ?? []).map((c) => <CharacterEditor key={c.id} p={p} c={c} models={models} onCommand={onCommand} />)}
+      <div className="st-chars">
+        {(p.characters ?? []).map((c) => <CharacterEditor key={c.id} p={p} c={c} models={models} onCommand={onCommand} />)}
+      </div>
       <div className="st-actions">
         <button className="btn small" onClick={() => onCommand('character.add', {})}>{t('+ Figur', '+ Character')}</button>
       </div>

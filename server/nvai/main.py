@@ -24,7 +24,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from starlette.requests import ClientDisconnect
 from starlette.routing import Route
-from mcp.server.transport_security import TransportSecuritySettings
 
 import httpx
 
@@ -62,7 +61,6 @@ from . import audio_lab  # noqa: E402  (Bereich „Audio“, Auftraege audio_*)
 from . import audio_forensic  # noqa: E402  (Ton-Forensik: Spektrogramm, Sprachaktivitaet, Transkript)
 from . import audio_vdr  # noqa: E402  (VDR-Aufzeichnungen im Bereich „Audio“, Auftraege audio_vdr_*)
 from . import audio_package  # noqa: E402  (Prüfpaket für die Prüf-App)
-from . import mcp_server  # noqa: E402  (dieselben MCP-Werkzeuge auch über HTTP unter /mcp, seit 0.5.39)
 
 
 @asynccontextmanager
@@ -85,6 +83,7 @@ async def lifespan(app: FastAPI):
         engine.start_repair()
     except Exception:  # noqa: BLE001 - der Server soll trotzdem starten
         traceback.print_exc()
+    asyncio.get_running_loop().run_in_executor(None, registry.prefetch_access)  # Hugging Face fragen, ohne zu warten
     async with _mcp_http.running():
         yield
     await jobs.shutdown()
@@ -286,24 +285,54 @@ app.add_middleware(
 # NVAI_DATA_DIR. Es gilt der Zugriffsschutz oben: dieser Rechner ohne Token, andere Geräte mit X-NVAI-Token. Die
 # DNS-Rebinding-Prüfung des SDK kennt nur localhost und sperrte den Netzbetrieb mit Token; dasselbe prüft schon
 # _is_local, deshalb ist sie hier aus. Der Sitzungsverwalter des SDK läuft nur einmal je Instanz: Jeder Lebenszyklus
-# (lifespan, auch in Tests) baut einen neuen.
+# (lifespan, auch in Tests) baut einen neuen. Das SDK lädt erst nach dem Start im Hintergrund: Sein Import kostet rund
+# 0,6 s und hielt sonst die Oberfläche auf (gemessen 25.11.2026). Sitzungsverwalter samt Aufgabengruppe leben dafür in
+# einer eigenen Aufgabe, die sie auch wieder schließt; wer /mcp vorher fragt, wartet kurz.
 class _McpHttp:
     def __init__(self) -> None:
         self.handler: Any = None
+        self._ready: asyncio.Event | None = None
 
     @asynccontextmanager
     async def running(self):
-        http_app = mcp_server.server.streamable_http_app(
-            streamable_http_path="/mcp",
-            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
-        self.handler = http_app.routes[0].endpoint
+        ready, stop = asyncio.Event(), asyncio.Event()
+        self._ready = ready
+        task = asyncio.create_task(self._serve(ready, stop), name="nvai-mcp-http")
         try:
-            async with mcp_server.server.session_manager.run():
-                yield
+            yield
         finally:
             self.handler = None
+            stop.set()
+            await asyncio.wait({task}, timeout=15)
+            if not task.done():
+                task.cancel()
+                await asyncio.wait({task}, timeout=5)
+
+    @staticmethod
+    def _load() -> tuple[Any, Any]:
+        from mcp.server.transport_security import TransportSecuritySettings
+        from . import mcp_server
+        return mcp_server, TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+    async def _serve(self, ready: asyncio.Event, stop: asyncio.Event) -> None:
+        try:
+            mcp_server, security = await asyncio.to_thread(self._load)
+            if stop.is_set():
+                return
+            http_app = mcp_server.server.streamable_http_app(streamable_http_path="/mcp", transport_security=security)
+            async with mcp_server.server.session_manager.run():
+                self.handler = http_app.routes[0].endpoint
+                ready.set()
+                await stop.wait()
+        except Exception:  # noqa: BLE001 - ohne MCP laufen Oberfläche und REST weiter
+            traceback.print_exc()
+        finally:
+            ready.set()
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if self.handler is None and self._ready is not None:
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._ready.wait(), 30)
         if self.handler is None:
             await JSONResponse({"detail": "MCP is not running"}, status_code=503)(scope, receive, send)
             return

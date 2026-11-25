@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.39",
+  "version": "0.5.40",
   "x-api-version": 1
  },
  "paths": {

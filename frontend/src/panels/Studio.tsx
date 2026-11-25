@@ -44,8 +44,11 @@ const BIN_WIDTH = 240
 const KEY_SIDE = 'nvai-studio-side-width'
 const SIDE_WIDTH = 330
 const SIDE_MIN = 260
-const SIDE_MAX = 640
-const MONITOR_MIN = 320
+const BIN_MIN = 180
+// Beide Seitenspalten lassen sich so breit ziehen, bis die Vorschau nur noch diese Breite hat (Nutzer 25.11.2026:
+// „‚Project‘ bereich im studio soll sich noch viel weiter breiter machen lassen“; bis 0.5.39 höchstens 640 px)
+const MONITOR_MIN = 200
+const SPLITTERS = 10
 
 function stored(key: string): string | null {
   try {
@@ -980,10 +983,15 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     const box = upper.current?.getBoundingClientRect()
     if (!box) return
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const side = sideWidth  // wird es eng, weicht die andere Spalte bis zu ihrer Mindestbreite, beim Zurückziehen zurück
     const move = (ev: PointerEvent) => {
-      const w = Math.round(Math.max(180, Math.min(ev.clientX - box.left, box.width - sideWidth - MONITOR_MIN)))
+      const free = box.width - MONITOR_MIN - SPLITTERS
+      const w = Math.round(Math.max(BIN_MIN, Math.min(ev.clientX - box.left, free - SIDE_MIN)))
+      const other = Math.round(Math.max(SIDE_MIN, Math.min(side, free - w)))
       setBinWidth(w)
       store(KEY_BIN, String(w))
+      setSideWidth(other)
+      store(KEY_SIDE, String(other))
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -1002,11 +1010,15 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     const box = upper.current?.getBoundingClientRect()
     if (!box) return
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    const bin = binWidth
     const move = (ev: PointerEvent) => {
-      const room = box.width - Math.min(binWidth, box.width / 2) - MONITOR_MIN
-      const w = Math.round(Math.max(SIDE_MIN, Math.min(box.right - ev.clientX, SIDE_MAX, room)))
+      const free = box.width - MONITOR_MIN - SPLITTERS
+      const w = Math.round(Math.max(SIDE_MIN, Math.min(box.right - ev.clientX, free - BIN_MIN)))
+      const other = Math.round(Math.max(BIN_MIN, Math.min(bin, free - w)))
       setSideWidth(w)
       store(KEY_SIDE, String(w))
+      setBinWidth(other)
+      store(KEY_BIN, String(other))
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
@@ -1186,7 +1198,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         </div>
       ) : (
         <>
-          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `min(${binWidth}px, 50vw) 5px minmax(0, 1fr) 5px min(${sideWidth}px, 45vw)` }}>
+          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `minmax(${BIN_MIN}px, ${binWidth}px) 5px minmax(${MONITOR_MIN}px, 1fr) 5px minmax(${SIDE_MIN}px, ${sideWidth}px)` }}>
             <Bin
               refreshKey={binKey + assetsVersion}
               selectedId={selection?.type === 'asset' ? selection.id : null}

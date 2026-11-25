@@ -38,7 +38,12 @@ function engineLabel(id: EngineId, st: EngineState): string {
     if (st.rocm_optional) return t('ComfyUI (ROCm, experimentell)', 'ComfyUI (ROCm, experimental)')
     return st.vendor === 'amd' ? 'ComfyUI (ROCm)' : 'ComfyUI (CUDA)'
   }
-  return 'stable-diffusion.cpp'
+  // Womit sd.cpp rechnet (Nutzer 25.11.2026: „es sollte auch (Vulkan) stehen“): der gewählte sd.cpp-Modus, bei Auto
+  // CUDA auf NVIDIA, sonst Vulkan, wie engine.effective auf dem Server
+  const ids = st.backends.map((b) => b.id)
+  const chosen = ids.includes(st.sdcpp_backend) ? st.sdcpp_backend : 'auto'
+  const backend = chosen !== 'auto' ? chosen : ids.includes('cuda') ? 'cuda' : 'vulkan'
+  return `stable-diffusion.cpp (${backend === 'cuda' ? 'CUDA' : 'Vulkan'})`
 }
 
 function backendLabel(b: EngineState['backends'][number]): string {

@@ -6,15 +6,17 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.39.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.39/NVAI-open-Setup-0.5.39.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.14.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-0.5.14.dmg) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.40.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.40/NVAI-open-Setup-0.5.40.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.15.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.40/NVAI-open-0.5.15.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.39 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.39))
+November 2026: NVAI-open 0.5.40 for Windows and 0.5.15 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.40))
 
+- **Faster start** (0.5.40): NVAI-open is ready after 2.0 instead of 5.2 s on the test machine. The launcher no longer waits 2 s for a closed port, MCP loads in the background, and a slow Hugging Face no longer holds up the start (10.6 s before in a test with 5 s per answer, now 0.02 s).
+- **Studio: more room, references and extras** (0.5.40, Mac 0.5.15): the project and media columns can be dragged across almost the whole window, and scenes offer reference images, an end image or loop, a layout video and a sound description, whatever the chosen model can do (on the Mac reference images for still images with FLUX.2 Klein). [Details](docs/STUDIO.md#step-by-step)
 - **Chinese and French** (0.5.39): the language list at the top right offers English, Deutsch, 简体中文 and Français; model descriptions and the messages of the server follow it. Based on a contribution by NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
 - **AI agents through an address** (0.5.39): NVAI-open serves its MCP server itself at `http://127.0.0.1:8100/mcp`, so WorkBuddy, Cursor, Claude Code and other agents connect without paths; "Models → AI agents (MCP)" shows entries to copy. [Details](docs/CLAUDE_CODE.md#setup)
 - **ComfyUI with ROCm on the Radeon RX 5000 and RX 6500/6400** (0.5.38, experimental): AMD now offers PyTorch with ROCm for these cards, so the setup installs it and checks it on the card. Vulkan stays the default; "ComfyUI (ROCm, experimental)" under Models → Your hardware computes every model that fits into the card's memory on the card. Not measured on such a card yet. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
@@ -338,8 +340,10 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.39 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.39))
+November 2026: NVAI-open 0.5.40 für Windows und 0.5.15 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.40))
 
+- **Schnellerer Start** (0.5.40): NVAI-open ist auf dem Testrechner nach 2,0 statt 5,2 s bereit. Der Starter wartet nicht mehr 2 s auf einen geschlossenen Port, MCP lädt im Hintergrund, und ein langsames Hugging Face hält den Start nicht mehr auf (im Test mit 5 s je Antwort vorher 10,6 s, jetzt 0,02 s).
+- **Studio: mehr Platz, Vorlagen und Zusätze** (0.5.40, Mac 0.5.15): Die Spalten für Projekt und Material lassen sich fast über das ganze Fenster ziehen, und Szenen bieten Referenzbilder, Endbild oder Schleife, Layout-Video und eine Tonbeschreibung an, je nachdem, was das gewählte Modell kann (auf dem Mac Referenzbilder für Standbilder mit FLUX.2 Klein). [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 - **Chinesisch und Französisch** (0.5.39): Die Sprachliste oben rechts bietet English, Deutsch, 简体中文 und Français; Modellbeschreibungen und Meldungen des Servers folgen ihr. Auf Grundlage eines Beitrags von NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
 - **KI-Agenten über eine Adresse** (0.5.39): NVAI-open stellt seinen MCP-Server selbst unter `http://127.0.0.1:8100/mcp` bereit; WorkBuddy, Cursor, Claude Code und andere Agenten verbinden sich ohne Pfade, „Modelle → KI-Agenten (MCP)“ zeigt Einträge zum Kopieren. [Einzelheiten](docs/CLAUDE_CODE.md#setup) (englisch)
 - **ComfyUI mit ROCm auf der Radeon RX 5000 und RX 6500/6400** (0.5.38, experimentell): AMD bietet PyTorch mit ROCm jetzt auch für diese Karten an, das Setup richtet es ein und prüft es auf der Karte. Vulkan bleibt die Vorgabe; „ComfyUI (ROCm, experimentell)“ unter Modelle → Deine Hardware rechnet jedes Modell, das in den Grafikspeicher passt, auf der Karte. Auf so einer Karte noch nicht gemessen. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)

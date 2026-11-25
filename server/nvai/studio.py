@@ -864,7 +864,8 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
 
 
 @command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, params "
-         "(wird zusammengeführt, z. B. image_asset_id, quality, seed, characters [Figuren-IDs im Bild], audio_from "
+         "(wird zusammengeführt, z. B. image_asset_id, reference_asset_ids, end_image_asset_id, loop, guide_asset_id "
+         "[Layout-Video, LTX-2.5], audio_prompt [Kandinsky 6], quality, seed, characters [Figuren-IDs im Bild], audio_from "
          "[Sprecher-Szene, deren Take der Ton eines Videos wird]; Bahn voice: character [Figur, deren Stimme spricht], "
          "voice, voice_from, voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
@@ -1912,6 +1913,14 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
     look, prompt = _character_look(p, s, model_id, params)
     if look:
         extra["loras"] = look
+    # Kandinsky 6: was zu hören ist, getrennt vom Bild (seit 0.5.40 auch im Studio)
+    if feats.get("audio_prompt") and str(params.get("audio_prompt") or "").strip():
+        extra["audio_prompt"] = str(params["audio_prompt"])
+    # Layout-To-Render (LTX-2.5, seit 0.5.40 auch im Studio): ein grobes Layout-Video gibt Kamera und Bewegung vor. Das
+    # geht nicht mit DFR; was sonst nicht dazu passt (Endbild, Schleife, Ton), nennt der Auftrag.
+    if entry and entry.get("family") == "ltx25" and params.get("guide_asset_id"):
+        extra["guide_asset_id"] = params["guide_asset_id"]
+        extra.setdefault("quality", "standard")
     if params.get("audio_from"):
         # Die Figur spricht ihren Satz aus der Sprecher-Szene (deren Take, in der Stimme der Figur); LTX-2.5 bewegt
         # die Lippen dazu, die Länge kommt vom Ton
@@ -1948,7 +1957,7 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         latent = (entry is not None and entry.get("family") == "ltx25" and take is not None and take.kind == "video"
                   and float((take.meta or {}).get("fps") or 24) <= 30
                   and not any(extra.get(k) for k in ("end_image_asset_id", "loop", "audio_asset_id",
-                                                     "temporal_upscale")))
+                                                     "temporal_upscale", "guide_asset_id")))
         if latent:
             chain_id = source["take"]
             # Nach den übernommenen Bildern mindestens die ganze Szene neu rechnen (aufrunden statt runden), sonst
@@ -2360,8 +2369,8 @@ def _used_assets(p: dict[str, Any]) -> list[str]:
     for s in p["scenes"]:
         ids.update(s.get("takes") or [])
         params = s.get("params") or {}
-        ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id")
-                   if params.get(k))
+        ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id",
+                                       "guide_asset_id") if params.get(k))
         ids.update(params.get("reference_asset_ids") or [])
     # Stimmen der Figuren aus einer Aufnahme (seit 0.5.24); die LoRA-Dateien selbst sind Modelle, nicht im Paket
     ids.update(c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id"))
@@ -2539,7 +2548,9 @@ def _import_extras(z: zipfile.ZipFile, members: set[str], a: dict[str, Any], exi
 NON_EN = re.compile(r"[äöüßÄÖÜ]|\b(der|das|und|ein|eine|einen|eines|einem|einer|mit|auf|bei|vom|zum|zur|dem|des|ist|"
                     r"sind|nicht|sich|unter|hinter|nach|aus|wird|steht|geht|zieht|hebt|langsam|seine|ihre|alten|alte|"
                     r"kleine|kleiner|große|großen|hellem|dunklen)\b", re.IGNORECASE)
-SOUND_FAMILIES = ("ltx25", "ltx23", "kandinsky6")  # Videomodelle mit eigenem Ton (wie wizard.SOUND_FAMILIES)
+# Videomodelle mit eigenem Ton (wizard.SOUND_FAMILIES nennt die des Assistenten); MiniMax H3 macht Stereoton
+SOUND_FAMILIES = ("ltx25", "ltx23", "kandinsky6", "minimax_h3", "minimax_h3_ref2va", "minimax_h3_fast",
+                  "minimax_h3_tiny")
 
 
 def _vram_gb() -> float | None:
@@ -2684,8 +2695,9 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
     # (Feld „Startbild“ in den Eigenschaften, seit 0.5.27)
     used = ({a for s in p["scenes"] for a in s["takes"]} | {c["asset_id"] for c in p["clips"]}
             | {c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id")}
-            | {(s.get("params") or {})[k] for s in p["scenes"] for k in ("image_asset_id", "end_image_asset_id")
-               if (s.get("params") or {}).get(k)})
+            | {(s.get("params") or {})[k] for s in p["scenes"]
+               for k in ("image_asset_id", "end_image_asset_id", "guide_asset_id") if (s.get("params") or {}).get(k)}
+            | {a for s in p["scenes"] for a in (s.get("params") or {}).get("reference_asset_ids") or [] if a})
     assets = {}
     for asset_id in used:
         asset = db.get_asset(asset_id)

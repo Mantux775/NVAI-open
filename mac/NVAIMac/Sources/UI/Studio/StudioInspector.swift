@@ -317,6 +317,9 @@ private struct SceneInspector: View {
                 SceneStartImageView(model: model, project: project, scene: scene,
                                     chained: scene.chainFrom != nil || chainMarker != nil, update: update)
             }
+            if scene.lane == "video" && scene.kind == "image" {
+                SceneReferencesView(model: model, project: project, scene: scene, update: update)
+            }
             if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
             if scene.lane == "video" { SceneCharactersView(project: project, scene: scene, update: update) }
             if scene.lane == "video" && scene.kind == "video" {
@@ -377,7 +380,7 @@ private struct SceneInspector: View {
                 Text(t("Noch keiner. Erzeugen oder ein Material auf die Szene ziehen.", "None yet. Generate, or drag an asset onto the scene."))
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 6)], spacing: 6) {
                     ForEach(Array(scene.takes.enumerated()), id: \.element) { i, take in
                         Button {
                             Task { await model.run("scene.take", ["id": .string(scene.id), "asset_id": .string(take)]) }
@@ -500,6 +503,124 @@ enum StudioRecordings {
 /// Stimme einer Sprecher-Szene (seit 0.5.3, wie unter Windows): beschreiben, die einer Figur (seit 0.5.5), gleich wie
 /// eine andere Sprecher-Szene (deren gewählter Take mit seinem Text) oder aus einer Aufnahme des Projekts; dazu die
 /// Sprache (bei einer Figur deren Sprache).
+/// Referenzbilder eines Standbilds (seit Mac 0.5.15, wie „Vorlagen und Zusätze“ im Windows-Studio seit 0.5.40): was das
+/// gewählte Bildmodell laut features.references nimmt (FLUX.2 Klein drei). Bilder aus dem Material hierher ziehen, aus dem
+/// Projektordner oder von der Festplatte; ein Klick entfernt sie. Nimmt das Modell keine, bleibt Gewähltes sichtbar.
+private struct SceneReferencesView: View {
+    @ObservedObject var model: StudioModel
+    let project: StudioProject
+    let scene: StudioScene
+    let update: (StudioParams) -> Void
+    @State private var assets: [AssetRecord] = []
+    @State private var choices: [AssetRecord] = []
+    @State private var hover = false
+
+    private var ids: [String] { (scene.params["reference_asset_ids"]?.arrayValue ?? []).compactMap(\.stringValue) }
+
+    var body: some View {
+        let entry = Models.find(scene.modelID) ?? Models.active
+        let limit = entry.features["references"] as? Int ?? 0
+        if limit > 0 || !ids.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(t("Referenzbilder", "Reference images") + (limit > 0 ? " (\(ids.count)/\(limit))" : ""))
+                    .font(.caption).foregroundStyle(.secondary)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(hover ? Color.green : Color.secondary.opacity(0.4),
+                                      style: StrokeStyle(lineWidth: hover ? 2 : 1, dash: ids.isEmpty ? [4] : []))
+                    if ids.isEmpty {
+                        Text(t("Bild aus dem Material hierher ziehen", "Drag a picture from the media here"))
+                            .font(.caption).foregroundStyle(.secondary).padding(8)
+                    } else {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 6)], spacing: 6) {
+                            ForEach(assets, id: \.id) { a in
+                                Button { set(ids.filter { $0 != a.id }) } label: {
+                                    AssetThumbnail(asset: a, maxSide: 240).frame(maxWidth: .infinity, maxHeight: 64)
+                                        .overlay(alignment: .topTrailing) {
+                                            Image(systemName: "xmark.circle.fill").font(.caption).padding(3)
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .help(t("Klick entfernt es", "Click to remove it"))
+                            }
+                        }
+                        .padding(5)
+                    }
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard let id = dropped.first, limit > 0 else { return false }
+                    Task { await add(id, limit) }
+                    return true
+                } isTargeted: { hover = $0 && limit > 0 }
+                HStack(spacing: 6) {
+                    if limit > 0 {
+                        Menu(t("Aus dem Projektordner …", "From the project folder …")) {
+                            if choices.isEmpty { Text(t("Keine Bilder im Projektordner", "No pictures in the project folder")) }
+                            ForEach(choices, id: \.id) { a in
+                                Button(a.prompt.isEmpty ? a.filename : String(a.prompt.prefix(48))) { Task { await add(a.id, limit) } }
+                            }
+                        }
+                        .fixedSize()
+                        .disabled(ids.count >= limit)
+                        Button(t("Datei …", "File …")) { pickFile(limit) }.disabled(ids.count >= limit)
+                    }
+                    if !ids.isEmpty { Button(t("Entfernen", "Remove")) { set([]) } }
+                }
+                .font(.callout)
+                if limit == 0 || ids.count > limit {
+                    Text(limit == 0
+                         ? t("\(entry.name) nimmt keine Referenzbilder: entfernen oder ein anderes Modell wählen.",
+                             "\(entry.name) takes no reference images: remove them or choose another model.")
+                         : t("\(entry.name) nimmt höchstens \(limit).", "\(entry.name) takes at most \(limit)."))
+                        .font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(t("Im Prompt nennen, zum Beispiel „The person from the first image …“.",
+                           "Name them in the prompt, for example \"The person from the first image …\"."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .task(id: ids.joined(separator: ",") + "|" + project.id) { await load() }
+        }
+    }
+
+    private func set(_ list: [String]) {
+        update(["params": .object(["reference_asset_ids": .array(list.map { .string($0) })])])
+    }
+
+    private func load() async {
+        var found: [AssetRecord] = []
+        for id in ids { if let a = await AssetStore.shared.get(id) { found.append(a) } }
+        assets = found
+        choices = await AssetStore.shared.list(limit: 5000)
+            .filter { $0.meta["studio_project"]?.stringValue == project.id && SceneStartImageView.isPicture($0) }
+    }
+
+    /// Nur Bilder, jedes einmal; das Bild kommt dabei in den Projektordner
+    private func add(_ id: String, _ limit: Int) async {
+        guard let a = await AssetStore.shared.get(id), SceneStartImageView.isPicture(a) else {
+            model.notice = t("Als Referenz geht nur ein Bild.", "Only a picture works as a reference.")
+            return
+        }
+        guard !ids.contains(id), ids.count < limit else { return }
+        await AssetStore.shared.tag([id], project: project.id)
+        set(ids + [id])
+    }
+
+    private func pickFile(_ limit: Int) {
+        guard let url = Panels.chooseImage(t("Referenzbild wählen", "Choose a reference image")),
+              let data = try? Data(contentsOf: url) else { return }
+        Task {
+            do {
+                let record = try await AssetStore.shared.addUpload(data: data, originalName: url.lastPathComponent)
+                await add(record.id, limit)
+            } catch {
+                model.notice = error.localizedDescription
+            }
+        }
+    }
+}
+
 /// Startbild einer Videoszene (seit Mac 0.5.6, wie StartImage in Inspector.tsx unter Windows seit 0.5.27): ein Bild
 /// aus dem Material hierher ziehen, aus dem Projektordner wählen oder von der Festplatte laden; entfernen. Bei einem
 /// Anschluss kommt das Startbild aus der Szene davor, dann nur ein Hinweis.
