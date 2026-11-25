@@ -15,43 +15,27 @@ Install, open, download a model under "Models", generate. The setup brings every
 
 November 2026: NVAI-open 0.5.40 for Windows and 0.5.15 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.40))
 
-- **Faster start** (0.5.40): NVAI-open is ready after 2.0 instead of 5.2 s on the test machine. The launcher no longer waits 2 s for a closed port, MCP loads in the background, and a slow Hugging Face no longer holds up the start (10.6 s before in a test with 5 s per answer, now 0.02 s).
-- **Studio: more room, references and extras** (0.5.40, Mac 0.5.15): the project and media columns can be dragged across almost the whole window, and scenes offer reference images, an end image or loop, a layout video and a sound description, whatever the chosen model can do (on the Mac reference images for still images with FLUX.2 Klein). [Details](docs/STUDIO.md#step-by-step)
-- **Chinese and French** (0.5.39): the language list at the top right offers English, Deutsch, 简体中文 and Français; model descriptions and the messages of the server follow it. Based on a contribution by NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
-- **AI agents through an address** (0.5.39): NVAI-open serves its MCP server itself at `http://127.0.0.1:8100/mcp`, so WorkBuddy, Cursor, Claude Code and other agents connect without paths; "Models → AI agents (MCP)" shows entries to copy. [Details](docs/CLAUDE_CODE.md#setup)
-- **ComfyUI with ROCm on the Radeon RX 5000 and RX 6500/6400** (0.5.38, experimental): AMD now offers PyTorch with ROCm for these cards, so the setup installs it and checks it on the card. Vulkan stays the default; "ComfyUI (ROCm, experimental)" under Models → Your hardware computes every model that fits into the card's memory on the card. Not measured on such a card yet. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
-- **Person from a photo, also for pictures** (0.5.38): the section is now also under Generate → Image and makes four pictures in the chosen size instead of start images for a video. [Details](docs/PHOTO_TO_VIDEO.md#pictures-instead-of-a-video-generate--image)
-- **Vulkan on older Radeons and Intel cards, fixed** (0.5.37): the setups of 0.5.34 to 0.5.36 never set up the Vulkan engines, because Windows PowerShell 5.1 stopped at the first line of the device list, so everything computed on the processor. The setup now reads the list properly, and if it still cannot set them up, NVAI-open downloads them itself on the next start. [Details](docs/DIRECTML.md#setup)
-- **Person from a photo** (0.5.37): every new attempt takes the face from the photo, not from the selected result, so it no longer drifts from round to round. Small video formats get larger start images, the photo can be cropped to head and shoulders along an outline, and other installed models with reference images can be chosen besides FLUX 3 (Qwen-Image-Edit-2511, Apache-2.0, matched a real face less well). [Details](docs/PHOTO_TO_VIDEO.md)
-- **Layout to render and VACE** (0.5.36): a rough grey animation from Blender sets the camera and motion of an LTX-2.5 shot, a painted first frame its look (Lightricks' IC-LoRA; the first job downloads its nodes from GitHub). Wan 2.1 VACE 1.3B puts a character from a reference image into a video, also through Vulkan on older Radeons and Intel cards. [Details](docs/MODELS.md)
-- **Choose the engine** (0.5.35): under Models → Your hardware, or with a click on the memory bar, ComfyUI or stable-diffusion.cpp through CUDA or Vulkan computes images and videos. Auto keeps the fastest way for the card, and only what runs on it is offered. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
-- **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice now compute on the Radeon RX 5000, Vega and Polaris and on Intel cards through Vulkan, with stable-diffusion.cpp and audio.cpp instead of DirectML. On a real RX 5700 XT an SDXL image with the second pass took 6 minutes through DirectML; through Vulkan we expect about 3.5. [Details](docs/DIRECTML.md)
-- **Generate, tidier** (0.5.35): optional parts such as reference images, LoRAs, end image, extending a video and given sound fold away, the model info sits under the tip, extending an image has its own button and needs no prompt, the width of the settings can be dragged, and the Generate button stays in view.
-- **Video on older Radeons through Vulkan** (0.5.34, experimental): Wan 2.1 T2V 1.3B now computes on the Radeon RX 5000, Vega and Polaris through a second engine, stable-diffusion.cpp with Vulkan; on the same card it was 1.7 times slower than CUDA and six times faster than DirectML. [Details](docs/DIRECTML.md#video-through-vulkan)
+- **Studio** (0.5.40, Mac 0.5.15): scenes take reference images and, on Windows, an end image or loop, a layout video and a sound description. [Details](docs/STUDIO.md#step-by-step)
+- **Faster start** (0.5.40): ready after 2.0 instead of 5.2 s on the test machine.
+- **Chinese and French** (0.5.39): choose them in the language list at the top right. Based on a contribution by NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
+- **AI agents through an address** (0.5.39): WorkBuddy, Cursor, Claude Code and other agents connect to `http://127.0.0.1:8100/mcp`. [Details](docs/CLAUDE_CODE.md#setup)
 
 <details><summary><kbd>&nbsp;Read more&nbsp;▾&nbsp;</kbd></summary>
 
-- **Video on older Radeons through Vulkan** (0.5.34, experimental): DirectML stops on video models (its PyTorch plugin handles only five tensor dimensions), so the setup also downloads stable-diffusion.cpp for these cards, and Wan 2.1 T2V 1.3B computes through Vulkan. 2 s at 832 × 480: 117 s with CUDA, 194 s through Vulkan on the same card limited to 8 GB. Vulkan also runs on Intel cards. [Details](docs/DIRECTML.md#video-through-vulkan)
-- **Older Radeons through DirectML** (0.5.33, experimental): the setup gives the Radeon RX 5000, Vega and Polaris a second ComfyUI environment with PyTorch 2.4.1 and Microsoft's torch-directml and checks it on the card. Recommended are the SDXL models and Stable Audio Open, Stable Audio 3 is marked as slow, video does not run yet. On the same card DirectML was 2 to 6 times slower than CUDA (SDXL 1024²: 83 instead of 16 s). [Details and measurements](docs/DIRECTML.md)
-- **ComfyUI 0.46.0** (0.5.32): bit-identical results for Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 and Stable Audio 3 in a comparison with the same seeds; reading from the middle of MP3 and MPEG-TS files at the right time; the review app reads 32-bit integer tracks. [Release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
-- **Bug fixes** (0.5.31, Mac 0.5.12): fixes from five independent reviews of the Studio, LoRA training, audio forensics, the web interface and the Mac app.
-- **Scenes by hand in the Studio** (0.5.30, Mac 0.5.11): a new scene gets the best downloaded model of its lane (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), music as long as the film and sound effects 4 s. "Expand prompt" turns a few words into a full English description, and "Generate start image" makes two start images from the prompt as the assistant does (with the characters of the scene, without black bars). Notes under the properties warn about a clip longer than 6 s at 1080p on a card with 16 GB, a character without a start image, a prompt not in English and a voice line under a video that makes its own sound. [Details](docs/STUDIO.md#step-by-step)
-- **Mac 0.5.11, audio forensics:** "New case …" makes a case from audio or video files, "Import VDR export …" from a voyage data recorder (VR-7000) with heading, speed, alarms, AIS and radar pictures; it shows the space the case needs first and stops before the drive runs full. "Recognise speech" runs Whisper large-v3 (Core ML) where Silero VAD hears speech, "Translate" uses Qwen3.5 (9B from 16 GB of memory, otherwise 4B). Everything runs on the Mac. [Details](docs/AUDIO.md#review-package-and-review-app)
-- **Older Radeons** (0.5.30): cards that AMD's PyTorch for Windows does not support (RX 5000, Vega, Radeon VII, Polaris and older) no longer hang at the start. The setup installs PyTorch for the processor, and the top bar says that NVAI-open runs on the CPU; hovering over it explains what that means and what helps. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
-- **Mac 0.5.10:** the History also shows music, sounds and speech with a play button, and "Clear history" deletes everything at once; whatever a Studio project uses stays. The Hugging Face token is checked with Hugging Face when you save it, and "Check" also tells you whether LTX-2.5 is unlocked. Interrupted downloads continue where they stopped, and uploads over the API are no longer limited to 64 MB. The review app can burn subtitles into an exported video, and its SRT files now load in the Windows Media Player.
-- **Mac 0.5.9:** a face from a photo now lands reliably in a new scene: put the photo under "Reference images" and say who it is (woman or man, age, hair). A start image is cropped to the format instead of stretched, and the assistant asks who is in the photo. A full bug hunt fixed, among other things: Studio projects from Windows with video now open on the Mac, FLUX.2 no longer tears an image when two sizes with the same number of pixels follow each other, Studio exports below 1080p no longer get stuck, the Hugging Face token has a field in the settings, and deleting a file no longer breaks a clip in a project.
-- **Audio forensics** (0.5.29): a long recording with many channels becomes a case: tracks, spectrogram, speech activity, events, notes and a translation track. Whisper large-v3 writes down what is said, Qwen3.5-9B translates it, and every block stays a draft until a person has checked it; a note says which models, under which license and on which graphics card. It also reads the data files of a voyage data recorder (VR-7000 format). [Details](docs/AUDIO.md#audio-forensics)
-- **Review app** (0.5.29): "Export" → "Review package" gives a folder with the case, the original audio and the review app NVAI-Pruefer.html, for people without NVAI-open, a law firm for example. It runs in Edge or Chrome without installation, internet or AI; changes go into a subfolder together with a chained log, and the reviewer's name can be changed at the top right. On the Mac (0.5.7) in the new "Audio forensics" tab. [Details](docs/AUDIO.md#review-package-and-review-app)
-- **Audio** (0.5.29): separate voices from music and speech from noise, and remove one recurring sound such as an alarm, learned from a few examples you mark. [Details](docs/AUDIO.md)
-- **Train your own LoRA** (0.5.29): the area "Create/Edit LoRA" puts a dataset together (from the History, from files, or drawn from one template in 24 poses), trains it on your graphics card and adds the result to the model list. [Details](docs/LORAS.md#training-your-own-lora)
-- **File name in the Studio** (0.5.29): the properties of a file show its name; one click selects it, "Copy" copies it. Windows and Mac.
-- **An assistant for beginners** (0.5.28): "✨ Assistant" in the Studio guides you through a whole video in seven short steps. You pick a path (from one continuous shot to a face from a photo), write your idea, describe a character or go without one, choose how many scenes, pick the music from 22 suggestions or write your own prompt, and the assistant suggests the best models for your hardware with the expected time. Missing models it downloads only after asking. Then it makes two start images per scene to choose from, and the videos. Windows and Mac. [Details](docs/STUDIO.md#the-assistant)
-- **Your hardware** (0.5.28): a catalog of 110 graphics cards and Apple chips estimates how long each model takes on your computer; "Models" shows your card and the time per model. [Details](docs/MODELS.md#your-hardware)
-- **Start image in the Studio** (0.5.27): a video scene's properties now have a "Start image" field. Drag an image from the media list onto it or pick one from the project folder. The clip begins with it, so a character looks the same in every shot. Before, only Claude Code could set it over MCP. [Details](docs/STUDIO.md#step-by-step)
-- **Kandinsky 6 Pro and Lite, with sound** (0.5.25): two more video models that make picture and sound in one pass, 5 s at 864 × 480, from text or a start image (NVIDIA only). What can be heard goes into its own "Sound" field. In the test Pro kept the action and the face, but it takes about 17 minutes for 5 s. **The sound may not be used commercially, and its video VAE is not licensed in the EU.** [Details](docs/MODELS.md#other-video-models)
-- **Your own LoRAs** (0.5.24): "Models" → "Add LoRA file" takes a LoRA you trained yourself or got elsewhere. NVAI-open reads the file header first and shows which models it fits; you confirm or change the assignment, also later. When generating, "+ Add your own LoRA file" sits right in the LoRA list. On the Mac for FLUX.2 Klein 4B. [All about LoRAs](docs/LORAS.md)
-- **Characters in the Studio** (0.5.24): a character bundles a look (one or more LoRAs) and a voice. Picture scenes show it, voice scenes speak with its voice, and on Windows a video scene with LTX-2.5 speaks a voice line with its lips. [Details](docs/STUDIO.md#characters)
-- **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound, 9 seconds in about 7 minutes. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** The app marks it in red. [Details](docs/MODELS.md#minimax-h3-since-0518)
+- **ROCm on the Radeon RX 5000 and RX 6500/6400** (0.5.38, experimental): ComfyUI can compute on these cards; Vulkan stays the default. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
+- **Person from a photo** (0.5.37, 0.5.38): every attempt takes the face from the photo, so it no longer drifts, and Generate → Image now makes pictures with it too. [Details](docs/PHOTO_TO_VIDEO.md)
+- **Layout to render and VACE** (0.5.36): a rough grey animation from Blender sets camera and motion of an LTX-2.5 shot; Wan 2.1 VACE 1.3B puts a character from a reference image into a video. [Details](docs/MODELS.md)
+- **Older Radeons and Intel cards through Vulkan** (0.5.35, experimental): images, videos, sound and the narrator voice with stable-diffusion.cpp and audio.cpp; the setup installs them reliably since 0.5.37. [Details](docs/DIRECTML.md)
+- **Choose the engine** (0.5.35): ComfyUI or stable-diffusion.cpp through CUDA or Vulkan, under Models → Your hardware. [Details](docs/DIRECTML.md#stable-diffusioncpp-on-nvidia-too)
+- **Scenes by hand in the Studio** (0.5.30, Mac 0.5.11): the best downloaded model per lane, "Expand prompt" and "Generate start image" right in the scene. [Details](docs/STUDIO.md#step-by-step)
+- **Audio forensics and review app** (0.5.29, also on the Mac): a long recording with many channels becomes a case with transcript and translation; a review package opens in Edge or Chrome without installation. [Details](docs/AUDIO.md#audio-forensics)
+- **Audio** (0.5.29): separate voices from music, remove a recurring sound such as an alarm. [Details](docs/AUDIO.md)
+- **Train your own LoRA** (0.5.29): put a dataset together and train it on your own graphics card. [Details](docs/LORAS.md#training-your-own-lora)
+- **Assistant in the Studio** (0.5.28, also on the Mac): a whole video in seven short steps, with the best models for your hardware. [Details](docs/STUDIO.md#the-assistant)
+- **Your hardware** (0.5.28): how long each model takes on your card, from a catalog of 110 graphics cards and Apple chips. [Details](docs/MODELS.md#your-hardware)
+- **Kandinsky 6 Pro and Lite** (0.5.25, NVIDIA only): video with sound in one pass. **The sound may not be used commercially, and its video VAE is not licensed in the EU.** [Details](docs/MODELS.md#other-video-models)
+- **Your own LoRAs and characters** (0.5.24): add your own LoRA files; a character in the Studio bundles a look and a voice. [LoRAs](docs/LORAS.md) · [Characters](docs/STUDIO.md#characters)
+- **MiniMax H3, with a license warning** (since 0.5.18): video with stereo sound. **Its license forbids any use in the EU, the UK, South Korea and the USA without a separate license from MiniMax, and nothing made with it may be published.** [Details](docs/MODELS.md#minimax-h3-since-0518)
 
 </details>
 
@@ -82,7 +66,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 - **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
 - **Audio and audio forensics:** separate voices from music, speech from noise, remove one recurring sound such as an alarm, also in recordings of many hours; examine a case with a translation track and hand it over as a review package. [Details](docs/AUDIO.md)
 - **A few words are enough:** "Expand prompt" writes the full description for you.
-- **Claude Code:** Claude creates your assets while it works on your project.
+- **AI agents:** Claude Code, WorkBuddy, Cursor and other agents create your assets over MCP while they work on your project.
 - **No filter of its own:** uncensored models are one click away. You are responsible for what you make.
 - **Windows and Mac**, NVIDIA and AMD Radeon, and an add-on for the photo editor PhotoCraft.
 
@@ -234,15 +218,21 @@ Every tab has a **Recommended settings** box with what we measured. The most imp
 
 The same list with the measurements, written for Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance)
 
-### Claude Code: your assets on request
+### Claude Code and other AI agents: your assets on request
 
-NVAI-open comes with an MCP server. While NVAI-open is running, register it once:
+NVAI-open comes with an MCP server at `http://127.0.0.1:8100/mcp`. While NVAI-open is running, register it once in Claude Code:
 
 ```
 claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
 
-Then just ask: "Make a weathered wooden barrel as a 3D model and put it into Assets/Generated/Meshes". Claude picks a model, asks before a download, generates, and copies the result into your project. WorkBuddy, Cursor and other AI agents connect to the same address; "Models → AI agents (MCP)" shows it with entries to copy. Setup and all tools: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)
+WorkBuddy, Cursor and other agents that take an address get the same one in their `mcp.json`:
+
+```json
+{"mcpServers": {"nvai": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}}}
+```
+
+Then just ask your agent: "Make a weathered wooden barrel as a 3D model and put it into Assets/Generated/Meshes". Claude, for example, picks a model, asks before a download, generates, and copies the result into your project. "Models → AI agents (MCP)" in the app shows your address with entries to copy. Setup and all tools: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)
 
 ### Graphics cards and uncensored models
 
@@ -278,7 +268,7 @@ The code is under the [MIT License](LICENSE): do whatever you want with it. Thir
 - [docs/MODELS.md](docs/MODELS.md): the models in detail, prompt tips, test results
 - [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md): from a photo to a video, step by step
 - [docs/STUDIO.md](docs/STUDIO.md): the Studio, whole videos from scenes
-- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NVAI-open from Claude Code
+- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): using NVAI-open from Claude Code and other AI agents
 - [docs/MAKING_OF.md](docs/MAKING_OF.md): how Claude built a video in the Studio
 - [docs/SHORT_FILM.md](docs/SHORT_FILM.md): a short film from a hand sketch, step by step with screenshots
 - [docs/DOCK_ORGANIZER_VIDEO.md](docs/DOCK_ORGANIZER_VIDEO.md): a promo video for a Mac app, with automated screen recordings
@@ -342,43 +332,27 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 November 2026: NVAI-open 0.5.40 für Windows und 0.5.15 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.40))
 
-- **Schnellerer Start** (0.5.40): NVAI-open ist auf dem Testrechner nach 2,0 statt 5,2 s bereit. Der Starter wartet nicht mehr 2 s auf einen geschlossenen Port, MCP lädt im Hintergrund, und ein langsames Hugging Face hält den Start nicht mehr auf (im Test mit 5 s je Antwort vorher 10,6 s, jetzt 0,02 s).
-- **Studio: mehr Platz, Vorlagen und Zusätze** (0.5.40, Mac 0.5.15): Die Spalten für Projekt und Material lassen sich fast über das ganze Fenster ziehen, und Szenen bieten Referenzbilder, Endbild oder Schleife, Layout-Video und eine Tonbeschreibung an, je nachdem, was das gewählte Modell kann (auf dem Mac Referenzbilder für Standbilder mit FLUX.2 Klein). [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
-- **Chinesisch und Französisch** (0.5.39): Die Sprachliste oben rechts bietet English, Deutsch, 简体中文 und Français; Modellbeschreibungen und Meldungen des Servers folgen ihr. Auf Grundlage eines Beitrags von NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
-- **KI-Agenten über eine Adresse** (0.5.39): NVAI-open stellt seinen MCP-Server selbst unter `http://127.0.0.1:8100/mcp` bereit; WorkBuddy, Cursor, Claude Code und andere Agenten verbinden sich ohne Pfade, „Modelle → KI-Agenten (MCP)“ zeigt Einträge zum Kopieren. [Einzelheiten](docs/CLAUDE_CODE.md#setup) (englisch)
-- **ComfyUI mit ROCm auf der Radeon RX 5000 und RX 6500/6400** (0.5.38, experimentell): AMD bietet PyTorch mit ROCm jetzt auch für diese Karten an, das Setup richtet es ein und prüft es auf der Karte. Vulkan bleibt die Vorgabe; „ComfyUI (ROCm, experimentell)“ unter Modelle → Deine Hardware rechnet jedes Modell, das in den Grafikspeicher passt, auf der Karte. Auf so einer Karte noch nicht gemessen. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
-- **Person aus einem Foto, auch für Bilder** (0.5.38): Der Abschnitt steht jetzt auch unter Generieren → Bild und macht vier Bilder im gewählten Format statt Startbildern für ein Video. [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md#bilder-statt-video-generieren--bild)
-- **Vulkan auf älteren Radeons und Intel-Karten, behoben** (0.5.37): Die Setups von 0.5.34 bis 0.5.36 richteten die Vulkan-Engines nie ein, weil Windows PowerShell 5.1 an der ersten Zeile der Geräteliste abbrach; also rechnete alles auf dem Prozessor. Das Setup liest die Liste jetzt richtig, und klappt es trotzdem nicht, lädt NVAI-open sie beim nächsten Start selbst. [Einzelheiten](docs/de/DIRECTML.md#einrichten)
-- **Person aus einem Foto** (0.5.37): Jeder neue Versuch nimmt das Gesicht aus dem Foto, nicht aus dem gewählten Ergebnis, damit es nicht mehr von Runde zu Runde abdriftet. Kleine Videoformate bekommen größere Startbilder, das Foto lässt sich entlang einer Kontur auf Kopf und Schultern zuschneiden, und neben FLUX 3 sind andere installierte Modelle mit Referenzbildern wählbar (Qwen-Image-Edit-2511, Apache-2.0, traf ein echtes Gesicht weniger gut). [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md)
-- **Layout to Render und VACE** (0.5.36): Eine grobe graue Animation aus Blender gibt Kamera und Bewegung einer LTX-2.5-Einstellung vor, ein gemaltes erstes Bild den Look (IC-LoRA von Lightricks; der erste Auftrag lädt seine Knoten von GitHub). Wan 2.1 VACE 1.3B bringt eine Figur aus einem Referenzbild ins Video, auch über Vulkan auf älteren Radeons und Intel-Karten. [Einzelheiten](docs/de/MODELLE.md)
-- **Rechenweg wählen** (0.5.35): Unter Modelle → Deine Hardware oder mit einem Klick auf die Speicher-Anzeige rechnet ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan Bilder und Videos. Auto nimmt den schnellsten Weg für die Karte, und zur Wahl steht nur, was dort läuft. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
-- **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme rechnen jetzt auf der Radeon RX 5000, Vega und Polaris und auf Intel-Karten über Vulkan, mit stable-diffusion.cpp und audio.cpp statt DirectML. Auf einer echten RX 5700 XT brauchte ein SDXL-Bild mit zweitem Durchgang über DirectML 6 Minuten; über Vulkan erwarten wir rund 3,5. [Einzelheiten](docs/de/DIRECTML.md)
-- **Generieren aufgeräumt** (0.5.35): Optionales wie Referenzbilder, LoRAs, Endbild, Video verlängern und Ton vorgeben ist zugeklappt, die Modell-Infos stehen unter dem Tipp, Bild erweitern hat einen eigenen Knopf und braucht keinen Prompt, die Breite der Einstellungen lässt sich ziehen, und der Knopf „Generieren“ bleibt sichtbar.
-- **Video auf älteren Radeons über Vulkan** (0.5.34, experimentell): Wan 2.1 T2V 1.3B rechnet jetzt auf der Radeon RX 5000, Vega und Polaris über eine zweite Engine, stable-diffusion.cpp mit Vulkan; auf derselben Karte war es 1,7-mal langsamer als CUDA und sechsmal schneller als DirectML. [Einzelheiten](docs/de/DIRECTML.md#video-über-vulkan)
+- **Studio** (0.5.40, Mac 0.5.15): Szenen nehmen Referenzbilder und unter Windows auch Endbild oder Schleife, ein Layout-Video und eine Tonbeschreibung. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
+- **Schnellerer Start** (0.5.40): auf dem Testrechner nach 2,0 statt 5,2 s bereit.
+- **Chinesisch und Französisch** (0.5.39): wählbar in der Sprachliste oben rechts. Auf Grundlage eines Beitrags von NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
+- **KI-Agenten über eine Adresse** (0.5.39): WorkBuddy, Cursor, Claude Code und andere Agenten verbinden sich mit `http://127.0.0.1:8100/mcp`. [Einzelheiten](docs/CLAUDE_CODE.md#setup) (englisch)
 
 <details><summary><kbd>&nbsp;Weiterlesen&nbsp;▾&nbsp;</kbd></summary>
 
-- **Video auf älteren Radeons über Vulkan** (0.5.34, experimentell): An Videomodellen scheitert DirectML (seine PyTorch-Erweiterung kennt nur fünf Tensor-Dimensionen), deshalb lädt das Setup für diese Karten auch stable-diffusion.cpp, und Wan 2.1 T2V 1.3B rechnet über Vulkan. 2 s in 832 × 480: 117 s mit CUDA, 194 s über Vulkan auf derselben, auf 8 GB begrenzten Karte. Vulkan läuft auch auf Intel-Karten. [Einzelheiten](docs/de/DIRECTML.md#video-über-vulkan)
-- **Ältere Radeons über DirectML** (0.5.33, experimentell): Das Setup gibt der Radeon RX 5000, Vega und Polaris eine zweite ComfyUI-Umgebung mit PyTorch 2.4.1 und Microsofts torch-directml und prüft sie auf der Karte. Empfohlen sind die SDXL-Modelle und Stable Audio Open, Stable Audio 3 ist als langsam markiert, Video läuft noch nicht. Auf derselben Karte war DirectML 2- bis 6-mal langsamer als CUDA (SDXL 1024²: 83 statt 16 s). [Einzelheiten und Messungen](docs/de/DIRECTML.md)
-- **ComfyUI 0.46.0** (0.5.32): bitgleiche Ergebnisse für Krea 2, Qwen-Image-2512, FLUX 3, MOSS-Image, LTX-2.5 und Stable Audio 3 im Vergleich mit gleichen Seeds; Lesen aus der Mitte von MP3- und MPEG-TS-Dateien an der richtigen Stelle; die Prüf-App liest Spuren mit 32-Bit-Ganzzahl. [Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.32)
-- **Fehlerbehebungen** (0.5.31, Mac 0.5.12): Korrekturen aus fünf unabhängigen Durchsichten von Studio, LoRA-Training, Ton-Forensik, Weboberfläche und Mac-App.
-- **Szenen von Hand im Studio** (0.5.30, Mac 0.5.11): Eine neue Szene bekommt das beste geladene Modell ihrer Bahn (LTX-2.5, Qwen3-TTS, Stable Audio 3, Stable Audio Open), Musik so lang wie der Film, Geräusche 4 s. „Prompt ausbauen“ macht aus ein paar Worten eine volle englische Beschreibung, und „Startbild erzeugen“ macht wie der Assistent zwei Startbilder aus dem Prompt (mit den Figuren der Szene, ohne schwarze Balken). Hinweise unter den Eigenschaften warnen vor einem Clip über 6 s in 1080p auf einer Karte mit 16 GB, einer Figur ohne Startbild, einem Prompt nicht auf Englisch und einem Sprechersatz unter einem Video, das eigenen Ton macht. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
-- **Mac 0.5.11, Ton-Forensik:** „Neuer Fall …“ legt einen Fall aus Audio- oder Videodateien an, „VDR-Export einlesen …“ aus einem Schiffsdatenschreiber (VR-7000) mit Kurs, Geschwindigkeit, Alarmen, AIS und Radarbildern; vorher zeigt es den Platzbedarf und bricht ab, bevor der Datenträger voll ist. „Sprache erkennen“ lässt Whisper large-v3 (Core ML) dort hören, wo Silero VAD Sprache findet, „Übersetzen“ nimmt Qwen3.5 (ab 16 GB Speicher 9B, sonst 4B). Alles läuft auf dem Mac. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
-- **Ältere Radeons** (0.5.30): Karten, die AMDs PyTorch für Windows nicht kennt (RX 5000, Vega, Radeon VII, Polaris und älter), hängen nicht mehr beim Start. Das Setup installiert PyTorch für den Prozessor, und oben in der Leiste steht, dass NVAI-open auf der CPU rechnet; mit der Maus darüber steht, was das bedeutet und was hilft. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
-- **Mac 0.5.10:** Der Verlauf zeigt auch Musik, Klänge und Sprache mit Abspielknopf, und „Verlauf leeren“ löscht alles auf einmal; was ein Studio-Projekt nutzt, bleibt. Das Hugging-Face-Token wird beim Speichern bei Hugging Face geprüft, und „Prüfen“ sagt auch, ob LTX-2.5 freigeschaltet ist. Abgebrochene Downloads setzen dort fort, wo sie standen, und Uploads über die Schnittstelle sind nicht mehr auf 64 MB begrenzt. Die Prüf-App brennt Untertitel auf Wunsch ins exportierte Video, und ihre SRT-Dateien laden jetzt im Windows Media Player.
-- **Mac 0.5.9:** Ein Gesicht aus einem Foto kommt jetzt zuverlässig in eine neue Szene: das Foto unter „Referenzbilder“ legen und sagen, wer es ist (Frau oder Mann, Alter, Haare). Ein Ausgangsbild wird aufs Format zugeschnitten statt gestreckt, und der Assistent fragt, wer auf dem Foto ist. Eine große Fehlersuche hat unter anderem behoben: Studio-Projekte von Windows mit Video öffnen jetzt auf dem Mac, FLUX.2 zerreißt kein Bild mehr, wenn zwei Formate mit gleich vielen Bildpunkten aufeinander folgen, Studio-Exporte unter 1080p bleiben nicht mehr stehen, das Hugging-Face-Token hat ein Feld in den Einstellungen, und Löschen zerstört keinen Clip in einem Projekt mehr.
-- **Ton-Forensik** (0.5.29): Aus einer langen Aufnahme mit vielen Kanälen wird ein Fall: Spuren, Spektrogramm, Sprachaktivität, Ereignisse, Notizen und eine Übersetzer-Spur. Whisper large-v3 schreibt auf, was gesprochen wird, Qwen3.5-9B übersetzt es, und jeder Block bleibt Entwurf, bis ein Mensch ihn geprüft hat; ein Vermerk nennt Modelle, Lizenzen und Grafikkarte. Sie liest auch die Datendateien eines Schiffsdatenschreibers (Format VR-7000). [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
-- **Prüf-App** (0.5.29): „Export“ → „Prüfpaket“ ergibt einen Ordner mit dem Fall, dem Originalton und der Prüf-App NVAI-Pruefer.html, für Menschen ohne NVAI-open, etwa eine Kanzlei. Sie läuft in Edge oder Chrome ohne Installation, Internet und KI; Änderungen kommen mit einem verketteten Protokoll in einen Unterordner, und der Name des Bearbeiters lässt sich oben rechts ändern. Auf dem Mac (0.5.7) im neuen Reiter „Ton-Forensik“. [Einzelheiten](docs/de/AUDIO.md#prüfpaket-und-prüf-app)
-- **Audio** (0.5.29): Stimmen von Musik trennen und Sprache von Rauschen, dazu ein wiederkehrendes Geräusch wie einen Alarm entfernen, gelernt aus ein paar markierten Beispielen. [Einzelheiten](docs/de/AUDIO.md)
-- **Eigene LoRA trainieren** (0.5.29): Der Bereich „LoRA erstellen/Bearbeiten“ stellt einen Datensatz zusammen (aus dem Verlauf, aus Dateien oder aus einer Vorlage in 24 Haltungen gezeichnet), trainiert ihn auf deiner Grafikkarte und nimmt das Ergebnis in die Modellliste. [Einzelheiten](docs/de/LORAS.md#eigene-lora-trainieren)
-- **Dateiname im Studio** (0.5.29): Die Eigenschaften einer Datei zeigen ihren Namen; ein Klick markiert ihn, „Kopieren“ kopiert ihn. Windows und Mac.
-- **Ein Assistent für Einsteiger** (0.5.28): „✨ Assistent“ im Studio führt in sieben kurzen Schritten durch ein ganzes Video. Du wählst einen Weg (von der durchgehenden Einstellung bis zum Gesicht aus einem Foto), schreibst deine Idee, beschreibst eine Figur oder lässt sie weg, wählst die Anzahl der Szenen, nimmst die Musik aus 22 Vorschlägen oder schreibst einen eigenen Prompt, und der Assistent schlägt die besten Modelle für deine Hardware mit der zu erwartenden Zeit vor. Fehlende Modelle lädt er erst nach Rückfrage. Danach erzeugt er je Szene zwei Startbilder zur Auswahl und die Videos. Windows und Mac. [Einzelheiten](docs/de/STUDIO.md#der-assistent)
-- **Deine Hardware** (0.5.28): Ein Katalog mit 110 Grafikkarten und Apple-Chips schätzt, wie lange jedes Modell auf deinem Rechner braucht; „Modelle“ zeigt deine Karte und die Zeit je Modell. [Einzelheiten](docs/de/MODELLE.md#deine-hardware)
-- **Startbild im Studio** (0.5.27): In den Eigenschaften einer Videoszene gibt es jetzt das Feld „Startbild“. Ein Bild aus dem Material darauf ziehen oder aus dem Projektordner wählen. Der Clip beginnt damit, so sieht eine Figur in jeder Einstellung gleich aus. Bisher ging das nur über Claude Code per MCP. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
-- **Kandinsky 6 Pro und Lite, mit Ton** (0.5.25): zwei weitere Videomodelle, die Bild und Ton in einem Durchgang machen, 5 s in 864 × 480, aus Text oder einem Startbild (nur NVIDIA). Was zu hören ist, kommt in ein eigenes Feld „Ton“. Pro hielt im Test Handlung und Gesicht, braucht aber rund 17 Minuten für 5 s. **Der Ton ist nicht kommerziell nutzbar, und die Video-VAE ist in der EU nicht lizenziert.** [Einzelheiten](docs/de/MODELLE.md#weitere-videomodelle)
-- **Eigene LoRAs** (0.5.24): „Modelle“ → „LoRA-Datei hinzufügen“ nimmt eine LoRA, die du selbst trainiert oder anderswo gefunden hast. NVAI-open liest zuerst den Dateikopf und zeigt, zu welchen Modellen sie passt; du bestätigst oder änderst die Zuordnung, auch später. Beim Generieren steht „+ Eigene LoRA-Datei hinzufügen“ direkt in der LoRA-Liste. Auf dem Mac für FLUX.2 Klein 4B. [Alles zu LoRAs](docs/de/LORAS.md)
-- **Figuren im Studio** (0.5.24): Eine Figur bündelt Aussehen (eine oder mehrere LoRAs) und Stimme. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und unter Windows spricht eine Videoszene mit LTX-2.5 einen Satz mit den Lippen. [Einzelheiten](docs/de/STUDIO.md#figuren)
-- **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton, 9 Sekunden in rund 7 Minuten. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** Die App markiert es rot. [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
+- **ROCm auf der Radeon RX 5000 und RX 6500/6400** (0.5.38, experimentell): ComfyUI kann auf diesen Karten rechnen; Vulkan bleibt die Vorgabe. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
+- **Person aus einem Foto** (0.5.37, 0.5.38): Jeder Versuch nimmt das Gesicht aus dem Foto, damit es nicht mehr abdriftet, und unter Generieren → Bild entstehen damit jetzt auch Bilder. [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md)
+- **Layout to Render und VACE** (0.5.36): Eine grobe graue Animation aus Blender gibt Kamera und Bewegung einer LTX-2.5-Einstellung vor; Wan 2.1 VACE 1.3B bringt eine Figur aus einem Referenzbild ins Video. [Einzelheiten](docs/de/MODELLE.md)
+- **Ältere Radeons und Intel-Karten über Vulkan** (0.5.35, experimentell): Bilder, Videos, Ton und Sprecherstimme mit stable-diffusion.cpp und audio.cpp; seit 0.5.37 richtet das Setup sie zuverlässig ein. [Einzelheiten](docs/de/DIRECTML.md)
+- **Rechenweg wählen** (0.5.35): ComfyUI oder stable-diffusion.cpp über CUDA oder Vulkan, unter Modelle → Deine Hardware. [Einzelheiten](docs/de/DIRECTML.md#stable-diffusioncpp-auch-auf-nvidia)
+- **Szenen von Hand im Studio** (0.5.30, Mac 0.5.11): das beste geladene Modell je Bahn, „Prompt ausbauen“ und „Startbild erzeugen“ direkt in der Szene. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
+- **Ton-Forensik und Prüf-App** (0.5.29, auch auf dem Mac): Aus einer langen Aufnahme mit vielen Kanälen wird ein Fall mit Mitschrift und Übersetzung; ein Prüfpaket öffnet sich ohne Installation in Edge oder Chrome. [Einzelheiten](docs/de/AUDIO.md#ton-forensik)
+- **Audio** (0.5.29): Stimmen von Musik trennen, ein wiederkehrendes Geräusch wie einen Alarm entfernen. [Einzelheiten](docs/de/AUDIO.md)
+- **Eigene LoRA trainieren** (0.5.29): einen Datensatz zusammenstellen und auf der eigenen Grafikkarte trainieren. [Einzelheiten](docs/de/LORAS.md#eigene-lora-trainieren)
+- **Assistent im Studio** (0.5.28, auch auf dem Mac): ein ganzes Video in sieben kurzen Schritten, mit den besten Modellen für deine Hardware. [Einzelheiten](docs/de/STUDIO.md#der-assistent)
+- **Deine Hardware** (0.5.28): wie lange jedes Modell auf deiner Karte braucht, aus einem Katalog mit 110 Grafikkarten und Apple-Chips. [Einzelheiten](docs/de/MODELLE.md#deine-hardware)
+- **Kandinsky 6 Pro und Lite** (0.5.25, nur NVIDIA): Video mit Ton in einem Durchgang. **Der Ton ist nicht kommerziell nutzbar, und die Video-VAE ist in der EU nicht lizenziert.** [Einzelheiten](docs/de/MODELLE.md#weitere-videomodelle)
+- **Eigene LoRAs und Figuren** (0.5.24): eigene LoRA-Dateien hinzufügen; eine Figur im Studio bündelt Aussehen und Stimme. [LoRAs](docs/de/LORAS.md) · [Figuren](docs/de/STUDIO.md#figuren)
+- **MiniMax H3 mit Lizenzwarnung** (seit 0.5.18): Video mit Stereoton. **Die Lizenz verbietet jede Nutzung in der EU, in Großbritannien, Südkorea und den USA ohne eigene Lizenz von MiniMax, und nichts damit Erzeugtes darf veröffentlicht werden.** [Einzelheiten](docs/de/MODELLE.md#minimax-h3-seit-0518)
 
 </details>
 
@@ -395,7 +369,7 @@ November 2026: NVAI-open 0.5.40 für Windows und 0.5.15 für den Mac ([Release-N
 - **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
 - **Audio und Ton-Forensik:** Stimmen von Musik trennen, Sprache von Rauschen, ein wiederkehrendes Geräusch wie einen Alarm entfernen, auch in Aufnahmen von vielen Stunden; einen Fall mit Übersetzer-Spur untersuchen und als Prüfpaket weitergeben. [Einzelheiten](docs/de/AUDIO.md)
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
-- **Claude Code:** Claude erzeugt deine Assets, während es an deinem Projekt arbeitet.
+- **KI-Agenten:** Claude Code, WorkBuddy, Cursor und andere Agenten erzeugen deine Assets per MCP, während sie an deinem Projekt arbeiten.
 - **Kein eigener Filter:** unzensierte Modelle sind einen Klick entfernt. Für das, was du erzeugst, bist du selbst verantwortlich.
 - **Windows und Mac**, NVIDIA und AMD Radeon, dazu ein Add-on für den Bildeditor PhotoCraft.
 
@@ -548,15 +522,21 @@ In jedem Reiter steht unter **Empfohlene Einstellungen**, was wir gemessen haben
 
 Dieselbe Liste mit den Messwerten, geschrieben für Claude Code: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md#recommended-settings-at-a-glance) (englisch)
 
-### Claude Code: Assets auf Zuruf
+### Claude Code und andere KI-Agenten: Assets auf Zuruf
 
-NVAI-open bringt einen MCP-Server mit. Während NVAI-open läuft, einmal eintragen:
+NVAI-open bringt einen MCP-Server unter `http://127.0.0.1:8100/mcp` mit. Während NVAI-open läuft, in Claude Code einmal eintragen:
 
 ```
 claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
 
-Dann einfach sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es nach Assets/Generated/Meshes“. Claude wählt ein Modell, fragt vor einem Download, generiert und kopiert das Ergebnis ins Projekt. WorkBuddy, Cursor und andere KI-Agenten verbinden sich mit derselben Adresse; „Modelle → KI-Agenten (MCP)“ zeigt sie mit Einträgen zum Kopieren. Einrichtung und alle Werkzeuge: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md) (englisch)
+WorkBuddy, Cursor und andere Agenten, die eine Adresse nehmen, bekommen dieselbe Adresse in ihrer `mcp.json`:
+
+```json
+{"mcpServers": {"nvai": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}}}
+```
+
+Dann einfach deinem Agenten sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es nach Assets/Generated/Meshes“. Claude zum Beispiel wählt ein Modell, fragt vor einem Download, generiert und kopiert das Ergebnis ins Projekt. „Modelle → KI-Agenten (MCP)“ in der App zeigt deine Adresse mit Einträgen zum Kopieren. Einrichtung und alle Werkzeuge: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md) (englisch)
 
 ### Grafikkarten und unzensierte Modelle
 
@@ -592,7 +572,7 @@ Der Code steht unter der [MIT-Lizenz](LICENSE): Jeder darf damit machen, was er 
 - [docs/de/MODELLE.md](docs/de/MODELLE.md): die Modelle im Detail, Prompt-Tipps, Testergebnisse
 - [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU_VIDEO.md): vom Foto zum Video, Schritt für Schritt
 - [docs/de/STUDIO.md](docs/de/STUDIO.md): das Studio, ganze Videos aus Szenen
-- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NVAI-open aus Claude Code nutzen (englisch)
+- [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md): NVAI-open aus Claude Code und anderen KI-Agenten nutzen (englisch)
 - [docs/de/MAKING_OF.md](docs/de/MAKING_OF.md): wie Claude ein Video im Studio gebaut hat
 - [docs/de/KURZFILM.md](docs/de/KURZFILM.md): ein Kurzfilm von der Handskizze an, Schritt für Schritt mit Bildern
 - [docs/de/DOCK_ORGANIZER_VIDEO.md](docs/de/DOCK_ORGANIZER_VIDEO.md): ein Werbevideo für eine Mac-App, mit automatischen Bildschirmaufnahmen
