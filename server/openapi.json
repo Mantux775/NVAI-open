@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.38",
+  "version": "0.5.39",
   "x-api-version": 1
  },
  "paths": {
@@ -3341,6 +3341,27 @@
        "application/json": {
         "schema": {
          "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/mcp": {
+   "get": {
+    "summary": "Mcp Info",
+    "description": "Anschluss für KI-Agenten (seit 0.5.39): die Adresse für MCP über HTTP und, für Agenten, die nur Programme\nstarten (stdio), Befehl und Umgebung. Die Weboberfläche zeigt beides unter Modelle.",
+    "operationId": "mcp_info_api_mcp_get",
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Mcp Info Api Mcp Get"
         }
        }
       }

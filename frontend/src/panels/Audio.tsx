@@ -53,7 +53,8 @@ function PurgeDialog({ what, list, onConfirm, onClose }: { what: AudioTrashEntry
     <div className="lt-modal" onClick={onClose}>
       <div className="lt-modal-box panel au-del-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="lt-modal-head"><strong>{what === 'all'
-          ? t(`Papierkorb leeren (${items.length} ${items.length === 1 ? 'Fall' : 'Fälle'})?`, `Empty the trash (${items.length} ${items.length === 1 ? 'case' : 'cases'})?`)
+          ? (items.length === 1 ? t('Papierkorb leeren (1 Fall)?', 'Empty the trash (1 case)?')
+            : t(`Papierkorb leeren (${items.length} Fälle)?`, `Empty the trash (${items.length} cases)?`))
           : t(`„${what.name}“ endgültig löschen?`, `Delete “${what.name}” for good?`)}</strong></div>
         <p className="small">{t(`Das lässt sich nicht rückgängig machen und gibt ${fmtBytes(size)} frei. Die Originaldateien der Quelle und die Exporte im Verlauf bleiben.`,
           `This cannot be undone and frees ${fmtBytes(size)}. The original source files and the exports in the History stay.`)}</p>

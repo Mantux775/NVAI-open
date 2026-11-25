@@ -85,12 +85,15 @@ the Start menu.
 
 ### First steps
 
-1. Open **NVAI-open** from the Start menu. Your browser shows the app at `http://127.0.0.1:8100`.
+1. Open **NVAI-open** from the Start menu. Your browser shows the app at `http://127.0.0.1:8100`. It starts in
+   English; the list at the top right switches to Deutsch, 简体中文 or Français.
 2. Under **Models**, download a model. Models that suit your graphics card are marked *recommended*.
 3. Under **Generate**, enter a prompt. The first job after a start takes 30 to 60 seconds longer while the model loads.
 
 **Quit NVAI-open** in the Start menu shuts everything down and frees the graphics card. To use NVAI-open from Claude
-Code, see [CLAUDE_CODE.md](CLAUDE_CODE.md).
+Code or another AI agent (WorkBuddy, Cursor), see [CLAUDE_CODE.md](CLAUDE_CODE.md).
+
+![The Generate tab in Chinese, with the language list at the top right](images/languages-zh.jpg)
 
 ### FLUX 3 and LTX-2.5 (Hugging Face access)
 
@@ -259,8 +262,12 @@ is plain HTTP, so from outside use a VPN.
 **Claude Code:**
 
 ```powershell
-claude mcp add --scope user nvai -- "<repository folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
+
+That needs the running server; without it, the stdio server works too:
+`claude mcp add --scope user nvai -- "<repository folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server`.
+Other agents (WorkBuddy, Cursor, Claude Desktop): [docs/CLAUDE_CODE.md](CLAUDE_CODE.md#setup).
 
 #### Optional: 3D workers
 

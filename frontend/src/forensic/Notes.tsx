@@ -29,7 +29,7 @@ export function exportNotes(proj: AudioProject, notes: AudioMarker[], fmt: 'csv'
       ...list.map((m, i) => [i + 1, m.start.toFixed(2), m.end.toFixed(2), clockAt(m.start, origin, true), clockAt(m.end, origin, true),
         (m.end - m.start).toFixed(1), q(m.author ?? ''), m.created ? new Date(m.created * 1000).toISOString() : '', q(m.label)].join(';'))].join('\n'), 'text/csv')
   } else {
-    const head = t(`Notizen: ${proj.name}\nZeiten ${origin ? 'in UTC' : 'ab Beginn der Aufnahme'}.\n`, `Notes: ${proj.name}\nTimes ${origin ? 'in UTC' : 'from the start of the recording'}.\n`)
+    const head = t(`Notizen: ${proj.name}\nZeiten ${origin ? 'in UTC' : 'ab Beginn der Aufnahme'}.\n`, `Notes: ${proj.name}\nTimes ${origin ? t('in UTC', 'in UTC') : t('ab Beginn der Aufnahme', 'from the start of the recording')}.\n`)
     download(`${base}_${t('notizen', 'notes')}.txt`, head + '\n' + list.map((m, i) =>
       `${i + 1}. ${clockAt(m.start, origin, true)}${m.end > m.start ? ` – ${clockAt(m.end, origin, true)} (${fmtClock(m.end - m.start, true)})` : ''}${m.author ? ` · ${m.author}` : ''}\n   ${(m.label || '').replace(/\n/g, '\n   ')}`).join('\n\n'))
   }

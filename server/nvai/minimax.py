@@ -448,7 +448,7 @@ MODELS: list[dict[str, Any]] = [
         "warning": WARNING,
         "license_badge": LICENSE_BADGE,
         "output_badge": OUTPUT_BADGE,
-        "best_for": "Schnell mit Ton aus Text oder Startbild, fest 8 Schritte, kaum Zeitlupe" + TEMPO_NOTE,
+        "best_for": "Schnell mit Ton aus Text oder Startbild, fest 8 Schritte, kaum Zeitlupe",  # gemessen, ohne TEMPO_NOTE
         "description": (
             "FastVideo FastH3 8-Step V2: ein DMD2-destillierter MiniMax-H3-Checkpoint (FastVideo mit Nuva Lab und "
             "NVIDIAs FastGen), Bild und Ton in genau 8 Schritten. Nur Text und Startbild (FL2VA), keine Referenzen. Er "
@@ -586,7 +586,7 @@ EN: dict[str, dict[str, Any]] = {
 _TURBO_CONS_EN = ["Slightly softer motion and weaker sound than with 20 steps, says ComfyUI"]
 EN[MODEL_ID_FAST] = {
     "name": "MiniMax H3 FastH3 8 steps (INT8, with sound)",
-    "best_for": "Fast, with sound, from text or a start image, fixed 8 steps, hardly any slow motion" + TEMPO_NOTE_EN,
+    "best_for": "Fast, with sound, from text or a start image, fixed 8 steps, hardly any slow motion",
     "description": (
         "FastVideo FastH3 8-Step V2: a DMD2-distilled MiniMax H3 checkpoint (FastVideo with Nuva Lab and NVIDIA's "
         "FastGen), picture and sound in exactly 8 steps. Text and start image only (FL2VA), no references. It runs with "

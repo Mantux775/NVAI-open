@@ -70,6 +70,8 @@ body {
   border-radius: 8px;
 }
 .lang-switch .tab { padding: 3px 8px; font-size: 12px; border-radius: 6px; letter-spacing: 0.4px; }
+/* Sprachwahl als Auswahlliste (seit 0.5.39, vier Sprachen) */
+.lang-select { width: auto; flex-shrink: 0; padding: 4px 6px; font-size: 12px; border-radius: 8px; cursor: pointer; }
 
 /* VRAM-Auslastung als schmaler Balken -- auf einen Blick erkennbar */
 .vram { display: flex; align-items: center; gap: 6px; }
@@ -824,6 +826,20 @@ kbd {
 .folder-title { font-weight: 600; white-space: nowrap; }
 .folder-summary { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .folder-body { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+/* KI-Agenten (MCP): Adresse und Einträge zum Kopieren */
+.agent-block { display: flex; flex-direction: column; gap: 4px; }
+.agent-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.agent-code {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
 .folder-row { display: flex; gap: 8px; }
 .folder-row input { flex: 1; }
 

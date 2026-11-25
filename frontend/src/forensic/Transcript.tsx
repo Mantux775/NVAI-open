@@ -109,7 +109,7 @@ export function exportTranscript(proj: AudioProject, tracks: AudioTrack[], doc: 
         s.conf == null ? '' : s.conf.toFixed(2), q(s.text), q(s.translation?.en || ''), q(s.translation?.[tl] || ''), q(s.alt_text || ''), q(noteText(s.note || ''))].join(';'))].join('\n'), 'text/csv')
   } else {
     const head = t(`Transkript: ${proj.name}\nZeiten ${origin ? 'in UTC' : 'ab Beginn der Aufnahme'}. Blöcke mit „Entwurf“ stammen von der KI und sind ungeprüft; die Übersetzung ist ein Entwurf und ersetzt keine beeidigte Übersetzung.\n`,
-      `Transcript: ${proj.name}\nTimes ${origin ? 'in UTC' : 'from the start of the recording'}. Blocks marked “draft” come from the AI and are unchecked; the translation is a draft and does not replace a certified translation.\n`)
+      `Transcript: ${proj.name}\nTimes ${origin ? t('in UTC', 'in UTC') : t('ab Beginn der Aufnahme', 'from the start of the recording')}. Blocks marked “draft” come from the AI and are unchecked; the translation is a draft and does not replace a certified translation.\n`)
     const note = creditsLines(doc.credits)
     download(`${base}_${t('transkript', 'transcript')}.txt`, head + (note.length ? note.join('\n') + '\n' : '') + '\n' + lines.map((s, i) => [
       `${i + 1}. [${clockAt(s.start, origin, true)} – ${clockAt(s.end, origin, true)}] ${trackName(s.track)}${s.speaker ? ` · ${s.speaker}` : ''} · ${s.status === 'checked' ? t('geprüft', 'checked') : t('Entwurf', 'draft')}${s.conf != null ? ` · ${Math.round(s.conf * 100)} %` : ''}`,
@@ -300,7 +300,7 @@ export function TranscriptTool({ proj, tracks, doc, setDoc, save, selection, sel
                 return (
                   <button key={i} className={`fx-w ${sure ? 'sure' : weak ? 'weak' : 'check'}`}
                     title={t(`Whisper sicher zu ${Math.round((w[3] ?? 0) * 100)} %${w[4] ? ', Zweitmeinung hört dasselbe' : seg.alt_text ? ', Zweitmeinung hört es anders' : ''}`,
-                      `Whisper ${Math.round((w[3] ?? 0) * 100)} % sure${w[4] ? ', second opinion hears the same' : seg.alt_text ? ', second opinion hears it differently' : ''}`)}
+                      `Whisper ${Math.round((w[3] ?? 0) * 100)} % sure${w[4] ? t(', Zweitmeinung hört dasselbe', ', second opinion hears the same') : seg.alt_text ? t(', Zweitmeinung hört es anders', ', second opinion hears it differently') : ''}`)}
                     onClick={() => { if (w[0] != null) onSeek(Math.max(0, w[0] - 0.3)) }}>{w[2]}</button>
                 )
               })}

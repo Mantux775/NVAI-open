@@ -416,9 +416,11 @@ async def _ensure_backend(ctx: JobContext) -> None:
 def _resolve_model(p: dict[str, Any], kind: str) -> dict[str, Any]:
     model_id = p.get("model_id") or registry.get_active_model(kind)
     if not model_id:
+        label = {"image": t("Bild", "image"), "video": t("Video", "video"), "audio": t("Ton", "audio"),
+                 "3d": "3D", "speech": t("Sprach", "speech")}.get(kind, kind)
         raise RuntimeError(t(
-            f"Kein {kind}-Modell installiert. Erst eines unter 'Modelle' herunterladen.",
-            f"No {kind} model installed. Download one under 'Models' first.",
+            f"Kein {label}-Modell installiert. Erst eines unter 'Modelle' herunterladen.",
+            f"No {label} model installed. Download one under 'Models' first.",
         ))
     entry = registry.get_entry(model_id)
     if entry is None:
@@ -1866,9 +1868,10 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     if refs:
         limit = int(registry.features_for(entry).get("references") or 0)
         if len(refs) > limit:
-            raise RuntimeError(t(
-                f"{_name(entry)} nimmt {limit or 'keine'} Referenzbilder.",
-                f"{_name(entry)} takes {limit or 'no'} reference images."))
+            raise RuntimeError(t(f"{_name(entry)} nimmt keine Referenzbilder.",
+                                 f"{_name(entry)} takes no reference images.") if not limit else t(
+                f"{_name(entry)} nimmt {limit} Referenzbilder.",
+                f"{_name(entry)} takes {limit} reference images."))
         p["reference_images"] = [_stage_image(a, t("Referenzbild", "Reference image")) for a in refs]
     recommended = _apply_recommended(p, entry)
     sparse = p.get("sparse_attention")

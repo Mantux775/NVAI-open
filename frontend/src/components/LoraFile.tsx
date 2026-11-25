@@ -67,8 +67,8 @@ function AssignFields({ value, onChange, options, detected }: {
             const k = o.models.filter((m) => m.installed).length
             return (
               <option key={o.base} value={o.base}>
-                {o.label} ({t(`${n} Modell${n === 1 ? '' : 'e'}, ${k} geladen`,
-                  `${n} model${n === 1 ? '' : 's'}, ${k} downloaded`)})
+                {o.label} ({n === 1 ? t(`1 Modell, ${k} geladen`, `1 model, ${k} downloaded`)
+                  : t(`${n} Modelle, ${k} geladen`, `${n} models, ${k} downloaded`)})
               </option>
             )
           })}

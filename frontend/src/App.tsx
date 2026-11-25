@@ -31,9 +31,12 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 // Sprachnamen stehen in ihrer eigenen Sprache, damit man sie in jeder Einstellung findet.
-const LANGS: { id: Lang; label: string; name: string }[] = [
-  { id: 'en', label: 'EN', name: 'English' },
-  { id: 'de', label: 'DE', name: 'Deutsch' },
+// Sprachen der Oberfläche, jede in ihrem eigenen Namen (Chinesisch und Französisch seit 0.5.39)
+const LANGS: { id: Lang; name: string }[] = [
+  { id: 'en', name: 'English' },
+  { id: 'de', name: 'Deutsch' },
+  { id: 'zh', name: '简体中文' },
+  { id: 'fr', name: 'Français' },
 ]
 
 export function App() {
@@ -235,22 +238,22 @@ export function App() {
         </button>
 
         {/* Sprachwahl: speichert und laedt neu (i18n.setLang). */}
-        <div className="lang-switch" role="group" aria-label={t('Sprache', 'Language')}>
+        <select
+          className="lang-select"
+          value={getLang()}
+          aria-label={t('Sprache', 'Language')}
+          title={t('Sprache', 'Language')}
+          onChange={(e) => {
+            const l = e.target.value as Lang
+            if (getLang() !== l) setLang(l)
+          }}
+        >
           {LANGS.map((l) => (
-            <button
-              key={l.id}
-              lang={l.id}
-              className={getLang() === l.id ? 'tab active' : 'tab'}
-              aria-pressed={getLang() === l.id}
-              title={l.name}
-              onClick={() => {
-                if (getLang() !== l.id) setLang(l.id)
-              }}
-            >
-              {l.label}
-            </button>
+            <option key={l.id} value={l.id} lang={l.id}>
+              {l.name}
+            </option>
           ))}
-        </div>
+        </select>
       </header>
 
       {reporting && <ReportDialog onClose={() => setReporting(false)} />}
@@ -359,7 +362,7 @@ function CpuModeChip({ mode, vulkan, audio }: {
     // und geprüft, Vulkan bleibt die Vorgabe, bis ROCm auf diesen Karten gemessen ist
     const now = vulkan
       ? t(`Auf ${cards} rechnet NVAI-open Bilder (SDXL) und Videos (Wan 2.1 1.3B) zunächst über Vulkan (stable-diffusion.cpp)${audio ? ', Ton und Sprecherstimme über audio.cpp' : ''}, alles andere auf dem Prozessor.`,
-        `On ${cards}, NVAI-open computes images (SDXL) and videos (Wan 2.1 1.3B) through Vulkan (stable-diffusion.cpp) for now${audio ? ', sound and the narrator voice through audio.cpp' : ''}, everything else on the processor.`)
+        `On ${cards}, NVAI-open computes images (SDXL) and videos (Wan 2.1 1.3B) through Vulkan (stable-diffusion.cpp) for now${audio ? t(', Ton und Sprecherstimme über audio.cpp', ', sound and the narrator voice through audio.cpp') : ''}, everything else on the processor.`)
       : t(`Auf ${cards} rechnet NVAI-open auf dem Prozessor, bis die Vulkan-Engine geladen ist.`,
         `On ${cards}, NVAI-open computes on the processor until the Vulkan engine is downloaded.`)
     const choice = t('AMDs PyTorch mit ROCm ist für diese Karte eingerichtet und hat beim Einrichten gerechnet. Für alle Modelle, die in den Grafikspeicher passen: unter „Modelle → Deine Hardware“ oder per Klick auf die Speicher-Anzeige „ComfyUI (ROCm, experimentell)“ wählen. Die Pakete für diese Karte sind neu und hier ungemessen; auf der RX 5000 berichten Nutzer anderer Programme von schwacher Leistung.',

@@ -690,7 +690,7 @@ EN: dict[str, dict[str, Any]] = {
             "reference images go in through Qwen2.5-VL's visual understanding and as a reference; the output size "
             "is free. Trained to put the same person or character into new poses and scenes: the LoRA assistant "
             "builds its datasets with it (one character in 24 poses).\n\n"
-            "The same files as \"Images from the template\" in the LoRA assistant: deleting removes them there "
+            "The same files as \"Generate from the template\" in the LoRA assistant: deleting removes them there "
             "too, the assistant downloads them again when needed. Text encoder and VAE are shared with "
             "Qwen-Image-2512. The fp8 model (20.5 GB) does not quite fit into 16 GB, ComfyUI offloads parts of it. "
             "Measured on an RTX 5060 Ti: about 44 s per image in the LoRA assistant, four images at 1296 × 720 in "

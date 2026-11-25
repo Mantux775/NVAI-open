@@ -12,8 +12,8 @@ interface Props {
 const KIND_FILTERS = [
   { id: 'all', label: t('Alle', 'All') },
   { id: 'image', label: t('Bild', 'Image') },
-  { id: 'audio', label: 'Audio' },
-  { id: 'video', label: 'Video' },
+  { id: 'audio', label: t('Audio', 'Audio') },
+  { id: 'video', label: t('Video', 'Video') },
   { id: 'mesh', label: '3D' },
 ]
 

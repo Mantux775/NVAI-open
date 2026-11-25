@@ -43,9 +43,9 @@ type Mode = GenKind | 'restore'
 
 const MODES: { id: Mode; label: string; icon: string }[] = [
   { id: 'image', label: t('Bild', 'Image'), icon: '▣' },
-  { id: 'audio', label: 'Audio', icon: '♪' },
+  { id: 'audio', label: t('Audio', 'Audio'), icon: '♪' },
   { id: 'speech', label: t('Sprache', 'Speech'), icon: '❝' },
-  { id: 'video', label: 'Video', icon: '▶' },
+  { id: 'video', label: t('Video', 'Video'), icon: '▶' },
   { id: '3d', label: '3D', icon: '◈' },
   { id: 'restore', label: t('Restaurieren', 'Restore'), icon: '✦' },
 ]
@@ -1268,7 +1268,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   }
   const speechControls = () => (
     <>
-      <h3>Text</h3>
+      <h3>{t('Text', 'Text')}</h3>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -1979,7 +1979,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 )}
               </>
             )}
-            <h3>Prompt</h3>
+            <h3>{t('Prompt', 'Prompt')}</h3>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -2887,7 +2887,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
         {mode === '3d' && (
           <>
-            <h3>Mesh</h3>
+            <h3>{t('Mesh', 'Mesh')}</h3>
             <div className="row">
               <label>
                 {t('Max. Faces', 'Max faces')}
@@ -3081,11 +3081,11 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 {stage} · {Math.round(progress * 100)} %
                 {mode === 'video' && (jobId === personJobId
                   ? t(` · vier Startbilder${personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''}`,
-                    ` · four start images${personMinutes ? `, about ${personMinutes} minutes` : ''}`)
+                    ` · four start images${personMinutes ? t(`, rund ${String(personMinutes).replace('.', ',')} Minuten`, `, about ${personMinutes} minutes`) : ''}`)
                   : t(' · Video dauert mehrere Minuten', ' · video takes several minutes'))}
                 {mode === 'image' && jobId === personJobId
                   && t(` · vier Bilder${personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''}`,
-                    ` · four images${personMinutes ? `, about ${personMinutes} minutes` : ''}`)}
+                    ` · four images${personMinutes ? t(`, rund ${String(personMinutes).replace('.', ',')} Minuten`, `, about ${personMinutes} minutes`) : ''}`)}
                 {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
                 {mode === 'restore' && t(' · meist 1–3 Minuten', ' · usually 1–3 minutes')}
               </span>

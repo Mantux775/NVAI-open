@@ -374,8 +374,11 @@ export function RunMonitor({ st, run, progress, testProgress, onJob, onCancel, o
             <label className="lr-inline">Seed<input type="number" className="lt-num" value={qSeed} onChange={(e) => setQSeed(Number(e.target.value) || 0)} /></label>
             <button className="btn primary" disabled={busy || running || !qCk || !qPrompt.trim() || !qStrengths.length || !st.base.installed}
               onClick={() => act(async () => onJob(await api.loraRunQuick(run.id, { checkpoint: qCk, prompt: qPrompt, strengths: qStrengths, seed: qSeed })))}>
-              {t(`${qStrengths.length} Bild${qStrengths.length > 1 ? 'er' : ''} rechnen (rund ${fmtDuration(qStrengths.length * st.timing.test_seconds_per_image)})`,
-                `Render ${qStrengths.length} image${qStrengths.length > 1 ? 's' : ''} (about ${fmtDuration(qStrengths.length * st.timing.test_seconds_per_image)})`)}
+              {qStrengths.length > 1
+                ? t(`${qStrengths.length} Bilder rechnen (rund ${fmtDuration(qStrengths.length * st.timing.test_seconds_per_image)})`,
+                  `Render ${qStrengths.length} images (about ${fmtDuration(qStrengths.length * st.timing.test_seconds_per_image)})`)
+                : t(`1 Bild rechnen (rund ${fmtDuration(st.timing.test_seconds_per_image)})`,
+                  `Render 1 image (about ${fmtDuration(st.timing.test_seconds_per_image)})`)}
             </button>
           </div>
           {testProgress && (

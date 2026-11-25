@@ -806,7 +806,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
           {
             label: first
               ? t(`${tr.id} bleibt immer`, `${tr.id} always stays`)
-              : t(`Spur ${trackLabel(tr)} entfernen${n ? ` (${n} Clip${n > 1 ? 's' : ''})` : ''}`, `Remove track ${trackLabel(tr)}${n ? ` (${n} clip${n > 1 ? 's' : ''})` : ''}`),
+              : t(`Spur ${trackLabel(tr)} entfernen${n ? ` (${n} Clip${n > 1 ? 's' : ''})` : ''}`, `Remove track ${trackLabel(tr)}${n === 1 ? t(' (1 Clip)', ' (1 clip)') : n ? t(` (${n} Clips)`, ` (${n} clips)`) : ''}`),
             separator: true,
             danger: true,
             disabled: first,

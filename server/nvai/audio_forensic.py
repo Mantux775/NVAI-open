@@ -594,7 +594,7 @@ async def _align(job: Job, ctx: jobs.JobContext) -> list[str]:
                                         f"{fit['b']:+.2f} s, Drift {res.get('drift_ppm')} ppm, Restfehler "
                                         f"{(res.get('residual_ms') or {}).get('median')} ms (Median) / "
                                         f"{(res.get('residual_ms') or {}).get('max')} ms (max), {res.get('used_points')} Messpunkte",
-                                        f"Video linked ({'clock in the picture' if method == 'clock' else 'by sound'}): {pr_path.name}; video time = {fit['a']:.6f} × recording time "
+                                        f"Video linked ({t('Uhr im Bild', 'clock in the picture') if method == 'clock' else t('über den Ton', 'by sound')}): {pr_path.name}; video time = {fit['a']:.6f} × recording time "
                                         f"{fit['b']:+.2f} s, drift {res.get('drift_ppm')} ppm, residual "
                                         f"{(res.get('residual_ms') or {}).get('median')} ms (median) / "
                                         f"{(res.get('residual_ms') or {}).get('max')} ms (max), {res.get('used_points')} points")})
@@ -720,7 +720,8 @@ async def submit_render(pid: str, req: dict[str, Any]) -> Job:
     spec = req.get("spec") or {}
     return await jobs.submit("audio_render", {
         "project_id": pid, "panels": panels, "tracks": chosen, "region": [round(a, 3), round(b, 3)], "fps": fps,
-        "mono": bool(req.get("mono")), "lang": "en" if req.get("lang") == "en" else "de",
+        # Beschriftung im Video: Deutsch nur bei deutscher Oberfläche, sonst Englisch (auch für zh und fr, seit 0.5.39)
+        "mono": bool(req.get("mono")), "lang": "de" if (req.get("lang") or "de") == "de" else "en",
         "spec": {"lo": float(spec.get("lo", -95)), "hi": float(spec.get("hi", -20)), "fmax": float(spec.get("fmax", 8000))},
         "dest_dir": al.check_dest_dir(req.get("dest_dir"))})
 

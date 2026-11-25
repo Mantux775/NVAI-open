@@ -4,8 +4,8 @@ import { TPS, type StudioClip, type StudioProject, type StudioTrack } from '../a
 import { getLang, t } from '../i18n'
 
 export const sec = (ticks: number) => ticks / TPS
-/** Dezimalzeichen der Oberflächensprache: 7,5 auf Deutsch, 7.5 auf Englisch. */
-export const decimal = (text: string) => (getLang() === 'de' ? text.replace('.', ',') : text)
+/** Dezimalzeichen der Oberflächensprache: 7,5 auf Deutsch und Französisch, sonst 7.5. */
+export const decimal = (text: string) => (getLang() === 'de' || getLang() === 'fr' ? text.replace('.', ',') : text)
 export const ticks = (seconds: number) => Math.round(seconds * TPS)
 /** Geschwindigkeit eines Clips (1 = 100 %); ältere Projekte kennen das Feld nicht. */
 export const clipSpeed = (c: StudioClip) => c.speed ?? 1

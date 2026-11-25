@@ -503,7 +503,7 @@ async def _execute(
                         val = data.get("value", 0)
                         node = str(data.get("node"))
                         idx = sampler_ids.index(node) if node in sampler_ids else 0
-                        stage = f"Step {val}/{mx}"
+                        stage = t(f"Schritt {val}/{mx}", f"Step {val}/{mx}")
                         if stages > 1:
                             stage = t(f"Durchgang {idx + 1}/{stages} · {stage}",
                                       f"Pass {idx + 1}/{stages} · {stage}")

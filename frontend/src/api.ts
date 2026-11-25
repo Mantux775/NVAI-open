@@ -722,6 +722,16 @@ export interface EngineState {
 
 export type GpuRole = 'image' | 'text' | 'mesh'
 
+/** GET /api/mcp: wie KI-Agenten NVAI-open über MCP erreichen (seit 0.5.39). */
+export interface McpInfo {
+  url: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  /** Server hat einen Token: andere Geräte brauchen X-NVAI-Token */
+  token: boolean
+}
+
 /** GET /api/settings/folders: Daten- und Modellordner (Setup-Fassung: änderbar). */
 export interface FolderSettings {
   data_dir: string
@@ -1381,6 +1391,8 @@ export const api = {
     req<Job>('/api/generate/image', { method: 'POST', body: JSON.stringify(p) }),
   /** Prompt ausbauen: der FLUX-3-Upsampler schreibt die volle Bildbeschreibung, für jedes Bildmodell. */
   folders: () => req<FolderSettings>('/api/settings/folders'),
+  /** Anschluss für KI-Agenten (seit 0.5.39): MCP-Adresse und stdio-Befehl. */
+  mcpInfo: () => req<McpInfo>('/api/mcp'),
   checkFolder: (path: string) =>
     req<{ path: string; free_gb: number | null }>('/api/settings/folders/check', { method: 'POST', body: JSON.stringify({ path }) }),
   browseFolder: (initial: string) =>
@@ -1560,9 +1572,9 @@ export function connectEvents(onEvent: (e: ServerEvent) => void): () => void {
 
 export const KIND_LABEL: Record<ModelKind, string> = {
   image: t('Bild', 'Image'),
-  audio: 'Audio',
+  audio: t('Audio', 'Audio'),
   speech: t('Sprache', 'Speech'),
-  video: 'Video',
+  video: t('Video', 'Video'),
   '3d': '3D',
   controlnet: 'ControlNet',
   lora: 'LoRA',

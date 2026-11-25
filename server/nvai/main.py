@@ -9,6 +9,7 @@ import ipaddress
 import re
 import shutil
 import signal
+import sys
 import time
 import traceback
 from contextlib import asynccontextmanager
@@ -22,6 +23,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 from starlette.requests import ClientDisconnect
+from starlette.routing import Route
+from mcp.server.transport_security import TransportSecuritySettings
 
 import httpx
 
@@ -59,6 +62,7 @@ from . import audio_lab  # noqa: E402  (Bereich „Audio“, Auftraege audio_*)
 from . import audio_forensic  # noqa: E402  (Ton-Forensik: Spektrogramm, Sprachaktivitaet, Transkript)
 from . import audio_vdr  # noqa: E402  (VDR-Aufzeichnungen im Bereich „Audio“, Auftraege audio_vdr_*)
 from . import audio_package  # noqa: E402  (Prüfpaket für die Prüf-App)
+from . import mcp_server  # noqa: E402  (dieselben MCP-Werkzeuge auch über HTTP unter /mcp, seit 0.5.39)
 
 
 @asynccontextmanager
@@ -81,7 +85,8 @@ async def lifespan(app: FastAPI):
         engine.start_repair()
     except Exception:  # noqa: BLE001 - der Server soll trotzdem starten
         traceback.print_exc()
-    yield
+    async with _mcp_http.running():
+        yield
     await jobs.shutdown()
     comfy.stop()
     mesh_workers.stop_all()
@@ -162,6 +167,9 @@ API_FEATURES = [
     "lora_train",      # /api/lora-train/*: eigene LoRAs fuer Qwen-Image-2512 trainieren (Datensaetze, Vorlage mit
                        # Qwen-Image-Edit-2511, musubi-tuner, Probebilder, Uebernehmen); Ereignis lora.changed, trained
                        # an Modellen (seit 0.5.29)
+    "mcp_http",        # /mcp: dieselben MCP-Werkzeuge über HTTP (Streamable HTTP); GET /api/mcp: Adresse und
+                       # stdio-Befehl für Agenten (seit 0.5.39)
+    "lang_zh_fr",      # Accept-Language zh und fr: Meldungen und Modellkatalog über Sprachpakete (seit 0.5.39)
 ]
 
 
@@ -269,6 +277,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ------------------------------------------------------- MCP über HTTP
+#
+# Seit 0.5.39 erreichen Agenten, die eine Adresse statt eines Befehls nehmen (WorkBuddy, Cursor, Claude Code mit
+# --transport http ...), dieselben Werkzeuge wie über `python -m nvai.mcp_server` unter /mcp, ohne Pfade und
+# NVAI_DATA_DIR. Es gilt der Zugriffsschutz oben: dieser Rechner ohne Token, andere Geräte mit X-NVAI-Token. Die
+# DNS-Rebinding-Prüfung des SDK kennt nur localhost und sperrte den Netzbetrieb mit Token; dasselbe prüft schon
+# _is_local, deshalb ist sie hier aus. Der Sitzungsverwalter des SDK läuft nur einmal je Instanz: Jeder Lebenszyklus
+# (lifespan, auch in Tests) baut einen neuen.
+class _McpHttp:
+    def __init__(self) -> None:
+        self.handler: Any = None
+
+    @asynccontextmanager
+    async def running(self):
+        http_app = mcp_server.server.streamable_http_app(
+            streamable_http_path="/mcp",
+            transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
+        self.handler = http_app.routes[0].endpoint
+        try:
+            async with mcp_server.server.session_manager.run():
+                yield
+        finally:
+            self.handler = None
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if self.handler is None:
+            await JSONResponse({"detail": "MCP is not running"}, status_code=503)(scope, receive, send)
+            return
+        await self.handler(scope, receive, send)
+
+
+_mcp_http = _McpHttp()
+app.router.routes.append(Route("/mcp", endpoint=_mcp_http))
+
+
+@app.get("/api/mcp")
+async def mcp_info() -> dict[str, Any]:
+    """Anschluss für KI-Agenten (seit 0.5.39): die Adresse für MCP über HTTP und, für Agenten, die nur Programme
+    starten (stdio), Befehl und Umgebung. Die Weboberfläche zeigt beides unter Modelle."""
+    exe = Path(sys.executable)
+    if exe.name.lower() == "pythonw.exe" and exe.with_name("python.exe").exists():
+        exe = exe.with_name("python.exe")  # stdio braucht die Konsolenfassung
+    base = f"http://127.0.0.1:{config.API_PORT}"
+    return {"url": f"{base}/mcp", "command": str(exe), "args": ["-m", "nvai.mcp_server"],
+            "env": {"NVAI_DATA_DIR": str(config.DATA_DIR), "NVAI_API_URL": base},
+            "token": bool(config.API_TOKEN)}
 
 
 # ----------------------------------------------------------- System

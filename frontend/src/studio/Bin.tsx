@@ -286,7 +286,7 @@ export function Bin({ refreshKey, selectedId, usedIds, projectId, home, onOpen, 
     ['audio', t('Ton', 'Audio')],
   ]
 
-  const files = (n: number) => t(`${n} ${n === 1 ? 'Datei' : 'Dateien'}`, `${n} ${n === 1 ? 'file' : 'files'}`)
+  const files = (n: number) => (n === 1 ? t('1 Datei', '1 file') : t(`${n} Dateien`, `${n} files`))
 
   /** Ordnereintrag (auch „..“): Klick markiert, Doppelklick öffnet. */
   const folderItem = (key: string, label: string, sub: string, title: string, open: () => void, extra?: {

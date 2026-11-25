@@ -214,7 +214,7 @@ export function HfSearch({ catalog, onShowModel, onQueued }: Props) {
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
           {t(
             `Auch LoRAs, GGUF und Repos ohne Modell zeigen${hidden > 0 && !showAll ? ` (${hidden} ausgeblendet)` : ''}`,
-            `Also show LoRAs, GGUF and repos without a model${hidden > 0 && !showAll ? ` (${hidden} hidden)` : ''}`,
+            `Also show LoRAs, GGUF and repos without a model${hidden > 0 && !showAll ? t(` (${hidden} ausgeblendet)`, ` (${hidden} hidden)`) : ''}`,
           )}
         </label>
       )}

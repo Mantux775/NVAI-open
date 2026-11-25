@@ -9,6 +9,7 @@ import { GpuSettings } from '../components/GpuSettings'
 import { EstimateBadge, HardwareSection } from '../components/HardwareInfo'
 import { ContentBadge } from '../components/ContentBadge'
 import { LicenseBadge, licenseBlocked } from '../components/LicenseBadge'
+import { AgentAccess } from '../components/AgentAccess'
 import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
 import { CivitaiSearch } from './CivitaiSearch'
@@ -31,9 +32,9 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'rec', label: t('Für deine Karte', 'For your GPU') },
   { id: 'fav', label: t('★ Favoriten', '★ Favorites') },
   { id: 'image', label: t('Bild', 'Image') },
-  { id: 'audio', label: 'Audio' },
+  { id: 'audio', label: t('Audio', 'Audio') },
   { id: 'speech', label: t('Sprache', 'Speech') },
-  { id: 'video', label: 'Video' },
+  { id: 'video', label: t('Video', 'Video') },
   { id: '3d', label: '3D' },
   { id: 'controlnet', label: 'ControlNet' },
   { id: 'lora', label: 'LoRA' },
@@ -300,6 +301,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
       <FolderSettings />
       <HardwareSection />
       <GpuSettings />
+      <AgentAccess />
       <div className="model-toolbar">
         <div className="filters">
           {FILTERS.map((f) => (
@@ -356,10 +358,9 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
           </button>
           {busyDownloads > 0 && (
             <button className="btn small ghost danger-text" onClick={cancelDownloads}>
-              {t(
-                `${busyDownloads} Download${busyDownloads > 1 ? 's' : ''} abbrechen`,
-                `Cancel ${busyDownloads} download${busyDownloads > 1 ? 's' : ''}`,
-              )}
+              {busyDownloads > 1
+                ? t(`${busyDownloads} Downloads abbrechen`, `Cancel ${busyDownloads} downloads`)
+                : t('1 Download abbrechen', 'Cancel 1 download')}
             </button>
           )}
           {hasPartial &&
@@ -577,12 +578,11 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
                 <p className="muted small">
                   {m.uploaded
                     ? t(`${m.disk_gb} GB · vom Rechner hinzugefügt`, `${m.disk_gb} GB · added from this computer`)
-                    : t(
-                      `${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · ${m.files.length} Datei`
-                        + (m.files.length > 1 ? 'en' : ''),
-                      `${m.size_gb} GB download · ~${m.vram_gb} GB VRAM · ${m.files.length} `
-                        + (m.files.length === 1 ? 'file' : 'files'),
-                    )} ·{' '}
+                    : m.files.length === 1
+                      ? t(`${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · 1 Datei`,
+                        `${m.size_gb} GB download · ~${m.vram_gb} GB VRAM · 1 file`)
+                      : t(`${m.size_gb} GB Download · ~${m.vram_gb} GB VRAM · ${m.files.length} Dateien`,
+                        `${m.size_gb} GB download · ~${m.vram_gb} GB VRAM · ${m.files.length} files`)} ·{' '}
                   <span className={m.commercial_ok ? 'ok-text' : 'warn-text'}>
                     {m.license}
                     {m.commercial_ok ? '' : t(' · nicht kommerziell', ' · non-commercial')}

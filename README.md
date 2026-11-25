@@ -13,8 +13,10 @@ Install, open, download a model under "Models", generate. The setup brings every
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.38 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.38))
+November 2026: NVAI-open 0.5.39 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.39))
 
+- **Chinese and French** (0.5.39): the language list at the top right offers English, Deutsch, 简体中文 and Français; model descriptions and the messages of the server follow it. Based on a contribution by NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
+- **AI agents through an address** (0.5.39): NVAI-open serves its MCP server itself at `http://127.0.0.1:8100/mcp`, so WorkBuddy, Cursor, Claude Code and other agents connect without paths; "Models → AI agents (MCP)" shows entries to copy. [Details](docs/CLAUDE_CODE.md#setup)
 - **ComfyUI with ROCm on the Radeon RX 5000 and RX 6500/6400** (0.5.38, experimental): AMD now offers PyTorch with ROCm for these cards, so the setup installs it and checks it on the card. Vulkan stays the default; "ComfyUI (ROCm, experimental)" under Models → Your hardware computes every model that fits into the card's memory on the card. Not measured on such a card yet. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
 - **Person from a photo, also for pictures** (0.5.38): the section is now also under Generate → Image and makes four pictures in the chosen size instead of start images for a video. [Details](docs/PHOTO_TO_VIDEO.md#pictures-instead-of-a-video-generate--image)
 - **Vulkan on older Radeons and Intel cards, fixed** (0.5.37): the setups of 0.5.34 to 0.5.36 never set up the Vulkan engines, because Windows PowerShell 5.1 stopped at the first line of the device list, so everything computed on the processor. The setup now reads the list properly, and if it still cannot set them up, NVAI-open downloads them itself on the next start. [Details](docs/DIRECTML.md#setup)
@@ -63,7 +65,7 @@ November 2026: NVAI-open 0.5.38 for Windows and 0.5.14 for the Mac ([release not
 
 I vibe-coded this app because I needed it myself: images, sounds and 3D models for my game projects, without paying per picture or sending everything to the cloud. Now I'm sharing it. Everything runs on your own graphics card, and nothing leaves your computer.
 
-It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac mini M1 (8 GB). Feedback is very welcome as an [issue](https://github.com/Mantux775/NVAI-open/issues), easiest with "Report a problem" in the app, which attaches an anonymized report. I have a full-time job, so answers can take a while. All apps are in English and German.
+It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac mini M1 (8 GB). Feedback is very welcome as an [issue](https://github.com/Mantux775/NVAI-open/issues), easiest with "Report a problem" in the app, which attaches an anonymized report. I have a full-time job, so answers can take a while. All apps are in English and German, the Windows interface also in Chinese and French.
 
 ### What you can do
 
@@ -232,13 +234,13 @@ The same list with the measurements, written for Claude Code: [docs/CLAUDE_CODE.
 
 ### Claude Code: your assets on request
 
-NVAI-open comes with an MCP server. Register it once:
+NVAI-open comes with an MCP server. While NVAI-open is running, register it once:
 
 ```
-claude mcp add --scope user nvai -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
 
-Then just ask: "Make a weathered wooden barrel as a 3D model and put it into Assets/Generated/Meshes". Claude picks a model, asks before a download, generates, and copies the result into your project. Setup and all tools: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)
+Then just ask: "Make a weathered wooden barrel as a 3D model and put it into Assets/Generated/Meshes". Claude picks a model, asks before a download, generates, and copies the result into your project. WorkBuddy, Cursor and other AI agents connect to the same address; "Models → AI agents (MCP)" shows it with entries to copy. Setup and all tools: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md)
 
 ### Graphics cards and uncensored models
 
@@ -332,12 +334,14 @@ Das Update: das Studio für den Mac und neue lokale KI-Modelle, auf YouTube.<br>
 
 Ich habe diese App „vibegecodet“, weil ich sie selbst brauchte: Bilder, Sounds und 3D-Modelle für meine Spieleprojekte, ohne pro Bild zu zahlen oder alles in die Cloud zu schicken. Jetzt teile ich sie. Alles rechnet auf deiner eigenen Grafikkarte, nichts verlässt deinen Rechner.
 
-Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) und ein Mac mini M1 (8 GB). Über Feedback als [Issue](https://github.com/Mantux775/NVAI-open/issues) freue ich mich sehr, am einfachsten mit „Problem melden“ in der App, das hängt einen anonymisierten Bericht an. Ich habe einen Vollzeitjob, Antworten können also dauern. Alle Apps gibt es auf Deutsch und Englisch.
+Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) und ein Mac mini M1 (8 GB). Über Feedback als [Issue](https://github.com/Mantux775/NVAI-open/issues) freue ich mich sehr, am einfachsten mit „Problem melden“ in der App, das hängt einen anonymisierten Bericht an. Ich habe einen Vollzeitjob, Antworten können also dauern. Alle Apps gibt es auf Deutsch und Englisch, die Windows-Oberfläche auch auf Chinesisch und Französisch.
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.38 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.38))
+November 2026: NVAI-open 0.5.39 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.39))
 
+- **Chinesisch und Französisch** (0.5.39): Die Sprachliste oben rechts bietet English, Deutsch, 简体中文 und Français; Modellbeschreibungen und Meldungen des Servers folgen ihr. Auf Grundlage eines Beitrags von NeoTiko ([#4](https://github.com/Mantux775/NVAI-open/pull/4)).
+- **KI-Agenten über eine Adresse** (0.5.39): NVAI-open stellt seinen MCP-Server selbst unter `http://127.0.0.1:8100/mcp` bereit; WorkBuddy, Cursor, Claude Code und andere Agenten verbinden sich ohne Pfade, „Modelle → KI-Agenten (MCP)“ zeigt Einträge zum Kopieren. [Einzelheiten](docs/CLAUDE_CODE.md#setup) (englisch)
 - **ComfyUI mit ROCm auf der Radeon RX 5000 und RX 6500/6400** (0.5.38, experimentell): AMD bietet PyTorch mit ROCm jetzt auch für diese Karten an, das Setup richtet es ein und prüft es auf der Karte. Vulkan bleibt die Vorgabe; „ComfyUI (ROCm, experimentell)“ unter Modelle → Deine Hardware rechnet jedes Modell, das in den Grafikspeicher passt, auf der Karte. Auf so einer Karte noch nicht gemessen. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
 - **Person aus einem Foto, auch für Bilder** (0.5.38): Der Abschnitt steht jetzt auch unter Generieren → Bild und macht vier Bilder im gewählten Format statt Startbildern für ein Video. [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md#bilder-statt-video-generieren--bild)
 - **Vulkan auf älteren Radeons und Intel-Karten, behoben** (0.5.37): Die Setups von 0.5.34 bis 0.5.36 richteten die Vulkan-Engines nie ein, weil Windows PowerShell 5.1 an der ersten Zeile der Geräteliste abbrach; also rechnete alles auf dem Prozessor. Das Setup liest die Liste jetzt richtig, und klappt es trotzdem nicht, lädt NVAI-open sie beim nächsten Start selbst. [Einzelheiten](docs/de/DIRECTML.md#einrichten)
@@ -542,13 +546,13 @@ Dieselbe Liste mit den Messwerten, geschrieben für Claude Code: [docs/CLAUDE_CO
 
 ### Claude Code: Assets auf Zuruf
 
-NVAI-open bringt einen MCP-Server mit. Einmal eintragen:
+NVAI-open bringt einen MCP-Server mit. Während NVAI-open läuft, einmal eintragen:
 
 ```
-claude mcp add --scope user nvai -- "<Installationsordner>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
 
-Dann einfach sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es nach Assets/Generated/Meshes“. Claude wählt ein Modell, fragt vor einem Download, generiert und kopiert das Ergebnis ins Projekt. Einrichtung und alle Werkzeuge: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md) (englisch)
+Dann einfach sagen: „Mach ein verwittertes Holzfass als 3D-Modell und leg es nach Assets/Generated/Meshes“. Claude wählt ein Modell, fragt vor einem Download, generiert und kopiert das Ergebnis ins Projekt. WorkBuddy, Cursor und andere KI-Agenten verbinden sich mit derselben Adresse; „Modelle → KI-Agenten (MCP)“ zeigt sie mit Einträgen zum Kopieren. Einrichtung und alle Werkzeuge: [docs/CLAUDE_CODE.md](docs/CLAUDE_CODE.md) (englisch)
 
 ### Grafikkarten und unzensierte Modelle
 

@@ -423,7 +423,7 @@ export function LoraWizard({ st, ds, genProgress, onCreated, onReload, onJob, on
           {step === 4 && ds && (
             <>
               <p>{t(`${keep.length} Bilder im Training, ${steps} Schritte, rund ${fmtDuration(estimate)}${test ? ' samt Probebildern' : ''}.`,
-                `${keep.length} images in training, ${steps} steps, about ${fmtDuration(estimate)}${test ? ' including test images' : ''}.`)}</p>
+                `${keep.length} images in training, ${steps} steps, about ${fmtDuration(estimate)}${test ? t(' samt Probebildern', ' including test images') : ''}.`)}</p>
               <details className="lw-details">
                 <summary>{t(`Einstellungen: ${settings.epochs} Epochen, Lernrate ${settings.lr}, Rang ${settings.rank}, Alpha ${settings.alpha}, Zwischenstand alle ${settings.save_every}`,
                   `Settings: ${settings.epochs} epochs, learning rate ${settings.lr}, rank ${settings.rank}, alpha ${settings.alpha}, checkpoint every ${settings.save_every}`)}</summary>

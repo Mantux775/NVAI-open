@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, SPEECH_LANGUAGES, type Asset, type SpeechLanguage, type StudioProject, type WizardModel, type WizardPlan, type WizardRole } from '../api'
 import { hfGuideUrl } from '../components/GatedNotice'
 import { fmtDuration } from '../components/HardwareInfo'
-import { getLang, t } from '../i18n'
+import { getLang, locale, t } from '../i18n'
 
 type PathId = 'oneshot' | 'story' | 'narration' | 'character' | 'face' | 'animation'
 type StyleId = 'film' | 'anim3d' | 'cartoon' | 'ink' | 'anime'
@@ -338,15 +338,15 @@ async function waitJob(id: string): Promise<Asset[]> {
 }
 
 /** Sieht der Text nicht englisch aus? Umlaute, ß und deutsche Wörter, die es im Englischen nicht gibt (gemessen 14.11.:
- * „an Deck eines alten Segelschiffs bei hellem Tageslicht“ fiel durch die erste, kürzere Liste). Bei deutscher Oberfläche
- * wird ohnehin immer übertragen. */
+ * „an Deck eines alten Segelschiffs bei hellem Tageslicht“ fiel durch die erste, kürzere Liste). Bei deutscher,
+ * chinesischer oder französischer Oberfläche wird ohnehin immer übertragen. */
 const NON_EN = /[äöüßÄÖÜ]|\b(der|das|und|ein|eine|einen|eines|einem|einer|mit|auf|bei|vom|zum|zur|dem|des|ist|sind|nicht|sich|unter|hinter|nach|aus|wird|steht|geht|zieht|hebt|langsam|seine|ihre|alten|alte|kleine|kleiner|große|großen|hellem|dunklen)\b/i
 
 /** Freie Texte treu ins Englische (Ziel „translate“ des lokalen Sprachmodells, ein Aufruf für alle, nummeriert). Bild-
  * und Videomodelle verstehen Englisch am besten; ein deutscher Szenentext kam bei FLUX sogar als Schrift ins Bild.
  * Gesprochene Sätze bleiben, wie sie sind. Klappt es nicht, bleibt der Originaltext. */
 async function toEnglish(texts: string[]): Promise<string[]> {
-  const need = texts.map((x) => !!x.trim() && (getLang() === 'de' || NON_EN.test(x)))
+  const need = texts.map((x) => !!x.trim() && (getLang() !== 'en' || NON_EN.test(x)))
   if (!need.some(Boolean)) return texts
   const numbered = texts.map((x, i) => (need[i] ? `[${i + 1}] ${x.trim().replace(/\s+/g, ' ')}` : '')).filter(Boolean).join('\n')
   const out = [...texts]
@@ -405,7 +405,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
   // Szenen und Ton
   const [scenes, setScenes] = useState<SceneDraft[]>(() => PATHS[1].scenes())
   const [voice, setVoice] = useState<VoiceId>('warm_female')
-  const [lang, setLang] = useState<SpeechLanguage>(getLang() === 'de' ? 'de' : 'en')
+  const [lang, setLang] = useState<SpeechLanguage>(getLang())
   const [music, setMusic] = useState(true)
   // Musik: ohne eigene Wahl der Vorschlag der Stimmung; musicText = eigener oder geänderter Prompt
   const [musicPick, setMusicPick] = useState<MusicId | null>(null)
@@ -463,7 +463,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
   const usedRoles: WizardRole[] = ['image', 'video', ...(lines.length ? ['speech' as const] : []), ...(music ? ['music' as const] : [])]
   /** Gewählte Modelle dieser Aufgaben, die noch nicht geladen sind */
   const missing = (roles: WizardRole[]) => roles.map((r) => plan?.models[r]).filter((m): m is WizardModel => !!m && !m.installed)
-  const gbText = (gb: number) => `${gb.toLocaleString(getLang() === 'de' ? 'de-DE' : 'en-US', { maximumFractionDigits: 1 })} GB`
+  const gbText = (gb: number) => `${gb.toLocaleString(locale(), { maximumFractionDigits: 1 })} GB`
 
   /** Fehlende Modelle laden, wenn der Nutzer Ja sagt: der normale Download-Auftrag (eigene Warteschlange), Fortschritt
    *  hier; danach den Plan neu holen, er meldet das Modell dann als geladen */
@@ -1136,7 +1136,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                     <tbody>
                       {characterOn && !drafts.length && modelRow(t('Figur', 'Character'), 'image', 'character', { select: true })}
                       {modelRow(t(`Startbilder (${startScenes} × 2)`, `Start images (${startScenes} × 2)`), 'image', 'start_images', { select: !(characterOn && !drafts.length) })}
-                      {lines.length > 0 && modelRow(t(`Stimme (${lines.length} ${lines.length === 1 ? 'Satz' : 'Sätze'})`, `Voice (${lines.length} ${lines.length === 1 ? 'line' : 'lines'})`), 'speech', 'voice', { select: true })}
+                      {lines.length > 0 && modelRow(lines.length === 1 ? t('Stimme (1 Satz)', 'Voice (1 line)') : t(`Stimme (${lines.length} Sätze)`, `Voice (${lines.length} lines)`), 'speech', 'voice', { select: true })}
                       {music && modelRow(t('Musik', 'Music'), 'music', 'music', { select: true })}
                       {modelRow(t(`Videos (${totalSeconds} s)`, `Videos (${totalSeconds} s)`), 'video', 'videos', {
                         select: true,
@@ -1167,7 +1167,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                 <>
                   <p className="small">
                     {t(`${path.title}: ${scenes.length} Szenen, ${totalSeconds} s, ${portrait ? 'hochkant' : 'quer'}, ${STYLES[style].label}${characterOn && chosenDraft ? ', mit Figur' : !characterOn ? ', ohne Figur' : ''}${lines.length ? `, ${lines.length} ${lines.length === 1 ? 'Satz' : 'Sätze'}` : ''}${music ? ', mit Musik' : ''}.`,
-                      `${path.title}: ${scenes.length} scenes, ${totalSeconds} s, ${portrait ? 'portrait' : 'landscape'}, ${STYLES[style].label}${characterOn && chosenDraft ? ', with a character' : !characterOn ? ', without a character' : ''}${lines.length ? `, ${lines.length} ${lines.length === 1 ? 'line' : 'lines'}` : ''}${music ? ', with music' : ''}.`)}
+                      `${path.title}: ${scenes.length} scenes, ${totalSeconds} s, ${portrait ? t('hochkant', 'portrait') : t('quer', 'landscape')}, ${STYLES[style].label}${characterOn && chosenDraft ? t(', mit Figur', ', with a character') : !characterOn ? t(', ohne Figur', ', without a character') : ''}${lines.length === 1 ? t(', 1 Satz', ', 1 line') : lines.length ? t(`, ${lines.length} Sätze`, `, ${lines.length} lines`) : ''}${music ? t(', mit Musik', ', with music') : ''}.`)}
                   </p>
                   {fetchBox(usedRoles, t('Noch nicht geladen. Soll ich die Modelle jetzt laden?', 'Not downloaded yet. Shall I download the models now?'))}
                   <div className="wz-actions-left">

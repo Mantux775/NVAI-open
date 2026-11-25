@@ -1352,7 +1352,7 @@ IMAGE_MODELS: list[dict[str, Any]] = [
             "(cfg 1). Bis zu drei Referenzbilder gehen über das Bildverständnis von Qwen2.5-VL und als Referenz "
             "ein; die Ausgabegröße ist frei. Darauf trainiert, dieselbe Person oder Figur in neue Haltungen und "
             "Szenen zu setzen: Der LoRA-Assistent baut damit seine Datensätze (eine Figur in 24 Haltungen).\n\n"
-            "Dieselben Dateien wie „Bilder aus der Vorlage“ im LoRA-Assistenten: Löschen entfernt sie auch dort, "
+            "Dieselben Dateien wie „Aus der Vorlage erzeugen“ im LoRA-Assistenten: Löschen entfernt sie auch dort, "
             "der Assistent lädt sie bei Bedarf neu. Text-Encoder und VAE teilt es mit Qwen-Image-2512. Das "
             "fp8-Modell (20,5 GB) passt nicht ganz in 16 GB, ComfyUI lagert Teile aus. Gemessen auf einer "
             "RTX 5060 Ti: rund 44 s je Bild im LoRA-Assistenten, vier Bilder in 1296 × 720 in 144 s samt Laden.\n\n"

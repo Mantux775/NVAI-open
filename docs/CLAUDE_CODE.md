@@ -14,7 +14,20 @@ Windows setup, the Start menu entry **NVAI-open** starts it and **Quit NVAI-open
 `scripts\start.ps1` and `scripts\stop.ps1`. The GPU backend (ComfyUI) starts with the first job, which takes about 30 s
 once; that is not an error.
 
-**Register the MCP server** once at user scope, so it is there in every project:
+**Register the MCP server** once at user scope, so it is there in every project. Since 0.5.39 the running NVAI-open serves it itself at `/mcp` (MCP over HTTP):
+
+```
+claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
+```
+
+The address is the one of the web interface plus `/mcp`; "Models → AI agents (MCP)" in the app shows it with
+entries to copy. Other agents connect the same way: WorkBuddy, Cursor and other agents that take an address get
+`{"mcpServers": {"nvai": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}}}` in their `mcp.json`. Without a
+token only this computer gets in; other devices send the token in the `X-NVAI-Token` header.
+
+![Models → AI agents (MCP): the address and entries for Claude Code, WorkBuddy and Cursor](images/mcp-agents.jpg)
+
+Agents that only start programs (Claude Desktop, for example) and NVAI-open before 0.5.39 use the stdio server:
 
 ```
 claude mcp add --scope user nvai -e "NVAI_DATA_DIR=<data folder>" -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server

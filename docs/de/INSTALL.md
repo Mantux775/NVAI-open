@@ -87,13 +87,19 @@ Scheitert der letzte Schritt, zeigt das Setup den Pfad zu `install.log`. Später
 
 ### Erste Schritte
 
-1. **NVAI-open** im Startmenü öffnen. Der Browser zeigt die App unter `http://127.0.0.1:8100`.
+1. **NVAI-open** im Startmenü öffnen. Der Browser zeigt die App unter `http://127.0.0.1:8100`. Sie startet auf
+   Englisch; die Liste oben rechts stellt auf Deutsch, 简体中文 oder Français um.
 2. Unter **„Modelle“** ein Modell laden. Modelle, die zu deiner Grafikkarte passen, sind als *empfohlen* markiert.
 3. Unter **„Generieren“** einen Prompt eingeben. Der erste Auftrag nach dem Start dauert 30 bis 60 Sekunden länger,
    weil das Modell lädt.
 
 **„NVAI-open beenden“** im Startmenü fährt alles herunter und gibt die Grafikkarte frei. NVAI-open aus Claude Code
-nutzen: [CLAUDE_CODE.md](../CLAUDE_CODE.md) (englisch).
+oder einem anderen KI-Agenten (WorkBuddy, Cursor) nutzen: unter „Modelle → KI-Agenten (MCP)“ stehen Adresse und
+Einträge zum Kopieren, Einzelheiten in [CLAUDE_CODE.md](../CLAUDE_CODE.md) (englisch).
+
+![Der Reiter „Generieren“ auf Französisch, mit der Sprachliste oben rechts](../images/languages-fr.jpg)
+
+![„Modelle → KI-Agenten (MCP)“: Adresse und Einträge für Claude Code, WorkBuddy und Cursor](../images/mcp-agents-de.jpg)
 
 ### FLUX 3 und LTX-2.5 (Zugang zu Hugging Face)
 
@@ -270,8 +276,12 @@ Verbindung ist einfaches HTTP, von außen also über ein VPN.
 **Claude Code:**
 
 ```powershell
-claude mcp add --scope user nvai -- "<Repository-Ordner>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
+claude mcp add --scope user --transport http nvai http://127.0.0.1:8100/mcp
 ```
+
+Das braucht den laufenden Server; ohne ihn geht auch der stdio-Server:
+`claude mcp add --scope user nvai -- "<Repository-Ordner>\server\.venv\Scripts\python.exe" -m nvai.mcp_server`.
+Andere Agenten (WorkBuddy, Cursor, Claude Desktop): [docs/CLAUDE_CODE.md](../CLAUDE_CODE.md#setup) (englisch).
 
 #### Optional: 3D-Worker
 

@@ -264,8 +264,9 @@ export function VhsPanel({ event, downloads, onShowModels }: Props) {
             <p className="muted small">
               {info.standard !== 'other' ? `${info.standard} · ` : ''}{info.width} × {info.height}
               {' · '}{info.interlaced
-                ? t(`interlaced, ${info.parity === 'tff' ? 'oberes' : 'unteres'} Halbbild zuerst`,
-                  `interlaced, ${info.parity === 'tff' ? 'top' : 'bottom'} field first`)
+                ? (info.parity === 'tff'
+                  ? t('interlaced, oberes Halbbild zuerst', 'interlaced, top field first')
+                  : t('interlaced, unteres Halbbild zuerst', 'interlaced, bottom field first'))
                 : t('progressiv', 'progressive')}
               {' · '}{fps.toFixed(fps % 1 ? 2 : 0)} {t('Bilder/s', 'fps')} · {info.aspect} · {fmtClock(info.seconds)}
               {' · '}{info.codec}{info.audio ? t(`, Ton ${info.audio.codec}`, `, sound ${info.audio.codec}`) : t(', ohne Ton', ', no sound')}

@@ -1,3 +1,5 @@
+// Zuerst: Sprachpakete (zh, fr) anmelden, bevor Module beim Laden t() auswerten
+import './langpacks'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'

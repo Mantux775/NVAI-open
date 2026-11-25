@@ -236,7 +236,7 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
                 repo = next(f["repo"] for f in entry["files"] if f.get("optional") == name)
                 feats.setdefault("missing", {})[name] = f"https://huggingface.co/{repo}"
         if i18n.lang() != "de" and feats.get("sizes"):
-            feats["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
+            feats["sizes"] = [s | {"label": i18n.tr_en(_SIZE_LABELS.get(s.get("label", ""), s.get("label", "")))}
                               for s in feats["sizes"]]
         if feats.get("min_compute"):
             _hardware_limits(feats)
@@ -271,7 +271,7 @@ def features_for(entry: dict[str, Any]) -> dict[str, Any]:
     merged.setdefault("outpaint", "reference" if merged.get("references") else
                       "mask" if merged.get("mask") else None)
     if i18n.lang() != "de" and merged.get("sizes"):
-        merged["sizes"] = [s | {"label": _SIZE_LABELS.get(s.get("label", ""), s.get("label", ""))}
+        merged["sizes"] = [s | {"label": i18n.tr_en(_SIZE_LABELS.get(s.get("label", ""), s.get("label", "")))}
                            for s in merged["sizes"]]
     return _vulkan_presets(entry, merged)
 
@@ -359,7 +359,8 @@ def display_name(entry: dict[str, Any]) -> str:
 
 def localized(entry: dict[str, Any]) -> dict[str, Any]:
     """Katalogeintrag in der Sprache der Anfrage. catalog.py ist die deutsche Quelle,
-    catalog_en.py liefert die englischen Texte; was dort fehlt, bleibt deutsch."""
+    catalog_en.py liefert die englischen Texte; was dort fehlt, bleibt deutsch. Chinesisch und
+    Franzoesisch (seit 0.5.39) uebersetzen die englischen Texte ueber das Sprachpaket."""
     if entry.get("custom"):
         return entry | _custom_texts(entry)
     if i18n.lang() == "de":
@@ -374,7 +375,22 @@ def localized(entry: dict[str, Any]) -> dict[str, Any]:
             out[key] = over[key]
     if "features" in over:
         out["features"] = (entry.get("features") or {}) | over["features"]
+    if i18n.lang() in i18n.PACK_LANGUAGES:
+        for key in _PACK_FIELDS:
+            if isinstance(v := out.get(key), str):
+                out[key] = i18n.tr_en(v)
+            elif isinstance(v, list):
+                out[key] = [i18n.tr_en(x) if isinstance(x, str) else x for x in v]
+        feats = out.get("features") or {}
+        if any(isinstance(feats.get(k), str) for k in _PACK_FEATURES):
+            out["features"] = feats | {k: i18n.tr_en(feats[k]) for k in _PACK_FEATURES if isinstance(feats.get(k), str)}
     return out
+
+
+# Felder mit englischem Text aus catalog_en, die das Sprachpaket kennt (packaging/tools/langpacks.py: CATALOG_*);
+# Modell- und Lizenznamen bleiben.
+_PACK_FIELDS = ("best_for", "description", "pros", "cons", "warning", "license_badge", "output_badge")
+_PACK_FEATURES = ("prompt_hint", "tested")
 
 
 def installed_files() -> set[Path]:
