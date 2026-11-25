@@ -504,10 +504,24 @@ async def put_engine(body: dict[str, Any]) -> dict[str, Any]:
     for key, allowed in (("engine", engine.ENGINES), ("sdcpp_backend", engine.BACKENDS)):
         if body.get(key) is not None and body[key] not in allowed:
             raise HTTPException(400, f"{key}: {body[key]}")
+    # RX 5000, RX 6500/6400 (seit 0.5.38, gpu.rocm_optional): Der Wechsel zwischen ComfyUI mit ROCm und Vulkan aendert, ob
+    # ComfyUI und die Worker auf der Karte oder dem Prozessor rechnen; sie starten danach neu (wie PUT /api/gpus).
+    restart = (body.get("engine") is not None and await asyncio.to_thread(gpu_info.rocm_optional) is not None
+               and await asyncio.to_thread(engine.rocm_chosen) != await asyncio.to_thread(engine.rocm_chosen, body["engine"]))
+    if restart and jobs.current_job_id():
+        raise HTTPException(409, t("Gerade läuft ein Job. Danach noch einmal versuchen.",
+                                   "A job is running. Please try again afterwards."))
     try:
-        return engine.set_choice(body.get("engine"), body.get("sdcpp_backend"))
+        state = engine.set_choice(body.get("engine"), body.get("sdcpp_backend"))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if restart:
+        comfy.stop()
+        for w in mesh_workers.all_workers():
+            if await w.is_running():
+                await w.unload()
+            w.stop()
+    return state
 
 
 @app.post("/api/backend/free")

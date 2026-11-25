@@ -686,9 +686,10 @@ export interface Health {
   gpus?: GpuInfo[]
   /** Eigenes ComfyUI für die Sprachmodelle, wenn sie auf einer anderen Karte liegen. */
   text_backend?: { separate: boolean; running: boolean; loaded: string | null }
-  /** Keine Karte, auf der PyTorch rechnet: ComfyUI läuft auf dem Prozessor (GitHub-Issue #3). */
+  /** Keine Karte, auf der PyTorch rechnet: ComfyUI läuft auf dem Prozessor (GitHub-Issue #3). "rocm_optional" (seit
+   * 0.5.38): RX 5000 oder RX 6500/6400 mit eingerichtetem ROCm, gewählt ist aber Vulkan (Auto). */
   cpu_mode?: {
-    reason: 'amd_unsupported' | 'no_gpu_compute' | 'no_cuda_rocm' | string
+    reason: 'amd_unsupported' | 'no_gpu_compute' | 'no_cuda_rocm' | 'rocm_optional' | string
     cards: string[]
   } | null
   /** seit 0.5.34 Video, seit 0.5.35 auch Bilder über die Vulkan-Engine (stable-diffusion.cpp), Karten ohne CUDA/ROCm */
@@ -713,6 +714,8 @@ export interface EngineState {
   ready: boolean
   vendor: 'nvidia' | 'amd' | null
   cpu_mode: boolean
+  /** RX 5000, RX 6500/6400 (seit 0.5.38): ROCm eingerichtet und geprüft, Auto = Vulkan, „ComfyUI (ROCm)“ wählbar */
+  rocm_optional?: boolean
   /** Laufender oder gescheiterter Download; "audio" = audio.cpp aus der Reparatur ohne CUDA/ROCm (seit 0.5.37) */
   install: { backend: SdcppBackend | 'audio'; done: number; total: number; error: string | null } | null
 }

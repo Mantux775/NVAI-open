@@ -41,8 +41,16 @@ The setup checks the graphics card and the driver and warns if it finds no suita
   GPU" shows the matching versions: FP8 and bf16 on a Radeon RX 9000, INT8 on other Radeons. 3D needs NVIDIA. Nothing is
   measured on a real Radeon yet, so feedback in [#2](https://github.com/Mantux775/NVAI-open/issues/2) helps a lot.
   `install-runtime.ps1 -Gpu amd|nvidia` or `-Rocm 10.0|7.2` forces a choice.
-- **Older Radeons and Intel cards** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 and older; Intel Arc) have no
-  PyTorch with CUDA or ROCm on Windows. Since 0.5.35 the setup gives them Vulkan instead (experimental):
+- **Radeon RX 5000 and RX 6500/6400** (since 0.5.38, experimental): AMD now offers PyTorch with ROCm for these cards
+  too. The setup installs it, checks it with a small computation on the card and also sets up Vulkan (see below).
+  Images and videos compute through Vulkan by default, because ROCm is not measured on these cards yet; users of
+  other programs report weak performance on the RX 5000. Under "Models" → "Your hardware" (or with a click on the
+  memory display), **ComfyUI (ROCm, experimental)** computes every model that fits into the card's memory, and
+  **Auto** goes back to Vulkan. If the check fails, the card stays on Vulkan as before. Reports in
+  [issue #3](https://github.com/Mantux775/NVAI-open/issues/3) help a lot.
+  ![The choice at the memory display on a Radeon RX 5700 XT: ComfyUI (ROCm, experimental)](images/rocm-choice.jpg)
+- **Older Radeons and Intel cards** (Vega, Radeon VII, Polaris RX 400/500 and older; Intel Arc) have no PyTorch
+  with CUDA or ROCm on Windows. Since 0.5.35 the setup gives them Vulkan instead (experimental):
   stable-diffusion.cpp computes images and videos, audio.cpp sound and the narrator voice, the top bar says "Vulkan
   (experimental)", and Generate and the Studio pick the models that run on the card. Details and measurements:
   [DIRECTML.md](DIRECTML.md). If Vulkan does not see a card of its own (only integrated graphics, for example),

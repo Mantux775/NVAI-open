@@ -2,10 +2,12 @@
 
 [Deutsch](de/DIRECTML.md)
 
-AMD's PyTorch for Windows (ROCm) does not support the Radeon RX 5000 series, Vega, Radeon VII or Polaris (RX 400/500),
-and on Windows PyTorch has neither CUDA nor ROCm for Intel cards. Since 0.5.35 NVAI-open computes on these cards through
-**Vulkan**, which all of them speak: images and videos with **stable-diffusion.cpp**, sound and the narrator voice with
-**audio.cpp**. Both are small programs without PyTorch. This is experimental: everything below was measured on an NVIDIA
+AMD's PyTorch for Windows (ROCm) does not support Vega, Radeon VII or Polaris (RX 400/500) and has supported the Radeon
+RX 5000 only recently, and on Windows PyTorch has neither CUDA nor ROCm for Intel cards. Since 0.5.35 NVAI-open
+computes on these cards through **Vulkan**, which all of them speak: images and videos with **stable-diffusion.cpp**,
+sound and the narrator voice with **audio.cpp**. Both are small programs without PyTorch. On the RX 5000 and
+RX 6500/6400, ComfyUI with ROCm can be chosen instead since 0.5.38
+([details](INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)). This is experimental: everything below was measured on an NVIDIA
 card limited to what an 8 GB card gets, partly with its matrix units switched off like on an RX 5700 XT. Reports in
 [issue #3](https://github.com/Mantux775/NVAI-open/issues/3) help a lot.
 

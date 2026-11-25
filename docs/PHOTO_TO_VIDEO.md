@@ -85,6 +85,17 @@ LTX-2.5 makes the video with speech and sound.
 
 ![Prompt with the spoken line and the zoom out; size and length](images/photo-video-4.jpg)
 
+## Pictures instead of a video (Generate → Image)
+
+The same section is also under "Generate → Image". There it has its own photo list: click the photo or upload it
+with "Upload photo", describe the scene and click "Create four images". The four come in the size chosen above, as a
+medium shot so the face gets enough pixels; without a style in the description they become photos. New attempts
+start from the photo here too. Four pictures at 896 × 1152 took 83 s with FLUX 3.
+
+![Person from a photo under Image: the photo list, the photo, the model and the scene](images/photo-person-image.jpg)
+
+![Four pictures of the lighthouse keeper, all from the same photo](images/photo-person-image-results.jpg)
+
 ## Tips from our tests
 
 - **Hold the face with an end image.** Tick "Loop: the start image is also the end image" and keep the

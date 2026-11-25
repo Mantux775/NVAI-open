@@ -248,7 +248,9 @@ jobs, the assistant uses your real times instead.
 models for images, Wan 2.1 T2V 1.3B for video, Stable Audio 3 (Vulkan) for sound and Qwen3-TTS for the voice;
 Generate and the Studio pick them by themselves. On the RTX 5060 Ti limited to an 8 GB card and without its matrix
 units, like an RX 5700 XT: SDXL 1024² with 28 steps in 57 s (CUDA 16 s, DirectML until 0.5.34: 83 s), 30 s of music in
-8 s. Details: [DIRECTML.md](DIRECTML.md)
+8 s. Details: [DIRECTML.md](DIRECTML.md). On the RX 5000 and RX 6500/6400, ComfyUI with ROCm can be chosen instead
+since 0.5.38 (experimental, [INSTALL.md](INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)); then the
+recommendations of the other Radeons apply.
 
 ### NVFP4 or INT8
 

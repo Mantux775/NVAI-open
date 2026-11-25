@@ -1,6 +1,7 @@
 """Lock-Dateien fuer AMD erzeugen (Python 3.10+, braucht uv im PATH). Aus dem Ordner packaging\\windows:
 
     python tools\\make_rocm_locks.py [--comfy-kitchen 0.2.41]
+    python tools\\make_rocm_locks.py --skip-base --targets gfx1010,gfx1011   (nur diese Kartenlocks neu)
 
 1. hebt mit --comfy-kitchen in locks\\comfyui.lock (also auch fuer NVIDIA) comfy-kitchen auf diese Fassung
    (Pruefsummen aller Dateien von PyPI); ohne bleibt dort ComfyUIs Pin,
@@ -35,9 +36,11 @@ ROCM = "10.0.0"
 TORCH = "2.13.0"
 TORCHVISION = "0.28.0"
 TORCHAUDIO = "2.11.0.2"
-# Kartenfamilien wie in server\nvai\gpu.py (AMD_TARGETS) und install-runtime.ps1.
+# Kartenfamilien wie in server\nvai\gpu.py (AMD_TARGETS) und install-runtime.ps1. Die letzten vier seit 0.5.38
+# (Nutzer 24.11.2026: „bau ROCm für RX 5000 und 6000 so ein. keine zluda.“): RX 6500/6400 (gfx1034) und RX 5000
+# (gfx1010/1011/1012), auf AMDs Index mit genau dieser Fassung; in NVAI-open als Wahl neben Vulkan (gpu.AMD_EXPERIMENTAL).
 TARGETS = ["gfx1201", "gfx1200", "gfx1100", "gfx1101", "gfx1102", "gfx1151", "gfx1150", "gfx1103",
-           "gfx1030", "gfx1031", "gfx1032"]
+           "gfx1030", "gfx1031", "gfx1032", "gfx1034", "gfx1010", "gfx1011", "gfx1012"]
 BASE_PACKAGES = {"rocm", "rocm-bootstrap", "rocm-sdk-core", "rocm-sdk-libraries", "torch", "torchvision",
                  "torchaudio"}
 # comfy-kitchen fuer AMD abweichend von comfyui.lock; None = wie dort (ComfyUIs Pin, 0.45.0 und 0.46.0: ==0.2.41). Nicht ueber
@@ -147,15 +150,24 @@ def compile_target(target: str) -> list[tuple[str, str]]:
         return blocks(out.read_text(encoding="utf-8"))[1]
 
 
-def rocm_locks() -> None:
+def rocm_locks(targets: list[str], keep_base: bool = False) -> None:
+    """keep_base: comfyui-rocm.lock nicht neu schreiben, sondern pruefen, dass die Karte genau diesen Stapel braucht
+    (install-runtime.ps1 installiert ihn fuer jede Karte gleich)."""
     header = (f"# PyTorch {TORCH} mit ROCm {ROCM} fuer AMD-Grafikkarten unter Windows (AMDs Mehrarchitektur-Pakete, wie\n"
               "# in ComfyUIs README). Erzeugt von tools\\make_rocm_locks.py. Installiert mit --no-deps --require-hashes;\n"
               "# die uebrigen Abhaengigkeiten stehen in comfyui-amd-base.lock, die Kernel der Karte in\n"
               "# comfyui-rocm-<gfx>.lock.\n")
     base_written = False
-    for target in TARGETS:
+    existing = (LOCKS / "comfyui-rocm.lock").read_text(encoding="utf-8") if keep_base else ""
+    for target in targets:
         items = compile_target(target)
-        if not base_written:
+        if keep_base:
+            base = [with_url(b) for name, b in items if name in BASE_PACKAGES]
+            missing = [b.splitlines()[0] for b in base if b not in existing]
+            if missing:
+                sys.exit(f"{target}: braucht einen anderen Stapel als comfyui-rocm.lock: {missing}")
+            print(f"{target}: Stapel wie comfyui-rocm.lock ({len(base)} Pakete)")
+        elif not base_written:
             base = [with_url(b) for name, b in items if name in BASE_PACKAGES]
             (LOCKS / "comfyui-rocm.lock").write_text(header + "\n".join(base) + "\n", encoding="utf-8", newline="\n")
             print(f"comfyui-rocm.lock: {len(base)} Pakete")
@@ -172,9 +184,16 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--comfy-kitchen", default=None, help="comfy-kitchen in comfyui.lock auf diese Fassung heben")
     ap.add_argument("--skip-rocm", action="store_true")
+    ap.add_argument("--skip-base", action="store_true", help="comfyui-amd-base.lock und comfyui-rocm.lock stehen lassen")
+    ap.add_argument("--targets", default="", help="nur diese Kartenlocks, etwa gfx1010,gfx1034")
     args = ap.parse_args()
     if args.comfy_kitchen:
         bump_comfy_kitchen(args.comfy_kitchen)
-    amd_base()
+    if not args.skip_base:
+        amd_base()
     if not args.skip_rocm:
-        rocm_locks()
+        chosen = [t.strip() for t in args.targets.split(",") if t.strip()] or TARGETS
+        unknown = [t for t in chosen if t not in TARGETS]
+        if unknown:
+            sys.exit(f"unbekannte Ziele: {unknown} (TARGETS: {TARGETS})")
+        rocm_locks(chosen, keep_base=args.skip_base)

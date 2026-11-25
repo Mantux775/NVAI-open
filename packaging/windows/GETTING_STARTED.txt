@@ -10,7 +10,7 @@ Requirements
 - Windows 10 (version 2004 or later) or Windows 11, 64-bit
 - NVIDIA graphics card, 12 GB of video memory or more recommended, with a
   current driver (https://www.nvidia.com/drivers). The setup checks this.
-- or an AMD Radeon RX 6000, 7000 or 9000 (experimental) with a current driver
+- or an AMD Radeon RX 5000, 6000, 7000 or 9000 (experimental) with a current driver
   (AMD Software: Adrenalin Edition). 3D models need an NVIDIA card.
 - Internet access during setup (about 3 GB) and for each model (5 to 30 GB)
 - Free disk space: about 10 GB for the program, plus room for the models

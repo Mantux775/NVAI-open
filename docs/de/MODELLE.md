@@ -253,7 +253,9 @@ wurde mit FLUX 3 3,2-mal. Sobald du ein paar Aufträge gerechnet hast, nimmt der
 für Bilder, Wan 2.1 T2V 1.3B für Video, Stable Audio 3 (Vulkan) für Ton und Qwen3-TTS für die Stimme; Generieren und
 Studio wählen sie von selbst. Auf der RTX 5060 Ti mit dem Speicher einer 8-GB-Karte und ohne ihre Matrix-Einheiten,
 wie bei einer RX 5700 XT: SDXL 1024² mit 28 Schritten in 57 s (CUDA 16 s, DirectML bis 0.5.34: 83 s), 30 s Musik in
-8 s. Einzelheiten: [DIRECTML.md](DIRECTML.md)
+8 s. Einzelheiten: [DIRECTML.md](DIRECTML.md). Auf der RX 5000 und RX 6500/6400 lässt sich seit 0.5.38 stattdessen
+ComfyUI mit ROCm wählen (experimentell, [INSTALL.md](INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell));
+dann gelten die Empfehlungen der übrigen Radeons.
 
 ### NVFP4 oder INT8
 

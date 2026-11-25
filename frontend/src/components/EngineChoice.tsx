@@ -2,7 +2,8 @@
 // und vulkan mit stabledifusion.cpp umstellen können … mit dem tip welches ist am besten für welches und auto als auswahl
 // in dropdown“, „genau so beim anklicken auf die ram anzeige (wie beim multigpu)“, „bei nicht kompaktiblen gpus gibt es
 // dann nur kompaktible optionen zur auswahl“). Der Server (engine.py) bietet nur an, was auf der Karte läuft, und lädt
-// das Programm von stable-diffusion.cpp beim ersten Wechsel.
+// das Programm von stable-diffusion.cpp beim ersten Wechsel. Seit 0.5.38 (Nutzer 24.11.2026: „bau ROCm für RX 5000 und
+// 6000 so ein. keine zluda.“) auf RX 5000 und RX 6500/6400 zusätzlich „ComfyUI (ROCm, experimentell)“ neben Vulkan.
 import { useCallback, useEffect, useState } from 'react'
 import { api, type EngineId, type EngineState, type SdcppBackend } from '../api'
 import { t } from '../i18n'
@@ -33,7 +34,10 @@ export function useEngine(): [EngineState | null, (s: EngineState) => void] {
 
 function engineLabel(id: EngineId, st: EngineState): string {
   if (id === 'auto') return t('Auto (empfohlen)', 'Auto (recommended)')
-  if (id === 'comfyui') return st.vendor === 'amd' ? 'ComfyUI (ROCm)' : 'ComfyUI (CUDA)'
+  if (id === 'comfyui') {
+    if (st.rocm_optional) return t('ComfyUI (ROCm, experimentell)', 'ComfyUI (ROCm, experimental)')
+    return st.vendor === 'amd' ? 'ComfyUI (ROCm)' : 'ComfyUI (CUDA)'
+  }
   return 'stable-diffusion.cpp'
 }
 
@@ -54,7 +58,25 @@ function measuredLine(): string {
   )
 }
 
+/** RX 5000, RX 6500/6400 (seit 0.5.38): ROCm ist eingerichtet, Auto bleibt Vulkan, bis ROCm dort gemessen ist */
+function optionalTip(id: EngineId, st: EngineState): string {
+  const vulkan = st.engines.includes('sdcpp')
+  if (id === 'comfyui') {
+    return t('ComfyUI rechnet alles mit AMDs ROCm auf der Karte: alle Modelle, die in den Grafikspeicher passen, nicht nur SDXL und Wan 2.1 1.3B. Experimentell: AMDs Pakete für diese Karte sind neu und hier ungemessen, auf der RX 5000 berichten Nutzer anderer Programme von schwacher Leistung. Läuft etwas nicht, zurück auf Auto und bitte über „Problem melden“ berichten. Beim Wechsel startet ComfyUI neu.',
+      'ComfyUI computes everything with AMD\'s ROCm on the card: every model that fits into the graphics memory, not just SDXL and Wan 2.1 1.3B. Experimental: AMD\'s packages for this card are new and unmeasured here; on the RX 5000, users of other programs report weak performance. If something does not work, go back to Auto and please tell us via "Report a problem". ComfyUI restarts when you switch.')
+  }
+  if (id === 'auto' && !vulkan) {
+    return t('Vulkan sieht diese Karte nicht: ComfyUI rechnet über ROCm (experimentell).',
+      'Vulkan does not see this card: ComfyUI computes through ROCm (experimental).')
+  }
+  const vk = t('Bilder (SDXL) und Videos (Wan 2.1 1.3B) über stable-diffusion.cpp mit Vulkan, Ton und Stimme über audio.cpp, alles andere auf dem Prozessor.',
+    'Images (SDXL) and videos (Wan 2.1 1.3B) through stable-diffusion.cpp with Vulkan, sound and voice through audio.cpp, everything else on the processor.')
+  if (id === 'sdcpp') return t('Wie Auto: ', 'Same as Auto: ') + vk
+  return vk + ' ' + t('Die Vorgabe, bis ROCm auf dieser Karte gemessen ist.', 'The default until ROCm is measured on this card.')
+}
+
 function engineTip(id: EngineId, st: EngineState): string {
+  if (st.rocm_optional) return optionalTip(id, st)
   if (id === 'auto') {
     return st.cpu_mode
       ? t('Bilder (SDXL) und Videos (Wan 2.1 1.3B) über stable-diffusion.cpp mit Vulkan, Ton und Stimme über audio.cpp, alles andere auf dem Prozessor.',
@@ -64,8 +86,8 @@ function engineTip(id: EngineId, st: EngineState): string {
   }
   if (id === 'comfyui') {
     return st.vendor === 'amd'
-      ? t('Alle Modelle, die ROCm rechnet, mit allen Funktionen. Erste Wahl auf Radeon ab RX 6000.',
-        'All models ROCm computes, with all features. The first choice on Radeon from the RX 6000.')
+      ? t('Alle Modelle, die ROCm rechnet, mit allen Funktionen. Erste Wahl auf Radeon ab RX 6600.',
+        'All models ROCm computes, with all features. The first choice on Radeon from the RX 6600.')
       : t('Alle Modelle mit allen Funktionen: NVFP4 auf RTX 50, Video mit Ton, 3D, Restaurieren. Erste Wahl auf NVIDIA.',
         'All models with all features: NVFP4 on RTX 50, video with sound, 3D, restoring. The first choice on NVIDIA.')
   }
@@ -91,6 +113,9 @@ function backendTip(b: BackendChoice, st: EngineState): string {
 
 function nowText(st: EngineState): string {
   const e = st.effective
+  if (e.engine === 'comfyui' && st.rocm_optional) {
+    return t('Gerade rechnet ComfyUI mit ROCm auf der Karte (experimentell).', 'ComfyUI is computing with ROCm on the card now (experimental).')
+  }
   if (e.engine === 'comfyui') return t('Gerade rechnet ComfyUI.', 'ComfyUI is computing now.')
   const name = `stable-diffusion.cpp (${e.backend === 'cuda' ? 'CUDA' : 'Vulkan'})`
   if (!st.ready) return t(`${name} lädt noch; bis dahin rechnet ComfyUI.`, `${name} is still downloading; ComfyUI computes until then.`)

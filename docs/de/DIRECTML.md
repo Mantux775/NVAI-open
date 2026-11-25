@@ -2,10 +2,11 @@
 
 [English](../DIRECTML.md)
 
-AMDs PyTorch für Windows (ROCm) kennt die Radeon RX 5000, Vega, Radeon VII und Polaris (RX 400/500) nicht, und für
-Intel-Karten hat PyTorch unter Windows weder CUDA noch ROCm. Seit 0.5.35 rechnet NVAI-open auf diesen Karten über
-**Vulkan**, das sie alle sprechen: Bilder und Videos mit **stable-diffusion.cpp**, Ton und Sprecherstimme mit
-**audio.cpp**. Beides sind kleine Programme ohne PyTorch. Das ist experimentell: Alles hier wurde auf einer NVIDIA-Karte
+AMDs PyTorch für Windows (ROCm) kennt Vega, Radeon VII und Polaris (RX 400/500) nicht und die Radeon RX 5000 erst seit
+Kurzem, und für Intel-Karten hat PyTorch unter Windows weder CUDA noch ROCm. Seit 0.5.35 rechnet NVAI-open auf diesen
+Karten über **Vulkan**, das sie alle sprechen: Bilder und Videos mit **stable-diffusion.cpp**, Ton und Sprecherstimme
+mit **audio.cpp**. Beides sind kleine Programme ohne PyTorch. Auf der RX 5000 und RX 6500/6400 lässt sich seit 0.5.38
+stattdessen ComfyUI mit ROCm wählen ([Einzelheiten](INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)). Das ist experimentell: Alles hier wurde auf einer NVIDIA-Karte
 gemessen, deren Speicher auf das begrenzt war, was eine 8-GB-Karte bekommt, teils mit abgeschalteten Matrix-Einheiten
 wie bei einer RX 5700 XT. Berichte in [Issue #3](https://github.com/Mantux775/NVAI-open/issues/3) helfen sehr.
 

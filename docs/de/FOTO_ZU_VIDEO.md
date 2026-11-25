@@ -87,6 +87,17 @@ Anführungszeichen mit der Stimme und die Geräusche. Die Länge einstellen (hie
 
 ![Prompt mit dem Satz und dem Zoom; Format und Länge](../images/photo-video-4-de.jpg)
 
+## Bilder statt Video (Generieren → Bild)
+
+Denselben Abschnitt gibt es auch unter „Generieren → Bild“. Dort hat er eine eigene Fotoliste: das Foto anklicken
+oder mit „Foto hochladen“ hochladen, die Szene beschreiben und auf „Vier Bilder erzeugen“ klicken. Die vier kommen im
+oben gewählten Format, halbnah, damit das Gesicht genug Pixel hat; ohne Stilangabe werden es Fotos. Auch hier nimmt
+jeder neue Versuch das Foto. Vier Bilder in 896 × 1152 dauerten mit FLUX 3 83 s.
+
+![Person aus einem Foto unter Bild: die Fotoliste, das Foto, das Modell und die Szene](../images/photo-person-image-de.jpg)
+
+![Vier Bilder des Leuchtturmwärters, alle aus demselben Foto](../images/photo-person-image-results.jpg)
+
 ## Tipps aus unseren Tests
 
 - **Das Gesicht mit einem Endbild halten.** „Schleife: das Startbild ist auch das Endbild“ anhaken und die

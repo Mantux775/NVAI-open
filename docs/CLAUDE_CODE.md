@@ -432,7 +432,7 @@ other IC-LoRAs need a source video, which NVAI-open does not take.
 ### Person from a photo
 
 Turn a portrait into a video: the face from the photo in a role, saying a line (web interface: Video tab → "Person
-from a photo").
+from a photo"; for pictures alone, without a video, the same section is in the Image tab).
 
 1. **Start image with FLUX 3:** the photo as `reference_asset_ids=[photo]`, prompt "Cinematic film still. The person
    from the first image, with exactly the same face, eyes, nose, mouth and hair color: <role>. Medium shot from the
@@ -770,7 +770,11 @@ so ask before running both. `GET/PUT /api/gpus` assigns a card per kind.
 NVIDIA. Older Radeons (RX 5000, Vega, Polaris) and Intel cards compute through Vulkan since 0.5.35 (`health` →
 `vulkan_engine`, `vulkan_audio`): images with the SDXL models and video with `wan21-t2v-1.3b` through
 stable-diffusion.cpp, sound with `stable-audio-3-small-sfx-gguf` / `stable-audio-3-medium-gguf` and the narrator voice
-through audio.cpp. The server preselects these models and their sizes. Details: [DIRECTML.md](DIRECTML.md).
+through audio.cpp. The server preselects these models and their sizes. Details: [DIRECTML.md](DIRECTML.md). On a
+Radeon RX 5000 or RX 6500/6400 the setup also installs PyTorch with ROCm since 0.5.38 and checks it on the card; if
+that worked, `compute_engine()` reports `rocm_optional: true`. Auto stays on Vulkan as above, and
+`compute_engine(engine="comfyui")` computes everything with ROCm on the card (experimental and unmeasured on these
+cards; ComfyUI restarts on the switch, so ask the user first).
 
 **Choosing the engine (since 0.5.35):** the user can let stable-diffusion.cpp compute the SDXL models and
 `wan21-t2v-1.3b` on an NVIDIA card too, through CUDA or Vulkan (Models → Your hardware, or a click on the memory bar).

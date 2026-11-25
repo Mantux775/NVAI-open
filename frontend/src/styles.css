@@ -725,7 +725,7 @@ kbd {
   display: flex; flex-direction: column; gap: 6px; text-align: left;
 }
 .gpu-pop-title { font-weight: 600; font-size: 13px; }
-.gpu-pop { width: 330px; }
+.gpu-pop { width: 350px; }  /* seit 0.5.38 breiter: „ComfyUI (ROCm, experimentell)“ passt ganz hinein */
 .gpu-pop-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .gpu-pop-note { margin-top: 2px; line-height: 1.4; }
 
@@ -734,7 +734,7 @@ kbd {
 .engine-choice { display: flex; flex-direction: column; gap: 6px; }
 .engine-head { font-size: 12px; font-weight: 600; }
 .engine-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
-.engine-row select { flex: 0 1 210px; min-width: 0; }
+.engine-row select { flex: 0 1 250px; min-width: 0; }
 .engine-tip { margin: 0; line-height: 1.4; }
 .engine-now { margin: 0; line-height: 1.4; color: var(--accent); }
 .engine-install { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
@@ -839,6 +839,7 @@ kbd {
   border: 1px solid rgba(255, 255, 255, 0.12); }
 .person-photo-gone { display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .person-photo p { margin: 2px 0 6px; }
+.person-photo span + button { margin-left: 8px; }
 .person-model { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
 .person-model select { width: 100%; }
 .photo-crop-stage { position: relative; display: inline-block; overflow: hidden; touch-action: none; user-select: none;

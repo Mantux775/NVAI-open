@@ -199,7 +199,13 @@ def build(description: str) -> dict[str, Any]:
         compute += ("; sound and voice through audio.cpp (Vulkan)" if audiocpp.active() else
                     "; sound on the processor")
         out.append(f"Compute:      {compute} (reason: {mode.get('reason')})")
-    else:
+    optional = gpu.rocm_optional()
+    if optional is not None:
+        # RX 5000, RX 6500/6400 (seit 0.5.38): ROCm eingerichtet und geprueft, gewaehlt oder nicht
+        targets = ", ".join(str(x) for x in optional.get("targets") or []) or "?"
+        out.append(f"ROCm:         set up for {targets} (experimental), "
+                   + ("chosen: ComfyUI computes on the card" if not mode else "not chosen (Vulkan is the default)"))
+    if not mode:
         from . import engine, sdcpp
         eff = engine.effective()
         if eff["engine"] == "sdcpp":

@@ -13,8 +13,10 @@ Install, open, download a model under "Models", generate. The setup brings every
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.37 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.37))
+November 2026: NVAI-open 0.5.38 for Windows and 0.5.14 for the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.38))
 
+- **ComfyUI with ROCm on the Radeon RX 5000 and RX 6500/6400** (0.5.38, experimental): AMD now offers PyTorch with ROCm for these cards, so the setup installs it and checks it on the card. Vulkan stays the default; "ComfyUI (ROCm, experimental)" under Models → Your hardware computes every model that fits into the card's memory on the card. Not measured on such a card yet. [Details](docs/INSTALL.md#amd-radeon-and-several-graphics-cards-experimental)
+- **Person from a photo, also for pictures** (0.5.38): the section is now also under Generate → Image and makes four pictures in the chosen size instead of start images for a video. [Details](docs/PHOTO_TO_VIDEO.md#pictures-instead-of-a-video-generate--image)
 - **Vulkan on older Radeons and Intel cards, fixed** (0.5.37): the setups of 0.5.34 to 0.5.36 never set up the Vulkan engines, because Windows PowerShell 5.1 stopped at the first line of the device list, so everything computed on the processor. The setup now reads the list properly, and if it still cannot set them up, NVAI-open downloads them itself on the next start. [Details](docs/DIRECTML.md#setup)
 - **Person from a photo** (0.5.37): every new attempt takes the face from the photo, not from the selected result, so it no longer drifts from round to round. Small video formats get larger start images, the photo can be cropped to head and shoulders along an outline, and other installed models with reference images can be chosen besides FLUX 3 (Qwen-Image-Edit-2511, Apache-2.0, matched a real face less well). [Details](docs/PHOTO_TO_VIDEO.md)
 - **Layout to render and VACE** (0.5.36): a rough grey animation from Blender sets the camera and motion of an LTX-2.5 shot, a painted first frame its look (Lightricks' IC-LoRA; the first job downloads its nodes from GitHub). Wan 2.1 VACE 1.3B puts a character from a reference image into a video, also through Vulkan on older Radeons and Intel cards. [Details](docs/MODELS.md)
@@ -255,7 +257,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (2004+) or 11, 64-bit | macOS 15 or newer, Apple Silicon |
-| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 6000 experimental): driver 26.2.2+; older Radeons only on the CPU, very slow | 16 GB RAM or more recommended (8 GB works for small images) |
+| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 5000 and RX 6000 experimental): driver 26.2.2+; older Radeons and Intel cards through Vulkan (experimental) | 16 GB RAM or more recommended (8 GB works for small images) |
 | Disk | about 10 GB for the program, plus 5 to 40 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
 | Internet | for setup (about 3 GB) and model downloads | for model downloads |
 
@@ -334,8 +336,10 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 0.5.37 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.37))
+November 2026: NVAI-open 0.5.38 für Windows und 0.5.14 für den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v0.5.38))
 
+- **ComfyUI mit ROCm auf der Radeon RX 5000 und RX 6500/6400** (0.5.38, experimentell): AMD bietet PyTorch mit ROCm jetzt auch für diese Karten an, das Setup richtet es ein und prüft es auf der Karte. Vulkan bleibt die Vorgabe; „ComfyUI (ROCm, experimentell)“ unter Modelle → Deine Hardware rechnet jedes Modell, das in den Grafikspeicher passt, auf der Karte. Auf so einer Karte noch nicht gemessen. [Einzelheiten](docs/de/INSTALL.md#amd-radeon-und-mehrere-grafikkarten-experimentell)
+- **Person aus einem Foto, auch für Bilder** (0.5.38): Der Abschnitt steht jetzt auch unter Generieren → Bild und macht vier Bilder im gewählten Format statt Startbildern für ein Video. [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md#bilder-statt-video-generieren--bild)
 - **Vulkan auf älteren Radeons und Intel-Karten, behoben** (0.5.37): Die Setups von 0.5.34 bis 0.5.36 richteten die Vulkan-Engines nie ein, weil Windows PowerShell 5.1 an der ersten Zeile der Geräteliste abbrach; also rechnete alles auf dem Prozessor. Das Setup liest die Liste jetzt richtig, und klappt es trotzdem nicht, lädt NVAI-open sie beim nächsten Start selbst. [Einzelheiten](docs/de/DIRECTML.md#einrichten)
 - **Person aus einem Foto** (0.5.37): Jeder neue Versuch nimmt das Gesicht aus dem Foto, nicht aus dem gewählten Ergebnis, damit es nicht mehr von Runde zu Runde abdriftet. Kleine Videoformate bekommen größere Startbilder, das Foto lässt sich entlang einer Kontur auf Kopf und Schultern zuschneiden, und neben FLUX 3 sind andere installierte Modelle mit Referenzbildern wählbar (Qwen-Image-Edit-2511, Apache-2.0, traf ein echtes Gesicht weniger gut). [Einzelheiten](docs/de/FOTO_ZU_VIDEO.md)
 - **Layout to Render und VACE** (0.5.36): Eine grobe graue Animation aus Blender gibt Kamera und Bewegung einer LTX-2.5-Einstellung vor, ein gemaltes erstes Bild den Look (IC-LoRA von Lightricks; der erste Auftrag lädt seine Knoten von GitHub). Wan 2.1 VACE 1.3B bringt eine Figur aus einem Referenzbild ins Video, auch über Vulkan auf älteren Radeons und Intel-Karten. [Einzelheiten](docs/de/MODELLE.md)
@@ -563,7 +567,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (ab 2004) oder 11, 64 Bit | macOS 15 oder neuer, Apple Silicon |
-| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 6000 experimentell): Treiber ab 26.2.2; ältere Radeons nur auf dem Prozessor, sehr langsam | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
+| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 5000 und RX 6000 experimentell): Treiber ab 26.2.2; ältere Radeons und Intel-Karten über Vulkan (experimentell) | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
 | Platte | rund 10 GB für das Programm, dazu 5 bis 40 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
 | Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
 

@@ -354,6 +354,22 @@ function CpuModeChip({ mode, vulkan, audio }: {
         `PyTorch could not compute on ${cards} during setup.`)
   const report = t('Läuft etwas nicht oder ist es sehr langsam: bitte über „Problem melden“ (oben rechts) berichten, der Bericht enthält die Zeiten.',
     'If something does not work or is very slow: please tell us via "Report a problem" (top right); the report includes the timings.')
+  if (mode.reason === 'rocm_optional') {
+    // RX 5000, RX 6500/6400 (seit 0.5.38; Nutzer 24.11.2026: „bau ROCm für RX 5000 und 6000 so ein“): ROCm eingerichtet
+    // und geprüft, Vulkan bleibt die Vorgabe, bis ROCm auf diesen Karten gemessen ist
+    const now = vulkan
+      ? t(`Auf ${cards} rechnet NVAI-open Bilder (SDXL) und Videos (Wan 2.1 1.3B) zunächst über Vulkan (stable-diffusion.cpp)${audio ? ', Ton und Sprecherstimme über audio.cpp' : ''}, alles andere auf dem Prozessor.`,
+        `On ${cards}, NVAI-open computes images (SDXL) and videos (Wan 2.1 1.3B) through Vulkan (stable-diffusion.cpp) for now${audio ? ', sound and the narrator voice through audio.cpp' : ''}, everything else on the processor.`)
+      : t(`Auf ${cards} rechnet NVAI-open auf dem Prozessor, bis die Vulkan-Engine geladen ist.`,
+        `On ${cards}, NVAI-open computes on the processor until the Vulkan engine is downloaded.`)
+    const choice = t('AMDs PyTorch mit ROCm ist für diese Karte eingerichtet und hat beim Einrichten gerechnet. Für alle Modelle, die in den Grafikspeicher passen: unter „Modelle → Deine Hardware“ oder per Klick auf die Speicher-Anzeige „ComfyUI (ROCm, experimentell)“ wählen. Die Pakete für diese Karte sind neu und hier ungemessen; auf der RX 5000 berichten Nutzer anderer Programme von schwacher Leistung.',
+      'AMD\'s PyTorch with ROCm is set up for this card and computed during setup. For every model that fits into the graphics memory: choose "ComfyUI (ROCm, experimental)" under "Models → Your hardware" or by clicking the memory display. The packages for this card are new and unmeasured here; on the RX 5000, users of other programs report weak performance.')
+    return (
+      <span className="cpu-mode" title={`${now}\n\n${choice}\n\n${report}`}>
+        ⚠ {t('Vulkan (experimentell)', 'Vulkan (experimental)')}
+      </span>
+    )
+  }
   if (vulkan) {
     const how = t('Deshalb rechnet NVAI-open Bilder und Videos über Vulkan auf der Karte (stable-diffusion.cpp, experimentell).',
       'NVAI-open therefore computes images and videos through Vulkan on the card (stable-diffusion.cpp, experimental).')
@@ -373,8 +389,8 @@ function CpuModeChip({ mode, vulkan, audio }: {
   const means = t('Deshalb rechnet NVAI-open auf dem Prozessor. Was das heißt: Bilder und Videos dauern sehr lange (viele Minuten je Bild), große Modelle wie Qwen-Image, FLUX oder LTX sind kaum nutzbar, Sprecherstimme und 3D gehen nicht. Studio-Schnitt und Export laufen normal; Audio-Werkzeuge und Ton-Forensik rechnen ebenfalls auf dem Prozessor und brauchen länger.',
     'NVAI-open therefore computes on the processor. What this means: images and videos take very long (many minutes per image), large models such as Qwen-Image, FLUX or LTX are hardly usable, the narrator voice and 3D do not work. Studio editing and export work normally; the audio tools and audio forensics also compute on the processor and take longer.')
   const todo = mode.reason === 'amd_unsupported' || mode.reason === 'no_cuda_rocm'
-    ? t('Was hilft: den aktuellen Grafiktreiber installieren und im Startmenü „NVAI-open reparieren“ ausführen; dann richtet das Setup Vulkan für die Karte ein, wenn Vulkan sie sieht. Am schnellsten ist eine NVIDIA-Grafikkarte oder eine Radeon RX 7000 oder 9000 (RX 6000 experimentell).',
-      'What helps: install the current graphics driver and run "Repair NVAI-open" from the Start menu; the setup then sets up Vulkan for the card if Vulkan sees it. Fastest is an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 6000 experimental).')
+    ? t('Was hilft: den aktuellen Grafiktreiber installieren und im Startmenü „NVAI-open reparieren“ ausführen; dann richtet das Setup Vulkan für die Karte ein, wenn Vulkan sie sieht. Am schnellsten ist eine NVIDIA-Grafikkarte oder eine Radeon RX 7000 oder 9000 (RX 5000 und RX 6000 experimentell).',
+      'What helps: install the current graphics driver and run "Repair NVAI-open" from the Start menu; the setup then sets up Vulkan for the card if Vulkan sees it. Fastest is an NVIDIA graphics card or a Radeon RX 7000 or 9000 (RX 5000 and RX 6000 experimental).')
     : t('Was hilft: den aktuellen Grafiktreiber installieren (bei AMD Adrenalin 26.2.2 oder neuer), danach im Startmenü „NVAI-open reparieren“ ausführen.',
       'What helps: install the current graphics driver (for AMD, Adrenalin 26.2.2 or newer), then run "Repair NVAI-open" from the Start menu.')
   return (

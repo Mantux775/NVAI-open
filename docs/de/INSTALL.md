@@ -43,7 +43,15 @@ Das Setup prüft Grafikkarte und Treiber und warnt, wenn es keine passende Karte
   Radeons. 3D braucht NVIDIA. Auf einer echten Radeon ist noch nichts gemessen, Rückmeldungen in
   [#2](https://github.com/Mantux775/NVAI-open/issues/2) helfen deshalb sehr. `install-runtime.ps1 -Gpu amd|nvidia` oder
   `-Rocm 10.0|7.2` erzwingt eine Wahl.
-- **Ältere Radeons und Intel-Karten** (RX 5000, Vega, Radeon VII, Polaris RX 400/500 und älter; Intel Arc) haben unter
+- **Radeon RX 5000 und RX 6500/6400** (seit 0.5.38, experimentell): AMD bietet PyTorch mit ROCm inzwischen auch für
+  diese Karten an. Das Setup installiert es, prüft es mit einer kleinen Rechnung auf der Karte und richtet zusätzlich
+  Vulkan ein (siehe unten). Bilder und Videos rechnen zunächst über Vulkan, weil ROCm auf diesen Karten noch nicht
+  gemessen ist; auf der RX 5000 berichten Nutzer anderer Programme von schwacher Leistung. Unter „Modelle“ →
+  „Deine Hardware“ (oder per Klick auf die Speicher-Anzeige) rechnet **ComfyUI (ROCm, experimentell)** jedes Modell,
+  das in den Grafikspeicher passt, und **Auto** geht zurück zu Vulkan. Scheitert die Prüfung, bleibt die Karte wie
+  bisher bei Vulkan. Berichte in [Issue #3](https://github.com/Mantux775/NVAI-open/issues/3) helfen sehr.
+  ![Die Wahl an der Speicher-Anzeige auf einer Radeon RX 5700 XT: ComfyUI (ROCm, experimentell)](../images/rocm-choice-de.jpg)
+- **Ältere Radeons und Intel-Karten** (Vega, Radeon VII, Polaris RX 400/500 und älter; Intel Arc) haben unter
   Windows kein PyTorch mit CUDA oder ROCm. Seit 0.5.35 richtet das Setup für sie Vulkan ein (experimentell):
   stable-diffusion.cpp rechnet Bilder und Videos, audio.cpp Ton und Sprecherstimme, oben steht „Vulkan
   (experimentell)“, und Generieren und Studio wählen die Modelle, die auf der Karte laufen. Einzelheiten und Messungen:

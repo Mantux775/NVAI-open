@@ -12,6 +12,10 @@
   detected card, comfyui-rocm-<gfx>.lock). If a small bf16 computation on the card fails with it
   (driver too old, say), -Rocm auto falls back to PyTorch 2.9.1 with ROCm 7.2.1, the version in
   AMD's Windows support matrix and in ComfyUI's own AMD package (comfyui-rocm72.lock).
+  Radeon RX 5000 and RX 6500/6400 (since 0.5.38, $AmdExperimental): AMD's packages for them are new, so ROCm 10 is set
+  up and checked the same way, but images and videos compute through Vulkan by default and ComfyUI with ROCm is a
+  choice in the app (gpu_mode.json "rocm_optional"); if the check fails, they go straight to Vulkan (ROCm 7.2.1 has no
+  kernels for them).
   3D is skipped on AMD because TripoSG needs CUDA. uv fetches Python itself as a standalone build into <App>\python,
   nothing has to be preinstalled. Log: <DataDir>\install.log
   Messages are German or English: the language chosen in the setup (-Lang; the setup and the "Repair" shortcut
@@ -71,20 +75,34 @@ $AmdTargets = @(
     @("8060S|8050S|8040S|AI\s*Max", "gfx1151"),
     @("890M|880M", "gfx1150"),
     @("780M|760M|740M", "gfx1103"),
-    @("RX\s*69[05]0|RX\s*6800", "gfx1030"),
-    @("RX\s*67[05]0", "gfx1031"),
-    @("RX\s*66[05]0|RX\s*6600", "gfx1032")
+    # RX 6000 in laptops (since 0.5.38): the S models are Navi 23, the RX 6800M/6850M XT Navi 22
+    @("RX\s*6[678]00S", "gfx1032"),
+    @("RX\s*67[05]0|RX\s*68[05]0M", "gfx1031"),
+    @("RX\s*69[05]0|RX\s*6800|W6800|V620", "gfx1030"),
+    @("RX\s*66[05]0|RX\s*6600|W6600", "gfx1032"),
+    # Since 0.5.38, experimental ($AmdExperimental): RX 6500/6400/6300 (Navi 24) and RX 5000 (Navi 10, 12, 14)
+    @("RX\s*6[345][05]0|W6[34]00", "gfx1034"),
+    @("Pro\s*5600M|V520", "gfx1011"),
+    @("RX\s*5[67]00|W5700|Pro\s*5700", "gfx1010"),
+    @("RX\s*5[345]\d0|W5[35]00|Pro\s*5[35]00", "gfx1012")
 )
+# Cards for which AMD has offered PyTorch packages for Windows only since autumn 2026 (the same version, PyTorch 2.13 with
+# ROCm 10.0), the same list as AMD_EXPERIMENTAL in server\nvai\gpu.py. Unmeasured on a real card; for the RX 5000, users
+# of other programs report weak performance. ROCm is set up and checked, but Vulkan stays the default.
+$AmdExperimental = @("gfx1010", "gfx1011", "gfx1012", "gfx1034")
 # Unknown Radeon: the kernels of the common current cards (RX 9000 and RX 7000).
 $AmdFallbackTargets = @("gfx1201", "gfx1200", "gfx1100", "gfx1101", "gfx1102")
 # Radeons that AMD's PyTorch for Windows (ROCm) does not support, the same list as AMD_UNSUPPORTED in
-# server\nvai\gpu.py: RX 5000 (RDNA1), Vega, Radeon VII, Polaris (RX 400/500) and older. No ROCm build computes on
-# them; on an RX 5700 XT PyTorch even crashed while checking the card (GitHub issue #3). NVAI-open then sets itself up
-# for the processor. "R9 390" needs the space: the R9700 (Radeon AI PRO, RDNA4) is supported.
+# server\nvai\gpu.py: Vega, Radeon VII, Polaris (RX 400/500) and older, plus RX 5000 names without an entry in
+# $AmdTargets (until 0.5.37 every RX 5000). No ROCm build computes on them; on an RX 5700 XT PyTorch with the kernels of
+# the RX 9000/7000 even crashed while checking the card (GitHub issue #3). NVAI-open then sets itself up for the
+# processor. "R9 390" needs the space: the R9700 (Radeon AI PRO, RDNA4) is supported.
 $AmdUnsupported = @("RX\s*5\d{3}", "\bW5\d{3}\b", "Vega", "Radeon\s*(Pro\s*)?VII", "RX\s*[45]\d0\b",
                     "\bR[579]\s+(\d{3}|Fury|Nano)", "\bHD\s*[5-8]\d{3}")
 
 function Test-AmdUnsupported([string]$name) {
+    # A card with a gfx target has ROCm kernels (since 0.5.38 also the RX 5000 and RX 6500/6400)
+    if (Get-AmdTarget $name) { return $false }
     foreach ($p in $AmdUnsupported) { if ($name -match $p) { return $true } }
     return $false
 }
@@ -105,7 +123,8 @@ function Get-AmdTarget([string]$name) {
     return $null
 }
 
-# Lists every GPU PyTorch sees and runs a small bf16 matrix product on the largest one. Exit 0 = usable.
+# Lists every GPU PyTorch sees and runs a small bf16 matrix product on the largest one, then fp16 (since 0.5.38: ComfyUI
+# computes in fp16 on the RX 5000 and RX 6000, bf16 only for upcast weights). Exit 0 = usable.
 $TorchProbe = @"
 import sys, torch
 ok = torch.cuda.is_available()
@@ -122,9 +141,12 @@ main = max(range(len(devs)), key=lambda i: devs[i].total_memory)
 torch.cuda.set_device(main)
 x = torch.randn(256, 256, device='cuda', dtype=torch.bfloat16)
 y = (x @ x).float().abs().mean().item()
+h = torch.randn(256, 256, device='cuda', dtype=torch.float16)
+z = (h @ h).float().abs().mean().item()
 torch.cuda.synchronize()
-print('  NVAI-open computes on GPU', main, ':', devs[main].name, '- bf16 test ok' if y == y else '- bf16 test NaN')
-sys.exit(0 if y == y else 2)
+print('  NVAI-open computes on GPU', main, ':', devs[main].name, '- bf16 test ok' if y == y else '- bf16 test NaN',
+      '- fp16 test ok' if z == z else '- fp16 test NaN')
+sys.exit(0 if y == y and z == z else 2)
 "@
 
 function Test-Torch($py) {
@@ -133,6 +155,12 @@ function Test-Torch($py) {
     & $py $probe | Out-Host
     $ok = $LASTEXITCODE -eq 0
     Remove-Item $probe -ErrorAction SilentlyContinue
+    # Test switch, only together with NVAI_SIMULATE_AMD: pretend the check computed, to walk through the path of a card
+    # that is not in this machine (RX 5000 with ROCm, since 0.5.38)
+    if (-not $ok -and $env:NVAI_SIMULATE_AMD -and $env:NVAI_SIMULATE_ROCM_OK) {
+        Write-Host "  (NVAI_SIMULATE_ROCM_OK: check counted as passed)"
+        $ok = $true
+    }
     return $ok
 }
 
@@ -169,7 +197,8 @@ function Get-DeviceList([string]$exe) {
     return ($lines -join "`n")
 }
 
-function Install-VulkanEngine {
+# -RocmReady: ROCm computes on this card too (RX 5000, RX 6500/6400), so without Vulkan ComfyUI takes over, not the processor.
+function Install-VulkanEngine([switch]$RocmReady) {
     Step (L "Vulkan-Engine fuer Bilder und Video (stable-diffusion.cpp, experimentell)" "Vulkan engine for images and video (stable-diffusion.cpp, experimental)")
     $dest = Join-Path $App "external\sdcpp"
     $zip = Join-Path $env:TEMP "nvai-sdcpp-$PID.zip"
@@ -192,8 +221,13 @@ function Install-VulkanEngine {
         if ($out -match "(?m)^ggml_vulkan: \d+ = .*\| uma: 1 ") { throw "only integrated graphics" }
         throw "no Vulkan device"
     } catch {
-        Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)); Bilder und Videos rechnen dann auf dem Prozessor." `
-                         "Vulkan engine not set up ($($_.Exception.Message)); images and videos then compute on the processor.")
+        if ($RocmReady) {
+            Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)). NVAI-open versucht es beim Start erneut; sieht Vulkan die Karte nicht, rechnet ComfyUI ueber ROCm (experimentell)." `
+                             "Vulkan engine not set up ($($_.Exception.Message)). NVAI-open tries again at startup; if Vulkan does not see the card, ComfyUI computes through ROCm (experimental).")
+        } else {
+            Write-Warning (L "Vulkan-Engine nicht eingerichtet ($($_.Exception.Message)); Bilder und Videos rechnen dann auf dem Prozessor." `
+                             "Vulkan engine not set up ($($_.Exception.Message)); images and videos then compute on the processor.")
+        }
         Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
         return [ordered]@{ ok = $false; error = "$($_.Exception.Message)" }
     } finally {
@@ -250,7 +284,10 @@ function Install-NoCudaRocm([string]$reason, [string[]]$cards, [string]$locks) {
     $audio = if ($vulkan.ok) { Install-AudioEngine } else { $false }
     $note = [ordered]@{ mode = "cpu"; reason = $reason; cards = @($cards); vulkan = $vulkan; audio = $audio } | ConvertTo-Json -Compress
     [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
-    if ($vulkan.ok) {
+    if ($vulkan.ok -and $audio) {
+        Write-Host (L "NVAI-open rechnet Bilder und Videos ueber Vulkan auf der Karte (experimentell), Ton und Sprecherstimme ueber audio.cpp; oben im Fenster steht ein Hinweis, was das bedeutet." `
+                      "NVAI-open computes images and videos through Vulkan on the card (experimental), sound and the narrator voice through audio.cpp; a note at the top of the window explains what this means.")
+    } elseif ($vulkan.ok) {
         Write-Host (L "NVAI-open rechnet Bilder und Videos ueber Vulkan auf der Karte (experimentell), Ton auf dem Prozessor; oben im Fenster steht ein Hinweis, was das bedeutet." `
                       "NVAI-open computes images and videos through Vulkan on the card (experimental), sound on the processor; a note at the top of the window explains what this means.")
     } else {
@@ -258,6 +295,24 @@ function Install-NoCudaRocm([string]$reason, [string[]]$cards, [string]$locks) {
                       "NVAI-open computes on the processor; a note at the top of the window explains what this means.")
     }
     return $py
+}
+
+# Radeon RX 5000 and RX 6500/6400 on which the ROCm check computed (since 0.5.38): PyTorch with ROCm stays in ComfyUI's
+# venv, and the Vulkan engines are set up as for cards without ROCm, because Vulkan stays the default until ROCm is
+# measured on these cards. gpu_mode.json "rocm_optional" tells the server (gpu.rocm_optional): Auto = Vulkan with ComfyUI
+# on the processor, "ComfyUI (ROCm, experimental)" under Models -> Your hardware computes everything on the card.
+function Install-RocmOptional([string[]]$cards, [string[]]$targets) {
+    $vulkan = Install-VulkanEngine -RocmReady
+    $audio = if ($vulkan.ok) { Install-AudioEngine } else { $false }
+    $note = [ordered]@{ mode = "rocm_optional"; cards = @($cards); targets = @($targets); vulkan = $vulkan; audio = $audio } | ConvertTo-Json -Compress
+    [System.IO.File]::WriteAllText($gpuModeFile, $note, (New-Object System.Text.UTF8Encoding $false))
+    if ($vulkan.ok) {
+        Write-Host (L "ROCm rechnet auf dieser Karte. Weil AMDs Pakete fuer sie neu sind, rechnet NVAI-open Bilder und Videos zunaechst ueber Vulkan; ComfyUI mit ROCm fuer alle Modelle laesst sich unter Modelle -> Deine Hardware waehlen (experimentell)." `
+                      "ROCm computes on this card. Because AMD's packages for it are new, NVAI-open computes images and videos through Vulkan for now; ComfyUI with ROCm for all models can be chosen under Models -> Your hardware (experimental).")
+    } else {
+        Write-Host (L "ROCm rechnet auf dieser Karte (experimentell); ohne Vulkan-Engine rechnet ComfyUI darueber." `
+                      "ROCm computes on this card (experimental); without the Vulkan engine, ComfyUI computes through it.")
+    }
 }
 
 try {
@@ -300,10 +355,13 @@ try {
                       "AMD graphics card detected: $($cards -join ', '). Requires a current AMD driver (Adrenalin).")
         $unsupported = @($cards | Where-Object { Test-AmdUnsupported $_ })
         if ($cards.Count -gt 0 -and $unsupported.Count -eq $cards.Count) {
-            Write-Warning (L "Diese Radeon ($($cards -join ', ')) unterstuetzt AMDs PyTorch fuer Windows (ROCm) nicht; unterstuetzt sind die Radeon RX 7000 und 9000, die RX 6000 experimentell. NVAI-open richtet sich ohne Grafikkarte ein und rechnet auf dem Prozessor: Bilder und Videos dauern dann sehr lange." `
-                             "This Radeon ($($cards -join ', ')) is not supported by AMD's PyTorch for Windows (ROCm); supported are the Radeon RX 7000 and 9000, the RX 6000 experimental. NVAI-open sets itself up without the graphics card and computes on the processor: images and videos then take very long.")
+            Write-Warning (L "Diese Radeon ($($cards -join ', ')) unterstuetzt AMDs PyTorch fuer Windows (ROCm) nicht; unterstuetzt sind die Radeon RX 7000 und 9000, die RX 5000 und RX 6000 experimentell. NVAI-open richtet sich ohne ROCm ein: Bilder und Videos rechnen ueber Vulkan, wenn Vulkan die Karte sieht, sonst auf dem Prozessor." `
+                             "This Radeon ($($cards -join ', ')) is not supported by AMD's PyTorch for Windows (ROCm); supported are the Radeon RX 7000 and 9000, the RX 5000 and RX 6000 experimental. NVAI-open sets itself up without ROCm: images and videos compute through Vulkan if Vulkan sees the card, otherwise on the processor.")
             $cpuOnly = "amd_unsupported"
         }
+        # RX 5000 and RX 6500/6400 (since 0.5.38): every detected target is one of the new ones
+        $experimental = $targets.Count -gt 0 -and @($targets | Where-Object { $AmdExperimental -notcontains $_ }).Count -eq 0
+        $rocmOptional = $false
         if ($cpuOnly) {
             # nothing from ROCm: the card cannot compute (below, PyTorch for the processor)
         } elseif ($targets.Count -eq 0) {
@@ -325,7 +383,12 @@ try {
             Step (L "Grafikkarte pruefen" "Checking the graphics card")
             $torchChecked = $true
             if (-not (Test-Torch $comfyPy)) {
-                if ($Rocm -eq "auto") {
+                if ($experimental -and $Rocm -eq "auto") {
+                    # ROCm 7.2.1 has no kernels for the RX 5000 and RX 6500/6400: straight to Vulkan, as up to 0.5.37
+                    Write-Warning (L "ROCm rechnet auf dieser Karte oder mit diesem Treiber nicht (fuer RX 5000 und RX 6500/6400 ist es neu). NVAI-open richtet sich ohne ROCm ein: Bilder und Videos rechnen ueber Vulkan." `
+                                     "ROCm does not compute on this card or with this driver (it is new for the RX 5000 and RX 6500/6400). NVAI-open sets itself up without ROCm: images and videos compute through Vulkan.")
+                    $cpuOnly = "no_gpu_compute"
+                } elseif ($Rocm -eq "auto") {
                     Write-Warning (L "ROCm 10.0 rechnet auf dieser Karte oder mit diesem Treiber nicht. Es kommt ROCm 7.2.1 (die Fassung aus AMDs Windows-Liste)." `
                                      "ROCm 10.0 does not compute on this card or with this driver. Switching to ROCm 7.2.1 (the version in AMD's Windows support list).")
                     $useRocm72 = $true
@@ -333,6 +396,8 @@ try {
                     Write-Warning (L "PyTorch rechnet nicht auf der Grafikkarte. Aktuellen AMD-Treiber installieren und 'NVAI-open reparieren' starten." `
                                      "PyTorch does not compute on the graphics card. Install the current AMD driver and run 'Repair NVAI-open'.")
                 }
+            } elseif ($experimental) {
+                $rocmOptional = $true
             }
         }
         if ($useRocm72 -and -not $cpuOnly) {
@@ -353,6 +418,8 @@ try {
         if ($cpuOnly) {
             $comfyPy = Install-NoCudaRocm $cpuOnly $cards $comfyLocks
             $torchChecked = $true
+        } elseif ($rocmOptional) {
+            Install-RocmOptional $cards $targets
         }
         # NVAI-open asks ROCm again at startup which card to use (gpu.hip_devices); drop the old answer.
         Remove-Item (Join-Path $DataDir "hip_devices.json") -ErrorAction SilentlyContinue

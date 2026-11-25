@@ -21,6 +21,13 @@ Reparatur (seit 0.5.37, GitHub-Issue #3): Konnte das Setup auf einer Karte ohne 
 pruefen (Download, Pruefsumme, in 0.5.34 und 0.5.35 der Abbruch beim Lesen der Geraeteliste), laedt der Server beim Start
 sd.cpp und audio.cpp selbst und prueft die Karte wie das Setup (start_repair). Steht fest, dass keine eigene Karte da
 ist, laedt er nichts.
+
+ROCm als Wahl (seit 0.5.38, Nutzer 24.11.2026: „bau ROCm für RX 5000 und 6000 so ein. keine zluda.“): Auf RX 5000 und
+RX 6500/6400 (gpu.AMD_EXPERIMENTAL) richtet das Setup ROCm ein und prueft es; lief die Pruefrechnung, steht
+"rocm_optional" in gpu_mode.json. Auto bleibt dort Vulkan wie auf Karten ohne ROCm (ComfyUI auf dem Prozessor, Ton und
+Stimme ueber audio.cpp), "comfyui" rechnet alles mit ROCm auf der Karte (rocm_chosen; gpu.cpu_mode ist dann None). Sieht
+Vulkan keine eigene Karte, rechnet auch Auto mit ROCm. Ein Wechsel zwischen beiden startet ComfyUI und die Worker neu
+(main.put_engine).
 """
 from __future__ import annotations
 
@@ -89,11 +96,17 @@ def _save(s: dict[str, Any]) -> None:
 
 
 def compatible() -> dict[str, list[str]]:
-    """Was auf diesem Rechner laeuft. ComfyUI rechnet auf der Karte nur mit CUDA (NVIDIA) oder ROCm (Radeon ab RX 6000);
-    sd.cpp gibt es fuer Windows als CUDA- (nur NVIDIA) und Vulkan-Programm. Ohne Karte, die Vulkan kann, bleibt nur
-    Auto (ComfyUI auf dem Prozessor)."""
+    """Was auf diesem Rechner laeuft. ComfyUI rechnet auf der Karte nur mit CUDA (NVIDIA) oder ROCm (Radeon ab RX 6000,
+    seit 0.5.38 auch RX 5000 und RX 6500/6400 als Wahl neben Vulkan); sd.cpp gibt es fuer Windows als CUDA- (nur NVIDIA)
+    und Vulkan-Programm. Ohne Karte, die Vulkan kann, bleibt nur Auto (ComfyUI auf dem Prozessor)."""
     if sys.platform != "win32":
         return {"engines": ["auto"], "backends": []}
+    if gpu.rocm_optional() is not None:
+        # RX 5000, RX 6500/6400 mit eingerichtetem ROCm (seit 0.5.38): ComfyUI mit ROCm oder sd.cpp ueber Vulkan. Vor
+        # gpu.cpu_mode(), das hier selbst rocm_chosen() fragt.
+        if _setup_vulkan() or _vulkan_unchecked():
+            return {"engines": ["auto", "comfyui", "sdcpp"], "backends": ["auto", "vulkan"]}
+        return {"engines": ["auto", "comfyui"], "backends": []}
     vendor, cpu = gpu.vendor(), gpu.cpu_mode()
     engines = ["auto"]
     if cpu is None and vendor in ("nvidia", "amd"):
@@ -170,6 +183,17 @@ async def _repair_task(todo: list[str]) -> None:
         _install.clear()
     except Exception as exc:  # noqa: BLE001 - die Oberflaeche zeigt den Grund
         _install["error"] = str(exc) or exc.__class__.__name__
+
+
+def rocm_chosen(choice: str | None = None) -> bool:
+    """RX 5000, RX 6500/6400 mit eingerichtetem ROCm (gpu.rocm_optional): rechnet ComfyUI mit ROCm auf der Karte? Ja,
+    wenn „ComfyUI (ROCm)“ gewaehlt ist, oder bei Auto, wenn Vulkan hier keine eigene Karte sieht. choice: statt der
+    gespeicherten Wahl diese pruefen (main.put_engine fragt vorher, ob ein Wechsel ComfyUI neu starten muss)."""
+    c = compatible()
+    engine = load()["engine"] if choice is None else choice
+    if engine not in c["engines"]:
+        engine = "auto"
+    return engine == "comfyui" or (engine == "auto" and "sdcpp" not in c["engines"])
 
 
 def _no_card(key: str) -> None:
@@ -250,6 +274,8 @@ def state() -> dict[str, Any]:
         # Laeuft der gewaehlte Weg schon? Sonst rechnet bis zum Ende des Downloads ComfyUI.
         "ready": eff["engine"] == "comfyui" or installed(eff["backend"]),
         "vendor": gpu.vendor(), "cpu_mode": gpu.cpu_mode() is not None,
+        # RX 5000, RX 6500/6400 (seit 0.5.38): ROCm eingerichtet, Auto = Vulkan, „ComfyUI (ROCm, experimentell)“ waehlbar
+        "rocm_optional": gpu.rocm_optional() is not None,
         "install": dict(_install) if _install else None,
     }
 

@@ -41,7 +41,8 @@ server = MCPServer(
         "on other Radeons; older Radeons such as the RX 5700 XT and Intel cards run the recommended SDXL models "
         "and wan21-t2v-1.3b (video, slow) through the Vulkan engine, and sound (stable-audio-3-small-sfx-gguf, "
         "stable-audio-3-medium-gguf) and the narrator voice through audio.cpp; health shows vulkan_engine and "
-        "vulkan_audio). The user can also let stable-diffusion.cpp (CUDA or Vulkan) compute the SDXL models and "
+        "vulkan_audio; on the RX 5000 and RX 6500/6400 the user can switch to ComfyUI with ROCm, experimental: "
+        "compute_engine() shows rocm_optional). The user can also let stable-diffusion.cpp (CUDA or Vulkan) compute the SDXL models and "
         "wan21-t2v-1.3b on an NVIDIA card (Models -> Your hardware, or compute_engine()); health().engine shows what "
         "computes, and jobs with features sd.cpp lacks (ControlNet, reference images, video LoRAs) still run in "
         "ComfyUI. "
@@ -384,7 +385,9 @@ async def compute_engine(engine: str | None = None, sdcpp_backend: str | None = 
         engine: "auto" (ComfyUI where PyTorch runs on the card, i.e. NVIDIA or a Radeon with ROCm, otherwise
             stable-diffusion.cpp through Vulkan), "comfyui" or "sdcpp". With "sdcpp" the SDXL models and
             wan21-t2v-1.3b compute in stable-diffusion.cpp; every other model, and jobs with ControlNet, reference
-            images or video LoRAs, stay in ComfyUI.
+            images or video LoRAs, stay in ComfyUI. On a Radeon RX 5000 or RX 6500/6400 (rocm_optional: true, since
+            0.5.38) auto stays Vulkan with ComfyUI on the processor, and "comfyui" computes everything with ROCm on
+            the card (experimental, unmeasured on these cards; ComfyUI restarts on the switch).
         sdcpp_backend: "auto" (CUDA on NVIDIA, otherwise Vulkan), "cuda" or "vulkan".
 
     Only the options listed in `engines` and `backends` run on this card. A missing program downloads on the first

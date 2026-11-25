@@ -114,16 +114,29 @@ AMD_TARGETS: list[tuple[str, str]] = [
     (r"8060S|8050S|8040S|AI\s*Max", "gfx1151"),
     (r"890M|880M", "gfx1150"),
     (r"780M|760M|740M", "gfx1103"),
-    (r"RX\s*69[05]0|RX\s*6800", "gfx1030"),
-    (r"RX\s*67[05]0", "gfx1031"),
-    (r"RX\s*66[05]0|RX\s*6600", "gfx1032"),
+    # RX 6000 in Laptops (seit 0.5.38): die S-Modelle sind Navi 23, RX 6800M/6850M XT Navi 22
+    (r"RX\s*6[678]00S", "gfx1032"),
+    (r"RX\s*67[05]0|RX\s*68[05]0M", "gfx1031"),
+    (r"RX\s*69[05]0|RX\s*6800|W6800|V620", "gfx1030"),
+    (r"RX\s*66[05]0|RX\s*6600|W6600", "gfx1032"),
+    # Seit 0.5.38 experimentell (AMD_EXPERIMENTAL): RX 6500/6400/6300 (Navi 24) und RX 5000 (Navi 10, 12, 14)
+    (r"RX\s*6[345][05]0|W6[34]00", "gfx1034"),
+    (r"Pro\s*5600M|V520", "gfx1011"),
+    (r"RX\s*5[67]00|W5700|Pro\s*5700", "gfx1010"),
+    (r"RX\s*5[345]\d0|W5[35]00|Pro\s*5[35]00", "gfx1012"),
 ]
+# Karten, fuer die AMD erst seit Herbst 2026 PyTorch-Pakete fuer Windows anbietet (dieselbe Fassung, PyTorch 2.13 mit
+# ROCm 10.0; Nutzer 24.11.2026: „bau ROCm für RX 5000 und 6000 so ein. keine zluda.“). Auf echter Karte ungemessen,
+# bei RX 5000 berichten Nutzer anderer Programme von schwacher Leistung: Das Setup richtet ROCm ein und prueft es, die
+# Vorgabe bleibt aber Vulkan; ComfyUI mit ROCm ist eine Wahl unter „Deine Hardware“ (rocm_optional, engine.py).
+AMD_EXPERIMENTAL: tuple[str, ...] = ("gfx1010", "gfx1011", "gfx1012", "gfx1034")
 
 
-# Radeons, die AMDs PyTorch fuer Windows (ROCm) nicht kennt: RX 5000 (RDNA1, gfx101x), Vega und Radeon VII (gfx90x),
-# Polaris (RX 400/500, gfx80x) und aeltere GCN-Karten. Auf ihnen rechnet kein ROCm-Bau; eine RX 5700 XT stuerzte beim
-# Pruefen der Karte sogar ab (access violation in torch.cuda.is_available, GitHub-Issue #3, 17.11.2026). NVAI-open
-# rechnet dann auf dem Prozessor (cpu_mode). Dieselbe Liste steht in packaging\windows\install-runtime.ps1.
+# Radeons, die AMDs PyTorch fuer Windows (ROCm) nicht kennt: Vega und Radeon VII (gfx90x), Polaris (RX 400/500, gfx80x)
+# und aeltere GCN-Karten, dazu RX-5000-Namen ohne Eintrag in AMD_TARGETS (bis 0.5.37 alle RX 5000). Auf ihnen rechnet
+# kein ROCm-Bau; eine RX 5700 XT stuerzte mit den Kerneln der RX 9000/7000 beim Pruefen der Karte sogar ab (access
+# violation in torch.cuda.is_available, GitHub-Issue #3, 17.11.2026). NVAI-open rechnet dann auf dem Prozessor
+# (cpu_mode). Dieselbe Liste steht in packaging\windows\install-runtime.ps1.
 # „R9 390“ braucht das Leerzeichen: R9700 (Radeon AI PRO, RDNA4) gehoert nicht dazu.
 AMD_UNSUPPORTED: tuple[str, ...] = (r"RX\s*5\d{3}", r"\bW5\d{3}\b", r"Vega", r"Radeon\s*(Pro\s*)?VII", r"RX\s*[45]\d0\b",
                                     r"\bR[579]\s+(\d{3}|Fury|Nano)", r"\bHD\s*[5-8]\d{3}")
@@ -132,35 +145,64 @@ CPU_ENV = {"HIP_VISIBLE_DEVICES": "-1", "CUDA_VISIBLE_DEVICES": "-1"}
 
 
 def amd_unsupported(name: str) -> bool:
-    """Kennt AMDs PyTorch fuer Windows diese Radeon nicht (RX 5000, Vega, Polaris und aelter)?"""
+    """Kennt AMDs PyTorch fuer Windows diese Radeon nicht (Vega, Polaris und aelter)? Karten mit gfx-Ziel in
+    AMD_TARGETS zaehlen nie dazu (seit 0.5.38 auch RX 5000 und RX 6500/6400)."""
     import re
+    if amd_arch(name):
+        return False
     return any(re.search(p, name or "", re.IGNORECASE) for p in AMD_UNSUPPORTED)
+
+
+def _gpu_mode_note() -> dict[str, Any]:
+    """Vermerk des Setups in DATA_DIR/gpu_mode.json (install-runtime.ps1), {} ohne ihn."""
+    try:
+        saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    return saved if isinstance(saved, dict) else {}
+
+
+def rocm_optional() -> dict[str, Any] | None:
+    """Radeon RX 5000 oder RX 6500/6400 (AMD_EXPERIMENTAL, seit 0.5.38), auf der die Pruefrechnung des Setups mit ROCm
+    lief: Vermerk {"mode": "rocm_optional", "cards", "targets", "vulkan", "audio"} in gpu_mode.json, sonst None. Bilder
+    und Videos rechnen dort zunaechst ueber Vulkan wie auf Karten ohne ROCm (cpu_mode mit reason "rocm_optional");
+    ComfyUI mit ROCm auf der Karte ist die Wahl „ComfyUI (ROCm, experimentell)“ unter „Deine Hardware“
+    (engine.rocm_chosen)."""
+    note = _gpu_mode_note()
+    if note.get("mode") != "rocm_optional" or vendor() != "amd":
+        return None
+    return note
 
 
 def cpu_mode() -> dict[str, Any] | None:
     """Rechnet ComfyUI ohne CUDA/ROCm? {"reason", "cards"} oder None. reason "amd_unsupported": alle eigenen Radeons
     (ohne eigene: alle) sind ohne ROCm unter Windows und es steckt keine NVIDIA im Rechner; "no_gpu_compute": das Setup
     fand keine Karte, auf der PyTorch rechnet, und richtete PyTorch fuer den Prozessor ein (DATA_DIR/gpu_mode.json);
-    "no_cuda_rocm" (seit 0.5.35): eine Karte ohne CUDA und ROCm, etwa Intel Arc.
+    "no_cuda_rocm" (seit 0.5.35): eine Karte ohne CUDA und ROCm, etwa Intel Arc; "rocm_optional" (seit 0.5.38): RX 5000
+    oder RX 6500/6400 mit eingerichtetem ROCm, das unter „Deine Hardware“ nicht gewaehlt ist (rocm_optional).
 
     Bilder (SDXL) und Videos (Wan 2.1 1.3B) rechnen dann ueber die Vulkan-Engine auf der Karte, wenn das Setup sie
     einrichten konnte (sdcpp.py; DirectML ist seit 0.5.35 raus), alles andere aus ComfyUI auf dem Prozessor."""
     mode: dict[str, Any] | None = None
     cards = list_gpus()
+    saved = _gpu_mode_note()
     if cards and all(c.get("vendor") == "amd" for c in cards):
         names = [str(c.get("name") or "") for c in cards]
         own = [n for n in names if _is_discrete(n)] or names
         if all(amd_unsupported(n) for n in own):
             mode = {"reason": "amd_unsupported", "cards": own}
+        elif saved.get("mode") not in ("rocm_optional", "cpu") and all(amd_arch(n) in AMD_EXPERIMENTAL for n in own):
+            # RX 5000, RX 6500/6400 ohne Urteil des Setups (abgebrochen, oder -Rocm 10.0 und die Pruefung scheiterte):
+            # ROCm nie ungeprueft, eine RX 5700 XT stuerzte mit falschen Kerneln schon beim Fragen nach der Karte ab
+            mode = {"reason": "no_gpu_compute", "cards": own}
     if mode is None:
-        try:
-            saved = json.loads((config.DATA_DIR / "gpu_mode.json").read_text(encoding="utf-8-sig"))
-        except (OSError, ValueError):
+        listed = [str(c) for c in saved.get("cards") or [c.get("name") for c in cards] if c]
+        if saved.get("mode") == "rocm_optional" and vendor() == "amd":
+            from . import engine
+            return None if engine.rocm_chosen() else {"reason": "rocm_optional", "cards": listed}
+        if saved.get("mode") != "cpu":
             return None
-        if not (isinstance(saved, dict) and saved.get("mode") == "cpu"):
-            return None
-        mode = {"reason": str(saved.get("reason") or "no_gpu_compute"),
-                "cards": [str(c) for c in saved.get("cards") or [c.get("name") for c in cards] if c]}
+        mode = {"reason": str(saved.get("reason") or "no_gpu_compute"), "cards": listed}
     return mode
 
 
@@ -186,7 +228,7 @@ def amd_arch(name: str) -> str | None:
 
 
 def rdna(arch: str | None) -> int | None:
-    """RDNA-Generation eines gfx-Ziels: gfx12xx = 4, gfx11xx = 3, gfx103x = 2."""
+    """RDNA-Generation eines gfx-Ziels: gfx12xx = 4, gfx11xx = 3, gfx103x = 2, gfx101x = 1."""
     if not arch:
         return None
     if arch.startswith("gfx12"):
@@ -195,6 +237,8 @@ def rdna(arch: str | None) -> int | None:
         return 3
     if arch.startswith("gfx103"):
         return 2
+    if arch.startswith("gfx101"):
+        return 1
     return None
 
 
