@@ -6,7 +6,7 @@ A studio for whole videos, plus images, video with sound, speech, music and 3D m
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.37.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.37/NVAI-open-Setup-0.5.37.exe) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-0.5.39.exe](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.39/NVAI-open-Setup-0.5.39.exe) |
 | macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-0.5.14.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v0.5.35/NVAI-open-0.5.14.dmg) |
 
 Install, open, download a model under "Models", generate. The setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
