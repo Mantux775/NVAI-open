@@ -1,0 +1,90 @@
+/* Reiter „Generieren“ im Konzept „NVAI im Fluss“ (Bildschirme B und C): Weg mit seinen Feldern, Chips mit Auswahl,
+   Knopfleiste mit Zeit, Phasen und nächste Schritte. Gemeinsame Bausteine stehen in flow.css, Farben in styles.css. */
+
+/* ---------------------------------------------------------------- Weg und seine Felder */
+.gen-way { display: grid; gap: 8px; margin: 2px 0 8px; }
+.gen-way .flow-seg { justify-self: start; max-width: 100%; }
+.gen-slots { display: grid; gap: 6px; }
+.gen-slot { min-height: 60px; padding: 4px 8px; }
+.gen-slot.filled { border-style: solid; border-color: var(--line); }
+.gen-slot.wanted { border-color: #6b5320; }
+.gen-slot.over { border-color: var(--accent); background: rgba(118, 185, 0, 0.06); }
+.gen-slot-empty {
+  width: 52px; height: 52px; border-radius: 6px; display: grid; place-items: center; flex: none;
+  background: var(--panel-2); color: var(--muted); font-size: 18px;
+}
+.gen-slot-text {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px;
+  color: var(--text);
+}
+.gen-slot-text b { font-weight: 600; }
+.gen-slot-actions { display: flex; gap: 4px; flex: none; }
+.gen-slot-actions .btn { padding: 3px 9px; }
+.gen-pick { display: grid; gap: 6px; }
+.gen-pick .row { margin-top: 0; }
+.gen-way .flow-note { font-size: 12.5px; line-height: 1.45; }
+.gen-way .gen-muted-line { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* ---------------------------------------------------------------- Chips mit Auswahl oder Zahl */
+.gen-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gen-chips .flow-chip, .gen-extras .flow-chip { font-size: 12.5px; padding: 3px 10px; }
+.gen-chip-pick { position: relative; cursor: pointer; max-width: 100%; }
+.gen-chip-pick select {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; padding: 0; border: 0;
+  margin: 0;
+}
+.gen-chip-pick select:disabled { cursor: default; }
+.gen-chip-pick:focus-within, .gen-chip-num:focus-within { outline: 2px solid var(--accent-dim); outline-offset: 1px; }
+.gen-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24em; }
+.gen-chip-caret { font-size: 10px; opacity: 0.8; }
+.gen-chip-num input {
+  width: 3.6em; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: right;
+}
+.gen-chip-num input:focus { outline: none; border: 0; }
+.gen-chip-alt { color: var(--muted); }
+.gen-chip-pick.ok .gen-chip-alt, .gen-chip-pick.info .gen-chip-alt { color: var(--muted); }
+
+/* Zusätze, die zum Weg passen (Zeitlupe, Ton vorgeben, Länge automatisch, Multishot) */
+.gen-extras { display: grid; gap: 6px; margin: 12px 0 2px; }
+.gen-extras button.flow-chip[aria-pressed="true"] { border-color: var(--accent-dim); color: #b6e35f; }
+.gen-extras .gen-muted-line { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+/* ---------------------------------------------------------------- Knopfleiste unten (klebt an der Spalte) */
+.controls .gen-submit { display: grid; gap: 8px; }
+.controls .gen-submit .btn.primary.flow-big { margin-top: 0; }
+.controls .gen-submit .hint { margin: 0; }
+.controls .flow-need .btn.primary { width: auto; margin-top: 0; }
+.gen-submit .flow-need { max-height: 38vh; overflow-y: auto; }
+
+/* Feineinstellung: Schritte, Seed, Sampler und was sonst nur selten gebraucht wird */
+.flow-fine { margin: 14px 0 4px; }
+.flow-fine > summary {
+  cursor: pointer; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.6px;
+}
+.flow-fine > summary .gen-fine-set { text-transform: none; letter-spacing: 0; color: var(--text); }
+.flow-fine[open] > summary { margin-bottom: 6px; }
+.flow-fine .advanced { margin-top: 0; }
+.flow-fine .advanced > .row:first-child { margin-top: 0; }
+
+/* ---------------------------------------------------------------- Ausgabe: Phasen, Ergebnis, nächste Schritte */
+.gen-run {
+  display: grid; gap: 8px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel-2); scroll-margin-top: 12px;
+}
+.gen-run-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.gen-result { display: grid; gap: 12px; scroll-margin-top: 12px; }
+.gen-result-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.gen-result-head b { font-size: 15px; }
+.gen-mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; user-select: all; }
+.gen-seed { font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.gen-copy { padding: 1px 8px; }
+.card.result.picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.card.result .gen-pick-btn { padding: 1px 8px; margin-left: 4px; }
+.gen-next { display: grid; gap: 6px; }
+.gen-next .flow-next .btn { justify-content: stretch; justify-items: start; align-content: start; }
+.gen-next .flow-need { margin-top: 4px; }
+.gen-next .gen-studio-note { margin: 2px 0 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .gen-slot { transition: border-color 0.15s ease, background-color 0.15s ease; }
+}

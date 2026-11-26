@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "0.5.40",
+  "version": "1.0.0",
   "x-api-version": 1
  },
  "paths": {
@@ -5725,7 +5725,7 @@
    },
    "delete": {
     "summary": "Delete Asset",
-    "description": "Loescht ein einzelnes Asset samt Datei. Was als Clip im Schnitt eines Studio-Projekts liegt, nicht (erst den Clip\nloeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern.",
+    "description": "Loescht ein einzelnes Asset samt Datei. Was als Clip im Schnitt eines Studio-Projekts liegt, nicht (erst den Clip\nloeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern.\nEbenso nicht, was eine Szene oder Figur als Vorlage nutzt (Start- oder Endbild, Referenz, Ton, Layout, Stimme): Der\nnaechste Lauf scheiterte sonst an einer fehlenden Datei. Takes darf man loeschen, die Szene verliert sie dann.",
     "operationId": "delete_asset_api_assets__asset_id__delete",
     "parameters": [
      {
@@ -6464,6 +6464,103 @@
          "additionalProperties": true,
          "type": "object",
          "title": "Response Hardware Info Api Hardware Get"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/estimate": {
+   "post": {
+    "summary": "Estimate Jobs",
+    "description": "Geschätzte Rechenzeit je Auftrag (seit 0.5.42): {\"items\": [{\"kind\": \"txt2video\", \"params\": {…}}]} ergibt je\nEintrag seconds (Rechenzeit, null = unbekannt), source (history, estimate, rough, unknown), runs und cold (Sekunden\nfür Backend-Start und Modell-Laden, nur wenn sie anfallen). Die Knöpfe zeigen sie vor dem Start.",
+    "operationId": "estimate_jobs_api_estimate_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Body"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "type": "object",
+         "title": "Response Estimate Jobs Api Estimate Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/estimate": {
+   "post": {
+    "summary": "Studio Estimate",
+    "description": "Geschätzte Rechenzeit je Szene (seit 0.5.42), aus derselben Anfrage wie beim Erzeugen; ohne scene_ids alle\nSzenen ohne Take.",
+    "operationId": "studio_estimate_api_studio_projects__pid__estimate_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Estimate Api Studio Projects  Pid  Estimate Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
         }
        }
       }
@@ -10354,6 +10451,14 @@
       "title": "Instance",
       "description": "Kennung dieser Installation (Hash des Programmordners). Der Starter erkennt daran, ob das NVAI-open auf dem Port sein eigenes ist.",
       "default": ""
+     },
+     "ui": {
+      "additionalProperties": {
+       "type": "boolean"
+      },
+      "type": "object",
+      "title": "Ui",
+      "description": "Bereiche der Oberfläche, die nur auf Wunsch erscheinen (seit 0.5.42): vhs = Reiter VHS"
      }
     },
     "type": "object",

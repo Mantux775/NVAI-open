@@ -37,8 +37,9 @@ enum StudioJSON {
     static func full(_ p: StudioProject, history: (undo: Int, redo: Int)) -> JSONValue {
         guard let data = try? StudioStore.encode(p), case .object(var out)? = JSON.parse(data) else { return .null }
         let chains = StudioCommands.resolvedChains(p)
+        let resolved = StudioGenerator.withChains(p)
         if case .array(let scenes)? = out["scenes"] {
-            out["scenes"] = .array(zip(scenes, p.scenes).map { json, s in
+            out["scenes"] = .array(zip(scenes, resolved.scenes).map { json, s in
                 guard case .object(var o) = json else { return json }
                 o["status"] = .string(status(s))
                 // Hinweise wie in den Eigenschaften (seit Mac 0.5.11, wie view() unter Windows 0.5.30)
@@ -47,6 +48,9 @@ enum StudioJSON {
                     o["chain_from"] = .string(chain.from)
                     o["chain_marker"] = .string(chain.marker)
                 }
+                // Veraltete Anschluss-Szene und wessen Ende der Take fortsetzt (seit Mac 1.0, wie Windows 0.5.42), nur abgeleitet
+                if let stale = StudioGenerator.stale(resolved, s) { o["stale"] = stale.json }
+                if let carry = StudioGenerator.carry(resolved, s) { o["carry_from"] = .string(carry) }
                 return .object(o)
             })
         }
@@ -78,6 +82,7 @@ enum StudioJSON {
     /// Kompakt für Claude (MCP): Zeiten in Sekunden, ohne Medien-Cache.
     static func summary(_ p: StudioProject) -> JSONValue {
         let chains = StudioCommands.resolvedChains(p)
+        let resolved = StudioGenerator.withChains(p)
         let scenes: [JSONValue] = p.scenes.map { s in
             var o: [String: JSONValue] = [
                 "id": .string(s.id), "lane": .string(s.lane), "start_s": round3(Studio.seconds(s.start)),
@@ -93,6 +98,12 @@ enum StudioJSON {
             // Hinweise wie in den Eigenschaften (seit Mac 0.5.11): zu lang für diesen Mac, Figur ohne Startbild …
             let hints = StudioGenerator.hints(p, s, StudioMediaProbe.environment)
             if !hints.isEmpty { o["hints"] = .array(hints.map(JSONValue.string)) }
+            // Veraltete Anschluss-Szene (seit Mac 1.0): beginnt noch mit dem alten Ende ihrer Vorlage; carry_from: Szene,
+            // deren Ende der Take fortsetzt
+            if let r = resolved.scenes.first(where: { $0.id == s.id }) {
+                if let stale = StudioGenerator.stale(resolved, r) { o["stale"] = stale.json }
+                if let carry = StudioGenerator.carry(resolved, r) { o["carry_from"] = .string(carry) }
+            }
             return .object(o)
         }
         let markers: [JSONValue] = p.markers.map { m in

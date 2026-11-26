@@ -78,19 +78,22 @@ class JobContext:
         """Abbruch angefordert (POST /api/jobs/{id}/cancel)? Threadsicher: nur ein Set-Lookup."""
         return self.job.id in _cancel_requested
 
-    def progress(self, value: float, stage: str = "") -> None:
+    def progress(self, value: float, stage: str = "", phase: str = "") -> None:
+        """`phase` (seit 0.5.42, Konzept „NVAI im Fluss“): sprachunabhängiger Abschnitt für die Anzeige in Phasen
+        („start“ GPU-Backend startet, „load“ Modell lädt, „save“ speichert); Schritte erkennt die Oberfläche selbst."""
         try:
             running = asyncio.get_running_loop()
         except RuntimeError:
             running = None
         if running is self._loop:
-            self._emit(value, stage)
+            self._emit(value, stage, phase)
         else:
-            self._loop.call_soon_threadsafe(self._emit, value, stage)
+            self._loop.call_soon_threadsafe(self._emit, value, stage, phase)
 
-    def _emit(self, value: float, stage: str) -> None:
+    def _emit(self, value: float, stage: str, phase: str = "") -> None:
         db.update_job(self.job.id, progress=round(value, 4), stage=stage)
-        _publish({"type": "job.progress", "job_id": self.job.id, "progress": value, "stage": stage})
+        _publish({"type": "job.progress", "job_id": self.job.id, "progress": value, "stage": stage,
+                  **({"phase": phase} if phase else {})})
 
 
 def register(kind: str) -> Callable[[Handler], Handler]:
@@ -334,6 +337,13 @@ async def cancel_current() -> dict[str, Any]:
     if task is not None and not task.done():
         task.cancel()
 
+    # Ist der Auftrag waehrend des Anhaltens oben doch noch fertig geworden, bleibt er fertig: sonst stuende ein Ergebnis
+    # mit Dateien als abgebrochen da, und das Studio naehme seinen Take nicht. Ein Fehler wird dagegen zu "abgebrochen":
+    # Den loest meist das Anhalten selbst aus (ein beendeter Mesh-Worker reisst seine Anfrage ab).
+    job = db.get_job(job_id)
+    if job is not None and job.status == "done":
+        return {"ok": False, "job_id": job_id, "stopped": stopped,
+                "reason": t("Der Job ist schon beendet.", "The job has already finished.")}
     db.update_job(job_id, status="cancelled", finished_at=time.time(),
                   stage=t("vom Nutzer gestoppt", "stopped by the user"))
     _publish({"type": "job.cancelled", "job_id": job_id})
@@ -403,8 +413,10 @@ async def _ensure_backend(ctx: JobContext) -> None:
             ctx.progress(0.0, t(f"entlade {w.name}", f"unloading {w.name}"))
             await w.unload()
 
-    ctx.progress(0.0, t("GPU-Backend wird gestartet", "starting GPU backend"))
     if not await comfy.is_running():
+        # Nur melden, wenn es wirklich startet (seit 0.5.42): Vorher stand die Meldung bei jedem Auftrag kurz da, und die
+        # Anzeige in Phasen hätte jedes Mal einen Start gezeigt
+        ctx.progress(0.0, t("GPU-Backend wird gestartet", "starting GPU backend"), phase="start")
         comfy.start()
         if not await comfy.wait_until_ready():
             raise RuntimeError(t(
@@ -485,8 +497,10 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
         loras.apply(graph, lora_files)
         extra_meta = {**extra_meta, "loras": [
             {"model_id": lo["model_id"], "strength": lo["strength"]} for lo in lora_files]}
+    # Lag ein anderes Modell im Speicher, lädt ComfyUI jetzt erst (Phase „Modell lädt“ bis zum ersten Schritt)
+    fresh = comfy.loaded_model() != _name(entry)
     comfy.set_loaded_model(_name(entry))  # fuer die VRAM-Anzeige
-    ctx.progress(0.02, t("generiert", "generating"))
+    ctx.progress(0.02, t("generiert", "generating"), phase="load" if fresh else "")
 
     def on_progress(frac: float, stage: str) -> None:
         # 2..98 % bleiben fuer das Sampling, der Rest fuer Start und Speichern.
@@ -504,7 +518,7 @@ async def _run_generation(job: Job, ctx: JobContext, kind: str, extra_meta: dict
         extra_meta = {**extra_meta, **fill_meta}
     else:
         paths = await comfy.run_workflow(graph, on_progress=on_progress, timeout=timeout, masters=masters)
-    ctx.progress(0.99, t("speichert", "saving"))
+    ctx.progress(0.99, t("speichert", "saving"), phase="save")
 
     if not paths:
         raise RuntimeError(t("ComfyUI lieferte keine Ausgabedatei zurueck.",

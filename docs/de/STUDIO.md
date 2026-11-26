@@ -70,6 +70,20 @@ Bei **Gesicht aus einem Foto** entsteht jedes Startbild aus dem Porträt, und je
 Startbild, damit das Gesicht über den ganzen Clip hält. Ein bewegter Hintergrund (Wasser, Rauch) steht dann eher
 still. Das Foto bleibt auf deinem Rechner.
 
+## Die Schrittleiste
+
+Über der Arbeitsfläche zeigt eine Leiste, wo das Projekt steht: Idee, Szenen, Startbilder, Videos, Schnitt, Export, je
+mit einer kurzen Zahl wie „3 von 4“. Der grüne Knopf daneben macht den nächsten Schritt und sagt, wie lange er auf
+deiner Hardware dauert, etwa „Startbilder für Szene 1 und 2 erzeugen ≈ 5:00“ oder „Alles in den Schnitt legen ·
+2 Clips“. Darunter zeigt eine Reihe Szenenkarten den Zustand jeder Szene: Startbild fehlt, wartet auf Szene 3, rechnet
+mit Restzeit, Take wählen, fertig oder **veraltet**: Eine Anschluss-Szene, deren Vorlage einen neuen Take bekam,
+beginnt noch mit dem alten Ende, und ihre Eigenschaften bieten „Neu rechnen“ oder „So lassen“. Rechtsklick oder ×
+entfernt eine Karte (Strg+Z holt sie zurück), Ziehen sortiert die Szenen einer Bahn um. Der Knopf ▾ hinter „Exportieren“
+klappt die ganze Leiste weg; die Kartenreihe startet zugeklappt.
+
+Während Aufträge laufen, zeigt die Auftragsleiste unten rechts in jedem Reiter, was läuft, was wartet und was fertig
+ist, mit Restzeit; „Zeigen“ springt zum Ergebnis.
+
 ## Schritt für Schritt
 
 1. **Neues Projekt:** oben links „+“ neben der Projektauswahl, dann „Neues Projekt“. Es beginnt mit 1920 × 1080 und
@@ -89,7 +103,8 @@ still. Das Foto bleibt auf deinem Rechner.
    beginnt der Clip mit dem Ende der Szene davor. Ein Bild, das du auf die Szene selbst ziehst, wird weiterhin ein Take.
    „Vorlagen und Zusätze“ darunter (seit 0.5.40) bietet wie im Reiter „Generieren“ an, was das gewählte Modell kann:
    **Referenzbilder** (FLUX 3, Qwen-Image-Edit, Krea 2 als Stilvorlage, Wan VACE), **Endbild** oder Schleife und ein
-   **Layout-Video** mit LTX-2.5, eine Tonbeschreibung mit Kandinsky 6. Aus dem Material ziehen oder aus dem Projektordner
+   **Layout-Video** mit LTX-2.5, eine Tonbeschreibung mit Kandinsky 6. Seit 0.5.41 auch Qualität, 48 fps und Zeitlupe
+   einer LTX-2.5-Szene, ihre LoRAs und ihr Seed. Aus dem Material ziehen oder aus dem Projektordner
    wählen; ein Klick entfernt sie. Auf dem Mac (seit 0.5.15) gibt es Referenzbilder für Standbilder mit FLUX.2 Klein.
 
    ![Vorlagen und Zusätze einer Szene mit FLUX 3](../images/studio-extras-de.jpg)
@@ -98,7 +113,10 @@ still. Das Foto bleibt auf deinem Rechner.
 4. **Szenen erzeugen:** erzeugt alle Szenen ohne Take. Ton und Standbilder kommen zuerst, dann die Videos; eine
    Anschluss-Szene wartet auf die Szene davor, eine Sprecher-Szene auf die Stimme, die sie übernimmt. Solange es läuft, zeigt die Leiste neben „Übernehmen“ die Szene, die
    gerade entsteht, mit Prozent und wie viele fertig sind (etwa „Far view 63 % · 2/5“). „✕ Abbrechen“ (zweimal
-   klicken) beendet alle laufenden und wartenden Aufträge des Projekts; fertige Takes bleiben.
+   klicken) beendet alle laufenden und wartenden Aufträge des Projekts; fertige Takes bleiben. Um eine Szene neu zu
+   erzeugen, sie auswählen: Der Knopf heißt dann „Gewählte erzeugen“, und die Eigenschaften der Szene bieten
+   „Neu erzeugen“. Jeder Take bleibt unter „Takes“ in den Eigenschaften; ein Klick dort wählt den, den Übernehmen in
+   den Schnitt legt.
 5. **Übernehmen**, dann **schneiden:** Mit der Auswahl (V) Clips und ihre Ränder ziehen, mit dem Schneidewerkzeug (C)
    per Klick teilen; Strg+K schneidet am Abspielkopf. Ein Rechtsklick zeigt überall, was geht.
 6. **Exportieren:** Format wählen und „Exportieren“ klicken. Das Video steht danach auch im Verlauf.

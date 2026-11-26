@@ -23,6 +23,8 @@ interface Props {
   downloads: Downloads
   /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde (auch per MCP) */
   modelsVersion?: number
+  /** Modelldateien gelöscht oder Unfertiges aufgeräumt: die anderen Reiter lesen ihre Modellliste neu */
+  onDeleted?: () => void
 }
 
 type Filter = ModelKind | 'all' | 'fav' | 'rec'
@@ -49,6 +51,7 @@ const EXTRAS: Record<string, string> = {
   auto_duration: t('Länge automatisch', 'Automatic length'),
   temporal_upscale: t('48 fps', '48 fps'),
   style_reference: t('Stil-Referenz', 'Style reference'),
+  layout: t('Layout-Video (Layout to Render)', 'Layout video (layout to render)'),
 }
 
 function extrasLabel(m: ModelInfo): string {
@@ -56,7 +59,7 @@ function extrasLabel(m: ModelInfo): string {
   return [...names].map((n) => EXTRAS[n] ?? n).join(', ')
 }
 
-export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVersion = 0 }: Props) {
+export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVersion = 0, onDeleted }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [active, setActive] = useState<Record<string, string | null>>({})
   const [filter, setFilter] = useState<Filter>('all')
@@ -124,6 +127,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
       )
       await load()
       onChanged()
+      if (res.cleaned.length) onDeleted?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -204,6 +208,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
       setMessage(`${m.name}: ${parts.join(' · ') || t('nichts zu löschen', 'nothing to delete')}`)
       await load()
       onChanged()
+      onDeleted?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -700,7 +705,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
                   </button>
                 )}
                 <button className="btn small ghost" onClick={() => toggle(m.id)}>
-                  {open ? t('Weniger', 'Less') : 'Details'}
+                  {open ? t('Weniger', 'Less') : t('Details', 'Details')}
                 </button>
               </div>
             </div>

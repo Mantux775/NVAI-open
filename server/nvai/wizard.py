@@ -146,7 +146,8 @@ def plan(req: dict[str, Any]) -> dict[str, Any]:
     req: format ('landscape'|'portrait'), quality ('best'|'fast'), character (bool: Entwürfe kommen noch),
     character_ref (bool), cast (bool: Startbilder mit Figur oder Porträt als Referenz), start_images (Anzahl),
     video_seconds (Summe), voice_lines (Anzahl), music (bool), models ({Aufgabe: Modell-ID}, eigene Wahl; was nicht
-    passt, fällt auf die beste zurück). Antwort: models (gewählt), options (zur Wahl), best (vorgewählt)."""
+    passt, fällt auf die beste zurück), photo (bool: Weg mit Foto, die Szenen laufen dann als Schleife, wenn das
+    Videomodell das kann). Antwort: models (gewählt), options (zur Wahl), best (vorgewählt)."""
     prof = hardware.profile()
     refs = bool(req.get("cast") or req.get("character") or req.get("character_ref"))
     wanted = req.get("models") if isinstance(req.get("models"), dict) else {}
@@ -161,7 +162,11 @@ def plan(req: dict[str, Any]) -> dict[str, Any]:
     if portrait:
         w, h = h, w
     video = models.get("video") or {}
-    quality = "dfr" if req.get("quality", "best") == "best" and tier == "1080p" and video.get("dfr") else "standard"
+    # Weg mit Foto: Jede Szene läuft als Schleife, wenn das Videomodell das kann (Wizard.tsx), und eine Schleife geht nur
+    # ohne DFR (studio._job_request). Dann weder DFR versprechen noch mit den Zeiten von DFR rechnen.
+    looped = bool(req.get("photo")) and bool(video.get("loop"))
+    quality = ("dfr" if req.get("quality", "best") == "best" and tier == "1080p" and video.get("dfr") and not looped
+               else "standard")
     notes: list[str] = []
     # Nachladen kostet nur gegenüber der Referenz Zeit: dort ist es in den Messwerten schon enthalten (LTX-2.5 meldet auch
     # auf 16 GB „nein“ und wurde so gemessen)

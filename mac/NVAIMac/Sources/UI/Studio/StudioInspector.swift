@@ -33,6 +33,15 @@ struct StudioInspector: View {
     }
 
     var body: some View {
+        // Eine Szene (seit Mac 1.0, Bildschirm E) rollt selbst: Ihre Aktionen stehen fest unten
+        if let p = model.project, model.kind == .scene, model.selected.count == 1, let s = model.scene {
+            SceneInspector(model: model, project: p, scene: s).id(s.id)
+        } else {
+            others
+        }
+    }
+
+    private var others: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 if let p = model.project {
@@ -40,7 +49,7 @@ struct StudioInspector: View {
                     case .scene where model.selected.count > 1: ScenesInspector(model: model, project: p)
                     case .clip where model.selected.count > 1: ClipsInspector(model: model, project: p)
                     case .marker where model.selected.count > 1: MarkersInspector(model: model, project: p)
-                    case .scene: if let s = model.scene { SceneInspector(model: model, project: p, scene: s).id(s.id) }
+                    case .scene: EmptyView()
                     case .clip: if let c = model.clip { ClipInspector(model: model, project: p, clip: c).id(c.id) }
                     case .marker: if let m = model.marker { MarkerInspector(model: model, project: p, marker: m).id(m.id) }
                     case .transition: if let c = model.transitionClip { TransitionInspector(model: model, project: p, clip: c).id(c.id) }
@@ -123,6 +132,8 @@ struct CommitEditor: View {
     let value: String
     var placeholder = ""
     var lines: CGFloat = 8
+    /// zählt hoch: das Feld bekommt den Fokus (großer Knopf „Prompt für Szene 3 schreiben“)
+    var focusOn = 0
     let commit: (String) -> Void
     @State private var text = ""
     @State private var token = UUID()
@@ -131,6 +142,7 @@ struct CommitEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.caption).foregroundStyle(.secondary)
+                .onChange(of: focusOn) { _, n in if n > 0 { focused = true } }
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $text).font(.callout).focused($focused)
                     .frame(height: lines * 17).scrollContentBackground(.hidden)
@@ -234,10 +246,17 @@ private struct ProjectInspector: View {
 
 // MARK: - Szene
 
+/// Eigenschaften einer Szene. Konzept „NVAI im Fluss“, Bildschirm E (seit Mac 1.0, wie SceneProps in Inspector.tsx unter
+/// Windows): oben Zustand und passender Knopf, Modell, Weg (Videoszenen), Prompt, was das Modell dazu kann, Takes;
+/// Seltenes unter „Feineinstellung“; „Erzeugen“ und „In den Schnitt“ stehen fest unten. Vorher wanderten die Knöpfe mit
+/// langen Eigenschaften nach unten.
 private struct SceneInspector: View {
+    @EnvironmentObject var state: AppState
     @ObservedObject var model: StudioModel
     let project: StudioProject
     let scene: StudioScene
+    @State private var fineOpen = false
+    @State private var promptFocus = 0
 
     private func update(_ params: StudioParams) {
         Task { await model.run("scene.update", ["id": .string(scene.id)].merging(params) { $1 }) }
@@ -249,47 +268,141 @@ private struct SceneInspector: View {
     }
 
     var body: some View {
-        let status = StudioJSON.status(scene)
+        let c = model.flowCtx(project, state.flowModels, jobs: state.jobs)
+        // mit aufgelöstem Anschluss-Marker (chain_from), wie Erzeugen ihn sieht
+        let s = c.p.scenes.first { $0.id == scene.id } ?? scene
+        let st = StudioFlow.sceneState(c, s)
+        let est = model.estimates[s.id]
+        let eta = FlowFormat.eta(est?.total)
+        let video = s.lane == "video" && s.kind == "video"
+        let startEta = video && StudioFlow.wayOf(s) == .start ? FlowFormat.eta(model.startEstimates[s.id]?.total) : ""
         let chainMarker = StudioCommands.resolvedChains(project)[scene.id]
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(t("Szene", "Scene") + " · " + laneName).font(.headline)
-                Spacer()
-                switch status {
-                case "running": Badge(text: t("wird erzeugt", "generating"), color: .orange)
-                case "waiting": Badge(text: t("wartet", "waiting"), color: .orange)
-                case "done": Badge(text: t("fertig", "done"), color: .green)
-                case "error": Badge(text: t("Fehler", "error"), color: .red)
-                default: Badge(text: t("leer", "empty"), color: .secondary)
+        VStack(spacing: 0) {
+            ScrollViewReader { reader in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(verbatim: (s.lane == "video" ? StudioFlow.sceneRef(c.p, s.id) : StudioFlow.sceneNum(c.p, s.id)) + " ·")
+                                    .font(.headline)
+                                CommitField(label: "", value: scene.title) { update(["title": .string($0)]) }
+                                FlowChip(text: st.label, tone: st.tone)
+                            }
+                            SceneStateNote(model: model, p: c.p, s: s, st: st, eta: eta, startEta: startEta, expected: est?.seconds,
+                                           onGenerate: generate, update: update,
+                                           onWay: { w, to in update(StudioFlow.wayChange(scene, w, chainTo: to ?? StudioFlow.sceneBefore(c.p, s)?.id)) })
+                            if let error = scene.error, st.key != "error" {
+                                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                            }
+                            // Hinweise wie unter Windows (.st-hint, seit Mac 0.5.11): was bei Szenen von Hand leicht fehlt
+                            ForEach(StudioGenerator.hints(project, scene, model.store.env), id: \.self) { hint in
+                                Text(hint).font(.caption).fixedSize(horizontal: false, vertical: true)
+                                    .padding(.leading, 8).padding(.vertical, 3)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .overlay(alignment: .leading) { Rectangle().fill(Color.orange).frame(width: 3) }
+                            }
+                            SceneModelLine(p: c.p, s: s, onPick: { update(["model_id": .string($0)]) }, onModelClick: {
+                                fineOpen = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation { reader.scrollTo("fine", anchor: .top) } }
+                            })
+                        }
+                        .id("state")
+                        if video {
+                            VStack(alignment: .leading, spacing: 6) {
+                                waySegment(c.p, s, marker: chainMarker != nil)
+                                switch StudioFlow.wayOf(s) {
+                                case .start:
+                                    SceneStartImageView(model: model, project: project, scene: scene, chained: false, startEta: startEta,
+                                                        update: update)
+                                case .chain:
+                                    Text(SceneFocus.wayHint(.chain) + (chainMarker != nil
+                                         ? " " + t("Den Anschluss setzt ein Anschluss-Marker.", "A chain marker sets the chain.") : ""))
+                                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                case .text:
+                                    Text(SceneFocus.wayHint(.text)).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .id("way")
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            CommitEditor(label: scene.lane == "video" ? t("Prompt: was zu sehen ist und wie es sich bewegt", "Prompt: what is seen and how it moves")
+                                         : scene.lane == "voice" ? t("Text: was gesprochen wird", "Text: what is said")
+                                         : t("Prompt: Klang, Stil, Tempo", "Prompt: sound, style, tempo"),
+                                         value: scene.prompt,
+                                         placeholder: scene.lane == "video" ? t("Einstellung, Ort und Licht, Handlung, Kamera …", "Shot, place and light, action, camera …")
+                                         : scene.lane == "voice" ? t("So, wie es gesprochen werden soll; die Szene wird so lang wie ihr Take.",
+                                                                     "As it should be spoken; the scene takes the length of its take.")
+                                         : t("z. B. „Ruhiges Klavier mit weichen Flächen. BPM: 80.“", "e.g. \"Calm piano with soft pads. BPM: 80.\""),
+                                         focusOn: promptFocus) {
+                                update(["prompt": .string($0)])
+                            }
+                            if scene.lane != "voice" { SceneExpandPrompt(model: model, scene: scene) }
+                        }
+                        .id("prompt")
+                        if scene.lane == "video" && scene.kind == "image" {
+                            SceneReferencesView(model: model, project: project, scene: scene, update: update)
+                        }
+                        if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
+                        if scene.lane == "video" { SceneCharactersView(project: project, scene: scene, update: update) }
+                        SceneToggles(s: scene, update: update)
+                        SceneTakes(model: model, s: scene, attention: st.key == "choose").id("takes")
+                        DisclosureGroup(isExpanded: $fineOpen) {
+                            fine(chainMarker: chainMarker != nil)
+                        } label: {
+                            Text(t("Feineinstellung", "Fine tuning")).font(.callout.weight(.semibold))
+                        }
+                        .id("fine")
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .onChange(of: model.focusRequest) { _, req in show(req, reader) }
+                .onAppear {
+                    // Kam die Wahl mit einem Feld (großer Knopf), es zeigen, sobald die Eigenschaften stehen
+                    let req = model.focusRequest
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { show(req, reader) }
                 }
             }
-            if let error = scene.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
-            // Hinweise wie unter Windows (.st-hint, seit Mac 0.5.11): was bei Szenen von Hand leicht fehlt
-            ForEach(StudioGenerator.hints(project, scene, model.store.env), id: \.self) { hint in
-                Text(hint).font(.caption).fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 8).padding(.vertical, 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .overlay(alignment: .leading) { Rectangle().fill(Color.orange).frame(width: 3) }
+            Divider()
+            foot(c.p, s, st, eta: eta)
+        }
+    }
+
+    /// Das Feld, um das es beim großen Knopf ging, in den Blick holen; jeder Wunsch nur einmal (sonst spränge es beim
+    /// nächsten Wählen derselben Szene wieder dorthin)
+    private func show(_ req: StudioModel.FocusRequest?, _ reader: ScrollViewProxy) {
+        guard let req, req.scene == scene.id, model.focusRequest == req else { return }
+        model.focusRequest = nil
+        let anchor = req.field == "takes" ? "takes" : req.field == "way" ? "way" : req.field == "prompt" ? "prompt" : "state"
+        withAnimation { reader.scrollTo(anchor, anchor: .top) }
+        if req.field == "prompt" { promptFocus += 1 }
+        if req.field == "model" { fineOpen = true }
+    }
+
+    /// Weg einer Videoszene: eine Wahl statt Klappen. Ein Anschluss aus einem Marker lässt sich nur über den Marker ändern.
+    @ViewBuilder private func waySegment(_ p: StudioProject, _ s: StudioScene, marker: Bool) -> some View {
+        let before = StudioFlow.sceneBefore(p, s)
+        let current = StudioFlow.wayOf(s)
+        let ways = StudioFlow.Way.allCases.filter { $0 != .chain || before != nil || current == .chain }
+        let target = s.chainFrom ?? before?.id
+        Picker(t("Weg", "Path"), selection: Binding(get: { current }, set: { w in
+            if w != current { update(StudioFlow.wayChange(scene, w, chainTo: w == .chain ? before?.id : nil)) }
+        })) {
+            ForEach(ways, id: \.self) { w in
+                Text(w == .chain ? t("Anschluss an \(StudioFlow.sceneNum(p, target))", "Chain to \(StudioFlow.sceneNum(p, target))")
+                     : SceneFocus.wayLabel(w)).tag(w)
             }
-            if let w = scene.waitingFor, let source = project.scenes.first(where: { $0.id == w }) {
-                let name = source.title.isEmpty ? t("Szene", "Scene") : source.title
-                Text(scene.lane == "voice"
-                     ? t("Wartet auf „\(name)“: deren Take gibt die Stimme vor.", "Waiting for \"\(name)\": its take sets the voice.")
-                     : t("Wartet auf „\(name)“: dessen letztes Bild wird das Startbild.", "Waiting for \"\(name)\": its last frame becomes the start image."))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            CommitField(label: t("Titel", "Title"), value: scene.title) { update(["title": .string($0)]) }
-            CommitEditor(label: scene.lane == "video" ? t("Prompt: was zu sehen ist und wie es sich bewegt", "Prompt: what is seen and how it moves")
-                         : scene.lane == "voice" ? t("Text: was gesprochen wird", "Text: what is said")
-                         : t("Prompt: Klang, Stil, Tempo", "Prompt: sound, style, tempo"),
-                         value: scene.prompt,
-                         placeholder: scene.lane == "video" ? t("Einstellung, Ort und Licht, Handlung, Kamera …", "Shot, place and light, action, camera …")
-                         : scene.lane == "voice" ? t("So, wie es gesprochen werden soll; die Szene wird so lang wie ihr Take.",
-                                                     "As it should be spoken; the scene takes the length of its take.")
-                         : t("z. B. „Ruhiges Klavier mit weichen Flächen. BPM: 80.“", "e.g. \"Calm piano with soft pads. BPM: 80.\"")) {
-                update(["prompt": .string($0)])
-            }
-            if scene.lane != "voice" { SceneExpandPrompt(model: model, scene: scene) }
+        }
+        .pickerStyle(.segmented).labelsHidden()
+        .disabled(marker)
+        .help(marker ? t("Der Anschluss kommt von einem Anschluss-Marker: zum Ändern den Marker verschieben oder löschen.",
+                         "The chain comes from a chain marker: move or delete the marker to change it.")
+              : SceneFocus.wayHint(current))
+    }
+
+    /// Seltenes: Bahn, Art, Start, Dauer, Modell, Anschluss an eine andere Szene, Szene löschen
+    @ViewBuilder private func fine(chainMarker: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
             Picker(t("Bahn", "Lane"), selection: Binding(get: { scene.lane }, set: { lane in
                 update(["lane": .string(lane), "kind": .string(lane == "video" ? "video" : "audio")])
             })) {
@@ -314,38 +427,70 @@ private struct SceneInspector: View {
             }
             modelPicker
             if scene.lane == "video" && scene.kind == "video" {
-                SceneStartImageView(model: model, project: project, scene: scene,
-                                    chained: scene.chainFrom != nil || chainMarker != nil, update: update)
-            }
-            if scene.lane == "video" && scene.kind == "image" {
-                SceneReferencesView(model: model, project: project, scene: scene, update: update)
-            }
-            if scene.lane == "voice" { VoiceInspector(project: project, scene: scene, update: update) }
-            if scene.lane == "video" { SceneCharactersView(project: project, scene: scene, update: update) }
-            if scene.lane == "video" && scene.kind == "video" {
                 let earlier = project.scenes.filter { $0.lane == "video" && $0.id != scene.id && $0.start < scene.start }
                 Picker(t("Anschluss an", "Chain to"), selection: Binding(
-                    get: { scene.chainFrom ?? chainMarker?.from ?? "" },
+                    get: { scene.chainFrom ?? StudioCommands.resolvedChains(project)[scene.id]?.from ?? "" },
                     set: { update(["chain_from": $0.isEmpty ? .null : .string($0)]) })) {
                     Text(t("keinen", "none")).tag("")
                     ForEach(earlier) { s in Text(s.title.isEmpty ? String(s.prompt.prefix(30)) : s.title).tag(s.id) }
                 }
-                .disabled(chainMarker != nil)
-                if chainMarker != nil {
-                    Text(t("Den Anschluss setzt ein Anschluss-Marker.", "A chain marker sets the chain.")).font(.caption).foregroundStyle(.secondary)
-                }
+                .disabled(chainMarker)
             }
-            HStack {
-                Button(scene.take == nil ? t("Erzeugen", "Generate") : t("Neu erzeugen", "Generate again")) {
-                    Task { await model.generate([scene.id]) }
-                }
-                .buttonStyle(.borderedProminent).tint(.green)
-                .disabled(!scene.jobs.isEmpty || scene.waitingFor != nil)
-                Spacer()
-                Button(t("Löschen", "Delete"), role: .destructive) { Task { await model.deleteSelection() } }
-            }
-            takes
+            Text(t("Bahn: \(laneName).", "Lane: \(laneName).")).font(.caption).foregroundStyle(.secondary)
+            Button(t("Szene löschen", "Delete scene"), role: .destructive) { Task { await model.deleteScene(scene.id) } }
         }
+        .padding(.top, 4)
+    }
+
+    /// Vorlagen ohne Take (Anschluss, gleiche Stimme) gehen mit; allein scheiterte die Szene an „braucht die vorherige
+    /// Szene erst ein Video“
+    private var batchIDs: [String] {
+        guard let p = model.project else { return [scene.id] }
+        return StudioFlow.withSources(StudioGenerator.withChains(p), [scene.id], model.store.env)
+    }
+
+    private func generate() {
+        let ids = batchIDs
+        Task { await model.generate(ids) }
+    }
+
+    /// Fester Fuß: Erzeugen mit Zeit, In den Schnitt
+    private func foot(_ p: StudioProject, _ s: StudioScene, _ st: StudioFlow.SceneState, eta: String) -> some View {
+        let busy = st.key == "running" || st.key == "waiting"
+        let also = batchIDs.filter { $0 != scene.id }.map { StudioFlow.sceneRef(p, $0) }.joined(separator: ", ")
+        let missing = StudioFlow.missingModel(s, state.flowModels) != nil
+        let label = st.key == "running" ? t("Rechnet …", "Computing …")
+            : st.key == "waiting" ? t("Wartet …", "Waiting …")
+            : !also.isEmpty ? t("Erzeugen, \(also) zuerst", "Generate, \(also) first")
+            : scene.take != nil ? t("Neu erzeugen", "Generate again") : t("Erzeugen", "Generate")
+        let why = scene.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? t("Erst einen Prompt schreiben", "Write a prompt first")
+            : missing ? t("Erst das Modell laden (oben)", "Download the model first (above)") : ""
+        let inEditNow = StudioFlow.inEdit(p, s)
+        let linked = p.clips.contains { $0.sceneID == s.id }
+        return HStack(spacing: 8) {
+            Button {
+                generate()
+            } label: {
+                HStack(spacing: 6) {
+                    Text(label).lineLimit(1)
+                    if !eta.isEmpty && !busy { Text("· \(eta)").monospacedDigit().opacity(0.8) }
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent).tint(.green)
+            .disabled(busy || !why.isEmpty)
+            .help(why.isEmpty ? FlowFormat.source(model.estimates[s.id]) : why)
+            Button(inEditNow ? t("Im Schnitt", "In the edit") : t("In den Schnitt", "Into the edit")) {
+                Task { await model.conform(only: [s.id]) }
+            }
+            .disabled(s.take == nil || inEditNow)
+            .help(inEditNow ? t("Dieser Take liegt schon im Schnitt", "This take is already in the edit")
+                  : linked ? t("Den Clip im Schnitt gegen diesen Take tauschen (fragt nach, wenn er geschnitten ist)",
+                               "Swap the clip in the edit for this take (asks if it was trimmed)")
+                  : t("Diese Szene in den Schnitt legen", "Put this scene into the edit"))
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.07))
     }
 
     @ViewBuilder private var modelPicker: some View {
@@ -355,7 +500,7 @@ private struct SceneInspector: View {
             let installed = Models.all.filter { $0.installed }
             let current = installed.contains { $0.id == scene.modelID } ? scene.modelID ?? "" : ""
             Picker(t("Modell", "Model"), selection: Binding(get: { current }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
-                Text(t("aktives Modell", "active model")).tag("")
+                Text(t("aktives Modell (\(Models.active.name))", "active model (\(Models.active.name))")).tag("")
                 ForEach(installed, id: \.id) { m in Text(m.name).tag(m.id) }
             }
         } else if scene.lane == "video" && VideoCatalog.installedModels.count > 1 {
@@ -363,46 +508,13 @@ private struct SceneInspector: View {
             let installed = VideoCatalog.installedModels
             let current = installed.contains { $0.id == scene.modelID } ? scene.modelID ?? "" : ""
             Picker(t("Modell", "Model"), selection: Binding(get: { current }, set: { update(["model_id": $0.isEmpty ? .null : .string($0)]) })) {
-                Text(t("aktives Modell", "active model")).tag("")
+                Text(t("aktives Modell (\(VideoCatalog.active.name))", "active model (\(VideoCatalog.active.name))")).tag("")
                 ForEach(installed) { m in Text(m.name).tag(m.id) }
             }
         } else {
             LabeledContent(t("Modell", "Model"), value: scene.lane == "video" ? VideoCatalog.active.name
                            : scene.lane == "voice" ? "Qwen3-TTS" : "Stable Audio 3")
                 .font(.callout)
-        }
-    }
-
-    private var takes: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(t("Takes (\(scene.takes.count))", "Takes (\(scene.takes.count))")).font(.caption).foregroundStyle(.secondary)
-            if scene.takes.isEmpty {
-                Text(t("Noch keiner. Erzeugen oder ein Material auf die Szene ziehen.", "None yet. Generate, or drag an asset onto the scene."))
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 6)], spacing: 6) {
-                    ForEach(Array(scene.takes.enumerated()), id: \.element) { i, take in
-                        Button {
-                            Task { await model.run("scene.take", ["id": .string(scene.id), "asset_id": .string(take)]) }
-                        } label: {
-                            ZStack(alignment: .topLeading) {
-                                if scene.lane == "video" {
-                                    StudioThumb(assetID: take, symbol: scene.kind == "image" ? "photo" : "film")
-                                } else {
-                                    ZStack { Color.gray.opacity(0.2); Text("♪").font(.title3) }
-                                }
-                                Text("\(i + 1)").font(.caption2.bold()).padding(3).background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
-                                    .foregroundStyle(.white).padding(2)
-                            }
-                            .aspectRatio(16 / 9, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(take == scene.take ? Color.accentColor : .clear, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain)
-                        .help(AssetSnapshot.shared.get(take).map { StudioMaterial.label($0) } ?? take)
-                    }
-                }
-            }
         }
     }
 }
@@ -549,7 +661,7 @@ private struct SceneReferencesView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .dropDestination(for: String.self) { dropped, _ in
-                    guard let id = dropped.first, limit > 0 else { return false }
+                    guard let id = dropped.first, limit > 0, !id.hasPrefix(StudioFlowBar.dragPrefix) else { return false }
                     Task { await add(id, limit) }
                     return true
                 } isTargeted: { hover = $0 && limit > 0 }
@@ -623,22 +735,23 @@ private struct SceneReferencesView: View {
 
 /// Startbild einer Videoszene (seit Mac 0.5.6, wie StartImage in Inspector.tsx unter Windows seit 0.5.27): ein Bild
 /// aus dem Material hierher ziehen, aus dem Projektordner wählen oder von der Festplatte laden; entfernen. Bei einem
-/// Anschluss kommt das Startbild aus der Szene davor, dann nur ein Hinweis.
+/// Anschluss kommt das Startbild aus der Szene davor, dann nur ein Hinweis. Seit Mac 1.0 läuft „Startbild erzeugen“ über
+/// das Studio (`startRuns`): Zustand auf der Karte, Zeit am Knopf, die Varianten bleiben beim Wechsel der Szene.
 private struct SceneStartImageView: View {
+    @EnvironmentObject var state: AppState
     @ObservedObject var model: StudioModel
     let project: StudioProject
     let scene: StudioScene
     let chained: Bool
+    /// „≈ 40 s“ für „Startbild erzeugen“
+    var startEta = ""
     let update: (StudioParams) -> Void
     @State private var asset: AssetRecord?
     @State private var choices: [AssetRecord] = []
     @State private var hover = false
-    /// „Startbild erzeugen“: die zwei Varianten des letzten Laufs zum Umschalten
-    @State private var variants: [AssetRecord] = []
-    @State private var generating = false
-    @State private var generateError: String?
 
-    private var assetID: String? { scene.params["image_asset_id"]?.stringValue }
+    private var assetID: String? { scene.params["image_asset_id"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } }
+    private var run: StudioFlow.StartRun? { model.startRuns[scene.id] }
 
     static func isPicture(_ a: AssetRecord) -> Bool {
         a.kind == "image" || (a.kind == "upload"
@@ -653,6 +766,22 @@ private struct SceneStartImageView: View {
                        "Comes from the chain: the last frame of the scene before."))
                     .font(.caption).foregroundStyle(.secondary)
             } else {
+                // Der Bild-Encoder fehlt (ältere Installation von LTX-Video): an Ort und Stelle nachrüsten
+                let video = StudioGenerator.videoModel(scene)
+                if video.installed && !video.encoderInstalled {
+                    let download = state.jobs.first { $0.downloadModelID == video.id && !$0.isFinished }
+                    SceneNote(text: t("Das Startbild braucht den Bild-Encoder von LTX-Video: 1,4 GB Download, danach 0,46 GB auf der Platte.",
+                                      "A start image needs LTX-Video's image encoder: 1.4 GB download, then 0.46 GB on disk.")) {
+                        if let download {
+                            ProgressView(value: download.progress).tint(.green)
+                        } else {
+                            Button(t("Startbild nachrüsten", "Add start image")) {
+                                Task { _ = await JobQueue.shared.submitVideoDownload(video.id); await state.refresh() }
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                }
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(hover ? Color.green : Color.secondary.opacity(0.4),
@@ -666,7 +795,7 @@ private struct SceneStartImageView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 56, maxHeight: 150)
                 .dropDestination(for: String.self) { ids, _ in
-                    guard let id = ids.first else { return false }
+                    guard let id = ids.first, !id.hasPrefix(StudioFlowBar.dragPrefix) else { return false }
                     Task { await use(id) }
                     return true
                 } isTargeted: { hover = $0 }
@@ -686,27 +815,32 @@ private struct SceneStartImageView: View {
                 .font(.callout)
                 // „Startbild erzeugen“ (seit Mac 0.5.11, wie unter Windows seit 0.5.30): zwei Varianten wie im Assistenten
                 HStack(spacing: 6) {
-                    Button(generating ? t("Erzeugt zwei Varianten …", "Generating two variants …") : t("Startbild erzeugen", "Generate start image")) {
-                        Task { await generate() }
+                    let busy = run?.status == "running"
+                    Button(busy ? t("Erzeugt zwei Varianten …", "Generating two variants …")
+                           : startEta.isEmpty ? t("Startbild erzeugen", "Generate start image")
+                           : t("Startbild erzeugen · \(startEta)", "Generate start image · \(startEta)")) {
+                        model.startImages([scene.id])
                     }
-                    .disabled(generating)
+                    .disabled(busy || scene.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .help(t("Zwei Varianten aus dem Prompt der Szene, wie die Startbilder des Assistenten: mit den Figuren der Szene (ihre LoRAs), ohne die Sätze über Ton, ohne schwarze Balken. Beide landen im Projektordner; die erste wird das Startbild.",
                             "Two variants from the scene prompt, like the start images of the assistant: with the characters of the scene (their LoRAs), without the sentences about sound, without black bars. Both go into the project folder; the first becomes the start image."))
-                    if generating { ProgressView().controlSize(.small) }
+                    if busy { ProgressView().controlSize(.small) }
                 }
                 .font(.callout)
-                if let generateError { Text(generateError).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
-                if variants.count > 1 {
+                if let error = run?.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
+                if let variants = run?.variants, variants.count > 1 {
                     HStack(spacing: 6) {
-                        ForEach(variants, id: \.id) { a in
-                            Button { Task { await use(a.id) } } label: {
-                                AssetThumbnail(asset: a, maxSide: 240)
-                                    .overlay(RoundedRectangle(cornerRadius: 4)
-                                        .stroke(a.id == assetID ? Color.accentColor : .clear, lineWidth: 2))
-                                    .frame(maxWidth: .infinity, maxHeight: 90)
+                        ForEach(variants, id: \.self) { id in
+                            if let a = AssetSnapshot.shared.get(id) {
+                                Button { Task { await use(a.id) } } label: {
+                                    AssetThumbnail(asset: a, maxSide: 240)
+                                        .overlay(RoundedRectangle(cornerRadius: 4)
+                                            .stroke(a.id == assetID ? Color.green : .clear, lineWidth: 2))
+                                        .frame(maxWidth: .infinity, maxHeight: 90)
+                                }
+                                .buttonStyle(.plain)
+                                .help(a.prompt)
                             }
-                            .buttonStyle(.plain)
-                            .help(a.prompt)
                         }
                     }
                 }
@@ -716,17 +850,6 @@ private struct SceneStartImageView: View {
             }
         }
         .task(id: (assetID ?? "") + "|" + project.id) { await load() }
-    }
-
-    private func generate() async {
-        generating = true
-        generateError = nil
-        defer { generating = false }
-        do {
-            variants = try await model.generateStartImage(scene.id)
-        } catch {
-            generateError = error.localizedDescription
-        }
     }
 
     private func load() async {
@@ -743,7 +866,7 @@ private struct SceneStartImageView: View {
             return
         }
         await AssetStore.shared.tag([id], project: project.id)
-        update(["params": .object(["image_asset_id": .string(id)])])
+        update(["params": .object(["image_asset_id": .string(id), "way": .string("start")])])
     }
 
     private func pickFile() {

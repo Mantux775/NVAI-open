@@ -14,8 +14,28 @@ final class StudioModel: ObservableObject {
     enum Kind: String { case scene, clip, marker, transition, media }
 
     @Published var projects: [(id: String, name: String)] = []
-    @Published var project: StudioProject?
+    @Published var project: StudioProject? { didSet { if project?.updatedAt != oldValue?.updatedAt || project?.id != oldValue?.id { scheduleEstimates() } } }
     @Published var undoCount = 0
+
+    // MARK: NVAI im Fluss (seit Mac 1.0, Bildschirme D und E)
+
+    /// „Startbild erzeugen“ je Szene: Auftrag, Stand, Varianten (läuft weiter, wenn man eine andere Szene wählt)
+    @Published var startRuns: [String: StudioFlow.StartRun] = [:]
+    /// Geschätzte Rechenzeit je Szene (wie „Neu erzeugen“ sie abschicken würde) und je Startbild-Lauf
+    @Published var estimates: [String: JobEstimate] = [:]
+    @Published var startEstimates: [String: JobEstimate] = [:]
+    /// Den Assistenten öffnen (erster Start, großer Knopf); zählt hoch
+    @Published var wizardRequest = 0
+    /// Ein Feld der Szene nach einem Klick auf den großen Knopf in den Blick holen (n zählt hoch)
+    struct FocusRequest: Equatable {
+        let scene: String
+        let field: String
+        let n: Int
+    }
+    @Published var focusRequest: FocusRequest?
+    /// Stand des Schnitts beim letzten Export aus der Oberfläche: Ist er seither anders, ist der Export nicht mehr frisch
+    private var exportSig: (job: String, sig: String)?
+    private var estimateTask: Task<Void, Never>?
     @Published var redoCount = 0
     /// Auswahl: immer nur eine Art (Szene, Clip, Marker, Übergang = Clip-ID, Material), wahlweise mehrere davon.
     @Published var kind: Kind?
@@ -266,30 +286,176 @@ final class StudioModel: ObservableObject {
     }
 
     /// „Startbild erzeugen“ für eine Videoszene (seit Mac 0.5.11, wie StartImage unter Windows seit 0.5.30): zwei
-    /// Varianten, beide in den Projektordner; die erste wird gleich das Startbild der Szene. Gibt die Varianten zurück.
+    /// Varianten, beide in den Projektordner; die erste wird gleich das Startbild der Szene, wenn inzwischen kein anderes
+    /// gewählt wurde. Seit Mac 1.0 merkt sich das Studio den Lauf (`startRuns`): Zustand „Startbild entsteht“ auf der
+    /// Karte und in der Auftragsleiste, die Varianten danach in den Eigenschaften. Gibt die Varianten zurück.
     func generateStartImage(_ sceneID: String) async throws -> [AssetRecord] {
         await commitEdits()  // ein eben getippter Prompt zuerst
         guard let p = project, let s = p.scenes.first(where: { $0.id == sceneID }) else {
             throw StudioError(t("Unbekannte Szene: \(sceneID)", "Unknown scene: \(sceneID)"), notFound: true)
         }
-        let job = try await StudioGenerator.submitStartImage(p, s, store.env)
+        let before = s.params["image_asset_id"]?.stringValue
+        let job: JobRecord
+        do {
+            job = try await StudioGenerator.submitStartImage(p, s, store.env)
+        } catch {
+            startRuns[sceneID] = StudioFlow.StartRun(job: "", status: "error", error: error.localizedDescription)
+            throw error
+        }
+        startRuns[sceneID] = StudioFlow.StartRun(job: job.id, status: "running")
+        await AppState.shared.refresh()
+        func fail(_ text: String) -> StudioError {
+            if startRuns[sceneID]?.job == job.id { startRuns[sceneID] = StudioFlow.StartRun(job: job.id, status: "error", error: text) }
+            return StudioError(text)
+        }
         while true {
             try await Task.sleep(for: .milliseconds(600))
-            guard let j = await JobQueue.shared.job(job.id) else {
-                throw StudioError(t("Auftrag verschwunden.", "Job disappeared."))
-            }
+            guard let j = await JobQueue.shared.job(job.id) else { throw fail(t("Auftrag verschwunden.", "Job disappeared.")) }
             if j.status == "error" || j.status == "cancelled" {
-                throw StudioError(j.error ?? (j.status == "cancelled" ? t("Abgebrochen.", "Cancelled.") : t("Fehlgeschlagen.", "Failed.")))
+                throw fail(j.error ?? (j.status == "cancelled" ? t("Abgebrochen.", "Cancelled.") : t("Fehlgeschlagen.", "Failed.")))
             }
             guard j.status == "done" else { continue }
             await AssetStore.shared.tag(j.assetIDs, project: p.id)
             var out: [AssetRecord] = []
             for id in j.assetIDs { if let r = await AssetStore.shared.get(id) { out.append(r) } }
-            // nur, wenn Projekt und Szene noch offen sind (sonst träfe der Befehl ein anderes Projekt)
-            if let first = out.first, project?.id == p.id, project?.scenes.contains(where: { $0.id == sceneID }) == true {
-                await run("scene.update", ["id": .string(sceneID), "params": .object(["image_asset_id": .string(first.id)])])
+            if startRuns[sceneID]?.job == job.id {
+                startRuns[sceneID] = StudioFlow.StartRun(job: job.id, status: "done", variants: out.map(\.id))
+            }
+            // Ersetzt wird nur, wenn inzwischen kein anderes Startbild gewählt wurde; auch, wenn das Projekt nicht mehr
+            // offen ist (dann direkt im Speicher des Projekts)
+            if let first = out.first {
+                let params: StudioParams = ["id": .string(sceneID), "params": .object(["image_asset_id": .string(first.id),
+                                                                                      "way": .string("start")])]
+                if project?.id == p.id {
+                    if let now = project?.scenes.first(where: { $0.id == sceneID }), now.params["image_asset_id"]?.stringValue == before {
+                        await run("scene.update", params)
+                    }
+                } else if let q = try? await store.load(p.id), let now = q.scenes.first(where: { $0.id == sceneID }),
+                          now.params["image_asset_id"]?.stringValue == before {
+                    _ = try? await store.apply(p.id, "scene.update", params)
+                }
             }
             return out
+        }
+    }
+
+    /// Startbilder für mehrere Szenen (großer Knopf „Startbilder für Szene 3 und 4 erzeugen“): je Szene ein Lauf, die
+    /// Schlange rechnet sie nacheinander
+    func startImages(_ ids: [String]) {
+        for id in ids where startRuns[id]?.status != "running" {
+            Task {
+                do { _ = try await generateStartImage(id) } catch { notice = error.localizedDescription }
+            }
+        }
+    }
+
+    // MARK: Schätzungen (seit Mac 1.0)
+
+    /// Zeiten je Szene neu schätzen, kurz entprellt (nach jeder Änderung des Projekts und wenn ein Modell dazukommt).
+    /// Schlägt eine Schätzung fehl, bleibt die letzte stehen: Ein Knopf ohne Zeit ist besser als ein falscher.
+    func scheduleEstimates() {
+        estimateTask?.cancel()
+        guard let p = project else { return }
+        estimateTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, let self else { return }
+            let env = self.store.env
+            let scenes = await StudioGenerator.estimateScenes(p, p.scenes.map(\.id), env)
+            var starts: [String: JobEstimate] = [:]
+            let resolved = StudioGenerator.withChains(p)
+            for s in resolved.scenes where s.lane == "video" && s.kind == "video" && StudioFlow.wayOf(s) == .start {
+                guard let body = try? StudioGenerator.startImageRequest(resolved, s, env) else { continue }
+                starts[s.id] = await Estimate.one(kind: "txt2img", params: .object(body))
+            }
+            guard !Task.isCancelled, self.project?.id == p.id else { return }
+            self.estimates = scenes
+            self.startEstimates = starts
+        }
+    }
+
+    /// Kontext der Ableitungen: Projekt mit aufgelösten Anschluss-Markern, Modelle, Startbild-Läufe, Fortschritt
+    func flowCtx(_ p: StudioProject, _ models: [FlowModel], jobs: [JobRecord]) -> StudioFlow.Ctx {
+        let progress: (StudioScene) -> Double? = { s in
+            for id in s.jobs { if let j = jobs.first(where: { $0.id == id }), FlowJobs.isActive(j) { return j.progress } }
+            return nil
+        }
+        return StudioFlow.Ctx(p: StudioGenerator.withChains(p), models: models, startRuns: startRuns, progress: progress)
+    }
+
+    /// Stand des Schnitts für „frisch exportiert?“: Clips, Spuren, Format
+    static func editSig(_ p: StudioProject) -> String {
+        let clips = p.clips.map { c in "\(c.id),\(c.track),\(c.assetID),\(c.start),\(c.inPoint),\(c.outPoint),\(c.speed),\(c.gainDB),\(c.muted),\(c.transition?.kind ?? ""),\(c.transition?.duration ?? 0),\(c.scale ?? 1)" }
+        let tracks = p.tracks.map { "\($0.id)\($0.isHidden)\($0.isMuted)" }
+        return (clips + tracks + ["\(p.settings.width)x\(p.settings.height)@\(p.settings.fps)"]).joined(separator: ";")
+    }
+
+    /// Exportstand für Leiste und großen Knopf
+    func exportInfo(_ preset: String) -> StudioFlow.ExportInfo {
+        guard let p = project else { return StudioFlow.ExportInfo(status: "none", progress: 0, fresh: false, preset: preset) }
+        let short = StudioFlow.presetShort(preset, p)
+        guard let job = exportJob else { return StudioFlow.ExportInfo(status: "none", progress: 0, fresh: false, preset: short) }
+        let status = ["queued", "running"].contains(job.status) ? "running" : job.status == "done" ? "done" : job.status == "error" ? "error" : "none"
+        let file = job.assetIDs.first.flatMap { AssetSnapshot.shared.get($0)?.filename }
+        let fresh: Bool
+        if let sig = exportSig, sig.job == job.id {
+            fresh = sig.sig == Self.editSig(p)
+        } else {
+            fresh = (job.finishedAt ?? 0) >= p.updatedAt
+        }
+        return StudioFlow.ExportInfo(status: status, progress: job.progress, file: file, fresh: fresh, preset: short)
+    }
+
+    /// Szene löschen (× auf der Karte, Rechtsklick „Entfernen“); ⌘Z holt sie zurück
+    func deleteScene(_ id: String) async {
+        await run("scene.delete", ["id": .string(id)])
+        if kind == .scene, selected.contains(id) { clearSelection() }
+    }
+
+    /// Szenen einer Bahn in neuer Reihenfolge (Ziehen in der Kartenreihe): lückenlos ab dem Start der bisher ersten,
+    /// Längen bleiben, andere Bahnen und Marker bleiben stehen; ein Schritt zum Rückgängigmachen. Ein Anschluss bleibt
+    /// bestehen; grenzt er nicht mehr an seine Vorlage, zeigt die Karte „Anschluss getrennt“.
+    func reorder(lane: String, ids: [String]) async {
+        guard let p = project else { return }
+        let moves = StudioFlow.reorderStarts(p, lane: lane, ids: ids)
+        guard !moves.isEmpty else { return }
+        await batch(moves.map { ("scene.update", ["id": .string($0.id), "start": .int($0.start)]) })
+    }
+
+    /// Eine Szene wählen und ein Feld in den Blick holen
+    func focus(_ sceneID: String, field: String?) {
+        if playing { togglePlay() }
+        select(.scene, sceneID)
+        if let field { focusRequest = FocusRequest(scene: sceneID, field: field, n: (focusRequest?.n ?? 0) + 1) }
+    }
+
+    /// „Zeigen“ aus der Auftragsleiste: das Projekt öffnen und die Szene des Auftrags wählen
+    func reveal(project pid: String?, job: JobRecord) async {
+        if let pid, pid != project?.id { await open(pid) }
+        guard let p = project else { return }
+        if let sid = job.params["studio_start_image"]?.stringValue, p.scenes.contains(where: { $0.id == sid }) {
+            focus(sid, field: "way")
+        } else if let s = p.scenes.first(where: { s in s.jobs.contains(job.id) || job.assetIDs.contains { s.takes.contains($0) } }) {
+            focus(s.id, field: "takes")
+        }
+    }
+
+    /// Der große Knopf (Bildschirm D): tut den nächsten Schritt oder holt die Szene, um die es geht, in die
+    /// Eigenschaften. Nichts landet ohne Klick im Schnitt oder im Export.
+    func doNext(_ next: StudioFlow.Next, preset: String) async {
+        let scene = next.scenes.first
+        switch next.kind {
+        case .wizard: wizardRequest += 1
+        case .start: startImages(next.scenes.map(\.id))
+        case .generate: await generate(next.scenes.map(\.id))
+        case .conform: await conform()
+        case .export: await export(preset)
+        case .done:
+            if let id = exportJob?.assetIDs.first, let r = AssetSnapshot.shared.get(id) {
+                NSWorkspace.shared.open(AssetStore.shared.fileURL(r.filename))
+            }
+        case .exporting, .idle: return
+        default:
+            if let scene { focus(scene.id, field: next.field) }
         }
     }
 
@@ -318,6 +484,32 @@ final class StudioModel: ObservableObject {
         }
     }
 
+    /// Nur diese Szenen in den Schnitt (Eigenschaften „In den Schnitt“, seit Mac 1.0): wie „Übernehmen“, der Dialog fragt
+    /// nur nach, wenn bei ihnen Vorhandenes betroffen ist
+    func conform(only ids: [String]) async {
+        await commitEdits()
+        guard let id = project?.id else { return }
+        do {
+            let p = try await StudioGenerator.shared.refresh(store, id)
+            await StudioMediaProbe.prefetch(StudioMediaProbe.referencedAssets([:], p))
+            let plan = StudioCommands.conformPlan(p, store.env)
+            let items = (plan["items"]?.arrayValue ?? []).filter { ids.contains($0["scene_id"]?.stringValue ?? "") }
+            let attention = items.contains { i in
+                let action = i["action"]?.stringValue
+                return action == "replace" || action == "error"
+                    || !(i["overlaps"]?.arrayValue ?? []).isEmpty || i["in_edit"]?.boolValue == true
+            }
+            if attention {
+                conformSummary = plan.objectValue ?? [:]
+                conformItems = items
+            } else {
+                await conform(scenes: ids, overwrite: [])
+            }
+        } catch {
+            notice = error.localizedDescription
+        }
+    }
+
     func conform(scenes: [String]?, overwrite: [String]) async {
         var params: StudioParams = ["overwrite": .array(overwrite.map(JSONValue.string))]
         if let scenes { params["scenes"] = .array(scenes.map(JSONValue.string)) }
@@ -335,7 +527,10 @@ final class StudioModel: ObservableObject {
             notice = t("Der Schnitt ist leer: erst Szenen übernehmen oder Clips anlegen.", "The edit is empty: conform scenes or add clips first.")
             return
         }
-        exportJob = await JobQueue.shared.submitStudioExport(StudioExportRequest(projectID: p.id, preset: preset))
+        let job = await JobQueue.shared.submitStudioExport(StudioExportRequest(projectID: p.id, preset: preset))
+        exportJob = job
+        exportSig = (job.id, Self.editSig(p))
+        await AppState.shared.refresh()
     }
 
     /// Exportstand in der Leiste, auch für Exporte, die Claude per REST/MCP gestartet hat.

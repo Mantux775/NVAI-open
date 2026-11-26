@@ -27,7 +27,7 @@ and PyTorch in the tested versions. It installs for the current user only, witho
 | | |
 |---|---|
 | **Windows** | Windows 10 (version 2004 or later) or Windows 11, 64-bit |
-| **Graphics card** | NVIDIA, or AMD Radeon (experimental, see below); 8 GB of VRAM is workable, 12–16 GB is comfortable |
+| **Graphics card** | NVIDIA, AMD Radeon or Intel Arc (both experimental, see below); 8 GB of VRAM is workable, 12–16 GB is comfortable |
 | **Driver** | NVIDIA 580.88 or newer (needed by PyTorch with CUDA 13): https://www.nvidia.com/drivers. AMD: Adrenalin 26.2.2 or newer |
 | **Internet** | about 3 GB during setup (mostly PyTorch), plus 5–40 GB per model |
 | **Disk** | about 10 GB for the program, plus room for the models |
@@ -91,9 +91,12 @@ the Start menu.
 3. Under **Generate**, enter a prompt. The first job after a start takes 30 to 60 seconds longer while the model loads.
 
 **Quit NVAI-open** in the Start menu shuts everything down and frees the graphics card. To use NVAI-open from Claude
-Code or another AI agent (WorkBuddy, Cursor), see [CLAUDE_CODE.md](CLAUDE_CODE.md).
+Code or another AI agent (WorkBuddy, Cursor): "Models → AI agents (MCP)" shows the address and entries to copy,
+details in [CLAUDE_CODE.md](CLAUDE_CODE.md).
 
 ![The Generate tab in Chinese, with the language list at the top right](images/languages-zh.jpg)
+
+!["Models → AI agents (MCP)": the address and entries for Claude Code, WorkBuddy and Cursor](images/mcp-agents.jpg)
 
 ### FLUX 3 and LTX-2.5 (Hugging Face access)
 
@@ -208,6 +211,8 @@ The server starts with the app, independently of the window, and listens only on
 | | LTX-Video 13B | from 16 GB (4 bit) or 24 GB (8 bit) |
 | | LTX-2.3 and LTX-2.5 with sound | from 32 and 64 GB, macOS 26.3 |
 | Music and sounds | Stable Audio 3 | from 8 GB |
+| Narrator voice | Qwen3-TTS: VoiceDesign 1.7B in 4 bit (from a description), Base 0.6B in 8 bit (from a recording) | from 8 GB |
+| Audio forensics | Whisper large-v3 (Core ML) for speech, Qwen3.5 for the translation (9B from 16 GB, otherwise 4B) | from 8 GB |
 | Old photos | FLUX.2 Klein, "Automatic" with Qwen3.5 4B, sharpening with SeedVR2 3B | from 8 GB |
 | Expand prompt | the Qwen3-4B text encoder of FLUX.2 Klein, no extra download | from 8 GB |
 

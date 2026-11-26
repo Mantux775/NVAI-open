@@ -104,7 +104,7 @@ start from the photo here too. Four pictures at 896 × 1152 took 83 s with FLUX 
   redrew the face. The price: whatever is the same in both images stands still, water and smoke included. For a
   moving background, use neither a loop nor an end image.
 - **With a real photo, use the photo itself.** FLUX 3 makes faces a little slimmer and younger. Under
-  "Image → Extend an existing image (outpainting)", FLUX 3 extends the photo to the video format and puts the
+  "Image → Extend an image (outpainting)", FLUX 3 extends the photo to the video format and puts the
   original back pixel for pixel, so the first frame is exactly the person.
 - **Keep the person facing the camera.** If they turn away, LTX-2.5 redraws the face afterwards and it
   looks less like the photo.

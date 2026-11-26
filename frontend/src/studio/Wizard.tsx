@@ -446,6 +446,8 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
     format: portrait ? 'portrait' : 'landscape', quality: best ? 'best' : 'fast',
     character: characterOn && !path.photo && drafts.length === 0, character_ref: !!refAsset, cast: characterOn,
     start_images: startScenes, video_seconds: totalSeconds, voice_lines: lines.length, music, models: choice,
+    // Gesicht aus einem Foto: Die Clips laufen als Schleife, DFR gilt dort nie; der Plan rechnet dann mit Standard
+    photo: !!path.photo,
   }), [portrait, best, characterOn, path.photo, drafts.length, refAsset, startScenes, totalSeconds, lines.length, music, choice])
   // Wofür der Plan gerechnet ist: Er kommt etwas nach jeder Änderung, die Hochrechnung braucht seine eigene Grundlage
   const planFor = useRef(planBody)
@@ -633,9 +635,21 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
       `${cap(dot(tx.actions[i] || tx.idea))}.${speaks}`, 'The camera holds steady.', sound].filter(Boolean).join(' ')
   }
 
+  /** Was „Projekt anlegen“ schon angelegt hat. Scheitert es mittendrin, räumt ein zweiter Versuch das zuerst weg: vorher
+   *  standen danach Szenen, Sätze, Musik und Figur doppelt im Projekt */
+  const made = useRef<{ scenes: string[]; characters: string[] }>({ scenes: [], characters: [] })
+
   /** Projekt füllen: Figur, Szenen, Sätze, Musik; dann die Startbilder anstoßen */
   const build = () => run('build', async () => {
     const pid = await ensureProject()
+    const before = made.current
+    if (before.scenes.length || before.characters.length) {
+      await cmd(pid, 'batch', { commands: [
+        ...before.scenes.map((id) => ({ command: 'scene.delete', params: { id } })),
+        ...before.characters.map((id) => ({ command: 'character.delete', params: { id } })),
+      ] })
+    }
+    made.current = { scenes: [], characters: [] }
     setStage(t('Texte werden ins Englische übertragen …', 'Translating the texts into English …'))
     // Der Musik-Prompt nur, wenn er nicht englisch aussieht (die Vorschläge sind englisch und bleiben wörtlich)
     const ownMusic = musicText?.trim() ?? ''
@@ -655,6 +669,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
         voice: VOICES[voice].p, language: lang,
       })
       cid = r?.id ?? null
+      if (cid) made.current.characters.push(cid)
     }
     const inPicture = cid && characterOn && (chosenDraft || path.photo) ? [cid] : []
     const faceRef = path.photo && refAsset ? [refAsset.id] : characterOn && chosenDraft ? [chosenDraft] : []
@@ -675,6 +690,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
         chain_from: path.chain && i > 0 ? ids[i - 1] : null,
       })
       ids.push(r.id)
+      made.current.scenes.push(r.id)
       if (path.lines !== 'none' && s.line.trim()) {
         const words = s.line.trim().split(/\s+/).length
         const v = await cmd(pid, 'scene.add', {
@@ -682,6 +698,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
           prompt: s.line.trim(), start_s: start + (lineMode === 'narration' ? 0.3 : 0.2),
           duration_s: Math.min(s.seconds, 0.6 + words / 2.4), params: cid ? { character: cid } : {},
         })
+        made.current.scenes.push(v.id)
         if (lineMode === 'lipsync' && lips) await cmd(pid, 'scene.update', { id: r.id, params: { audio_from: v.id } })
         firstVoice = firstVoice ?? v.id
       }
@@ -690,10 +707,11 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
     // Alle Sätze in derselben Stimme: der erste gibt sie vor (dieselbe Beschreibung klingt je Seed anders)
     if (cid && firstVoice && lines.length > 1) await cmd(pid, 'character.update', { id: cid, voice_from: firstVoice })
     if (music) {
-      await cmd(pid, 'scene.add', {
+      const m = await cmd(pid, 'scene.add', {
         lane: 'music', model_id: p.models.music?.id ?? null, title: t('Musik', 'Music'),
         prompt: musicPrompt, start_s: 0, duration_s: totalSeconds + 0.5,
       })
+      if (m?.id) made.current.scenes.push(m.id)
     }
     // Startbilder: je Szene zwei zum Auswählen (bei einer durchgehenden Einstellung nur für den Anfang)
     const items: BoardItem[] = []

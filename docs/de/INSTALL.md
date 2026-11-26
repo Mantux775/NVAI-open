@@ -28,7 +28,7 @@ Administratorrechte.
 | | |
 |---|---|
 | **Windows** | Windows 10 (ab Version 2004) oder Windows 11, 64 Bit |
-| **Grafikkarte** | NVIDIA oder AMD Radeon (experimentell, siehe unten); 8 GB VRAM gehen, 12–16 GB sind bequem |
+| **Grafikkarte** | NVIDIA, AMD Radeon oder Intel Arc (beide experimentell, siehe unten); 8 GB VRAM gehen, 12–16 GB sind bequem |
 | **Treiber** | NVIDIA ab 580.88 (nötig für PyTorch mit CUDA 13): https://www.nvidia.com/drivers. AMD: Adrenalin ab 26.2.2 |
 | **Internet** | rund 3 GB beim Einrichten (vor allem PyTorch), dazu 5–40 GB pro Modell |
 | **Platte** | rund 10 GB für das Programm, dazu Platz für die Modelle |
@@ -220,6 +220,8 @@ Der Server startet mit der App, unabhängig vom Fenster, und lauscht nur auf `12
 | | LTX-Video 13B | ab 16 GB (4 Bit) oder 24 GB (8 Bit) |
 | | LTX-2.3 und LTX-2.5 mit Ton | ab 32 bzw. 64 GB, macOS 26.3 |
 | Musik und Klänge | Stable Audio 3 | ab 8 GB |
+| Sprecherstimme | Qwen3-TTS: VoiceDesign 1.7B in 4 Bit (aus einer Beschreibung), Base 0.6B in 8 Bit (aus einer Aufnahme) | ab 8 GB |
+| Ton-Forensik | Whisper large-v3 (Core ML) für die Sprache, Qwen3.5 für die Übersetzung (9B ab 16 GB, sonst 4B) | ab 8 GB |
 | Alte Fotos | FLUX.2 Klein, „Automatisch“ mit Qwen3.5 4B, Schärfen mit SeedVR2 3B | ab 8 GB |
 | Prompt ausbauen | der Qwen3-4B-Text-Encoder von FLUX.2 Klein, ohne eigenen Download | ab 8 GB |
 
@@ -350,10 +352,10 @@ auch ohne Bildschirm.
 
 `zsh ~/NVAIMac/scripts/release.sh` baut `~/NVAIMac/release/NVAI-open-<Version>.dmg` mit der App, dem PhotoCraft-Add-on
 (wenn die Umgebungsvariable `ADDON_DIR` auf den Ordner mit dessen `build-app.sh` zeigt) und einer Kurzanleitung. Mit
-einem Zertifikat „Developer ID Application“ werden die Apps und die DMG signiert, notarisiert und gestapelt (für
-`notarytool` braucht es einen API-Schlüssel von App Store Connect); ohne Zertifikat ist die DMG nur ad hoc signiert, für
-interne Tests. In einer SSH-Sitzung mit gesperrtem Schlüsselbund das Kennwort über stdin übergeben und
-`--unlock-from-stdin` anhängen.
+einem Zertifikat „Developer ID Application“ werden die Apps und die DMG signiert, notarisiert und mit dem
+Notarisierungsticket versehen (für `notarytool` braucht es einen API-Schlüssel von App Store Connect); ohne Zertifikat
+ist die DMG nur ad hoc signiert, für interne Tests. In einer SSH-Sitzung mit gesperrtem Schlüsselbund das Kennwort
+über stdin übergeben und `--unlock-from-stdin` anhängen.
 
 ---
 

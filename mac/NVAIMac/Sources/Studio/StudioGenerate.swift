@@ -306,15 +306,35 @@ actor StudioGenerator {
 
     /// Die Anfrage, wie sie auch `/api/generate/*` bekäme (dieselbe Prüfung), und gleich abgeschickt.
     static func submit(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) async throws -> JobRecord {
+        let (kind, body) = try await request(p, s, env)
+        switch kind {
+        case "tts": return await JobQueue.shared.submitSpeech(try SpeechJobRequest.parse(.object(body)))
+        case "txt2audio": return await JobQueue.shared.submitAudio(try AudioJobRequest.parse(.object(body)))
+        case "txt2img": return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
+        default: return await JobQueue.shared.submitVideo(try VideoJobRequest.parse(.object(body)))
+        }
+    }
+
+    /// Angaben einer Szene, die nur das Studio liest und nie in einen Auftrag gehören: der gewählte Weg, ein bestätigter
+    /// Take und „So lassen“ einer veralteten Anschluss-Szene (seit Mac 1.0, Konzept „NVAI im Fluss“)
+    static let flowParams: Set<String> = ["way", "take_ok", "chain_keep"]
+
+    /// Art und Körper des Auftrags einer Szene (wie `_job_request` unter Windows), ohne ihn abzuschicken. `dry`
+    /// (Schätzung, seit Mac 1.0): nichts anlegen, das letzte Bild einer Vorlage nur als vorhanden annehmen.
+    static func request(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment,
+                        dry: Bool = false) async throws -> (kind: String, body: [String: JSONValue]) {
         let prompt = s.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { throw StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet.")) }
         let secs = Studio.seconds(s.duration)
+        // Zu welchem Projekt der Auftrag gehört (wie studio_project unter Windows): Auftragsleiste und Hinweise
+        let project: JSONValue = .string(p.id)
         if s.lane == "voice" {
             // Sprecher-Szene (seit 0.5.3): Der Prompt ist der Text; die Stimme aus params.voice, params.voice_from (der
             // gewählte Take einer anderen Sprecher-Szene mit seinem Text) oder params.voice_asset_id (+ voice_text).
             // Mit params.character (seit 0.5.5) die Stimme der Figur statt der eigenen Angaben.
             let voice = StudioCommands.voiceSettings(p, s)
-            var body: [String: JSONValue] = ["text": .string(prompt), "model_id": .string(SpeechCatalog.id)]
+            var body: [String: JSONValue] = ["text": .string(prompt), "model_id": .string(SpeechCatalog.id),
+                                             "studio_project": project]
             for key in ["voice", "voice_asset_id", "voice_text", "language"] {
                 if let v = voice[key], !v.isNull, v.stringValue != "" { body[key] = v }
             }
@@ -335,13 +355,14 @@ actor StudioGenerator {
                 let spoken = meta["speech"]?.boolValue == true ? meta["text"]?.stringValue : nil
                 body["voice_text"] = .string(spoken ?? source.params["voice_text"]?.stringValue ?? "")
             }
-            return await JobQueue.shared.submitSpeech(try SpeechJobRequest.parse(.object(body)))
+            return ("tts", body)
         }
         if s.lane == "music" || s.lane == "sfx" {
             var body: [String: JSONValue] = ["prompt": .string(prompt), "model_id": .string(AudioCatalog.id),
-                                             "seconds": .double((min(secs, AudioCatalog.maxSeconds) * 100).rounded() / 100)]
+                                             "seconds": .double((min(secs, AudioCatalog.maxSeconds) * 100).rounded() / 100),
+                                             "studio_project": project]
             for key in ["seed", "steps", "cfg"] { if let v = s.params[key] { body[key] = v } }
-            return await JobQueue.shared.submitAudio(try AudioJobRequest.parse(.object(body)))
+            return ("txt2audio", body)
         }
         if s.kind == "image" {
             let model = Models.find(s.modelID) != nil ? s.modelID! : Models.active.id
@@ -349,7 +370,7 @@ actor StudioGenerator {
             // und ihre Trigger-Wörter vorn im Prompt; eigene LoRAs der Szene gehen vor
             let look = StudioCommands.characterLook(p, s, modelID: model, env)
             var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
-                                             "model_id": .string(model)]
+                                             "model_id": .string(model), "studio_project": project]
             let size = imageSize(p, s.params)
             body["width"] = .int(size.width)
             body["height"] = .int(size.height)
@@ -357,7 +378,7 @@ actor StudioGenerator {
                 if let v = s.params[key] { body[key] = v }
             }
             if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
-            return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
+            return ("txt2img", body)
         }
         // Video: das Modell der Szene, wenn geladen, sonst das aktive (2B oder 13B), 24 fps, Bilder 8n+1 aus der Länge;
         // Format im Seitenverhältnis des Projekts, so groß, wie der Speicher dieses Macs es für die Länge zulässt.
@@ -374,14 +395,17 @@ actor StudioGenerator {
         var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
                                          "model_id": .string(video.id),
                                          "width": .int(size.width), "height": .int(size.height),
-                                         "frames": .int(frames), "fps": .int(fps)]
+                                         "frames": .int(frames), "fps": .int(fps), "studio_project": project]
         // Was nur LTX-2.5 unter Windows kann (Endbild, Schleife …), lässt parse mit einer Meldung scheitern; die
         // Qualitätsstufe setzt das Windows-Studio selbst, hier gibt es nur eine. Figuren und „Ton aus“ sind Angaben
-        // der Szene, keine des Auftrags.
-        let own = ["quality", "width", "height", "frames", "fps", "model_id", "loras", "characters", "character", "audio_from"]
-        for (key, v) in s.params where !own.contains(key) {
+        // der Szene, keine des Auftrags, ebenso Weg, bestätigter Take und „So lassen“ (flowParams).
+        let own = ["quality", "width", "height", "frames", "fps", "model_id", "loras", "characters", "character", "audio_from",
+                   "studio_project"]
+        for (key, v) in s.params where !own.contains(key) && !flowParams.contains(key) {
             body[key] = v
         }
+        // „Nur Text“: ein Startbild, das von früher in den Angaben steht, gilt nicht (der Weg entscheidet)
+        if s.params["way"]?.stringValue == "text" { body["image_asset_id"] = nil }
         if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
         // „Ton aus Sprecher-Szene“: nur ein Videomodell, das einen Ton nimmt (unter Windows LTX-2.5), spricht den Satz
         // mit den Lippen. Auf dem Mac kann das keins; die Angabe bleibt im Projekt, und Übernehmen legt den Satz normal.
@@ -400,9 +424,93 @@ actor StudioGenerator {
                 throw StudioError(t("Für den Anschluss braucht die vorherige Szene erst ein Video.",
                                     "For the chain, the previous scene needs a video first."))
             }
-            body["image_asset_id"] = .string(try await lastFrameAsset(take, title: source.title))
+            body["image_asset_id"] = .string(dry ? take : try await lastFrameAsset(take, title: source.title))
         }
-        return await JobQueue.shared.submitVideo(try VideoJobRequest.parse(.object(body)))
+        return ("txt2video", body)
+    }
+
+    // MARK: Veraltet und Anschluss (seit Mac 1.0, wie scene_stale und scene_carry unter Windows 0.5.42)
+
+    /// Von welchem Take seiner Vorlage ein Anschluss-Take ausging: Sein Startbild ist das letzte Bild dieses Takes
+    /// (`meta.image_asset_id`, dort `meta.studio_last_frame_of`). nil, wenn es sich nicht sagen lässt (eingefügter Take,
+    /// Take von vor dem Anschluss). Eine Latent-Kette wie unter Windows gibt es auf dem Mac nicht.
+    static func chainSource(_ takeID: String?) -> String? {
+        guard let takeID, let take = AssetSnapshot.shared.get(takeID) else { return nil }
+        if let chain = take.meta["chain_asset_id"]?.stringValue { return chain }
+        guard let image = take.meta["image_asset_id"]?.stringValue, let start = AssetSnapshot.shared.get(image) else { return nil }
+        return start.meta["studio_last_frame_of"]?.stringValue
+    }
+
+    /// Eine Anschluss-Szene, die noch mit dem alten Ende ihrer Vorlage beginnt (Oberflächentest 26.11.2026: „Wird eine
+    /// Szene neu erzeugt, behalten Anschluss-Szenen ihr altes Ende ohne Hinweis“).
+    struct Stale: Sendable, Equatable {
+        /// Vorlage (Szene), ihr gewählter Take, der Take, von dem diese Szene ausging
+        let source: String
+        let take: String
+        let used: String
+        /// take: neuer Take der Vorlage; scene: der Anschluss zeigt inzwischen auf eine andere Szene
+        let why: String
+        let reason: String
+
+        var json: JSONValue {
+            .object(["source": .string(source), "take": .string(take), "used": .string(used), "why": .string(why),
+                     "reason": .string(reason)])
+        }
+    }
+
+    /// Veraltet: Der Take einer Anschluss-Szene ging von einem anderen Take ihrer Vorlage aus als dem jetzt gewählten.
+    /// „So lassen“ merkt sich genau dieses Paar in params.chain_keep ({take, source}); ein neuer Take auf einer der beiden
+    /// Seiten zeigt den Hinweis wieder. `p` mit aufgelösten Anschluss-Markern.
+    static func stale(_ p: StudioProject, _ s: StudioScene) -> Stale? {
+        guard s.lane == "video", s.kind == "video", let from = s.chainFrom, let take = s.take,
+              let source = p.scenes.first(where: { $0.id == from }), let now = source.take,
+              let used = chainSource(take), used != now else { return nil }
+        if let keep = s.params["chain_keep"]?.objectValue, keep["take"]?.stringValue == take,
+           keep["source"]?.stringValue == now { return nil }
+        func name(_ x: StudioScene) -> String { !x.title.isEmpty ? x.title : !x.prompt.isEmpty ? String(x.prompt.prefix(40)) : x.id }
+        // Der alte Take gehört einer anderen Szene: Der Anschluss wurde umgestellt (eine eingefügte Kopie teilt die Takes
+        // ihrer Vorlage, deshalb zählt die eigene Vorlage zuerst)
+        let other = source.takes.contains(used) ? nil : p.scenes.first { $0.id != source.id && $0.takes.contains(used) }
+        let reason = other.map {
+            t("Diese Szene schließt jetzt an „\(name(source))“ an, beginnt aber noch mit dem Ende von „\(name($0))“.",
+              "This scene now continues “\(name(source))” but still begins with the end of “\(name($0))”.")
+        } ?? t("„\(name(source))“ hat einen neuen Take. Diese Szene schließt daran an und beginnt noch mit dem alten Ende.",
+               "“\(name(source))” has a new take. This scene continues from it and still begins with the old ending.")
+        return Stale(source: source.id, take: now, used: used, why: other == nil ? "take" : "scene", reason: reason)
+    }
+
+    /// Szene, deren Ende der gewählte Take einer Videoszene fortsetzt, auch wenn der Anschluss aus einem Marker kam;
+    /// sonst nil. Liegt die Szene nach dem Umordnen nicht mehr direkt dahinter, warnt die Oberfläche („Anschluss getrennt“).
+    static func carry(_ p: StudioProject, _ s: StudioScene) -> String? {
+        guard s.lane == "video", s.kind == "video", let used = chainSource(s.take) else { return nil }
+        if let own = p.scenes.first(where: { $0.id == s.chainFrom && $0.takes.contains(used) }) { return own.id }
+        return p.scenes.first { $0.id != s.id && $0.takes.contains(used) }?.id
+    }
+
+    /// Das Projekt mit den Anschlüssen aus Markern (nur abgeleitet), für Ansichten und Schätzung
+    static func withChains(_ p: StudioProject) -> StudioProject { resolvingChains(p) }
+
+    // MARK: Schätzen (seit Mac 1.0)
+
+    /// Geschätzte Rechenzeit je Szene aus derselben Anfrage wie beim Erzeugen (`request(dry:)`), nur gelesen. Ohne
+    /// `sceneIDs` alle Szenen ohne Take. Szenen, deren Anfrage noch nicht geht (kein Prompt, Vorlage fehlt), bekommen
+    /// `error` statt einer Zeit. Antwortform wie `estimate_scenes` unter Windows.
+    static func estimateScenes(_ p: StudioProject, _ sceneIDs: [String]?, _ env: StudioEnvironment) async -> [String: JobEstimate] {
+        let p = resolvingChains(p)
+        var out: [String: JobEstimate] = [:]
+        for s in p.scenes where sceneIDs.map({ $0.contains(s.id) }) ?? (s.take == nil) {
+            do {
+                let (kind, body) = try await request(p, s, env, dry: true)
+                var e = await Estimate.one(kind: kind, params: .object(body))
+                e.kind = kind
+                out[s.id] = e
+            } catch {
+                var e = JobEstimate.unknown
+                e.error = error.localizedDescription
+                out[s.id] = e
+            }
+        }
+        return out
     }
 
     /// Das Videomodell einer Szene: ihr eigenes, wenn es geladen ist, sonst das aktive.
@@ -599,6 +707,11 @@ actor StudioGenerator {
         guard !s.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet."))
         }
+        return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(try startImageRequest(p, s, env))))
+    }
+
+    /// Körper des Auftrags „Startbild erzeugen“ (für Schätzung und Abschicken gleich)
+    static func startImageRequest(_ p: StudioProject, _ s: StudioScene, _ env: StudioEnvironment) throws -> [String: JSONValue] {
         guard let modelID = startImageModel(p, s, env) else {
             throw StudioError(t("Kein Bildmodell geladen (unter „Modelle“).", "No image model is downloaded (under \"Models\")."))
         }
@@ -609,8 +722,9 @@ actor StudioGenerator {
         let size = startImageSize(p)
         var body: [String: JSONValue] = ["prompt": .string(look.prompt.trimmingCharacters(in: .whitespacesAndNewlines)),
                                          "model_id": .string(modelID), "width": .int(size.width),
-                                         "height": .int(size.height), "batch_size": .int(2)]
+                                         "height": .int(size.height), "batch_size": .int(2), "studio_project": .string(p.id),
+                                         "studio_start_image": .string(s.id)]
         if !look.loras.isEmpty { body["loras"] = .array(look.loras) }
-        return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
+        return body
     }
 }

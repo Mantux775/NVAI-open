@@ -21,10 +21,10 @@ export function AssetView({ asset, compact = false }: { asset: Asset; compact?: 
   if (asset.kind === 'video') {
     return (
       <div className="asset video">
+        {/* Ohne muted: nichts spielt hier von selbst ab, und LTX-2.5 liefert Ton (stumm hielt man ihn für fehlend) */}
         <video
           controls
           loop
-          muted
           playsInline
           preload="metadata"
           src={asset.url}

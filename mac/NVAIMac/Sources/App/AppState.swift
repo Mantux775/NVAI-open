@@ -57,6 +57,71 @@ final class AppState: ObservableObject {
     /// LoRAs für FLUX.2 Klein mit Ladestand.
     @Published var loras: [LoRARow] = []
 
+    // MARK: NVAI im Fluss (seit Mac 1.0)
+
+    /// Alle ladbaren Modelle wie `GET /api/models` (ohne LoRAs): fehlende Modelle an Ort und Stelle, erster Start
+    @Published var flowModels: [FlowModel] = []
+    private var flowSignature = ""
+    /// Der Auftrag, den „Generieren“ rechts zeigt (Phasen, Ergebnis, nächste Schritte); auch aus der Auftragsleiste
+    @Published var generateJobID: String?
+    /// „Generieren“ in dieser Aufgabe öffnen (image, restore, audio, speech, video); n zählt hoch
+    struct GenerateFocus: Equatable {
+        let mode: String
+        let n: Int
+    }
+    @Published var generateFocus: GenerateFocus?
+
+    func focusGenerate(_ mode: String) {
+        selectedTab = "generate"
+        generateFocus = GenerateFocus(mode: mode, n: (generateFocus?.n ?? 0) + 1)
+    }
+    /// Erster Start: Absicht wählen, dann genau die Modelle dafür (Bildschirm A)
+    @Published var showWelcome = false
+    /// Auftragsleiste über alle Reiter (Bildschirm F) offen
+    @Published var dockOpen = false
+    /// Prüfstand: Willkommen auch mit geladenen Modellen zeigen (`--flow-welcome`)
+    var forceWelcome = false
+    /// Prüfstand (`--flow-prompt`, `--flow-submit`): Prompt der offenen Aufgabe vorgeben, den großen Knopf drücken
+    @Published var flowPrefill: String?
+    @Published var flowSubmit = 0
+    static let welcomeDismissedKey = "flow.welcome.dismissed"
+
+    /// Ist schon ein Modell da, das etwas erzeugt (Bild, Video, Ton, Stimme)? Sonst ist es ein erster Start.
+    var anyMakerInstalled: Bool {
+        models.contains(where: \.installed) || videoInstalled || audioInstalled || speechInstalled
+    }
+
+    func updateWelcome() {
+        let dismissed = UserDefaults.standard.bool(forKey: Self.welcomeDismissedKey) || welcomeHiddenThisSession
+        let show = forceWelcome || (!dismissed && !anyMakerInstalled)
+        if show != showWelcome { showWelcome = show }
+    }
+
+    var welcomeHiddenThisSession = false
+
+    /// Ein Ergebnis zeigen, auch aus einem anderen Reiter („Zeigen“ in der Auftragsleiste, „Ansehen“ im Hinweis)
+    func showJob(_ job: JobRecord) {
+        switch FlowKinds.origin(job) {
+        case "studio":
+            selectedTab = "studio"
+            let pid = job.params["studio_project"]?.stringValue ?? (job.kind == "studio_export" ? job.params["project_id"]?.stringValue : nil)
+            Task { await StudioModel.shared.reveal(project: pid, job: job) }
+        case "forensic":
+            selectedTab = "forensic"
+        case "models":
+            selectedTab = "models"
+        default:
+            generateJobID = job.id
+            switch job.kind {
+            case "txt2video", "img2video": focusGenerate("video")
+            case "txt2audio": focusGenerate("audio")
+            case "tts": focusGenerate("speech")
+            case "restore": focusGenerate("restore")
+            default: focusGenerate("image")
+            }
+        }
+    }
+
     struct LoRARow: Identifiable, Equatable {
         let model: LoRAModel
         let installed: Bool
@@ -201,6 +266,7 @@ final class AppState: ObservableObject {
 
     func refresh() async {
         jobs = await JobQueue.shared.list(limit: 200)
+        FlowJobs.shared.update(jobs)
         images = await AssetStore.shared.list(kind: "image", limit: 1000)
         // Bild-Uploads für die Bildauswahl; Video und Ton aus dem Studio getrennt (sie sind keine Ausgangsbilder)
         let allUploads = await AssetStore.shared.list(kind: "upload", limit: 1000)
@@ -230,6 +296,15 @@ final class AppState: ObservableObject {
         let ids = Set(VideoCatalog.installedModels.map(\.id))
         if ids != videoInstalledIDs { videoInstalledIDs = ids }
         activeModelID = Models.active.id
+        // Modelle für „Fehlendes an Ort und Stelle“ nur neu lesen, wenn sich ihr Stand geändert hat
+        let signature = [rows.map { "\($0.id)\($0.installed)\($0.partial)" }.joined(), helperRows.map { "\($0.id)\($0.installed)" }.joined(),
+                         "\(audioOK)\(speechOK)\(ids.sorted())\(encoderOK)", Lang.ui.rawValue, Settings.hfToken == nil ? "-" : "t"]
+            .joined(separator: "|")
+        if signature != flowSignature {
+            flowSignature = signature
+            flowModels = FlowCatalog.all()
+        }
+        updateWelcome()
     }
 
     var serverDescription: String {

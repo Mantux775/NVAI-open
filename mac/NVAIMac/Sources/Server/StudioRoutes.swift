@@ -78,6 +78,13 @@ enum StudioRoutes {
             return .json(try await StudioGenerator.shared.generate(store, id, sceneIDs: ids?.isEmpty == true ? nil : ids).any)
         case ("POST", "cancel"):
             return .json(try await StudioGenerator.shared.cancel(store, id).any)
+        case ("POST", "estimate"):
+            // Geschätzte Rechenzeit je Szene wie unter Windows (seit Mac 1.0), aus derselben Anfrage wie beim Erzeugen;
+            // ohne scene_ids alle Szenen ohne Take
+            let ids = req.json?["scene_ids"]?.arrayValue?.compactMap(\.stringValue)
+            let p = try await StudioGenerator.shared.refresh(store, id)
+            let scenes = await StudioGenerator.estimateScenes(p, ids, store.env)
+            return .json(["scenes": scenes.mapValues(\.json.any)])
         case ("POST", "export"):
             let preset = req.json?["preset"]?.stringValue ?? "youtube-1080p"
             guard StudioRender.preset(preset) != nil else {

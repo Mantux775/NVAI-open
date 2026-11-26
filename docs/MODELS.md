@@ -20,7 +20,7 @@ with the same prompts and seeds: [MODEL_COMPARISON.md](MODEL_COMPARISON.md).
 | Vendor | Alibaba (Qwen) | Black Forest Labs | Krea.ai | OpenMOSS |
 | Steps / CFG | 50 / 4 | 16 / 1 | 8 / 1 | 50 / 3 |
 | Negative prompt | works | no effect | no effect | works |
-| Reference images | — | up to 10 | 1–2 as a style template | — |
+| Reference images | – | up to 10 | 1–2 as a style template | – |
 | Text in the image | letter-perfect | correct in 3 of 3 | letter-perfect | letter-perfect, the cleanest |
 | Time per 1024² image | ~100 s | ~30 s, 13–16 s for a known prompt | ~20 s | ~51 s |
 | License | Apache-2.0 | FLUX Kommunity License: below US$5M revenue, review every image | Krea 2 Community License: below US$1M revenue, review every image | Apache-2.0 |
@@ -277,7 +277,7 @@ made of several clips.
 
 | Way | Parameter | Measured |
 |---|---|---|
-| Text to video | — | 5 s at 1280 × 704 in 93 s; 1920 × 1088 in 251 s |
+| Text to video | – | 5 s at 1280 × 704 in 93 s; 1920 × 1088 in 241 s |
 | Start image | `image_asset_id` | 5 s at 1280 × 704 in 109 s |
 | Start and end image | `end_image_asset_id` | 5 s in 154 s; first and last frame match the two images |
 | Loop | `loop=True` | 4 s in 125 s; only with a still camera, otherwise the last frames fall apart |
@@ -330,7 +330,7 @@ the first frame." held); thin props such as rifles that cross people morph into 
 > outputs there, private use included (section V.4). **Videos and images from it must not be published**, stills and
 > screenshots included; that is why there is no picture here. License request, also as a private person (required
 > company field, e.g. "Private"): <https://platform.minimax.io/h3-license>. The app marks the model and every result in red ("Do not publish") until
-> the box "I have obtained a permission" is ticked under "Models". Anyone who offers third parties a tool for
+> the box "I have obtained permission" is ticked under "Models". Anyone who offers third parties a tool for
 > generating with MiniMax must prevent prohibited content under the license (section V.5); NVAI-open filters nothing.
 
 Three versions, all with picture and stereo sound, 24 fps, 5 to 15 s, up to 768p: **start image** (text and optionally
@@ -445,8 +445,8 @@ Tested and not included: the **LTX-2.5 IC-LoRAs Restore and Ingredients** (neith
 A Wan 2.2 model computes every 15th frame in one step, a small decoder fills in the frames in between; sound and frame
 rate stay. Generated directly at 1080p, LTX-2.5 was still a little finer, and still surfaces twitch slightly every 15
 frames. Input at most 1920 × 1088, per run at most 4K × 121 frames (1080p: 5 s). In the web interface: **Upscale ×2**
-under a video in the History; the result lands next to the original. Needs ComfyUI 0.45 (NVAI-open 0.5.23 brings
-it). The ×2 version comes from LightX2V, whose model page states no license of its own; the RelayVSR project and
+under a video in the History; the result lands next to the original. Needs ComfyUI 0.45 or newer (the setup brings
+v0.46.0). The ×2 version comes from LightX2V, whose model page states no license of its own; the RelayVSR project and
 Comfy-Org's package are Apache-2.0.
 
 ```bash
@@ -621,7 +621,7 @@ Claude Code, use the MCP server ([CLAUDE_CODE.md](CLAUDE_CODE.md)). Over REST:
 | `GET /api/version` | versions, contract (`api`) and supported extensions (`features`) |
 | `GET /api/models?kind=image` | models with `features`, `recommended` and `gpu_note` |
 | `POST /api/generate/image` (`/video`, `/audio`, `/speech`) | create a job; the answer has its `id` |
-| `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
+| `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`, `cancelled`), `progress` 0–1, `stage` |
 | `GET /api/jobs/{id}/assets` | the results with `id`, `filename`, `url`, `meta` (seed, settings, `caption`) |
 | `POST /api/upload` | upload your own image (multipart, field `file`), e.g. as a reference |
 | `GET /files/{filename}` | the file |
@@ -643,7 +643,7 @@ job = call("POST", "/api/generate/image", {
     "prompt": "Studio product photograph of a weathered wooden ammunition crate. ...",
     "width": 1024, "height": 1024, "seed": 42,
 })
-while (j := call("GET", f"/api/jobs/{job['id']}"))["status"] not in ("done", "error"):
+while (j := call("GET", f"/api/jobs/{job['id']}"))["status"] not in ("done", "error", "cancelled"):
     time.sleep(2)
 for asset in call("GET", f"/api/jobs/{job['id']}/assets"):
     print(asset["id"], asset["url"])
@@ -662,12 +662,12 @@ with `scripts\start.ps1 -Lan`) every request needs the `X-NVAI-Token` header. Th
 | `width`, `height` | multiples of 8, native ~1.76 MP | multiples of 16, up to 2048 | size by silhouette |
 | `steps`, `cfg` | 50 / 4 | 16 / 1 | empty = model default |
 | `seed`, `batch_size` | ✓ | ✓ (4 images ~37 s) | one model load for several images |
-| `hires` | ✓ | — | |
+| `hires` | ✓ | – | |
 | `image_asset_id` + `denoise` | refine an image | becomes the first reference | |
 | `mask_asset_id` | fill with a mask | fill through a reference | white = new, black = keep |
 | `outpaint` | via mask, often a hard edge | seamless | `[left, top, right, bottom]` |
-| `reference_asset_ids` | — | up to 10 | |
-| `upsample_prompt` | — | on by default | |
+| `reference_asset_ids` | – | up to 10 | |
+| `upsample_prompt` | – | on by default | |
 
 Size by silhouette: a standing figure 832 × 1216, a vehicle in landscape 1216 × 832, an object or icon 1024 × 1024.
 

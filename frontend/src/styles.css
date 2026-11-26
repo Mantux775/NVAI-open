@@ -20,6 +20,10 @@ body {
   font: 14px/1.5 'Segoe UI', system-ui, sans-serif;
 }
 
+/* Links ohne eigene Klasse (etwa „Download“ unter einem Ergebnis) standen im Blau des Browsers auf dunklem Grund */
+a { color: #9bd34a; }
+a:hover { color: #b6e35f; }
+
 .app { display: flex; flex-direction: column; height: 100vh; }
 
 /* ---------------------------------------------------------- Topbar */
@@ -43,7 +47,8 @@ body {
   opacity: 0.8;
 }
 
-.tabs { display: flex; gap: 4px; }
+/* Umbrechen statt überlaufen: sieben Reiter brauchen rund 780 px (26.11.2026) */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 
 .tab {
   background: none;

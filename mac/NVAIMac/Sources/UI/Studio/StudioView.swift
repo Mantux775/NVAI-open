@@ -19,6 +19,11 @@ struct StudioView: View {
     @State private var confirmCancel = false
     @State private var dragStart: Double?  // Wert eines Teilers zu Beginn des Ziehens
     @State private var dragOther = 0.0     // Breite der anderen Spalte zu Beginn: sie weicht und kommt zurück
+    /// Leiste mit dem nächsten Schritt (seit Mac 1.0, Bildschirm D) offen; Vorgabe offen (Nutzer 26.11.2026: „standard
+    /// ausgeklappt (unterelemente zugeklappt)“), der Knopf dafür steht hinter „Exportieren“
+    @AppStorage("studio.flow.open") private var flowOpen = true
+    /// Die Exportvorlage folgt dem Projektformat, bis man selbst eine wählt (je Projekt)
+    @State private var presetChosenFor: String?
     // Assistent (seit Mac 0.5.6): Frage beim Start und bei neuen Projekten, der Assistent selbst, Hinweise danach
     @State private var showAsk = false
     @State private var showWizard = false
@@ -35,17 +40,35 @@ struct StudioView: View {
                     .onTapGesture { model.notice = nil }
                     .help(t("Klick schließt", "Click to close"))
             }
+            // Konzept „NVAI im Fluss“, Bildschirm D: Stand des Projekts, ein Knopf für den nächsten Schritt, Szenenkarten
+            if let p = model.project, flowOpen {
+                StudioFlowBar(model: model, project: p, preset: exportPreset)
+                Divider()
+            }
             if model.project == nil { start } else { panes }
         }
         .task {
             await model.start()
             if WizardDemo.script != nil {
                 showWizard = true
-            } else if StudioWizardAsk.wanted && !Self.askedThisSession && !WizardDemo.requested {
+            } else if StudioWizardAsk.wanted && !Self.askedThisSession && !WizardDemo.requested && !state.showWelcome {
+                // Beim ersten Start fragt das Willkommen nach der Absicht; dann nicht zweimal fragen
                 Self.askedThisSession = true
                 showAsk = true
             }
+            followFormat()
         }
+        .onChange(of: model.wizardRequest) { _, _ in
+            if showAsk {
+                showAsk = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showWizard = true }
+            } else {
+                showWizard = true
+            }
+        }
+        .onChange(of: model.project?.id) { _, _ in followFormat() }
+        .onChange(of: model.project.map { "\($0.settings.width)x\($0.settings.height)" }) { _, _ in followFormat() }
+        .onChange(of: state.flowModels) { _, _ in model.scheduleEstimates() }
         .sheet(isPresented: $showAsk) {
             StudioWizardAsk { start, never in
                 if never {
@@ -306,13 +329,25 @@ struct StudioView: View {
             Button { model.pxPerSecond = min(400, model.pxPerSecond * 1.25) } label: { Image(systemName: "plus") }
                 .help(t("Vergrößern (+)", "Zoom in (+)"))
             separator
-            Picker("", selection: $exportPreset) {
+            Picker("", selection: Binding(get: { exportPreset }, set: { v in
+                exportPreset = v
+                presetChosenFor = model.project?.id  // eigene Wahl gilt für dieses Projekt
+            })) {
                 ForEach(StudioRender.presets, id: \.id) { pr in Text(Lang.current == .de ? pr.label.de : pr.label.en).tag(pr.id) }
             }
             .labelsHidden().frame(width: compact ? 150 : 190)
+            .help(t("Exportformat; folgt dem Projektformat (Hochformat: Shorts), bis du selbst eins wählst",
+                    "Export format; follows the project format (portrait: Shorts) until you choose one yourself"))
             Button(t("Exportieren", "Export")) { Task { await model.export(exportPreset) } }
                 .buttonStyle(.borderedProminent).tint(.green).fixedSize()
                 .disabled(model.project?.clips.isEmpty ?? true || exporting)
+            // Die ganze Leiste mit dem nächsten Schritt ein- und ausklappen, mit demselben Zeichen wie ihre Kartenreihe
+            // (Nutzer 26.11.2026: „es soll hinter dem export button sein“)
+            Button { flowOpen.toggle() } label: { Text(flowOpen ? "▾" : "▸").font(.body.weight(.semibold)).frame(width: 18) }
+                .buttonStyle(.borderless)
+                .disabled(model.project == nil)
+                .help(flowOpen ? t("Leiste mit dem nächsten Schritt einklappen", "Collapse the bar with the next step")
+                      : t("Leiste mit dem nächsten Schritt zeigen", "Show the bar with the next step"))
             exportStatus
             Spacer(minLength: 8)
             Button { NSApp.keyWindow?.toggleFullScreen(nil) } label: {
@@ -327,6 +362,14 @@ struct StudioView: View {
     }
 
     private var separator: some View { Divider().frame(height: 18).padding(.horizontal, 2) }
+
+    /// Exportvorlage nach dem Projektformat (Nutzertest 26.11.2026: ein Hochkant-Projekt ging sonst als 1920 × 1080
+    /// hinaus), solange für dieses Projekt keine eigene gewählt ist
+    private func followFormat() {
+        guard let p = model.project, presetChosenFor != p.id else { return }
+        let fit = StudioFlow.presetForFormat(p.settings.width, p.settings.height)
+        if exportPreset != fit { exportPreset = fit }
+    }
 
     private var exporting: Bool { ["queued", "running"].contains(model.exportJob?.status ?? "") }
 

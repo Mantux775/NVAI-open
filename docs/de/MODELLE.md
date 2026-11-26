@@ -20,7 +20,7 @@ nebeneinander, mit denselben Prompts und Seeds: [MODEL_COMPARISON.md](../MODEL_C
 | Hersteller | Alibaba (Qwen) | Black Forest Labs | Krea.ai | OpenMOSS |
 | Schritte / CFG | 50 / 4 | 16 / 1 | 8 / 1 | 50 / 3 |
 | Negativprompt | wirkt | wirkungslos | wirkungslos | wirkt |
-| Referenzbilder | — | bis zu 10 | 1–2 als Stilvorlage | — |
+| Referenzbilder | – | bis zu 10 | 1–2 als Stilvorlage | – |
 | Schrift im Bild | buchstabengenau | 3 von 3 fehlerfrei | buchstabengenau | buchstabengenau, am saubersten |
 | Zeit je Bild 1024² | ~100 s | ~30 s, 13–16 s bei bekanntem Prompt | ~20 s | ~51 s |
 | Lizenz | Apache-2.0 | FLUX Kommunity License: unter 5 Mio. US-$ Umsatz, jedes Bild prüfen | Krea 2 Community License: unter 1 Mio. US-$ Umsatz, jedes Bild prüfen | Apache-2.0 |
@@ -283,7 +283,7 @@ machen; längere Szenen entstehen aus mehreren Clips.
 
 | Weg | Parameter | Gemessen |
 |---|---|---|
-| Text zu Video | — | 5 s in 1280 × 704 in 93 s; 1920 × 1088 in 251 s |
+| Text zu Video | – | 5 s in 1280 × 704 in 93 s; 1920 × 1088 in 241 s |
 | Startbild | `image_asset_id` | 5 s in 1280 × 704 in 109 s |
 | Start- und Endbild | `end_image_asset_id` | 5 s in 154 s; erstes und letztes Bild treffen die zwei Bilder |
 | Schleife | `loop=True` | 4 s in 125 s; nur mit ruhiger Kamera, sonst zerfallen die letzten Bilder |
@@ -452,8 +452,8 @@ erkennbar).
 Ein Wan-2.2-Modell rechnet in einem Schritt jedes 15. Bild, ein kleiner Decoder füllt die Bilder dazwischen; Ton und
 Bildrate bleiben. Direkt in 1080p erzeugt war LTX-2.5 noch etwas feiner, und ruhige Flächen zucken leicht alle 15
 Bilder. Eingang höchstens 1920 × 1088, je Durchgang höchstens 4K × 121 Bilder (1080p: 5 s). In der Weboberfläche:
-**Hochskalieren ×2** unter einem Video im Verlauf; das Ergebnis liegt neben dem Original. Braucht ComfyUI 0.45
-(NVAI-open 0.5.23 bringt es mit). Die ×2-Fassung stammt von LightX2V, deren Modellseite selbst keine Lizenz nennt;
+**Hochskalieren ×2** unter einem Video im Verlauf; das Ergebnis liegt neben dem Original. Braucht ComfyUI 0.45 oder
+neuer (das Setup bringt v0.46.0 mit). Die ×2-Fassung stammt von LightX2V, deren Modellseite selbst keine Lizenz nennt;
 das RelayVSR-Projekt und Comfy-Orgs Paket stehen unter Apache-2.0.
 
 ```bash
@@ -631,7 +631,7 @@ Aus Claude Code geht es über den MCP-Server ([CLAUDE_CODE.md](../CLAUDE_CODE.md
 | `GET /api/version` | Versionen, Vertrag (`api`) und unterstützte Erweiterungen (`features`) |
 | `GET /api/models?kind=image` | Modelle mit `features`, `recommended` und `gpu_note` |
 | `POST /api/generate/image` (`/video`, `/audio`, `/speech`) | Auftrag anlegen; die Antwort hat seine `id` |
-| `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`), `progress` 0–1, `stage` |
+| `GET /api/jobs/{id}` | `status` (`queued`, `running`, `done`, `error`, `cancelled`), `progress` 0–1, `stage` |
 | `GET /api/jobs/{id}/assets` | die Ergebnisse mit `id`, `filename`, `url`, `meta` (Seed, Einstellungen, `caption`) |
 | `POST /api/upload` | eigenes Bild hochladen (multipart, Feld `file`), etwa als Referenz |
 | `GET /files/{filename}` | die Datei |
@@ -653,7 +653,7 @@ job = call("POST", "/api/generate/image", {
     "prompt": "Studio product photograph of a weathered wooden ammunition crate. ...",
     "width": 1024, "height": 1024, "seed": 42,
 })
-while (j := call("GET", f"/api/jobs/{job['id']}"))["status"] not in ("done", "error"):
+while (j := call("GET", f"/api/jobs/{job['id']}"))["status"] not in ("done", "error", "cancelled"):
     time.sleep(2)
 for asset in call("GET", f"/api/jobs/{job['id']}/assets"):
     print(asset["id"], asset["url"])
@@ -672,12 +672,12 @@ GPU-Aufträge laufen nacheinander; ein Auftrag in `queued` wartet auf den vor ih
 | `width`, `height` | Vielfache von 8, nativ ~1,76 MP | Vielfache von 16, bis 2048 | Format nach Silhouette |
 | `steps`, `cfg` | 50 / 4 | 16 / 1 | leer = Vorgabe des Modells |
 | `seed`, `batch_size` | ✓ | ✓ (4 Bilder ~37 s) | ein Modell-Laden für mehrere Bilder |
-| `hires` | ✓ | — | |
+| `hires` | ✓ | – | |
 | `image_asset_id` + `denoise` | Bild verfeinern | wird zur ersten Referenz | |
 | `mask_asset_id` | Füllen mit Maske | Füllen über eine Referenz | weiß = neu, schwarz = behalten |
 | `outpaint` | über Maske, oft harte Kante | nahtlos | `[links, oben, rechts, unten]` |
-| `reference_asset_ids` | — | bis zu 10 | |
-| `upsample_prompt` | — | an als Vorgabe | |
+| `reference_asset_ids` | – | bis zu 10 | |
+| `upsample_prompt` | – | an als Vorgabe | |
 
 Format nach Silhouette: stehende Figur 832 × 1216, Fahrzeug im Querformat 1216 × 832, Objekt oder Icon 1024 × 1024.
 

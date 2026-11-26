@@ -6,8 +6,13 @@
 // Zeitleiste, Rechtsklick-Menüs überall (hier gebaut, weil sie Zwischenablage, Erzeugen und Export brauchen),
 // Kopieren/Ausschneiden/Einfügen, Spuren hinzufügen und schalten, Geschwindigkeit mit Rückfrage bei Kollision,
 // „Übernehmen“ mit Rückfrage, Projekte als Paket exportieren und importieren.
+//
+// Konzept „NVAI im Fluss“ (seit 0.5.42): unter der Werkzeugleiste eine Schrittleiste mit einem Knopf für den nächsten
+// Schritt samt Zeit und die Szenen als Karten mit ihrem Zustand (Bildschirm D, flow/studio/FlowBar.tsx); die
+// Eigenschaften einer Szene zeigen oben ihren Zustand mit dem passenden Knopf (Bildschirm E). Die Knöpfe der Leiste
+// bleiben, treten aber hinter den einen Knopf zurück.
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react'
 import {
   api,
   TPS,
@@ -23,6 +28,11 @@ import {
   type StudioScene,
   type StudioTransitionKind,
 } from '../api'
+import type { Downloads } from '../downloads'
+import '../flow/studio.css'
+import { FlowBar } from '../flow/studio/FlowBar'
+import { trackJob } from '../flow/jobs'
+import { presetShort, reorderStarts, sceneOrder, type ExportInfo, type FocusField, type Next, type SceneFlow, type StartRun } from '../flow/studio/logic'
 import { t } from '../i18n'
 import { Bin, mediaKind } from '../studio/Bin'
 import { ConformDialog, type ConformPlan } from '../studio/ConformDialog'
@@ -72,7 +82,20 @@ interface ExportState {
   status: 'running' | 'done' | 'error'
   url?: string
   error?: string
+  /** Stand des Schnitts beim Start: Ändert er sich danach, schlägt die Leiste wieder „Exportieren“ vor */
+  sig?: string
 }
+
+/** Fingerabdruck des Schnitts (Clips, Spuren, Format) für „ist der Export noch aktuell?“ */
+function editSig(p: StudioProject): string {
+  return JSON.stringify([p.clips.map((c) => [c.id, c.track, c.asset_id, c.start, c.in, c.out, c.speed, c.gain_db, c.muted,
+    c.transition?.kind, c.transition?.duration, c.scale, c.anchor, c.scale_keys]), p.tracks, p.settings.width, p.settings.height, p.settings.fps])
+}
+
+// Leiste mit dem nächsten Schritt auf (1) oder zu (0), Vorgabe auf; ihre Kartenreihe der Szenen auf (1) oder zu (0),
+// Vorgabe zu (Nutzer 26.11.2026: „standard ausgeklappt (unterelemente zugeklappt)“)
+const KEY_FLOW = 'nvai-studio-flow'
+const KEY_CARDS = 'nvai-studio-cards'
 
 /** Zwischenablage des Studios: Clips, Szenen oder Marker samt Abstand zum frühesten (anchor). */
 type Clipboard =
@@ -94,12 +117,33 @@ function megabytes(bytes: number): string {
   return bytes >= 1e9 ? `${decimal((bytes / 1e9).toFixed(1))} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`
 }
 
-export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion = 0 }: {
+/** Exportvorlage nach dem Projektformat (Nutzertest 26.11.2026: ein Hochkant-Projekt ging sonst als 1920 × 1080 hinaus):
+ *  hochkant die Shorts-Vorlage, 4K YouTube 4K, 1920 × 1080 YouTube 1080p, andere Größen im Projektformat */
+function presetForFormat(w: number, h: number): string {
+  if (h > w) return 'shorts-1080x1920'
+  if (w >= 3840 && h >= 2160) return 'youtube-2160p'
+  return w === 1920 && h === 1080 ? 'youtube-1080p' : 'project'
+}
+
+/** Schmales Fenster (bis 900 px): ohne Materialspalte (wie styles.css) */
+const NARROW = '(max-width: 900px)'
+
+export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion = 0, visible = true, onShowModels, downloads, focus, wizard = 0 }: {
   event: ServerEvent | null
   studioEvent: StudioChangedEvent | null
   assetsVersion: number
   /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde: Modellliste (Figuren) neu laden */
   modelsVersion?: number
+  /** Das Studio bleibt beim Reiterwechsel bestehen (seit 26.11.2026) und ist dann nur ausgeblendet */
+  visible?: boolean
+  /** Reiter „Modelle“ öffnen (fehlendes Modell einer Szene) */
+  onShowModels?: () => void
+  /** Downloads der App: Ein fehlendes Modell einer Szene lädt an Ort und Stelle (seit 0.5.42, ModelNeed) */
+  downloads?: Downloads
+  /** Projekt öffnen und Szene wählen (Auftragsleiste, „Ins Studio“ im Reiter Generieren); n zählt je Klick hoch */
+  focus?: { projectId: string; sceneId?: string | null; n: number } | null
+  /** zählt hoch, wenn der Willkommen-Bildschirm „Ein Video mit Ton“ startet: Assistenten öffnen */
+  wizard?: number
 }) {
   const [projects, setProjects] = useState<StudioProjectInfo[]>([])
   const [project, setProject] = useState<StudioProject | null>(null)
@@ -135,6 +179,12 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   const [askWizard, setAskWizard] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [coach, setCoach] = useState(false)
+  // Konzept „NVAI im Fluss“ (seit 0.5.42): „Startbild erzeugen“ je Szene, Kartenreihe auf/zu, Feld für den Blick nach
+  // einem Klick auf den großen Knopf
+  const [startRuns, setStartRuns] = useState<Record<string, StartRun>>({})
+  const [flowOpen, setFlowOpen] = useState(() => stored(KEY_FLOW) !== '0')
+  const [cardsOpen, setCardsOpen] = useState(() => stored(KEY_CARDS) === '1')
+  const [focusField, setFocusField] = useState<{ scene: string; field: FocusField; n: number } | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const upper = useRef<HTMLDivElement>(null)
   const importInput = useRef<HTMLInputElement>(null)
@@ -167,9 +217,12 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     }
   }, [])
 
+  // Wunsch von außen (focus): gilt vor dem zuletzt offenen Projekt, auch wenn die Liste erst danach ankommt
+  const focusTaken = useRef(0)
   useEffect(() => {
     api.studioProjects().then((list) => {
       setProjects(list)
+      if (focusTaken.current) return
       const last = stored(KEY_PROJECT)
       const pick = list.find((x) => x.id === last) ?? list[0]
       if (pick) open(pick.id)
@@ -191,13 +244,68 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     setAskWizard(true)
   }, [])
 
+  // Willkommen-Bildschirm „Ein Video mit Ton“ (seit 0.5.42): den Assistenten öffnen; wizard zählt je Start hoch
+  const wizardSeen = useRef(0)
+  useEffect(() => {
+    if (!wizard || wizard === wizardSeen.current) return
+    wizardSeen.current = wizard
+    setAskWizard(false)
+    setWizardOpen(true)
+  }, [wizard])
+
   // Sprachmodelle gehören dazu (Sprecher-Bahn), sonst bot die Auswahl dort nur „aktives Modell“ (bis 0.5.21); LoRAs für
   // die Figuren (seit 0.5.24), neu geladen, wenn eine hinzukommt oder sich ihre Zuordnung ändert
-  useEffect(() => {
+  const loadModels = useCallback(() => {
     Promise.all([api.models('image'), api.models('video'), api.models('audio'), api.models('speech'), api.models('lora')])
       .then((lists) => setModels(lists.flat()))
       .catch(() => {})
-  }, [modelsVersion])
+  }, [])
+  useEffect(() => {
+    loadModels()
+  }, [modelsVersion, loadModels])
+  // Ein Modell, das eine Szene an Ort und Stelle geladen hat (ModelNeed): Liste neu lesen, die Szene ist dann bereit
+  useEffect(() => {
+    if (downloads?.finished) {
+      loadModels()
+      api.health().then((h) => setActive(h.active_models)).catch(() => {})
+    }
+  }, [downloads?.finished, loadModels])
+
+  // Ausgeblendet (anderer Reiter): Wiedergabe und Medien anhalten, Menü zu. Wieder sichtbar: aktive und geladene Modelle
+  // neu lesen, sie können sich unter „Modelle“ geändert haben (vorher kam das Studio jedes Mal frisch)
+  const wasHidden = useRef(false)
+  useEffect(() => {
+    if (!visible) {
+      wasHidden.current = true
+      setPlaying(false)
+      setMenu(null)
+      root.current?.querySelectorAll('video, audio').forEach((el) => (el as HTMLMediaElement).pause())
+    } else if (wasHidden.current) {
+      api.health().then((h) => setActive(h.active_models)).catch(() => {})
+      loadModels()
+    }
+  }, [visible, loadModels])
+
+  // Schmale Fenster: Vorschau und Eigenschaften ohne die Materialspalte. Vorher blendete styles.css sie aus, die fünf
+  // Spalten im style blieben aber, und Vorschau und Eigenschaften rutschten in die 5-px-Spalten der Trennlinien.
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW)
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+
+  // Exportvorlage passend zum Format des Projekts, bis man selbst eine wählt (je Projekt)
+  const presetTouched = useRef(false)
+  const formatW = project?.settings.width
+  const formatH = project?.settings.height
+  useEffect(() => {
+    presetTouched.current = false
+  }, [pid])
+  useEffect(() => {
+    if (formatW && formatH && !presetTouched.current) setPreset(presetForFormat(formatW, formatH))
+  }, [pid, formatW, formatH])
 
   // Eine Antwort nur übernehmen, wenn sie nicht älter ist als der Stand, den die Ansicht schon hat: GET und Befehle laufen
   // im Server nebeneinander, ein spätes GET setzte sonst einen überholten Stand (etwa ein eben Rückgängig-gemachtes)
@@ -230,6 +338,39 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     },
     [pid],
   )
+
+  // Von außen (seit 0.5.42): Projekt öffnen und Szene wählen, aus der Auftragsleiste („Zeigen“) oder nach „Ins Studio“
+  // im Reiter Generieren. n zählt je Klick hoch, derselbe Wunsch kommt also nur einmal an.
+  const focusScene = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focus || !focus.n || focus.n === focusTaken.current) return
+    focusTaken.current = focus.n
+    setAskWizard(false)
+    const go = async () => {
+      if (focus.projectId !== pid) {
+        // ein eben angelegtes Projekt kennt die Liste vielleicht noch nicht
+        await api.studioProjects().then(setProjects).catch(() => {})
+        await open(focus.projectId)
+      } else {
+        await reload()
+      }
+      if (focus.sceneId) {
+        focusScene.current = focus.sceneId
+        setSelection({ type: 'scene', id: focus.sceneId })
+      }
+    }
+    void go()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.n])
+  // Die gewählte Szene in der Kartenreihe zeigen (nur nach einem Wunsch von außen, sonst springt nichts)
+  useEffect(() => {
+    if (!focusScene.current || selection?.type !== 'scene' || selection.id !== focusScene.current) return
+    const id = focusScene.current
+    focusScene.current = null
+    window.requestAnimationFrame(() => {
+      root.current?.querySelector(`[data-scene-card="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+  }, [selection, project])
 
   // Projekt anderswo geändert (Claude per MCP, ein fertiger Auftrag, ein Anschluss, der jetzt startet)
   useEffect(() => {
@@ -286,7 +427,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     if (event.type === 'job.started' && pid && exporting?.status !== 'running') {
       api.job(event.job_id).then((j) => {
         if (j.kind === 'studio_export' && j.params?.project_id === pid) {
-          setExporting({ id: j.id, progress: j.progress ?? 0, stage: j.stage || t('läuft', 'running'), status: 'running' })
+          setExporting({ id: j.id, progress: j.progress ?? 0, stage: j.stage || t('läuft', 'running'), status: 'running', sig: project ? editSig(project) : undefined })
         }
       }).catch(() => {})
     }
@@ -385,16 +526,162 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         `Conformed: ${r.created} new, ${r.updated} replaced, ${r.transitions} transition(s).`) + skipped)
     }
   }
-  const conform = async () => {
+  /** Mit `sceneIds` nur diese Szenen („In den Schnitt“ einer Szene, seit 0.5.42); der Plan zeigt dann nur sie */
+  const conform = async (sceneIds?: string[]) => {
     if (!pid) return
     try {
-      const plan = await api.studioConformPlan(pid)
+      const full = await api.studioConformPlan(pid)
+      const plan = sceneIds ? { ...full, items: full.items.filter((i) => sceneIds.includes(i.scene_id)) } : full
       const attention = plan.items.some((i) =>
         i.action === 'replace' || i.action === 'error' || (i.action === 'create' && (i.overlaps?.length || i.in_edit)))
       if (attention) setConformPlan(plan)
-      else await runConform({})
+      else await runConform(sceneIds ? { scenes: sceneIds } : {})
     } catch (e: any) {
       setNotice(String(e.message ?? e))
+    }
+  }
+
+  // „Startbild erzeugen“ (seit 0.5.42 hier statt in den Eigenschaften): zwei Varianten je Szene; die erste wird das
+  // Startbild, wenn inzwischen kein anderes gewählt wurde. Der Auftrag gehört dem Studio, er läuft weiter, wenn man eine
+  // andere Szene oder ein anderes Projekt wählt.
+  const projectRef = useRef(project)
+  projectRef.current = project
+  const startRunsRef = useRef(startRuns)
+  startRunsRef.current = startRuns
+  const settling = useRef(new Set<string>())
+  const startImages = async (ids: string[]) => {
+    if (!pid || !project) return
+    for (const id of ids) {
+      const s = project.scenes.find((x) => x.id === id)
+      if (!s || startRunsRef.current[id]?.status === 'running') continue
+      try {
+        const job = await api.studioStartImage(pid, id)
+        trackJob(job)
+        setStartRuns((m) => ({ ...m, [id]: { pid, job: job.id, before: s.params?.image_asset_id ?? null, status: 'running', variants: [] } }))
+      } catch (e: any) {
+        setNotice(String(e.message ?? e))
+      }
+    }
+  }
+  const settleStart = useCallback(async (sceneId: string) => {
+    const r = startRunsRef.current[sceneId]
+    if (!r || r.status !== 'running' || settling.current.has(r.job)) return
+    settling.current.add(r.job)
+    try {
+      const j = await api.job(r.job)
+      if (j.status === 'queued' || j.status === 'running') return
+      if (j.status === 'done') {
+        const variants = await api.jobAssets(r.job)
+        const cur = projectRef.current
+        const now = cur?.id === r.pid ? cur.scenes.find((x) => x.id === sceneId) : undefined
+        if (variants[0] && (!now || (now.params?.image_asset_id ?? null) === r.before)) {
+          const res = await api.studioCommand(r.pid, 'scene.update', { id: sceneId, params: { image_asset_id: variants[0].id } })
+          accept(res.project)
+        }
+        setStartRuns((m) => (m[sceneId]?.job === r.job ? { ...m, [sceneId]: { ...r, status: 'done', variants } } : m))
+      } else {
+        setStartRuns((m) => (m[sceneId]?.job === r.job
+          ? { ...m, [sceneId]: { ...r, status: 'error', error: j.error || t('Abgebrochen.', 'Cancelled.') } } : m))
+      }
+    } catch {
+      /* Server kurz weg: beim nächsten Takt */
+    } finally {
+      settling.current.delete(r.job)
+    }
+  }, [accept])
+  // Fertig melden die Ereignisse; dazu alle 3 s nachfragen, falls eins verloren ging (zwei in einem Takt)
+  const startBusy = Object.values(startRuns).some((r) => r.status === 'running')
+  useEffect(() => {
+    if (!startBusy) return
+    const timer = window.setInterval(() => {
+      for (const [id, r] of Object.entries(startRunsRef.current)) if (r.status === 'running') void settleStart(id)
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [startBusy, settleStart])
+  useEffect(() => {
+    if (!event || !('job_id' in event) || !['job.done', 'job.error', 'job.cancelled'].includes(event.type)) return
+    const hit = Object.entries(startRunsRef.current).find(([, r]) => r.job === event.job_id)
+    if (hit) void settleStart(hit[0])
+  }, [event, settleStart])
+
+  // Neue Videoszene hinten an der Bildbahn (Karte „+ Szene“; ohne Länge nähme der Server 5 s)
+  const addScene = async () => {
+    const r = await run('scene.add', { lane: 'video', kind: 'video', duration_s: 5 })
+    if (r?.id) {
+      setSelection({ type: 'scene', id: r.id })
+      setFocusField((f) => ({ scene: r.id, field: 'prompt', n: (f?.n ?? 0) + 1 }))
+    }
+  }
+
+  // Kartenreihe (Nutzer 26.11.2026: „mit rechtsklick entfernen oder mit x icon rechts oben (bei mouse over) löschen …
+  // dann via drag and drop schieben“). Löschen wie in der Zeitleiste ohne Rückfrage, Strg+Z holt die Szene zurück; eine
+  // laufende Szene rechnet dann weiter, und mit Strg+Z kommt ihr Ergebnis wieder an die Szene.
+  const deleteScene = async (id: string) => {
+    await run('scene.delete', { id })
+    setSelection((sel) => (selIds(sel, 'scene').includes(id) ? null : sel))
+  }
+  /** Szenen einer Bahn in neuer Reihenfolge: lückenlos ab dem Start der bisher ersten, Längen bleiben, andere Bahnen
+   *  und Marker bleiben stehen; ein Schritt zum Rückgängigmachen. Ein Anschluss bleibt bestehen, grenzt er nicht mehr
+   *  an seine Vorlage, zeigt die Karte „Anschluss getrennt“. */
+  const reorder = async (lane: string, ids: string[]) => {
+    if (!project) return
+    const moves = reorderStarts(project, lane, ids)
+    if (!moves.length) return
+    await run('batch', { commands: moves.map((m) => ({ command: 'scene.update', params: { id: m.id, start: m.start } })) })
+  }
+  /** Rechtsklick auf eine Karte: dasselbe Menü wie auf der Szene in der Zeitleiste, davor Schieben innerhalb der Bahn */
+  const cardMenu = (e: { clientX: number; clientY: number }, id: string) => {
+    if (!project) return
+    const s = project.scenes.find((x) => x.id === id)
+    if (!s) return
+    if (!selIds(selection, 'scene').includes(id)) setSelection({ type: 'scene', id })
+    const lane = sceneOrder(project).filter((x) => x.lane === s.lane).map((x) => x.id)
+    const i = lane.indexOf(id)
+    const move = (to: number) => {
+      const ids = lane.filter((x) => x !== id)
+      ids.splice(to, 0, id)
+      void reorder(s.lane, ids)
+    }
+    const items: MenuItem[] = [
+      { label: t('Nach vorn schieben', 'Move earlier'), disabled: i <= 0, onClick: () => move(i - 1) },
+      { label: t('Nach hinten schieben', 'Move later'), disabled: i < 0 || i >= lane.length - 1, onClick: () => move(i + 1) },
+      ...menuFor({ kind: 'scene', id, at: s.start }).map((it, k) => (k === 0 ? { ...it, separator: true } : it)),
+    ]
+    setMenu({ x: e.clientX, y: e.clientY, items })
+  }
+
+  /** Der große Knopf (Bildschirm D): tut den nächsten Schritt oder holt die Szene, um die es geht, in die Eigenschaften.
+   *  Nichts landet ohne Klick im Schnitt oder im Export. */
+  const doNext = (next: Next) => {
+    const scene = next.scenes[0]
+    const show = (field?: FocusField) => {
+      if (!scene) return
+      setPlaying(false)
+      setSelection({ type: 'scene', id: scene.id })
+      if (field) setFocusField((f) => ({ scene: scene.id, field, n: (f?.n ?? 0) + 1 }))
+    }
+    switch (next.kind) {
+      case 'wizard': setWizardOpen(true); return
+      case 'start': void startImages(next.scenes.map((s) => s.id)); return
+      case 'generate': void generate(next.scenes.map((s) => s.id)); return
+      case 'conform': void conform(); return
+      case 'export': void startExport(); return
+      case 'done': {
+        // wie „Fertig – ansehen“: MKV und MOV spielt kein Browser, die werden heruntergeladen
+        const url = exporting?.url
+        if (!url) return
+        if (/\.(mkv|mov)$/i.test(url)) {
+          const a = document.createElement('a')
+          a.href = url
+          a.download = ''
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+        } else window.open(url, '_blank', 'noopener')
+        return
+      }
+      case 'exporting': case 'idle': return
+      default: show(next.field)
     }
   }
 
@@ -425,7 +712,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     if (!pid) return
     try {
       const job = await api.studioExport(pid, preset)
-      setExporting({ id: job.id, progress: 0, stage: t('wartet', 'waiting'), status: 'running' })
+      setExporting({ id: job.id, progress: 0, stage: t('wartet', 'waiting'), status: 'running', sig: project ? editSig(project) : undefined })
     } catch (e: any) {
       setNotice(String(e.message ?? e))
     }
@@ -887,8 +1174,9 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !project || menu || conformPlan || speedAsk
-        || wizardOpen || askWizard) return
+      // !visible: Das Studio bleibt auf anderen Reitern bestehen; Entf, Leertaste und Strg+Z gehören dann nicht ihm
+      if (!visible || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !project || menu || conformPlan
+        || speedAsk || wizardOpen || askWizard) return
       const ctrl = e.ctrlKey || e.metaKey
       const key = e.key.toLowerCase()
       if (e.key === 'Escape') {
@@ -1040,8 +1328,39 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
   const runDone = Math.max(0, runTotal - running)
   const askNames = speedAsk ? speedAsk.hits.map((c) => project?.scenes.find((s) => s.id === c.scene_id)?.title || project?.assets[c.asset_id]?.prompt?.slice(0, 30) || c.asset_id) : []
 
+  // Konzept „NVAI im Fluss“ (seit 0.5.42): Stand des Exports für Leiste und Knopf, gemeinsamer Stand für die Eigenschaften
+  const sigNow = useMemo(() => (project ? editSig(project) : ''), [project])
+  const exportInfo: ExportInfo | null = project ? {
+    status: exporting ? exporting.status : 'none',
+    progress: exporting?.progress ?? 0,
+    file: exporting?.url ? decodeURIComponent(exporting.url.split('/').pop() ?? '') : undefined,
+    fresh: !!exporting && exporting.sig === sigNow,
+    preset: presetShort(preset, presets.find((x) => x.id === preset)?.label ?? preset, project),
+  } : null
+  const sceneFlow: SceneFlow = {
+    startRuns,
+    onStartImages: (ids) => void startImages(ids),
+    onConform: (ids) => void conform(ids),
+    progressOf: (s) => {
+      for (const j of s.jobs) if (jobProgress[j]) return jobProgress[j].progress
+      return null
+    },
+    downloads,
+    focus: focusField,
+  }
+  const toggleCards = () => {
+    store(KEY_CARDS, cardsOpen ? '0' : '1')
+    setCardsOpen(!cardsOpen)
+  }
+  const toggleFlow = () => {
+    store(KEY_FLOW, flowOpen ? '0' : '1')
+    setFlowOpen(!flowOpen)
+  }
+  const showFlow = !!project && !!exportInfo && flowOpen
+
   return (
-    <div className="studio" ref={root} style={{ gridTemplateRows: `auto 1fr 6px ${split}%` }}>
+    <div className="studio" ref={root}
+      style={{ gridTemplateRows: showFlow ? `auto auto 1fr 6px ${split}%` : `auto 1fr 6px ${split}%`, ...(visible ? {} : { display: 'none' }) }}>
       <div className="st-toolbar">
         <select
           value={pid ?? ''}
@@ -1070,7 +1389,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         {/* Mit gewählten Szenen erzeugt der Knopf genau diese neu, sonst alle ohne Take (Nutzer 18.11. am Mac: „ich kann
             keine neue szene erzeugen, es sagt mir alle szenen haben schon einen Take“; eine kopierte Szene bringt den Take
             ihrer Vorlage mit). Eine leere Liste hieße beim Server „alle ohne Take“: beschäftigte Szenen gar nicht senden. */}
-        <button className="btn small primary" disabled={!project}
+        <button className="btn small" disabled={!project}
           onClick={() => {
             const picked = selIds(selection, 'scene')
             if (!picked.length) { void generate(); return }
@@ -1086,7 +1405,7 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
             : t('Alle Szenen ohne Take erzeugen; mit gewählten Szenen genau diese', 'Generate every scene without a take; with selected scenes exactly those')}>
           {selIds(selection, 'scene').length ? t('Gewählte erzeugen', 'Generate selected') : t('Szenen erzeugen', 'Generate scenes')}{running ? ` (${running})` : ''}
         </button>
-        <button className="btn small" disabled={!project} onClick={conform} title={t('Gewählte Takes in den Schnitt legen, Marker auswerten; fragt nach, bevor Vorhandenes überschrieben wird', 'Put the chosen takes into the edit, apply the markers; asks before anything in the edit is overwritten')}>
+        <button className="btn small" disabled={!project} onClick={() => void conform()} title={t('Gewählte Takes in den Schnitt legen, Marker auswerten; fragt nach, bevor Vorhandenes überschrieben wird', 'Put the chosen takes into the edit, apply the markers; asks before anything in the edit is overwritten')}>
           {t('Übernehmen', 'Conform')} ↓
         </button>
         <button className="btn small wz-open" onClick={() => setWizardOpen(true)} title={t('Der Assistent führt Schritt für Schritt durch ein ganzes Video', 'The assistant guides you step by step through a whole video')}>
@@ -1125,13 +1444,21 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         <button className="btn small ghost" onClick={() => setZoom(Math.max(4, zoom * 0.8))} title={t('Verkleinern (-)', 'Zoom out (-)')}>−</button>
         <button className="btn small ghost" onClick={() => setZoom(Math.min(400, zoom * 1.25))} title={t('Vergrößern (+)', 'Zoom in (+)')}>+</button>
         <span className="st-sep" />
-        <select value={preset} onChange={(e) => setPreset(e.target.value)} title={t('Exportformat', 'Export format')}>
+        <select value={preset} onChange={(e) => { presetTouched.current = true; setPreset(e.target.value) }}
+          title={t('Exportformat', 'Export format')}>
           {presets.map((x) => (
             <option key={x.id} value={x.id}>{x.label}</option>
           ))}
         </select>
-        <button className="btn small primary" disabled={!project?.clips.length || exporting?.status === 'running'} onClick={startExport}>
+        <button className="btn small" disabled={!project?.clips.length || exporting?.status === 'running'} onClick={startExport}>
           {t('Exportieren', 'Export')}
+        </button>
+        {/* Die ganze Leiste mit dem nächsten Schritt ein- und ausklappen, mit demselben Zeichen wie ihre Kartenreihe;
+            eingeklappt nimmt sie keinen Platz (Nutzer 26.11.2026: „es soll hinter dem export button sein“) */}
+        <button type="button" className="sf-fold st-flow-fold" onClick={toggleFlow} aria-expanded={flowOpen}
+          title={flowOpen ? t('Leiste mit dem nächsten Schritt einklappen', 'Collapse the bar with the next step')
+            : t('Leiste mit dem nächsten Schritt zeigen', 'Show the bar with the next step')}>
+          {flowOpen ? '▾' : '▸'}
         </button>
         {exporting && (
           <span className={`st-export ${exporting.status}`}>
@@ -1182,6 +1509,28 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         </div>
       )}
 
+      {showFlow && project && exportInfo && (
+        <FlowBar
+          p={project}
+          models={models}
+          active={active}
+          selectedId={selection?.type === 'scene' ? selection.id : null}
+          startRuns={startRuns}
+          jobProgress={jobProgress}
+          exportInfo={exportInfo}
+          open={cardsOpen}
+          onToggle={toggleCards}
+          onSelect={(id) => {
+            setPlaying(false)
+            setSelection({ type: 'scene', id })
+          }}
+          onNext={doNext}
+          onAddScene={() => void addScene()}
+          onMenu={cardMenu}
+          onDelete={(id) => void deleteScene(id)}
+          onReorder={(lane, ids) => void reorder(lane, ids)}
+        />
+      )}
       {!project ? (
         <div className="st-start">
           <div className="panel">
@@ -1198,20 +1547,26 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         </div>
       ) : (
         <>
-          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: `minmax(${BIN_MIN}px, ${binWidth}px) 5px minmax(${MONITOR_MIN}px, 1fr) 5px minmax(${SIDE_MIN}px, ${sideWidth}px)` }}>
-            <Bin
-              refreshKey={binKey + assetsVersion}
-              selectedId={selection?.type === 'asset' ? selection.id : null}
-              usedIds={new Set(project.clips.map((c) => c.asset_id))}
-              projectId={project.id}
-              home={project.folder}
-              onOpen={openSource}
-              onDeleted={assetGone}
-              menuItems={binMenu}
-              onMenu={(e, items) => setMenu({ x: e.clientX, y: e.clientY, items })}
-            />
-            <div className="st-vsplit" onPointerDown={dragBin} onDoubleClick={resetBin}
-              title={t('Ziehen: Breite der Materialspalte; Doppelklick: zurücksetzen', 'Drag: width of the media column; double-click: reset')} />
+          <div className="st-upper" ref={upper} style={{ gridTemplateColumns: narrow
+            ? `minmax(${MONITOR_MIN}px, 1fr) 5px minmax(${SIDE_MIN}px, ${sideWidth}px)`
+            : `minmax(${BIN_MIN}px, ${binWidth}px) 5px minmax(${MONITOR_MIN}px, 1fr) 5px minmax(${SIDE_MIN}px, ${sideWidth}px)` }}>
+            {!narrow && (
+              <Bin
+                refreshKey={binKey + assetsVersion}
+                selectedId={selection?.type === 'asset' ? selection.id : null}
+                usedIds={new Set(project.clips.map((c) => c.asset_id))}
+                projectId={project.id}
+                home={project.folder}
+                onOpen={openSource}
+                onDeleted={assetGone}
+                menuItems={binMenu}
+                onMenu={(e, items) => setMenu({ x: e.clientX, y: e.clientY, items })}
+              />
+            )}
+            {!narrow && (
+              <div className="st-vsplit" onPointerDown={dragBin} onDoubleClick={resetBin}
+                title={t('Ziehen: Breite der Materialspalte; Doppelklick: zurücksetzen', 'Drag: width of the media column; double-click: reset')} />
+            )}
             <Monitor
               project={project}
               playhead={playhead}
@@ -1243,6 +1598,8 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
                   setPlaying(false)
                   setPlayhead(x)
                 }}
+                onShowModels={onShowModels}
+                flow={sceneFlow}
               />
             </div>
           </div>

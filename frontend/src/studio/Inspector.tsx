@@ -24,6 +24,14 @@ import {
 } from '../api'
 import { ModelTip, type RecommendationMode } from '../components/Recommendations'
 import { OutputBadge, licenseBlocked } from '../components/LicenseBadge'
+import { totalSeconds } from '../flow/estimate'
+import { useSceneEstimate, useStartImageEstimate } from '../flow/studio/estimates'
+import {
+  missingModel, modelKindOf, sceneModel, sceneNum, sceneRef, sceneState, spokenInVideo, wayChange, wayOf, withSources,
+  type FlowCtx, type SceneFlow, type Way,
+} from '../flow/studio/logic'
+import { ModelLine, SceneFoot, SceneHead, SceneTakes, SceneToggles, StateNote, WaySeg } from '../flow/studio/SceneFocus'
+import { fmtEta } from '../flow/time'
 import { t } from '../i18n'
 import { assetFacts, assetLabel, mediaKind } from './Bin'
 import { SCALE_MAX, SCALE_MIN, clipEnd, clipLength, clipScaleAt, clipSpeed, decimal, frameTicks, keyTime, mediaAt, sec, snapFrame, tracksOf, trackOrHighest } from './time'
@@ -47,6 +55,11 @@ interface Props {
   onSpeed: (c: StudioClip, speed: number) => void
   /** Abspielkopf setzen (Springen zwischen Keyframes) */
   onPlayhead: (t: number) => void
+  /** Reiter „Modelle“ öffnen, wenn ein Modell fehlt */
+  onShowModels?: () => void
+  /** Konzept „NVAI im Fluss“, Bildschirm E (seit 0.5.42): Startbild-Aufträge, Fortschritt, Downloads und „In den Schnitt“
+   *  vom Studio, damit der Zustand oben in der Szene stimmt */
+  flow?: SceneFlow
 }
 
 /** Formate für bestehende Projekte (neue beginnen mit 1920 × 1080) */
@@ -109,8 +122,14 @@ function Field({ label, value, onCommit, area = false, rows = 4, placeholder, pr
   prompt?: boolean
 }) {
   const [v, setV] = useState(value)
-  useEffect(() => setV(value), [value])
+  // Zuletzt abgeschickter Text: verhindert, dass Verlassen und Verschwinden ihn doppelt schicken, solange die Antwort
+  // aussteht. Kommt ein neuer Stand (Antwort, Rückgängig, Änderung per MCP), gilt er nicht mehr: Vorher ließ sich nach
+  // Strg+Z derselbe Text nicht noch einmal speichern
   const committed = useRef<string | null>(null)
+  useEffect(() => {
+    setV(value)
+    committed.current = null
+  }, [value])
   const commit = () => {
     if (v !== value && v !== committed.current) {
       committed.current = v
@@ -165,16 +184,16 @@ function Seconds({ label, value, onCommit, min = 0, p }: {
   )
 }
 
-export function Inspector({ project, selection, models, active, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead }: Props) {
+export function Inspector({ project, selection, models, active, onCommand, onGenerate, onSelect, asset, playhead, onDeleteAsset, onSpeed, onPlayhead, onShowModels, flow }: Props) {
   const p = project
-  if (!selection) return <ProjectProps p={p} models={models} onCommand={onCommand} />
+  if (!selection) return <ProjectProps p={p} models={models} onCommand={onCommand} onShowModels={onShowModels} />
   if (selection.type === 'asset') {
     return asset ? <AssetProps key={asset.id} p={p} a={asset} model={models.find((m) => m.id === asset.model_id)} playhead={playhead} onCommand={onCommand} onDelete={onDeleteAsset} /> : null
   }
   if ((selection.ids?.length ?? 1) > 1) return <ManyProps p={p} selection={selection} onCommand={onCommand} onGenerate={onGenerate} onSelect={onSelect} />
   if (selection.type === 'scene') {
     const s = p.scenes.find((x) => x.id === selection.id)
-    return s ? <SceneProps key={s.id} p={p} s={s} models={models} active={active} onCommand={onCommand} onGenerate={onGenerate} /> : null
+    return s ? <SceneProps key={s.id} p={p} s={s} models={models} active={active} onCommand={onCommand} onGenerate={onGenerate} onShowModels={onShowModels} flow={flow} /> : null
   }
   if (selection.type === 'clip') {
     const c = p.clips.find((x) => x.id === selection.id)
@@ -259,135 +278,333 @@ function ManyProps({ p, selection, onCommand, onGenerate, onSelect }: {
   )
 }
 
-function SceneProps({ p, s, models, active, onCommand, onGenerate }: {
+/** Zuletzt in den Blick geholter Wunsch des großen Knopfs (SceneFlow.focus.n zählt nur hoch) */
+const focusUsed = { n: 0 }
+
+/** Eigenschaften einer Szene. Konzept „NVAI im Fluss“, Bildschirm E (seit 0.5.42): oben Zustand und passender Knopf,
+ * Modell, Weg (Videoszenen), Prompt, was das Modell dazu kann, Takes; Seltenes unter „Feineinstellung“; „Neu erzeugen“
+ * und „In den Schnitt“ stehen fest unten. Vorher wanderten die Knöpfe mit langen Eigenschaften nach unten. */
+function SceneProps({ p, s, models, active, onCommand, onGenerate, onShowModels, flow }: {
   p: StudioProject
   s: StudioScene
   models: ModelInfo[]
   active: Props['active']
   onCommand: Props['onCommand']
   onGenerate: Props['onGenerate']
+  onShowModels?: () => void
+  flow?: SceneFlow
 }) {
   const update = (fields: Record<string, unknown>) => onCommand('scene.update', { id: s.id, ...fields })
-  const modelKind = s.lane === 'video' ? (s.kind === 'image' ? 'image' : 'video') : s.lane === 'voice' ? 'speech' : 'audio'
+  const modelKind = modelKindOf(s)
   const usable = models.filter((m) => m.kind === modelKind && m.installed)
+  // Das Modell der Szene ist nicht installiert (gelöscht, vom Assistenten gewählt, aber nie geladen): ehrlich anzeigen.
+  // Die Auswahl zeigte sonst „aktives Modell“, der Server rechnete aber mit diesem und scheiterte.
+  const sceneModelInfo = s.model_id ? models.find((m) => m.id === s.model_id) : undefined
+  const missingSelected = sceneModelInfo && sceneModelInfo.kind === modelKind && !sceneModelInfo.installed ? sceneModelInfo : undefined
   // Welches Modell „aktiv“ ist, steht dabei (Nutzer 3.11.2026: in der Sprecher-Bahn stand nur „aktives Modell“)
   const activeName = usable.find((m) => m.id === active?.[modelKind])?.name
   const earlier = p.scenes.filter((x) => x.lane === 'video' && x.id !== s.id && x.start < s.start)
+  const model = sceneModel(s, models, active)
+  const c: FlowCtx = { p, models, active, startRuns: flow?.startRuns ?? {}, progress: flow?.progressOf ?? (() => null) }
+  const state = sceneState(c, s)
+  const video = s.lane === 'video' && s.kind === 'video'
+  const way: Way | null = video ? wayOf(s, model) : null
+  const est = useSceneEstimate(c, s)
+  const eta = fmtEta(totalSeconds(est))
+  // Zeit für „Startbild erzeugen“ nur, wenn der Weg ein Startbild nimmt
+  const startEta = fmtEta(useStartImageEstimate(p, models, video && way !== 'text' && way !== 'chain' ? [s] : []))
+  const missing = !!missingModel(s, models, active)
+  const q = s.params ?? {}
+  // Ohne das nötige Bild scheiterte der Auftrag beim Server (Schleife ohne Startbild) oder täte nicht, was gewählt ist
+  const lacks = way === 'loop' && !q.image_asset_id ? t('Erst ein Startbild wählen', 'Choose a start image first')
+    : way === 'ends' && !q.end_image_asset_id ? t('Erst ein Endbild wählen', 'Choose an end image first')
+      : way === 'layout' && !q.guide_asset_id ? t('Erst ein Layout-Video wählen', 'Choose a layout video first') : undefined
+  const fine = useRef<HTMLDetailsElement>(null)
+  const modelSelect = useRef<HTMLSelectElement>(null)
+  const topBox = useRef<HTMLDivElement>(null)
+  const wayBox = useRef<HTMLDivElement>(null)
+  const promptBox = useRef<HTMLDivElement>(null)
+  const takesBox = useRef<HTMLDivElement>(null)
+  // Nach einem Klick auf den großen Knopf (Studio-Leiste) das passende Feld in den Blick holen; jeder Klick nur einmal,
+  // sonst sprang es beim nächsten Wählen derselben Szene wieder dorthin
+  const focusN = flow?.focus?.scene === s.id ? flow.focus.n : 0
+  useEffect(() => {
+    const field = flow?.focus?.field
+    if (!focusN || !field || focusN <= focusUsed.n) return
+    focusUsed.n = focusN
+    const el = field === 'prompt' ? promptBox.current : field === 'takes' ? takesBox.current
+      : field === 'way' ? wayBox.current ?? topBox.current : topBox.current
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (field === 'prompt') el?.querySelector('textarea')?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusN])
+  const openModel = () => {
+    if (fine.current) fine.current.open = true
+    window.requestAnimationFrame(() => {
+      modelSelect.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      modelSelect.current?.focus()
+    })
+  }
+  // Vorlagen ohne Take (Anschluss, Satz für die Lippen, gleiche Stimme) gehen mit, der Server wartet dann auf sie;
+  // allein scheiterte die Szene an „braucht die vorherige Szene erst ein Video“
+  const batch = withSources(p, [s.id])
+  const generate = () => onGenerate(batch)
+  const alsoNames = batch.filter((id) => id !== s.id).map((id) => sceneRef(p, id)).join(', ')
+  // Klick auf einen Take wählt ihn und bestätigt die Wahl (params.take_ok): „Take wählen“ ist damit erledigt
+  const pickTake = (id: string) => onCommand('batch', { commands: [
+    { command: 'scene.take', params: { id: s.id, asset_id: id } },
+    { command: 'scene.update', params: { id: s.id, params: { take_ok: id } } },
+  ] })
+  const setWay = (w: Way, chainTo: string | null) => update(wayChange(s, w, chainTo))
+  // Harte Lizenzgrenze des gewählten Modells: Warnung sichtbar, bis eine Genehmigung bestätigt ist
+  const blocked = licenseBlocked(model) && model?.warning ? model.warning : null
   return (
-    <div className="st-inspector">
-      <h3>
-        {t('Szene', 'Scene')} · {LANE_LABEL[s.lane]}
-        <span className={`badge ${s.status === 'done' ? 'done' : s.status === 'error' ? 'error' : ''}`}>
-          {s.status === 'running' ? t('wird erzeugt', 'generating') : s.status === 'waiting' ? t('wartet', 'waiting') : s.status === 'done' ? t('fertig', 'done') : s.status === 'error' ? t('Fehler', 'error') : t('leer', 'empty')}
-        </span>
-      </h3>
-      {s.error && <p className="warn-text small">{s.error}</p>}
-      {(s.hints ?? []).map((h) => <p key={h} className="st-hint small">{h}</p>)}
-      {s.status === 'waiting' && (
-        <p className="muted small">
-          {s.lane === 'voice'
-            ? t(`Wartet auf „${sceneName(p, s.waiting_for)}“: Deren Take gibt die Stimme vor.`, `Waiting for "${sceneName(p, s.waiting_for)}": its take sets the voice.`)
-            : t(`Wartet auf „${sceneName(p, s.waiting_for)}“: Deren letztes Bild wird das Startbild.`, `Waiting for "${sceneName(p, s.waiting_for)}": its last frame becomes the start image.`)}
-        </p>
+    <div className="st-inspector sf-scene">
+      <div ref={topBox} className="sf-stack">
+        <SceneHead p={p} s={s} state={state} onTitle={(v) => update({ title: v })} />
+        <StateNote p={p} s={s} state={state} model={model} models={models} eta={eta} startEta={startEta} expected={est?.seconds ?? null}
+          flow={flow} onGenerate={generate} onWay={(w, to) => setWay(w, to ?? null)} update={update} />
+        {s.error && state.key !== 'error' && <p className="warn-text small">{s.error}</p>}
+        {(s.hints ?? []).map((h) => <p key={h} className="st-hint small">{h}</p>)}
+        <ModelLine p={p} s={s} models={models} active={active} flow={flow} onPick={(id) => update({ model_id: id })}
+          onModelClick={openModel} onShowModels={onShowModels} />
+        {blocked && <p className="warn-banner small">{blocked}</p>}
+      </div>
+      {video && (
+        <div ref={wayBox} className="sf-stack">
+          <WaySeg p={p} s={s} model={model} onWay={setWay} />
+          <WaySlots p={p} s={s} way={way!} model={model} models={models} active={active} update={update} flow={flow}
+            startEta={startEta} earlier={earlier} />
+        </div>
       )}
-      <Field label={t('Titel', 'Title')} value={s.title} onCommit={(v) => update({ title: v })} />
-      <Field
-        label={s.lane === 'video' ? t('Prompt (was zu sehen ist und wie es sich bewegt)', 'Prompt (what is seen and how it moves)') : s.lane === 'voice' ? t('Text (was gesprochen wird)', 'Text (what is said)') : t('Prompt (Klang, Stil, Tempo)', 'Prompt (sound, style, tempo)')}
-        value={s.prompt}
-        area
-        prompt
-        rows={8}
-        placeholder={s.lane === 'video' ? t(
-          'Ein Absatz: Einstellung, Handlung, Kamera, Ton. Personen: Gesicht im Bild lassen, sonst erfindet LTX ein neues; sprechen nur mit Gesicht im Bild, die Stimme immer gleich beschreiben („in a warm, cheerful, clear female voice“).',
-          'One paragraph: shot, action, camera, sound. People: keep the face in the picture, or LTX invents a new one; let them speak only with their face in the shot and describe the voice the same way every time ("in a warm, cheerful, clear female voice").',
-        ) : s.lane === 'voice' ? t(
-          'So, wie es gesprochen werden soll; Satzzeichen setzen Pausen. Die Szene wird so lang wie ihr Take.',
-          'As it should be spoken; punctuation sets the pauses. The scene takes the length of its take.',
-        ) : undefined}
-        onCommit={(v) => update({ prompt: v })}
-      />
-      <ExpandPrompt p={p} s={s} models={models} active={active} update={update} />
-      <div className="st-grid2">
-        <label className="st-field">
-          <span>{t('Bahn', 'Lane')}</span>
-          <select value={s.lane} onChange={(e) => update({ lane: e.target.value, kind: e.target.value === 'video' ? 'video' : 'audio' })}>
-            {Object.entries(LANE_LABEL).map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
-            ))}
-          </select>
-        </label>
-        {s.lane === 'video' && (
+      <div ref={promptBox} className="sf-stack">
+        <Field
+          label={s.lane === 'video' ? t('Prompt (was zu sehen ist und wie es sich bewegt)', 'Prompt (what is seen and how it moves)') : s.lane === 'voice' ? t('Text (was gesprochen wird)', 'Text (what is said)') : t('Prompt (Klang, Stil, Tempo)', 'Prompt (sound, style, tempo)')}
+          value={s.prompt}
+          area
+          prompt
+          rows={8}
+          placeholder={s.lane === 'video' ? t(
+            'Ein Absatz: Einstellung, Handlung, Kamera, Ton. Personen: Gesicht im Bild lassen, sonst erfindet LTX ein neues; sprechen nur mit Gesicht im Bild, die Stimme immer gleich beschreiben („in a warm, cheerful, clear female voice“).',
+            'One paragraph: shot, action, camera, sound. People: keep the face in the picture, or LTX invents a new one; let them speak only with their face in the shot and describe the voice the same way every time ("in a warm, cheerful, clear female voice").',
+          ) : s.lane === 'voice' ? t(
+            'So, wie es gesprochen werden soll; Satzzeichen setzen Pausen. Die Szene wird so lang wie ihr Take.',
+            'As it should be spoken; punctuation sets the pauses. The scene takes the length of its take.',
+          ) : undefined}
+          onCommit={(v) => update({ prompt: v })}
+        />
+        <ExpandPrompt p={p} s={s} models={models} active={active} update={update} />
+      </div>
+      {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
+      {s.lane === 'video' && <SceneRefs p={p} s={s} model={model} update={update} />}
+      {video && <SceneSound s={s} model={model} update={update} />}
+      {s.lane === 'video' && <SceneCharacters p={p} s={s} models={models} active={active} update={update} hint={false} />}
+      <SceneToggles p={p} s={s} model={model} models={models} update={update} />
+      <div ref={takesBox}>
+        <SceneTakes p={p} s={s} attention={state.key === 'choose'} onPick={pickTake} />
+      </div>
+      <details ref={fine} className="sf-fine">
+        <summary>{t('Feineinstellung', 'Advanced settings')}</summary>
+        <div className="sf-stack">
+          <div className="st-grid2">
+            <label className="st-field">
+              <span>{t('Bahn', 'Lane')}</span>
+              <select value={s.lane} onChange={(e) => update({ lane: e.target.value, kind: e.target.value === 'video' ? 'video' : 'audio' })}>
+                {Object.entries(LANE_LABEL).map(([id, label]) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
+              </select>
+            </label>
+            {s.lane === 'video' && (
+              <label className="st-field">
+                <span>{t('Art', 'Kind')}</span>
+                <select value={s.kind} onChange={(e) => update({ kind: e.target.value })}>
+                  <option value="video">{t('Videoclip', 'Video clip')}</option>
+                  <option value="image">{t('Standbild', 'Still image')}</option>
+                </select>
+              </label>
+            )}
+            <Seconds p={p} label={t('Start (s)', 'Start (s)')} value={s.start} onCommit={(v) => update({ start: v })} />
+            <Seconds p={p} label={t('Dauer (s)', 'Duration (s)')} value={s.duration} min={0.1} onCommit={(v) => update({ duration: v })} />
+          </div>
           <label className="st-field">
-            <span>{t('Art', 'Kind')}</span>
-            <select value={s.kind} onChange={(e) => update({ kind: e.target.value })}>
-              <option value="video">{t('Videoclip', 'Video clip')}</option>
-              <option value="image">{t('Standbild', 'Still image')}</option>
+            <span>{t('Modell', 'Model')}</span>
+            <select ref={modelSelect} value={s.model_id ?? ''} onChange={(e) => update({ model_id: e.target.value || null })}>
+              <option value="">{activeName ? t(`aktives Modell (${activeName})`, `active model (${activeName})`) : t('aktives Modell', 'active model')}</option>
+              {missingSelected && (
+                <option value={missingSelected.id} disabled>
+                  {t(`${missingSelected.name} (nicht installiert)`, `${missingSelected.name} (not installed)`)}
+                </option>
+              )}
+              {usable.map((m) => (
+                <option key={m.id} value={m.id}>{licenseBlocked(m) ? '⚠ ' : ''}{m.name}</option>
+              ))}
+            </select>
+          </label>
+          {(() => {
+            // Kurzer Tipp zum gewählten Modell wie unter der Modellwahl im Reiter Generieren (seit 0.5.30)
+            const chosen = usable.find((m) => m.id === (s.model_id || active?.[modelKind]))
+            const mode: RecommendationMode = modelKind === 'speech' ? 'speech' : modelKind === 'audio' ? 'audio' : modelKind === 'image' ? 'image' : 'video'
+            return <ModelTip mode={mode} model={chosen ?? null} />
+          })()}
+          <SceneFine p={p} s={s} model={model} models={models} update={update} />
+          {s.lane === 'video' && !(p.characters ?? []).length && (
+            <p className="muted small">
+              {t('Figuren (Aussehen per LoRA, eigene Stimme) legst du in den Projekteinstellungen an: dafür im Leeren klicken.',
+                'Characters (look via LoRA, their own voice) are set up in the project settings: click an empty spot.')}
+            </p>
+          )}
+          <div className="st-actions">
+            <button className="btn small ghost" onClick={() => onCommand('scene.delete', { id: s.id })}>{t('Szene löschen', 'Delete scene')}</button>
+          </div>
+        </div>
+      </details>
+      <SceneFoot p={p} s={s} state={state} eta={eta} missing={missing} lacks={lacks} also={alsoNames} spoken={spokenInVideo(c, s)} onGenerate={generate}
+        onConform={() => flow?.onConform([s.id])} />
+    </div>
+  )
+}
+
+/** Unter der Wegwahl: was der Weg braucht (Startbild, Endbild, Layout-Video, Vorlage des Anschlusses). Endbild und Layout
+ * setzen wie bisher Schleife, DFR und 48 fps zurück, die damit nicht gehen. Passt etwas nicht zum Modell, steht es dabei. */
+function WaySlots({ p, s, way, model, models, active, update, flow, startEta, earlier }: {
+  p: StudioProject
+  s: StudioScene
+  way: Way
+  model?: ModelInfo
+  models: ModelInfo[]
+  active: Props['active']
+  update: (fields: Record<string, unknown>) => void
+  flow?: SceneFlow
+  startEta: string
+  earlier: StudioScene[]
+}) {
+  const q = s.params ?? {}
+  const f = model?.features
+  const ltx = model?.family === 'ltx25'
+  const name = model?.name ?? t('Dieses Modell', 'This model')
+  const plain = { quality: null, temporal_upscale: null }
+  const set = (fields: Record<string, unknown>) => update({ params: fields })
+  const end: string | null = q.end_image_asset_id || null
+  const guide: string | null = q.guide_asset_id || null
+  const start = <StartImage p={p} s={s} models={models} active={active} update={update} flow={flow} eta={startEta} />
+  if (way === 'text') {
+    return <p className="muted small">{t('Kein Bild nötig: Das Modell erfindet den Anfang aus dem Prompt.', 'No image needed: the model invents the beginning from the prompt.')}</p>
+  }
+  if (way === 'chain') {
+    if (s.chain_marker) {
+      return <p className="muted small">{t('Kommt vom Anschluss-Marker. Zum Ändern den Marker verschieben oder löschen.', 'Set by a chain marker. Move or delete the marker to change it.')}</p>
+    }
+    const source = p.scenes.find((x) => x.id === s.chain_from)
+    const options = source && !earlier.includes(source) ? [source, ...earlier] : earlier
+    return (
+      <>
+        {options.length > 1 && (
+          <label className="st-field">
+            <span>{t('Anschluss an', 'Chain to')}</span>
+            <select value={s.chain_from ?? ''} onChange={(e) => e.target.value && update({ chain_from: e.target.value })}>
+              {options.map((x) => (
+                <option key={x.id} value={x.id}>{sceneNum(p, x.id)} · {x.title || x.prompt.slice(0, 40) || x.id}</option>
+              ))}
             </select>
           </label>
         )}
-        <Seconds p={p} label={t('Start (s)', 'Start (s)')} value={s.start} onCommit={(v) => update({ start: v })} />
-        <Seconds p={p} label={t('Dauer (s)', 'Duration (s)')} value={s.duration} min={0.1} onCommit={(v) => update({ duration: v })} />
-      </div>
-      <label className="st-field">
-        <span>{t('Modell', 'Model')}</span>
-        <select value={s.model_id ?? ''} onChange={(e) => update({ model_id: e.target.value || null })}>
-          <option value="">{activeName ? t(`aktives Modell (${activeName})`, `active model (${activeName})`) : t('aktives Modell', 'active model')}</option>
-          {usable.map((m) => (
-            <option key={m.id} value={m.id}>{licenseBlocked(m) ? '⚠ ' : ''}{m.name}</option>
-          ))}
-        </select>
-      </label>
-      {(() => {
-        // Harte Lizenzgrenze des gewählten Modells: Warnung sichtbar unter der Wahl, bis eine Genehmigung bestätigt ist
-        const chosen = usable.find((m) => m.id === s.model_id)
-        return licenseBlocked(chosen) && chosen?.warning ? <p className="warn-banner small">{chosen.warning}</p> : null
-      })()}
-      {(() => {
-        // Kurzer Tipp zum gewählten Modell wie unter der Modellwahl im Reiter Generieren (seit 0.5.30)
-        const chosen = usable.find((m) => m.id === (s.model_id || active?.[modelKind]))
-        const mode: RecommendationMode = modelKind === 'speech' ? 'speech' : modelKind === 'audio' ? 'audio' : modelKind === 'image' ? 'image' : 'video'
-        return <ModelTip mode={mode} model={chosen ?? null} />
-      })()}
-      {s.lane === 'video' && s.kind === 'video' && <StartImage p={p} s={s} models={models} active={active} update={update} />}
-      {s.lane === 'video' && <SceneExtras key={s.id} p={p} s={s} models={models} active={active} update={update} />}
-      {s.lane === 'voice' && <VoiceProps p={p} s={s} update={update} />}
-      {s.lane === 'video' && <SceneCharacters p={p} s={s} models={models} active={active} update={update} />}
-      {s.lane === 'video' && s.kind === 'video' && (
-        <label className="st-field">
-          <span>{t('Anschluss an', 'Chain to')}</span>
-          <select value={s.chain_from ?? ''} disabled={!!s.chain_marker} onChange={(e) => update({ chain_from: e.target.value || null })}>
-            <option value="">{t('— keins —', '— none —')}</option>
-            {earlier.map((x) => (
-              <option key={x.id} value={x.id}>{x.title || x.prompt.slice(0, 40) || x.id}</option>
-            ))}
-          </select>
-          {s.chain_marker && (
-            <span className="small">{t('Kommt vom Anschluss-Marker. Zum Ändern den Marker verschieben oder löschen.', 'Set by a chain marker. Move or delete the marker to change it.')}</span>
-          )}
-        </label>
-      )}
-      <div className="st-actions">
-        <button className="btn primary small" disabled={s.status === 'running' || s.status === 'waiting'} onClick={() => onGenerate([s.id])}>
-          {s.take ? t('Neu erzeugen', 'Generate again') : t('Erzeugen', 'Generate')}
-        </button>
-        <button className="btn small ghost" onClick={() => onCommand('scene.delete', { id: s.id })}>{t('Löschen', 'Delete')}</button>
-      </div>
-      <h4>{t('Takes', 'Takes')} ({s.takes.length})</h4>
-      {s.takes.length === 0 && (
-        <p className="muted small">{t('Noch keine. Erzeugen oder ein Asset aus der Medienleiste auf die Szene ziehen.', 'None yet. Generate, or drag an asset from the media bin onto the scene.')}</p>
-      )}
-      <div className="st-takes">
-        {s.takes.map((id, i) => {
-          const a = p.assets[id]
-          return (
-            <button key={id} className={`st-take${s.take === id ? ' st-sel' : ''}`} onClick={() => onCommand('scene.take', { id: s.id, asset_id: id })} title={a?.prompt}>
-              {a?.kind === 'image' ? <img src={a.url} alt="" /> : a?.kind === 'video' ? <video src={`${a.url}#t=0.1`} preload="metadata" muted /> : <span>♪</span>}
-              <span className="small">{i + 1}</span>
-            </button>
-          )
-        })}
-      </div>
+        <p className="muted small">{ltx
+          ? t('Der Clip beginnt mit der letzten Sekunde dieser Szene und setzt ihre Bewegung fort; „Übernehmen“ blendet darüber.', 'The clip begins with the last second of that scene and continues its motion; "Conform" crossfades over it.')
+          : t('Der Clip beginnt mit dem letzten Bild dieser Szene.', 'The clip begins with the last frame of that scene.')}</p>
+      </>
+    )
+  }
+  if (way === 'ends') {
+    return (
+      <>
+        {start}
+        <AssetPicker p={p} media="image" ids={end ? [end] : []} max={f?.end_image ? 1 : 0} label={t('Endbild', 'End image')}
+          empty={t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
+          onChange={(ids) => set({ end_image_asset_id: ids[0] ?? null, ...(ids[0] ? { loop: false, guide_asset_id: null, ...plain } : {}) })} />
+        {!f?.end_image && <p className="warn-text small">{t(`${name} nimmt kein Endbild: entfernen oder LTX-2.5 wählen.`, `${name} takes no end image: remove it or choose LTX-2.5.`)}</p>}
+      </>
+    )
+  }
+  if (way === 'loop') {
+    return (
+      <>
+        {start}
+        {f?.loop
+          ? <p className="muted small">{t('Endet wieder im Startbild. Nur mit ruhiger Kamera; Wasser und Rauch stehen dann still.', 'Ends with the start image again. Only with a calm camera; water and smoke then stand still.')}</p>
+          : <p className="warn-text small">{t(`${name} kann keine Schleife: einen anderen Weg oder LTX-2.5 wählen.`, `${name} cannot loop: choose another path or LTX-2.5.`)}</p>}
+      </>
+    )
+  }
+  if (way === 'layout') {
+    return (
+      <>
+        <AssetPicker p={p} media="video" ids={guide ? [guide] : []} max={ltx && f?.layout ? 1 : 0}
+          label={t('Layout-Video (Layout to Render)', 'Layout video (layout to render)')}
+          empty={ltx && !f?.layout
+            ? t('Braucht die Layout-To-Render-LoRA: unter „Modelle“ bei LTX-2.5 „Zusätze laden“.', 'Needs the Layout-To-Render LoRA: "Download extras" for LTX-2.5 under "Models".')
+            : t('Video aus dem Material hierher ziehen', 'Drag a video from the media here')}
+          onChange={(ids) => set({ guide_asset_id: ids[0] ?? null, ...(ids[0] ? { end_image_asset_id: null, loop: false, ...plain } : {}) })} />
+        {guide && !ltx && <p className="warn-text small">{t(`${name} nimmt kein Layout-Video; es bleibt hier unbenutzt.`, `${name} takes no layout video; it stays unused here.`)}</p>}
+        {guide && ltx && (q.audio_from || q.audio_asset_id) && (
+          <p className="warn-text small">{t('Ein Layout geht nicht zusammen mit Ton aus einer Sprecher-Szene.', 'A layout does not combine with sound from a voice scene.')}</p>
+        )}
+        {ltx && f?.layout && (
+          <p className="muted small">{t('Eine grobe graue Animation (24 fps) gibt Kamera und Bewegung vor, das Startbild Look und Licht. Ohne Ton und DFR, höchstens so lang wie das Layout. Der erste Auftrag lädt zwei Knoten von Lightricks.',
+            'A rough grey animation (24 fps) sets camera and motion, the start image look and light. No sound, no DFR, at most as long as the layout. The first job downloads two nodes by Lightricks.')}</p>
+        )}
+        {start}
+      </>
+    )
+  }
+  return start
+}
+
+/** Referenzbilder, wenn das Modell welche nimmt (FLUX 3, MiniMax H3 Referenz …) oder schon welche gewählt sind */
+function SceneRefs({ p, s, model, update }: {
+  p: StudioProject; s: StudioScene; model?: ModelInfo; update: (fields: Record<string, unknown>) => void
+}) {
+  const still = s.kind === 'image'
+  const f = model?.features
+  const refs: string[] = s.params?.reference_asset_ids ?? []
+  const maxRefs = Number(f?.references ?? 0)
+  if (maxRefs <= 0 && refs.length === 0) return null
+  const name = model?.name ?? t('Dieses Modell', 'This model')
+  const needsRefs = maxRefs > 0 && refs.length === 0
+    && (still ? model?.workflow === 'qwen_image_edit' : !!model && startImageUse(model) === null)
+  return (
+    <div className="sf-stack">
+      <AssetPicker p={p} media="image" ids={refs} max={maxRefs}
+        label={f?.reference_kind === 'style' ? t('Stilvorlage', 'Style template') : t('Referenzbilder', 'Reference images')}
+        empty={t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
+        onChange={(ids) => update({ params: { reference_asset_ids: ids } })} />
+      {maxRefs === 0 || refs.length > maxRefs
+        ? <p className="warn-text small">{maxRefs === 0
+          ? t(`${name} nimmt keine Referenzbilder: entfernen oder ein anderes Modell wählen.`, `${name} takes no reference images: remove them or choose another model.`)
+          : t(`${name} nimmt höchstens ${maxRefs}.`, `${name} takes at most ${maxRefs}.`)}</p>
+        : needsRefs
+          ? <p className="warn-text small">{t(`${name} braucht ein Referenzbild.`, `${name} needs a reference image.`)}</p>
+          : f?.reference_kind === 'style'
+            ? <p className="muted small">{t('Gibt nur den Stil vor, nicht den Inhalt.', 'Sets the style only, not the content.')}</p>
+            : <p className="muted small">{t('Im Prompt nennen: „The person from the first image …“ zeigt die Person aus einem Foto, „the first image“ eine Figur oder ein Ding.',
+              'Name them in the prompt: "The person from the first image …" shows the person from a photo, "the first image" a character or an object.')}</p>}
     </div>
+  )
+}
+
+/** Eigene Tonbeschreibung (Kandinsky 6, features.audio_prompt) */
+function SceneSound({ s, model, update }: { s: StudioScene; model?: ModelInfo; update: (fields: Record<string, unknown>) => void }) {
+  const f = model?.features
+  const sound = String(s.params?.audio_prompt ?? '')
+  if (!f?.audio_prompt && !sound) return null
+  return (
+    <>
+      <Field label={t('Ton (was zu hören ist)', 'Sound (what is heard)')} value={sound} area rows={2}
+        placeholder={f?.audio_placeholder} onCommit={(v) => update({ params: { audio_prompt: v } })} />
+      {!f?.audio_prompt && sound && (
+        <p className="muted small">{t(`${model?.name ?? 'Dieses Modell'} nimmt keine eigene Tonbeschreibung; sie bleibt hier unbenutzt.`, `${model?.name ?? 'This model'} takes no separate sound description; it stays unused here.`)}</p>
+      )}
+    </>
   )
 }
 
@@ -490,6 +707,14 @@ function VoiceProps({ p, s, update }: { p: StudioProject; s: StudioScene; update
 /** Videomodelle mit eigenem Ton (wie wizard.SOUND_FAMILIES) */
 const SOUND_FAMILIES = ['ltx25', 'ltx23', 'kandinsky6']
 
+/** Format für „Prompt ausbauen“: Der Server nimmt 256 bis 2560 in Vielfachen von 8 (schemas.ExpandPromptRequest); ein
+ *  4K-Projekt (3840 × 2160) oder eines mit 1366 × 768 scheiterte sonst. Das Seitenverhältnis bleibt. */
+function expandSize(w: number, h: number): { width: number; height: number } {
+  const k = Math.min(1, 2560 / Math.max(w, h, 1))
+  const fit = (x: number) => Math.max(256, Math.min(2560, Math.round((x * k) / 8) * 8))
+  return { width: fit(w), height: fit(h) }
+}
+
 /** „Prompt ausbauen“ (seit 0.5.30): wie im Reiter Generieren, das Ziel nach Art der Szene (mit Startbild nur die
  * Bewegung); überträgt nebenbei ins Englische. Ersetzt den Prompt, Strg+Z holt den alten zurück. */
 function ExpandPrompt({ p, s, models, active, update }: {
@@ -515,7 +740,7 @@ function ExpandPrompt({ p, s, models, active, update }: {
     const sent = s.prompt
     try {
       const r = await api.expandPrompt({
-        prompt: sent, target, width: p.settings.width, height: p.settings.height,
+        prompt: sent, target, ...expandSize(p.settings.width, p.settings.height),
         ...(image && target === 'video_start' ? { reference_asset_ids: [image] }
           : target === 'image' && s.params?.reference_asset_ids?.length ? { reference_asset_ids: s.params.reference_asset_ids } : {}),
       })
@@ -543,12 +768,16 @@ function ExpandPrompt({ p, s, models, active, update }: {
   )
 }
 
-function StartImage({ p, s, models, active, update }: {
+function StartImage({ p, s, models, active, update, flow, eta }: {
   p: StudioProject
   s: StudioScene
   models: ModelInfo[]
   active: Props['active']
   update: (fields: Record<string, unknown>) => void
+  /** Startbild-Aufträge des Studios (seit 0.5.42): laufen weiter, wenn man eine andere Szene wählt */
+  flow?: SceneFlow
+  /** geschätzte Zeit für zwei Varianten: „≈ 40 s“ */
+  eta?: string
 }) {
   const id: string | null = s.params?.image_asset_id || null
   const model = models.find((m) => m.id === (s.model_id || active?.video))
@@ -589,6 +818,12 @@ function StartImage({ p, s, models, active, update }: {
       setGen({ busy: false, error: e instanceof Error ? e.message : String(e), variants: [] })
     }
   }
+  // Mit dem Studio (Konzept „NVAI im Fluss“) gehört der Auftrag ihm: Zustand, Varianten und Fehler kommen von dort
+  const shared = flow ? flow.startRuns[s.id] : undefined
+  const busy = flow ? shared?.status === 'running' : gen.busy
+  const error = flow ? (shared?.status === 'error' ? shared.error ?? t('Fehler', 'Error') : null) : gen.error
+  const variants = flow ? (shared?.status === 'done' ? shared.variants : []) : gen.variants
+  const start = flow ? () => flow.onStartImages([s.id]) : generate
   const accept = (e: RDragEvent) => {
     if (!e.dataTransfer.types.includes(ASSET_MIME)) return
     e.preventDefault()
@@ -624,17 +859,18 @@ function StartImage({ p, s, models, active, update }: {
         </button>
         {id && <button className="btn small ghost" onClick={() => set(null)}>{t('Entfernen', 'Remove')}</button>}
         {use !== null && !chained && (
-          <button className="btn small ghost" disabled={gen.busy || !s.prompt.trim()} onClick={generate}
+          <button className="btn small ghost" disabled={busy || !s.prompt.trim()} onClick={start}
             title={t('Zwei Varianten aus dem Prompt der Szene, wie die Startbilder des Assistenten: mit den Figuren der Szene (ihre LoRAs), ohne die Sätze über Ton, ohne schwarze Balken. Beide landen im Projektordner; die erste wird das Startbild.',
               'Two variants from the scene prompt, like the start images of the assistant: with the characters of the scene (their LoRAs), without the sentences about sound, without black bars. Both go into the project folder; the first becomes the start image.')}>
-            {gen.busy ? t('Erzeugt zwei Varianten …', 'Generating two variants …') : t('Startbild erzeugen', 'Generate start image')}
+            {busy ? t('Erzeugt zwei Varianten …', 'Generating two variants …') : t('Startbild erzeugen', 'Generate start image')}
+            {!busy && eta && <span className="flow-eta">&nbsp;· {eta}</span>}
           </button>
         )}
       </div>
-      {gen.error && <span className="warn-text small">{gen.error}</span>}
-      {gen.variants.length > 1 && (
+      {error && <span className="warn-text small">{error}</span>}
+      {variants.length > 1 && (
         <div className="st-takes st-start-grid">
-          {gen.variants.map((x) => (
+          {variants.map((x) => (
             <button key={x.id} className={`st-take${x.id === id ? ' st-sel' : ''}`} title={assetLabel(x)} onClick={() => set(x.id)}>
               <img src={x.thumb_url || x.url} alt="" />
             </button>
@@ -655,13 +891,14 @@ function StartImage({ p, s, models, active, update }: {
               ))}
             </div>
           ))}
-      <span className="small">
-        {chained
-          ? t('Der Anschluss hat Vorrang: Der Clip beginnt mit dem Ende der Szene davor.', 'The chain comes first: the clip begins with the end of the scene before.')
-          : use === null
-            ? t('Dieses Modell nimmt kein Startbild; es bleibt hier unbenutzt.', 'This model takes no start image; it stays unused here.')
-            : t('Der Clip beginnt mit diesem Bild. So sieht eine Figur in jeder Einstellung gleich aus.', 'The clip begins with this image, so a character looks the same in every shot.')}
-      </span>
+      {/* Die Erklärung des Wegs steht seit 0.5.42 am Knopf „Startbild“ der Wegwahl; hier nur, was nicht passt */}
+      {(chained || use === null) && (
+        <span className="small">
+          {chained
+            ? t('Der Anschluss hat Vorrang: Der Clip beginnt mit dem Ende der Szene davor.', 'The chain comes first: the clip begins with the end of the scene before.')
+            : t('Dieses Modell nimmt kein Startbild; es bleibt hier unbenutzt.', 'This model takes no start image; it stays unused here.')}
+        </span>
+      )}
     </div>
   )
 }
@@ -754,108 +991,106 @@ function AssetPicker({ p, media, ids, max, label, empty, onChange }: {
   )
 }
 
-/** Vorlagen und Zusätze einer Bild- oder Videoszene (seit 0.5.40; Nutzer 25.11.2026: „stelle sicher dass die neuen modelle
- * und features auch im studio aktuell sind“): was das gewählte Modell laut Katalog kann, wie im Reiter Generieren.
- * Referenzbilder, Endbild und Schleife, Layout-Video (Layout to Render), eigene Tonbeschreibung. Zugeklappt, solange nichts
- * gewählt ist. Passt etwas Gewähltes nicht mehr zum Modell, bleibt es sichtbar und lässt sich entfernen. */
-function SceneExtras({ p, s, models, active, update }: {
+/** Feineinstellung einer Szene (seit 0.5.42; vorher „Vorlagen und Zusätze“, 0.5.40/0.5.41): Qualität, Faktor der
+ * Zeitlupe, 48 fps, LoRAs mit Stärke und der Seed als Zahl. Die Schalter oben („Was … dazu kann“) setzen dieselben
+ * Felder; Weg, Endbild, Layout, Referenzen und Ton stehen sichtbar oben. Ohne eigene Wahl gilt das Projekt bzw. das
+ * Modell. */
+function SceneFine({ p, s, model, models, update }: {
   p: StudioProject
   s: StudioScene
+  model?: ModelInfo
   models: ModelInfo[]
-  active: Props['active']
   update: (fields: Record<string, unknown>) => void
 }) {
+  const picture = s.lane === 'video'
   const still = s.kind === 'image'
-  const model = models.find((m) => m.id === (s.model_id || active?.[still ? 'image' : 'video']))
   const f = model?.features
   const params = s.params ?? {}
-  const refs: string[] = params.reference_asset_ids ?? []
   const end: string | null = params.end_image_asset_id || null
   const guide: string | null = params.guide_asset_id || null
   const loop = !!params.loop
-  const sound = String(params.audio_prompt ?? '')
-  const maxRefs = Number(f?.references ?? 0)
-  const ltx = !still && model?.family === 'ltx25'
-  const showRefs = maxRefs > 0 || refs.length > 0
-  const showEnd = !still && (!!f?.end_image || !!end || loop)
-  const showLayout = !still && (ltx || !!guide)
-  const showSound = !still && (!!f?.audio_prompt || !!sound)
-  if (!showRefs && !showEnd && !showLayout && !showSound) return null
+  const ltx = picture && !still && model?.family === 'ltx25'
+  const noDfr = !!end || loop || !!guide
+  const quality: string = params.quality ?? ''
+  const projectDfr = (p.settings.video_quality ?? 'dfr') === 'dfr' && !!f?.dfr
+  const dfr = !noDfr && (quality ? quality === 'dfr' : projectDfr)
+  const speed = Number(params.motion_speed ?? 1)
+  const loras: { model_id: string; strength: number }[] = params.loras ?? []
+  const fitting = picture ? models.filter((m) => m.kind === 'lora' && m.installed && (model?.lora_bases ?? []).includes(m.family)) : []
+  const loraName = (id: string) => models.find((m) => m.id === id)?.name ?? id
+  const seed = params.seed ?? null
   const set = (fields: Record<string, unknown>) => update({ params: fields })
-  const name = model?.name ?? t('Dieses Modell', 'This model')
-  const count = refs.length + (end ? 1 : 0) + (loop ? 1 : 0) + (guide ? 1 : 0) + (sound ? 1 : 0)
-  const needsRefs = maxRefs > 0 && refs.length === 0
-    && (still ? model?.workflow === 'qwen_image_edit' : !!model && startImageUse(model) === null)
   return (
-    <details className="lora-picker st-extras" open={count > 0 || needsRefs || undefined}>
-      <summary>
-        {t('Vorlagen und Zusätze', 'References and extras')}{' '}
-        <span className="muted small">{count ? t(`— ${count} gewählt`, `— ${count} selected`) : t('— optional', '— optional')}</span>
-      </summary>
-      {showRefs && (
+    <>
+      {ltx && (
         <>
-          <AssetPicker p={p} media="image" ids={refs} max={maxRefs}
-            label={f?.reference_kind === 'style' ? t('Stilvorlage', 'Style template') : t('Referenzbilder', 'Reference images')}
-            empty={t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
-            onChange={(ids) => set({ reference_asset_ids: ids })} />
-          {maxRefs === 0 || refs.length > maxRefs
-            ? <p className="warn-text small">{maxRefs === 0
-              ? t(`${name} nimmt keine Referenzbilder: entfernen oder ein anderes Modell wählen.`, `${name} takes no reference images: remove them or choose another model.`)
-              : t(`${name} nimmt höchstens ${maxRefs}.`, `${name} takes at most ${maxRefs}.`)}</p>
-            : needsRefs
-              ? <p className="warn-text small">{t(`${name} braucht ein Referenzbild.`, `${name} needs a reference image.`)}</p>
-              : f?.reference_kind === 'style'
-                ? <p className="small">{t('Gibt nur den Stil vor, nicht den Inhalt.', 'Sets the style only, not the content.')}</p>
-                : <p className="small">{t('Im Prompt nennen: „The person from the first image …“ zeigt die Person aus einem Foto, „the first image“ eine Figur oder ein Ding.',
-                  'Name them in the prompt: "The person from the first image …" shows the person from a photo, "the first image" a character or an object.')}</p>}
-        </>
-      )}
-      {showEnd && (
-        <>
-          <AssetPicker p={p} media="image" ids={end ? [end] : []} max={f?.end_image && !loop ? 1 : 0}
-            label={t('Endbild', 'End image')}
-            empty={loop ? t('Die Schleife endet mit dem Startbild.', 'The loop ends with the start image.') : t('Bild aus dem Material hierher ziehen', 'Drag an image from the media here')}
-            onChange={(ids) => set({ end_image_asset_id: ids[0] ?? null, ...(ids[0] ? { loop: false, guide_asset_id: null } : {}) })} />
-          {f?.loop || loop ? (
-            <label className="st-check">
-              <input type="checkbox" checked={loop} disabled={!loop && !params.image_asset_id}
-                onChange={(e) => set({ loop: e.target.checked, ...(e.target.checked ? { end_image_asset_id: null, guide_asset_id: null } : {}) })} />
-              <span>{t('Schleife (endet mit dem Startbild)', 'Loop (ends with the start image)')}</span>
+          <div className="st-grid2">
+            <label className="st-field">
+              <span>{t('Qualität', 'Quality')}</span>
+              <select value={noDfr ? 'standard' : quality} disabled={noDfr}
+                onChange={(e) => set({ quality: e.target.value || null, ...(e.target.value === 'dfr' ? {} : { temporal_upscale: null }) })}>
+                <option value="">{projectDfr ? t('wie im Projekt (DFR)', 'as in the project (DFR)') : t('wie im Projekt (Standard)', 'as in the project (standard)')}</option>
+                <option value="standard">{t('Standard', 'Standard')}</option>
+                <option value="dfr" disabled={!f?.dfr}>{t('Höchste Qualität (DFR)', 'Best quality (DFR)')}</option>
+              </select>
             </label>
-          ) : null}
-          {!f?.end_image && (end || loop)
-            ? <p className="warn-text small">{t(`${name} nimmt kein Endbild: entfernen oder LTX-2.5 wählen.`, `${name} takes no end image: remove it or choose LTX-2.5.`)}</p>
-            : <p className="small">{t('Mit Endbild oder Schleife rechnet LTX-2.5 ohne DFR.', 'With an end image or a loop, LTX-2.5 renders without DFR.')}</p>}
-        </>
-      )}
-      {showLayout && (
-        <>
-          <AssetPicker p={p} media="video" ids={guide ? [guide] : []} max={ltx && f?.layout ? 1 : 0}
-            label={t('Layout-Video (Layout to Render)', 'Layout video (layout to render)')}
-            empty={ltx && !f?.layout
-              ? t('Braucht die Layout-To-Render-LoRA: unter „Modelle“ bei LTX-2.5 „Zusätze laden“.', 'Needs the Layout-To-Render LoRA: "Download extras" for LTX-2.5 under "Models".')
-              : t('Video aus dem Material hierher ziehen', 'Drag a video from the media here')}
-            onChange={(ids) => set({ guide_asset_id: ids[0] ?? null, ...(ids[0] ? { end_image_asset_id: null, loop: false } : {}) })} />
-          {guide && !ltx && <p className="warn-text small">{t(`${name} nimmt kein Layout-Video; es bleibt hier unbenutzt.`, `${name} takes no layout video; it stays unused here.`)}</p>}
-          {guide && ltx && (params.audio_from || params.audio_asset_id) && (
-            <p className="warn-text small">{t('Ein Layout geht nicht zusammen mit Ton aus einer Sprecher-Szene.', 'A layout does not combine with sound from a voice scene.')}</p>
+            {f?.motion_speed && (
+              <label className="st-field">
+                <span>{t('Zeitlupe', 'Slow motion')}</span>
+                <select value={speed} onChange={(e) => set({ motion_speed: Number(e.target.value) < 1 ? Number(e.target.value) : null })}>
+                  {([[1, t('aus (Echtzeit)', 'off (real time)')], [0.5, '2×'], [0.2, '5×'], [0.1, '10×'], [0.05, '20×'],
+                    [0.025, '40×']] as [number, string][]).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+          {dfr && f?.temporal_upscale && (
+            <label className="st-check">
+              <input type="checkbox" checked={!!params.temporal_upscale}
+                onChange={(e) => set(e.target.checked ? { temporal_upscale: true, quality: 'dfr' } : { temporal_upscale: null })} />
+              <span>{t('48 fps (zeitlich verdoppelt, langsamer)', '48 fps (temporal upscale, slower)')}</span>
+            </label>
           )}
-          {ltx && f?.layout && (
-            <p className="small">{t('Eine grobe graue Animation (24 fps) gibt Kamera und Bewegung vor, das Startbild Look und Licht. Ohne Ton und DFR, höchstens so lang wie das Layout. Der erste Auftrag lädt zwei Knoten von Lightricks.',
-              'A rough grey animation (24 fps) sets camera and motion, the start image look and light. No sound, no DFR, at most as long as the layout. The first job downloads two nodes by Lightricks.')}</p>
-          )}
-        </>
-      )}
-      {showSound && (
-        <>
-          <Field label={t('Ton (was zu hören ist)', 'Sound (what is heard)')} value={sound} area rows={2}
-            placeholder={f?.audio_placeholder} onCommit={(v) => set({ audio_prompt: v })} />
-          {!f?.audio_prompt && sound && (
-            <p className="small">{t(`${name} nimmt keine eigene Tonbeschreibung; sie bleibt hier unbenutzt.`, `${name} takes no separate sound description; it stays unused here.`)}</p>
+          <p className="muted small">{noDfr
+            ? t('Mit Endbild, Schleife oder Layout rechnet LTX-2.5 im Standardweg.', 'With an end image, a loop or a layout, LTX-2.5 renders the standard way.')
+            : t('DFR: über die ganze Länge scharf, rund dreimal so lang.', 'DFR: sharp over the whole clip, about three times the time.')}</p>
+          {speed < 1 && (
+            <p className="muted small">{t('Zeitlupe: mit der LoRA „Slow Motion Control“ und einem Startbild.', 'Slow motion: with the "Slow Motion Control" LoRA and a start image.')}</p>
           )}
         </>
       )}
-    </details>
+      {(fitting.length > 0 || loras.length > 0) && (
+        <div className="st-field">
+          <span>{t('LoRAs dieser Szene', 'LoRAs of this scene')}</span>
+          {loras.map((l) => {
+            const m = models.find((x) => x.id === l.model_id)
+            const fits = fitting.some((x) => x.id === l.model_id)
+            return (
+              <div key={l.model_id} className="st-lora-row">
+                <span className="st-lora-name" title={m?.trigger ? t(`Trigger: ${m.trigger}`, `Trigger: ${m.trigger}`) : ''}>
+                  <span>{loraName(l.model_id)}</span>
+                  {!fits && <span className="warn-text small">{m?.installed ? t('passt nicht zum Modell', 'does not fit the model') : t('fehlt', 'missing')}</span>}
+                </span>
+                <StrengthInput value={l.strength}
+                  onCommit={(v) => set({ loras: loras.map((x) => (x.model_id === l.model_id ? { ...x, strength: v } : x)) })} />
+                <button type="button" className="btn small ghost" title={t('LoRA entfernen', 'Remove LoRA')}
+                  onClick={() => set({ loras: loras.filter((x) => x.model_id !== l.model_id) })}>✕</button>
+              </div>
+            )
+          })}
+          <select value="" onChange={(e) => e.target.value && set({ loras: [...loras, { model_id: e.target.value, strength: models.find((m) => m.id === e.target.value)?.features?.strength ?? 0.8 }] })}>
+            <option value="">{t('+ LoRA hinzufügen …', '+ Add LoRA …')}</option>
+            {fitting.filter((m) => !loras.some((l) => l.model_id === m.id)).map((m) => (
+              <option key={m.id} value={m.id}>{loraName(m.id)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {model && (
+        <Field label={t('Seed (leer = zufällig)', 'Seed (empty = random)')} value={seed === null ? '' : String(seed)}
+          onCommit={(v) => { const n = Number.parseInt(v, 10); set({ seed: Number.isFinite(n) && n >= 0 ? n : null }) }} />
+      )}
+    </>
   )
 }
 
@@ -883,12 +1118,14 @@ function voiceSummary(p: StudioProject, c: StudioCharacter, sceneId?: string): s
 /** Figuren im Bild (seit 0.5.24): ihre LoRAs, die zum Modell der Szene passen, und deren Trigger-Wörter kommen in den
  * Auftrag. Videoszenen mit LTX-2.5 können dazu den Satz einer Sprecher-Szene als Ton nehmen: Er wird zuerst in der
  * Stimme seiner Figur gesprochen, das Video folgt ihm mit den Lippen. */
-function SceneCharacters({ p, s, models, active, update }: {
+function SceneCharacters({ p, s, models, active, update, hint = true }: {
   p: StudioProject
   s: StudioScene
   models: ModelInfo[]
   active: Props['active']
   update: (fields: Record<string, unknown>) => void
+  /** false: ohne Figuren nichts zeigen (der Hinweis steht dann unter „Feineinstellung“) */
+  hint?: boolean
 }) {
   const chars = p.characters ?? []
   const params = s.params || {}
@@ -903,6 +1140,7 @@ function SceneCharacters({ p, s, models, active, update }: {
   const speaks = s.kind === 'video' && !!model?.features?.audio_input
   const nameOf = (id?: string) => chars.find((c) => c.id === id)?.name
   if (chars.length === 0 && !(speaks && params.audio_from)) {
+    if (!hint) return null
     return (
       <p className="muted small">
         {t('Figuren (Aussehen per LoRA, eigene Stimme) legst du in den Projekteinstellungen an: dafür im Leeren klicken.',
@@ -921,8 +1159,9 @@ function SceneCharacters({ p, s, models, active, update }: {
                 onChange={(e) => update({ params: { characters: e.target.checked ? [...chosen, c.id] : chosen.filter((x) => x !== c.id) } })} />
               <span>{c.name}</span>
               {chosen.includes(c.id) && !fits(c) && (
-                <span className="warn-text small">{t(model ? `keine LoRA für ${model.name}` : 'keine passende LoRA',
-                  model ? `no LoRA for ${model.name}` : 'no matching LoRA')}</span>
+                <span className="warn-text small">{model
+                  ? t(`keine LoRA für ${model.name}`, `no LoRA for ${model.name}`)
+                  : t('keine passende LoRA', 'no matching LoRA')}</span>
               )}
             </label>
           ))}
@@ -965,11 +1204,12 @@ function StrengthInput({ value, onCommit }: { value: number; onCommit: (v: numbe
 }
 
 /** Eine Figur in den Projekteinstellungen: Name, Aussehen (LoRAs), Stimme */
-function CharacterEditor({ p, c, models, onCommand }: {
+function CharacterEditor({ p, c, models, onCommand, onShowModels }: {
   p: StudioProject
   c: StudioCharacter
   models: ModelInfo[]
   onCommand: Props['onCommand']
+  onShowModels?: () => void
 }) {
   const update = (fields: Record<string, unknown>) => onCommand('character.update', { id: c.id, ...fields })
   const loraModels = models.filter((m) => m.kind === 'lora' && m.installed)
@@ -1020,7 +1260,10 @@ function CharacterEditor({ p, c, models, onCommand }: {
         </select>
         {loraModels.length === 0 && (
           <span className="small">{t('Noch keine LoRA geladen: unter „Modelle“ suchen oder eine eigene LoRA-Datei hinzufügen.',
-            'No LoRA downloaded yet: search under "Models" or add your own LoRA file.')}</span>
+            'No LoRA downloaded yet: search under "Models" or add your own LoRA file.')}
+          {onShowModels && (
+            <>{' '}<button className="link-btn small" onClick={onShowModels}>{t('Unter „Modelle“ suchen', 'Search under “Models”')}</button></>
+          )}</span>
         )}
       </div>
       <label className="st-field">
@@ -1088,7 +1331,9 @@ function CharacterEditor({ p, c, models, onCommand }: {
   )
 }
 
-function ProjectProps({ p, models, onCommand }: { p: StudioProject; models: ModelInfo[]; onCommand: Props['onCommand'] }) {
+function ProjectProps({ p, models, onCommand, onShowModels }: {
+  p: StudioProject; models: ModelInfo[]; onCommand: Props['onCommand']; onShowModels?: () => void
+}) {
   const s = p.settings
   const fps = s.fps[0] / s.fps[1]
   const format = FORMATS.findIndex((f) => f.w === s.width && f.h === s.height)
@@ -1141,7 +1386,7 @@ function ProjectProps({ p, models, onCommand }: { p: StudioProject; models: Mode
           'A character bundles a look (LoRA, e.g. one you trained) and a voice. Picture scenes choose under "Characters in the picture" who is seen, voice scenes under "Voice" who speaks. A video scene with "Sound from voice scene" speaks that line with its lips.')}
       </p>
       <div className="st-chars">
-        {(p.characters ?? []).map((c) => <CharacterEditor key={c.id} p={p} c={c} models={models} onCommand={onCommand} />)}
+        {(p.characters ?? []).map((c) => <CharacterEditor key={c.id} p={p} c={c} models={models} onCommand={onCommand} onShowModels={onShowModels} />)}
       </div>
       <div className="st-actions">
         <button className="btn small" onClick={() => onCommand('character.add', {})}>{t('+ Figur', '+ Character')}</button>

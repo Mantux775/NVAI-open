@@ -106,7 +106,7 @@ jeder neue Versuch das Foto. Vier Bilder in 896 × 1152 dauerten mit FLUX 3 83 s
   Sekunde heran, und LTX-2.5 zeichnete das Gesicht neu. Der Preis: Was in beiden Bildern gleich ist, steht still,
   auch Wasser und Rauch. Für bewegten Hintergrund weder Schleife noch Endbild.
 - **Bei einem echten Foto das Foto selbst nehmen.** FLUX 3 macht Gesichter etwas schmaler und jünger. Unter
-  „Bild → Vorhandenes Bild erweitern (Outpainting)“ erweitert FLUX 3 das Foto aufs Videoformat und setzt das
+  „Bild → Bild erweitern (Outpainting)“ erweitert FLUX 3 das Foto aufs Videoformat und setzt das
   Original pixelgleich wieder ein; das erste Bild ist dann genau die Person.
 - **Die Person der Kamera zugewandt lassen.** Dreht sie sich weg, zeichnet LTX-2.5 das Gesicht danach
   neu, und es ähnelt dem Foto weniger.

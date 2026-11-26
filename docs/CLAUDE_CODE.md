@@ -27,7 +27,9 @@ token only this computer gets in; other devices send the token in the `X-NVAI-To
 
 ![Models → AI agents (MCP): the address and entries for Claude Code, WorkBuddy and Cursor](images/mcp-agents.jpg)
 
-Agents that only start programs (Claude Desktop, for example) and NVAI-open before 0.5.39 use the stdio server:
+Agents that only start programs (Claude Desktop, for example) use the stdio server: copy their entry (`command`,
+`args`, `env`) from "Models → AI agents (MCP)", or read it from `GET /api/mcp`. Claude Code with NVAI-open before
+0.5.39 registers the stdio server like this:
 
 ```
 claude mcp add --scope user nvai -e "NVAI_DATA_DIR=<data folder>" -- "<install folder>\server\.venv\Scripts\python.exe" -m nvai.mcp_server
@@ -157,7 +159,7 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 | Speech 5.8 s / voice taken over 3 s (first job of a session +20–65 s loading) | Qwen3-TTS 1.7B | ~2.3 s / ~2 s |
 | Video with sound 1280 × 704, 5 s; with a start image | LTX-2.5 NVFP4 | ~93 s; ~109 s |
 | Start and end image 5 s / loop 4 s, 1280 × 704 | LTX-2.5 NVFP4 | ~154 s / ~125 s |
-| Video 1920 × 1088, 5 s, standard / DFR | LTX-2.5 NVFP4 | ~251 s / ~786 s |
+| Video 1920 × 1088, 5 s, standard / DFR | LTX-2.5 NVFP4 | ~241 s / ~786 s |
 | 1920 × 832 from a start image, DFR 6 s / 5 s / extend by 3 s | LTX-2.5 NVFP4 | ~305–326 s / ~242 s / ~146–150 s |
 | 1920 × 832, DFR 8 s (exceeds 16 GB, avoid) | LTX-2.5 NVFP4 | 20 to over 60 min |
 | Video to a given sound, 20 s, 1024 × 576 | LTX-2.5 NVFP4 | ~302 s |
@@ -199,8 +201,8 @@ Measured on an RTX 5060 Ti 16 GB; the first job after a start costs another 15�
 On RTX 20/30/40 use the INT8 versions (`…-int8`); `list_models` marks what suits the detected card as `recommended` and
 explains other formats in `gpu_note`. NVFP4 needs PyTorch cu130 in the ComfyUI venv; with cu128 it is three to five
 times slower. What a model can do is machine-readable in `list_models(kind="image", detailed=True)` under `features`.
-More models (SDXL, Pony, Illustrious …) come from **Models → Search Hugging Face**; ask before downloading. Details and
-all test findings: [MODELS.md](MODELS.md).
+More models (SDXL, Pony, Illustrious …) come from **Models → Search models and LoRAs** (Hugging Face and Civitai); ask
+before downloading. Details and all test findings: [MODELS.md](MODELS.md).
 
 ### Prompts for Qwen, FLUX 3, Krea 2 and MOSS-Image
 
@@ -509,7 +511,7 @@ Measured with one character over many comedy clips and an explainer video:
 > generated videos included (sections I.3, I.5, V.4). Without a separate license from MiniMax
 > (<https://platform.minimax.io/h3-license>) it must not be used there, and nothing made with it may be published,
 > stills and screenshots included. The web interface marks the model and every result in red until the user ticks "I
-> have obtained a permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the user
+> have obtained permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the user
 > before using it unless `license_confirmed` is true. Anyone offering third parties a tool for generating with it must
 > prevent prohibited content (section V.5); NVAI-open filters nothing.
 
@@ -567,9 +569,9 @@ Measured with one character over many comedy clips and an explainer video:
 
 `upscale_video(asset_id)` (REST `POST /api/video/upscale`; in the web interface the **Upscale ×2** button under a video
 in the History) doubles the width and height with **RelayVSR ×2** (`relayvsr-x2-int8`, Apache-2.0, 5.3 GB, needs
-ComfyUI 0.45): a Wan 2.2 model computes every 15th frame in one step, a small decoder fills in the frames in between.
-Sound and frame rate stay, a generated video is read from its lossless copy, and the result lands next to the source
-(a Studio take stays in its project folder) with a lossless copy of its own.
+ComfyUI 0.45 or newer; the setup brings v0.46.0): a Wan 2.2 model computes every 15th frame in one step, a small
+decoder fills in the frames in between. Sound and frame rate stay, a generated video is read from its lossless copy,
+and the result lands next to the source (a Studio take stays in its project folder) with a lossless copy of its own.
 
 - Measured on the RTX 5060 Ti, 5 s at 24 fps: 1024 × 576 → 2048 × 1152 in 38 s, 1920 × 1088 → 3840 × 2176 in 104 s
   at up to 14.5 GB of video memory. About four times as sharp as plain enlarging (variance of the Laplacian 88 against
@@ -605,6 +607,10 @@ For people, the web interface has an assistant (**✨ Assistant** next to "Confo
 steps. Its building blocks are a good model for your own prompts; `POST /api/studio/wizard/plan` returns the models it
 would pick and the expected time, and `GET /api/hardware` the detected graphics card with the typical time per model
 (estimated from the hardware catalog, or measured once jobs have run). Tell the user these times before long runs.
+`POST /api/estimate` with `{"items": [{"kind": "txt2video", "params": {...}}]}` estimates any job with the parameters
+you would send (`seconds`, `source` = `history` when measured on this machine, and `cold` for starting the engine and
+loading the model), and `POST /api/studio/projects/{id}/estimate` does the same per scene, built from the same request
+as generating.
 
 Workflow:
 
@@ -672,17 +678,26 @@ and restored photos made for a project outside its scenes go straight into its f
 
 **How a scene becomes a job:**
 
-- **Video:** LTX-2.5 with frames = 8n+1 from the length, 1280 × 704 (projects below 1900 px) or 1920 × 1088 with "Best
-  quality (DFR)" when the detail IC-LoRA is installed (project setting `video_quality`, per scene `params.quality`).
-  `params` pass on seed, size, LoRAs, start and end image and `audio_asset_id`.
-- **Still image:** about 1 MP in the project's aspect ratio (a title card with Qwen: `params` 1664 × 928).
+- **Video:** LTX-2.5 with frames = 8n+1 from the length, 1920 × 1088 for projects from 1900 px and 1280 × 704 below
+  (turned for portrait), as "Best quality (DFR)" when the detail IC-LoRA is installed and the scene has no end image,
+  loop or layout video (project setting `video_quality`, per scene `params.quality`: `dfr` or `standard`). `params`
+  pass on `seed`, size, `image_asset_id` (start image), `end_image_asset_id` or `loop`, `audio_asset_id`,
+  `reference_asset_ids` (models that take references, such as Wan VACE) and `loras`; since 0.5.40 also
+  `guide_asset_id` (layout video, LTX-2.5, standard quality) and `audio_prompt` (Kandinsky 6), since 0.5.41
+  `temporal_upscale` (48 fps, with DFR) and `motion_speed` (slow motion). A field set to `null` falls back to the
+  model's default.
+- **Still image:** the model's preset size in the project's aspect ratio (Qwen-Image-2512 about 1.76 MP, FLUX 3, Krea 2
+  and MOSS-Image about 2 MP, other models about 1 MP; a title card with Qwen: `params` 1664 × 928). `params` pass on
+  `seed`, `negative_prompt`, `reference_asset_ids` and `loras`.
 - **Music and sound:** the scene's length, up to 300 s.
 - **Voice:** Qwen3-TTS speaks the scene's text in the voice from its params or its character (see above); a recorded
   audio file can also be added as a take (`scene.take` with `asset_id`).
 - **Chain:** a video scene with `chain_from`, or starting at a `chain` marker, continues the earlier scene: with LTX-2.5
   it takes over the last 25 frames, and `edit.conform` lays the take exactly over them with a dissolve, so the edit
   keeps the length of the scenes. Otherwise the last frame becomes the start image. If the source is generated in the
-  same run, the chained scene waits (`waiting`) and starts as soon as its source is done.
+  same run, the chained scene waits (`waiting`) and starts as soon as its source is done. A chained scene whose take
+  began from an older take of its source carries `stale` with a reason: generate it again, or keep it with
+  `scene.update` `params.chain_keep = {take, source}` from `stale` if the user wants to.
 - **Order in the GPU queue:** sound, still images, videos grouped by model, chained scenes last, so LTX-2.5 is not
   unloaded in between.
 
@@ -692,7 +707,7 @@ and restored photos made for a project outside its scenes go straight into its f
 clips is mixed, set to −14 LUFS and limited at −2.5 dBFS; the export runs in its own queue next to generating. Clips
 within 5 % of the project's aspect ratio fill the frame (LTX's 1920 × 1088 loses 8 rows), others are letterboxed.
 
-Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours at 720p and 8.5
+Be honest about the cost: 10 minutes made only of LTX-2.5 clips are 120 clips of 5 s, about 3 hours at 720p and 8
 hours at 1080p. Still images with music and voice are much cheaper.
 
 ### Recipe: an explainer video with a presenter
@@ -828,7 +843,7 @@ user to the license instead of generating silently.
 - **`clip input is invalid: None`** → the checkpoint has no text encoder; the model is missing files (`list_models`
   shows which). Don't tinker with the prompt.
 - **`No <kind> model installed`** → `list_models(kind=...)`, then suggest a download.
-- **`… is an image-to-video model — please provide a start image`** → pass `image_asset_id` or choose a text-to-video
+- **`… is an image-to-video model: please provide a start image`** → pass `image_asset_id` or choose a text-to-video
   model.
 - **Timeout while starting the backend** → `GET /api/backend/log` (or `?worker=triposg`) shows the real reason.
 - **Job stays `queued`** → another GPU job is running. Downloads don't block.

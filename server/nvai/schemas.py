@@ -675,3 +675,7 @@ class VersionInfo(BaseModel):
         "", description="Kennung dieser Installation (Hash des Programmordners). Der Starter "
                         "erkennt daran, ob das NVAI-open auf dem Port sein eigenes ist."
     )
+    ui: dict[str, bool] = Field(
+        default_factory=dict,
+        description="Bereiche der Oberfläche, die nur auf Wunsch erscheinen (seit 0.5.42): vhs = Reiter VHS",
+    )

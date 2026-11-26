@@ -1,0 +1,165 @@
+/* Geführte Oberfläche (seit 0.5.42, Konzept „NVAI im Fluss“): gemeinsame Bausteine für Generieren, Studio,
+   Willkommen und Auftragsleiste. Farben aus styles.css (:root). */
+
+.flow-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.flow-label {
+  font: 600 11px/1 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Hinweis mit Rand links (grün: Erklärung; warn: etwas fehlt oder ist veraltet) */
+.flow-note {
+  margin: 0; border-left: 3px solid var(--accent-dim); background: rgba(118, 185, 0, 0.07);
+  padding: 7px 10px; border-radius: 0 8px 8px 0;
+}
+.flow-note.warn { border-color: #e3a72f; background: rgba(227, 167, 47, 0.08); }
+
+/* Zustands-Chip: „LTX-2.5 · bereit“, „Startbild fehlt“, „veraltet“ */
+.flow-chip {
+  display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px 9px; color: var(--muted); font-size: 12px; white-space: nowrap; background: none;
+}
+button.flow-chip { cursor: pointer; font: inherit; font-size: 12px; }
+.flow-chip.ok { border-color: var(--accent-dim); color: #b6e35f; }
+.flow-chip.warn { border-color: #6b5320; color: #e3a72f; }
+.flow-chip.info { border-color: #284a70; color: #5aa9ff; }
+.flow-chip.err { border-color: #7a2a2a; color: var(--danger); }
+
+/* Wegwahl: eine Reihe Knöpfe statt Klappen (aria-pressed zeigt den gewählten) */
+.flow-seg {
+  display: flex; flex-wrap: wrap; gap: 4px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; padding: 3px;
+}
+.flow-seg button {
+  background: none; border: 0; border-radius: 6px; padding: 5px 10px; color: var(--muted); cursor: pointer;
+  font: inherit; font-size: 13px;
+}
+.flow-seg button:hover:not(:disabled) { color: var(--text); }
+.flow-seg button[aria-pressed="true"] {
+  background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-dim);
+}
+.flow-seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Platz für ein Bild oder Video des Wegs (Startbild, Endbild, Layout-Video …) */
+.flow-slot {
+  border: 1px dashed #3a4450; border-radius: 9px; padding: 8px; display: flex; gap: 10px; align-items: center;
+  min-height: 64px; color: var(--muted);
+}
+.flow-slot img, .flow-slot video { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; flex: none; }
+
+/* Großer Knopf mit Zeit: „Video erzeugen ≈ 1:50“ */
+.btn.flow-big {
+  width: 100%; padding: 11px 16px; font-size: 14px; display: flex; justify-content: center; gap: 10px;
+  align-items: baseline;
+}
+.flow-eta { font-weight: 500; opacity: 0.75; font-variant-numeric: tabular-nums; }
+
+/* Fortschritt in Phasen */
+.flow-phases-box { display: grid; gap: 8px; }
+.flow-phases { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.flow-phases li {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.flow-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); display: inline-block; }
+.flow-dot.done { background: var(--accent); border-color: var(--accent); }
+.flow-dot.run { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.18); }
+.flow-dot.err { background: var(--danger); border-color: var(--danger); }
+.flow-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 5px; }
+.flow-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.4s ease; }
+
+/* Fehlendes Modell an Ort und Stelle */
+.flow-need {
+  display: grid; gap: 8px; border-left: 3px solid #e3a72f; background: rgba(227, 167, 47, 0.08);
+  padding: 8px 10px; border-radius: 0 8px 8px 0; font-size: 13px;
+}
+.flow-need-dl { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.flow-need-dl .flow-bar { margin: 0; }
+
+/* Nächste Schritte unter einem Ergebnis */
+.flow-next { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.flow-next .btn { text-align: left; display: grid; gap: 1px; padding: 7px 10px; }
+.flow-next .btn small { color: var(--muted); font-size: 11.5px; font-weight: 400; }
+.flow-next .btn.primary small { color: #24310c; }
+@media (max-width: 700px) { .flow-next { grid-template-columns: minmax(0, 1fr); } }
+
+/* Studio: Schrittleiste mit einem Knopf */
+.flow-rail {
+  display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  min-width: 0;
+}
+.flow-rail .step {
+  flex: 1; min-width: 0; padding: 7px 10px; border-right: 1px solid var(--line); display: grid; gap: 2px;
+  background: var(--panel); text-align: left; color: var(--text); font: inherit; font-size: 13px;
+}
+.flow-rail .step:last-child { border-right: 0; }
+.flow-rail .step small {
+  color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.flow-rail .step.done { background: #18210f; }
+.flow-rail .step.done b::before { content: "✓ "; color: var(--accent); }
+.flow-rail .step.now { background: var(--panel-2); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Szenen-Karte mit Zustand */
+.flow-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: grid;
+  text-align: left; color: var(--text); font: inherit; padding: 0; cursor: pointer;
+}
+.flow-card.sel { border-color: var(--accent); }
+.flow-card .pic { background: linear-gradient(160deg, #26313b, #151b21); position: relative; }
+.flow-card .pic img, .flow-card .pic video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.flow-card .meta { padding: 7px 8px; display: grid; gap: 5px; min-width: 0; }
+.flow-card .meta b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Auftragsleiste über alle Reiter */
+.flow-dock {
+  position: fixed; right: 16px; bottom: 16px; width: 380px; max-width: calc(100vw - 32px); z-index: 60;
+  background: var(--panel); border: 1px solid #36414c; border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45); overflow: hidden;
+}
+.flow-dock-head {
+  padding: 9px 12px; background: var(--panel-2); display: flex; justify-content: space-between; gap: 8px;
+  align-items: center; border-bottom: 1px solid var(--line);
+}
+.flow-dock ul { list-style: none; margin: 0; padding: 6px 0; max-height: min(50vh, 420px); overflow-y: auto; }
+.flow-dock li {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; padding: 6px 12px; align-items: center;
+}
+.flow-dock li .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-dock li .sub {
+  display: block; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.flow-dock li .btn { padding: 2px 8px; }
+.flow-toast {
+  position: fixed; left: 16px; bottom: 16px; z-index: 61; background: #18210f; border: 1px solid var(--accent-dim);
+  border-radius: 10px; padding: 9px 12px; display: flex; gap: 10px; align-items: center;
+  max-width: min(420px, calc(100vw - 32px)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4); font-size: 13px;
+}
+.flow-toast.err { background: #2a1414; border-color: #7a2a2a; }
+
+/* Erster Start */
+.flow-welcome {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  display: grid; gap: 10px; margin: 12px 18px 0;
+}
+.flow-intents { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.flow-intent {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; text-align: left;
+  display: grid; gap: 4px; align-content: start; color: var(--text); font: inherit; cursor: pointer;
+}
+.flow-intent b { font-size: 13.5px; }
+.flow-intent span { color: var(--muted); font-size: 12px; }
+.flow-intent[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.flow-needs { display: grid; gap: 6px; }
+.flow-needs .row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px;
+}
+.flow-needs .size { font-variant-numeric: tabular-nums; color: var(--muted); }
+@media (max-width: 900px) { .flow-intents { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-bar i { transition: none; }
+}

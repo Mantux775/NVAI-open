@@ -220,7 +220,7 @@ export function HistoryPanel({ event }: Props) {
               <option value="all">{t('Alle Ordner', 'All folders')}</option>
               <option value="">{t('Nur Verlauf (ohne Studio)', 'History only (no Studio)')}</option>
               {folders.map((f) => (
-                <option key={f.path} value={f.path}>Studio: {f.name}</option>
+                <option key={f.path} value={f.path}>{t('Studio', 'Studio')}: {f.name}</option>
               ))}
             </select>
           )}
@@ -230,15 +230,11 @@ export function HistoryPanel({ event }: Props) {
           (confirmClear ? (
             <span className="confirm">
               <span className="muted small">
+                {/* Ohne Zahl: Geladen ist nur eine Seite, gelöscht wird alles dieser Art (die API nennt keine Gesamtzahl) */}
                 {filter === 'all'
-                  ? t(
-                      `Alle ${jobs.length} Einträge samt Dateien löschen?`,
-                      `Delete all ${jobs.length} entries including their files?`,
-                    )
-                  : t(
-                      `Alle ${shown.length} Einträge der Art „${filterLabel(filter)}“ löschen?`,
-                      `Delete all ${shown.length} ${filterLabel(filter)} entries?`,
-                    )}
+                  ? t('Alle Einträge samt Dateien löschen?', 'Delete all entries including their files?')
+                  : t(`Alle Einträge der Art „${filterLabel(filter)}“ samt Dateien löschen?`,
+                    `Delete all “${filterLabel(filter)}” entries including their files?`)}
                 {folders.length > 0 && t(' Projektordner des Studios und was ein Projekt nutzt, bleiben.',
                   ' Studio project folders and anything a project uses stay.')}
               </span>
@@ -362,7 +358,7 @@ export function HistoryPanel({ event }: Props) {
                           {a.model_id}
                           {a.meta.seed != null && ` · seed ${a.meta.seed}`} ·{' '}
                           <a href={a.url} download>
-                            Download
+                            {t('Download', 'Download')}
                           </a>
                           {canUpscale(a) && (
                             <>

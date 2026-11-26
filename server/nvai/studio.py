@@ -327,6 +327,15 @@ def clip_owner(asset_id: str) -> str | None:
     return None
 
 
+def source_owner(asset_id: str) -> str | None:
+    """Name des Projekts, das das Asset als Vorlage einer Szene oder Figur nutzt (_source_assets), sonst None. Takes
+    zählen nicht: Schlechte Takes löscht man in der Medienleiste, refresh nimmt sie dann aus der Szene."""
+    for p in _all_projects():
+        if asset_id in _source_assets(p):
+            return p.get("name") or p.get("id")
+    return None
+
+
 def used_asset_ids() -> set[str]:
     """Alles, was ein Studio-Projekt benutzt (Clips, Takes, Vorlagen): Den Verlauf zu leeren löscht es nicht mit."""
     return {a for p in _all_projects() for a in _used_assets(p)}
@@ -597,10 +606,11 @@ def _keep_generation(restored: dict[str, Any], current: dict[str, Any]) -> None:
         s["takes"] = s["takes"] + [a for a in c["takes"] if a not in s["takes"]]
         s["jobs"] = list(c.get("jobs") or [])
         s["error"] = c.get("error")
-        if c.get("waiting_for"):
-            s["waiting_for"] = c["waiting_for"]
-        else:
-            s.pop("waiting_for", None)
+        for key in ("waiting_for", "cancelled"):
+            if c.get(key):
+                s[key] = c[key]
+            else:
+                s.pop(key, None)
         if not s.get("take") and c.get("take"):
             s["take"] = c["take"]
     restored["media"] = {**restored.get("media", {}), **current.get("media", {})}
@@ -775,8 +785,7 @@ def _spoken_in_video(p: dict[str, Any]) -> set[str]:
     """Sprecher-Szenen, deren Take eine Videoszene als Ton nimmt (params.audio_from): Der Satz klingt dann schon im
     Video; Übernehmen legt ihn nicht noch einmal auf die Spur „Stimme“."""
     voice = {s["id"] for s in p["scenes"] if s["lane"] == "voice"}
-    return {src for s in p["scenes"] if s["lane"] == "video" and s.get("kind") == "video"
-            and (src := (s.get("params") or {}).get("audio_from")) in voice}
+    return {src for s in p["scenes"] if _speaks(s) and (src := (s.get("params") or {}).get("audio_from")) in voice}
 
 
 # ---------------------------------------------------------------------------------------- Szenen
@@ -865,8 +874,10 @@ def _scene_add(p: dict[str, Any], a: dict[str, Any]) -> dict[str, str]:
 
 @command("scene.update", "Felder ändern: id und title, prompt, kind, model_id, lane, chain_from, params "
          "(wird zusammengeführt, z. B. image_asset_id, reference_asset_ids, end_image_asset_id, loop, guide_asset_id "
-         "[Layout-Video, LTX-2.5], audio_prompt [Kandinsky 6], quality, seed, characters [Figuren-IDs im Bild], audio_from "
-         "[Sprecher-Szene, deren Take der Ton eines Videos wird]; Bahn voice: character [Figur, deren Stimme spricht], "
+         "[Layout-Video, LTX-2.5], audio_prompt [Kandinsky 6], quality [standard|dfr], temporal_upscale [48 fps, nur dfr], "
+         "motion_speed [Zeitlupe], loras [{model_id, strength}], seed, characters [Figuren-IDs im Bild], audio_from "
+         "[Sprecher-Szene, deren Take der Ton eines Videos wird], chain_keep [{take, source}: „So lassen“ für eine "
+         "veraltete Anschluss-Szene, siehe stale]; Bahn voice: character [Figur, deren Stimme spricht], "
          "voice, voice_from, voice_asset_id, voice_text, language), start/start_s, duration/duration_s")
 def _scene_update(p: dict[str, Any], a: dict[str, Any]) -> None:
     s = _find(p["scenes"], a.get("id", ""), t("Szene", "scene"))
@@ -926,6 +937,7 @@ def _scene_take(p: dict[str, Any], a: dict[str, Any]) -> None:
         s["takes"].append(asset_id)
     s["take"] = asset_id
     s["error"] = None
+    s.pop("cancelled", None)
     _fit_voice(p, s)
 
 
@@ -1525,8 +1537,11 @@ def _conform_targets(p: dict[str, Any]) -> dict[str, tuple[int, str]]:
 
 
 def _speaks(s: dict[str, Any]) -> bool:
-    """Eine Videoszene, die den Satz einer Sprecher-Szene als Ton nimmt (params.audio_from, seit 0.5.24)."""
-    return s["lane"] == "video" and s.get("kind") == "video" and bool((s.get("params") or {}).get("audio_from"))
+    """Eine Videoszene, die den Satz einer Sprecher-Szene als Ton nimmt (params.audio_from, seit 0.5.24). Nur mit
+    LTX-2.5: Nach dem Wechsel auf ein anderes Modell bleibt die Angabe stehen, wirkt aber nicht (_job_request), und der
+    Satz kommt beim Übernehmen wieder als eigener Clip auf die Spur „Stimme“."""
+    return (s["lane"] == "video" and s.get("kind") == "video" and bool((s.get("params") or {}).get("audio_from"))
+            and _ltx25(_known_model(s.get("model_id"), "video")))
 
 
 def _clip_length_for(p: dict[str, Any], s: dict[str, Any], start: int, at: int) -> int:
@@ -1544,6 +1559,17 @@ def _clip_length_for(p: dict[str, Any], s: dict[str, Any], start: int, at: int) 
     return length
 
 
+def _conform_order(p: dict[str, Any], targets: dict[str, tuple[int, str]]) -> list[dict[str, Any]]:
+    """Reihenfolge, in der das Übernehmen neue Clips legt (_conform, der Plan rechnet in derselben). Takes mit
+    übernommenem Anfang (Latent-Kette) zuletzt und nach Zeit: Ihre Vorlage liegt dann schon im Schnitt, und eine später
+    gelegte Vorlage überdeckt ihren Anfang nicht. Videos, die einen Satz sprechen, nach den übrigen: Ist der Satz länger
+    als die Szene, überdeckt ihr Clip den Anfang der nächsten Szene, statt dass deren Clip den Satz abschneidet."""
+    chained = {s["id"] for s in p["scenes"] if s.get("take") and _carry_ticks(s["take"])}
+    speaking = {s["id"] for s in p["scenes"] if _speaks(s)}
+    return sorted(p["scenes"], key=lambda s: (s["id"] in chained, s["id"] in speaking,
+                                              targets[s["id"]][0] if s["id"] in chained else 0))
+
+
 def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     """Was „Übernehmen“ täte, ohne etwas zu ändern (Nutzer 27.10.2026: „es soll erkennen, wenn die Clips schon
     generiert worden sind … ich kann mit der Checkbox wählen, welche überschrieben werden“).
@@ -1559,7 +1585,11 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
     in_edit = {c["asset_id"] for c in q["clips"]}
     items, without = [], 0
     spoken = _spoken_in_video(q)
-    for s in q["scenes"]:
+    # Wie _conform: in dessen Reihenfolge, und neue Clips aus diesem Übernehmen zählen für die folgenden mit (dort liegen
+    # sie dann schon im Schnitt). Sonst meldete der Plan „keine Überdeckung“, und _conform übersprang die Szene doch,
+    # etwa den nächsten Sprechersatz, wenn der vorige länger geworden ist.
+    created: list[dict[str, Any]] = []
+    for s in _conform_order(q, targets):
         if s["id"] in spoken and not any(c.get("scene_id") == s["id"] for c in q["clips"]):
             continue  # klingt schon im Video (params.audio_from einer Videoszene)
         if not s.get("take"):
@@ -1585,7 +1615,7 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
                           "default": changed and not edited})
             continue
         try:
-            at = _chain_start(q, track, s["take"], start)
+            at = _chain_start({**q, "clips": q["clips"] + created}, track, s["take"], start)
             clip = _new_clip(q, track, s["take"], at, _clip_length_for(q, s, start, at), 0, s["id"])
         except StudioError as exc:
             items.append({**base, "action": "error", "error": str(exc), "default": False})
@@ -1593,11 +1623,19 @@ def conform_plan(p: dict[str, Any]) -> dict[str, Any]:
         # wie in _conform: die gewollte Überlappung einer Latent-Kette vor dem Szenenanfang ist kein Überdecken
         overlaps = [{"clip_id": c["id"], "title": _clip_label(q, c),
                      "seconds": round(seconds(min(clip_end(c), clip_end(clip)) - max(c["start"], start)), 3)}
-                    for c in q["clips"] if c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start]
+                    for c in q["clips"] + created
+                    if c["track"] == track and c["start"] < clip_end(clip) and clip_end(c) > start]
+        # Spricht das Video einen Satz, der länger ist als die Szene, soll es den Anfang der nächsten neuen Szene
+        # überdecken (_conform_order): dafür ist das Häkchen vorgewählt, für Vorhandenes im Schnitt nicht
+        own = {c["id"] for c in created}
+        over_new_only = bool(overlaps) and _speaks(s) and all(o["clip_id"] in own for o in overlaps)
+        created.append(clip)
         dup = s["take"] in in_edit
         items.append({**base, "action": "create", "start_s": round(seconds(start), 3),
                       "length_s": round(seconds(clip_length(clip)), 3), "overlaps": overlaps, "in_edit": dup,
-                      "default": not overlaps and not dup})
+                      "default": (not overlaps or over_new_only) and not dup})
+    order = {s["id"]: i for i, s in enumerate(q["scenes"])}
+    items.sort(key=lambda it: order.get(it["scene_id"], 0))  # angezeigt in der Reihenfolge der Szenen
     transitions = sum(1 for m in q["markers"] if m["kind"] == "transition")
     return {"items": items, "without_take": without, "transition_markers": transitions,
             "spoken_in_video": len([x for x in spoken if not any(c.get("scene_id") == x for c in q["clips"])])}
@@ -1613,15 +1651,8 @@ def _conform(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
     allowed = set(a.get("overwrite") or [])
     skipped: list[str] = []
     targets = _conform_targets(p)
-    # Takes mit übernommenem Anfang (Latent-Kette) zuletzt und nach Zeit: Ihre Vorlage liegt dann schon im Schnitt,
-    # und eine später gelegte Vorlage überdeckt ihren Anfang nicht
-    chained = {s["id"] for s in p["scenes"] if s.get("take") and _carry_ticks(s["take"])}
     spoken = _spoken_in_video(p)
-    # Videos, die einen Satz sprechen, nach den übrigen: Ist der Satz länger als die Szene, überdeckt ihr Clip den
-    # Anfang der nächsten Szene, statt dass deren Clip den Satz abschneidet
-    speaking = {s["id"] for s in p["scenes"] if _speaks(s)}
-    for s in sorted(p["scenes"], key=lambda s: (s["id"] in chained, s["id"] in speaking,
-                                                targets[s["id"]][0] if s["id"] in chained else 0)):
+    for s in _conform_order(p, targets):  # Latent-Ketten und sprechende Videos zuletzt, wie im Plan
         if not s.get("take") or (only is not None and s["id"] not in only):
             continue
         start, track = targets[s["id"]]
@@ -1675,12 +1706,16 @@ def _collect_jobs(p: dict[str, Any], s: dict[str, Any], choose: bool) -> bool:
     pending = []
     for job_id in s.get("jobs", []):
         job = db.get_job(job_id)
-        if job is None or job.status in ("queued", "running"):
-            if job is not None:
-                pending.append(job_id)
+        if job is not None and job.status in ("queued", "running"):
+            pending.append(job_id)
             continue
         changed = True
-        if job.status == "done":
+        if job is None or job.status == "cancelled":
+            # Abgebrochen (Stopp, Verlauf, Serverneustart) oder wartend gelöscht: Wer auf diese Szene wartet, nimmt
+            # dann nicht ihren alten Take (_chain_later)
+            if choose:
+                s["cancelled"] = True
+        elif job.status == "done":
             for asset_id in job.asset_ids:
                 if asset_id not in s["takes"]:
                     s["takes"].append(asset_id)
@@ -1688,6 +1723,7 @@ def _collect_jobs(p: dict[str, Any], s: dict[str, Any], choose: bool) -> bool:
                 s["take"] = job.asset_ids[-1]
                 s["error"] = None
                 _fit_voice(p, s)
+            s.pop("cancelled", None)
         elif job.status == "error" and choose:
             s["error"] = job.error
     if pending != s.get("jobs", []):
@@ -1742,6 +1778,68 @@ def scene_status(s: dict[str, Any]) -> str:
     if s.get("error"):
         return "error"
     return "done" if s.get("take") else "empty"
+
+
+def _chain_source(asset_id: str | None) -> str | None:
+    """Von welchem Take seiner Vorlage ein Anschluss-Take ausging: bei der Latent-Kette meta.chain_asset_id, sonst war
+    das letzte Bild der Vorlage sein Startbild (meta.image_asset_id, dort meta.studio_last_frame_of). None, wenn es sich
+    nicht sagen lässt (eingefügter Take, Take von vor dem Anschluss)."""
+    take = db.get_asset(asset_id) if asset_id else None
+    meta = (take.meta or {}) if take is not None else {}
+    if meta.get("chain_asset_id"):
+        return str(meta["chain_asset_id"])
+    image = db.get_asset(meta["image_asset_id"]) if meta.get("image_asset_id") else None
+    source = (image.meta or {}).get("studio_last_frame_of") if image is not None else None
+    return str(source) if source else None
+
+
+def scene_stale(p: dict[str, Any], s: dict[str, Any]) -> dict[str, Any] | None:
+    """Veraltet (seit 0.5.42, Konzept „NVAI im Fluss“, Bildschirm E; Oberflächentest 26.11.2026: „Wird eine Szene neu
+    erzeugt, behalten Anschluss-Szenen ihr altes Ende ohne Hinweis“): Der Take einer Anschluss-Szene ging von einem
+    anderen Take ihrer Vorlage aus als dem jetzt gewählten, die Szene beginnt also noch mit dem alten Ende. „So lassen“
+    merkt sich genau dieses Paar in params.chain_keep ({take, source}); ein neuer Take auf einer der beiden Seiten zeigt
+    den Hinweis wieder. `p` mit aufgelösten Anschluss-Markern (view, summary). Antwort: source (Szene), take (ihr
+    gewählter Take), used (der, von dem diese Szene ausging), why (take: neuer Take der Vorlage; scene: der Anschluss
+    zeigt inzwischen auf eine andere Szene) und reason (Text)."""
+    if s.get("lane") != "video" or s.get("kind") != "video" or not s.get("chain_from") or not s.get("take"):
+        return None
+    source = next((x for x in p["scenes"] if x["id"] == s["chain_from"]), None)
+    now = source.get("take") if source is not None else None
+    used = _chain_source(s["take"]) if now else None
+    if not used or used == now:
+        return None
+    keep = (s.get("params") or {}).get("chain_keep")
+    if isinstance(keep, dict) and keep.get("take") == s["take"] and keep.get("source") == now:
+        return None
+    name = source.get("title") or source.get("prompt", "")[:40] or source["id"]
+    # Der alte Take gehört einer anderen Szene: Der Anschluss wurde umgestellt (eine eingefügte Kopie teilt die Takes
+    # ihrer Vorlage, deshalb zählt die eigene Vorlage zuerst)
+    other = None if used in (source.get("takes") or []) else next(
+        (x for x in p["scenes"] if x is not source and used in (x.get("takes") or [])), None)
+    if other is not None:
+        old = other.get("title") or other.get("prompt", "")[:40] or other["id"]
+        reason = t(f"Diese Szene schließt jetzt an „{name}“ an, beginnt aber noch mit dem Ende von „{old}“.",
+                   f"This scene now continues “{name}” but still begins with the end of “{old}”.")
+    else:
+        reason = t(f"„{name}“ hat einen neuen Take. Diese Szene schließt daran an und beginnt noch mit dem alten Ende.",
+                   f"“{name}” has a new take. This scene continues from it and still begins with the old ending.")
+    return {"source": source["id"], "take": now, "used": used, "why": "scene" if other is not None else "take",
+            "reason": reason}
+
+
+def scene_carry(p: dict[str, Any], s: dict[str, Any]) -> str | None:
+    """Szene, deren Ende der gewählte Take einer Videoszene fortsetzt (Latent-Kette oder letztes Bild), auch wenn der
+    Anschluss aus einem Marker kam und chain_from nie gespeichert wurde; sonst None. Seit 0.5.42 lassen sich Szenen in
+    der Kartenreihe umordnen: Liegt diese Szene danach nicht mehr direkt hinter ihr, warnt die Oberfläche, weil die Naht
+    beim Übernehmen dann über die falsche Szene blendet."""
+    if s.get("lane") != "video" or s.get("kind") != "video" or not s.get("take"):
+        return None
+    used = _chain_source(s["take"])
+    if not used:
+        return None
+    own = next((x for x in p["scenes"] if x["id"] == s.get("chain_from") and used in (x.get("takes") or [])), None)
+    src = own or next((x for x in p["scenes"] if x is not s and used in (x.get("takes") or [])), None)
+    return src["id"] if src is not None else None
 
 
 # ------------------------------------------------------------------------------------------- Erzeugen
@@ -1819,16 +1917,27 @@ def _known_model(model_id: str | None, kind: str) -> str | None:
     return registry.get_active_model(kind)
 
 
+# Was nur LTX-2.5 kann (jobs._check_video_options lehnt es bei anderen Modellen ab): Wird eine Szene auf Kandinsky 6, Wan
+# oder MiniMax umgestellt, bleibt es in ihren params, geht aber nicht mit in den Auftrag, wie Layout-Video und
+# Tonbeschreibung. Sonst scheiterte jeder Lauf an einer Wahl, die die Oberfläche bei diesen Modellen gar nicht zeigt.
+LTX25_ONLY = ("quality", "temporal_upscale", "motion_speed", "end_image_asset_id", "loop", "audio_asset_id")
+
+
+def _ltx25(model_id: str | None) -> bool:
+    entry = registry.get_entry(model_id) if model_id else None
+    return entry is not None and entry.get("family") == "ltx25"
+
+
 def _dependencies(p: dict[str, Any], s: dict[str, Any]) -> list[str]:
     """Szenen, auf deren Take diese wartet: die Vorlage eines Anschlusses (Video), die Szene, deren Stimme eine
     Sprecher-Szene übernimmt (params.voice_from, seit 0.5.21, auch über ihre Figur) und die Sprecher-Szene, deren Satz
-    eine Videoszene spricht (params.audio_from, seit 0.5.24)."""
+    eine Videoszene spricht (params.audio_from, seit 0.5.24, nur mit LTX-2.5)."""
     if s["lane"] == "voice":
         source = _voice_settings(p, s).get("voice_from")
         return [source] if source else []
     deps = [s["chain_from"]] if s.get("chain_from") else []
     audio = (s.get("params") or {}).get("audio_from")
-    if s["lane"] == "video" and s.get("kind") == "video" and audio and audio not in deps:
+    if _speaks(s) and audio not in deps:
         deps.append(audio)
     return deps
 
@@ -1864,8 +1973,9 @@ def _voice_request(p: dict[str, Any], s: dict[str, Any], params: dict[str, Any])
     return {**req.model_dump(), "studio_project": p["id"]}
 
 
-def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Die Anfrage, wie sie auch /api/generate/* bekäme (dieselbe Prüfung durch das Schema)."""
+def _job_request(p: dict[str, Any], s: dict[str, Any], dry: bool = False) -> tuple[str, dict[str, Any]]:
+    """Die Anfrage, wie sie auch /api/generate/* bekäme (dieselbe Prüfung durch das Schema). `dry` (Schätzung, seit
+    0.5.42): nichts anlegen, das letzte Bild einer Vorlage nur als vorhanden annehmen."""
     params = dict(s.get("params") or {})
     if not s.get("prompt", "").strip():
         raise StudioError(t("Die Szene hat noch keinen Prompt.", "The scene has no prompt yet."))
@@ -1886,7 +1996,8 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
         req = GenerateImageRequest(prompt=prompt, model_id=model_id, **_image_size(p, params, model_id), loras=look,
                                    **{k: v for k, v in params.items() if k in ("seed", "steps", "cfg",
                                                                                "negative_prompt",
-                                                                               "reference_asset_ids")})
+                                                                               "reference_asset_ids")
+                                      and v is not None})
         return "txt2img", {**req.model_dump(), "studio_project": p["id"]}
     model_id = _known_model(s.get("model_id"), "video")
     entry = registry.get_entry(model_id) if model_id else None
@@ -1908,7 +2019,11 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
                                                       "end_image_asset_id", "quality", "motion_speed",
                                                       "audio_asset_id", "loop", "temporal_upscale", "crf",
                                                       "reference_asset_ids", "sparse_attention", "int8_attention",
-                                                      "recommended")}
+                                                      "recommended")
+             and v is not None}  # zurückgesetzte Felder der Szene (null): die Vorgabe des Modells
+    if not _ltx25(model_id):
+        for key in LTX25_ONLY:
+            extra.pop(key, None)
     # Figuren im Bild (seit 0.5.24): ihre LoRAs, die zum Modell passen, und ihre Trigger-Wörter
     look, prompt = _character_look(p, s, model_id, params)
     if look:
@@ -1921,7 +2036,7 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
     if entry and entry.get("family") == "ltx25" and params.get("guide_asset_id"):
         extra["guide_asset_id"] = params["guide_asset_id"]
         extra.setdefault("quality", "standard")
-    if params.get("audio_from"):
+    if _speaks(s):
         # Die Figur spricht ihren Satz aus der Sprecher-Szene (deren Take, in der Stimme der Figur); LTX-2.5 bewegt
         # die Lippen dazu, die Länge kommt vom Ton
         source = _find(p["scenes"], params["audio_from"], t("Szene", "scene"))
@@ -1962,9 +2077,11 @@ def _job_request(p: dict[str, Any], s: dict[str, Any]) -> tuple[str, dict[str, A
             chain_id = source["take"]
             # Nach den übernommenen Bildern mindestens die ganze Szene neu rechnen (aufrunden statt runden), sonst
             # fehlten bei Längen, die nicht auf 8 Bilder aufgehen, am Ende Bilder; das Übernehmen schneidet den Rest ab
-            frames = max(9, -(-int(round(secs * fps * 1000)) // (step * 1000)) * step + 1)
+            frames = min(workflows.LTX25_MAX_FRAMES,
+                         max(9, -(-int(round(secs * fps * 1000)) // (step * 1000)) * step + 1))
         else:
-            image_id = _last_frame_asset(source["take"], source.get("title") or "", project_folder(p))
+            image_id = (source["take"] if dry
+                        else _last_frame_asset(source["take"], source.get("title") or "", project_folder(p)))
     req = GenerateVideoRequest(prompt=prompt, model_id=model_id, frames=frames, fps=fps,
                                image_asset_id=None if chain_id else image_id, chain_asset_id=chain_id,
                                **_video_size(model_id, p, params), **extra)
@@ -2086,9 +2203,11 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
             if s["id"] in submitted:
                 s.setdefault("jobs", []).append(submitted[s["id"]])
                 s["error"] = None
+                s.pop("cancelled", None)
             elif s["id"] in waiting:
                 s["waiting_for"] = waiting[s["id"]]
                 s["error"] = None
+                s.pop("cancelled", None)
                 # Unter der Sperre anlegen: ein refresh aus einem anderen Thread hielte die Szene sonst für verwaist
                 _chain_tasks[s["id"]] = asyncio.create_task(_chain_later(pid, s["id"], waiting[s["id"]]),
                                                             name=f"nvai-studio-chain-{s['id']}")
@@ -2103,14 +2222,9 @@ async def cancel(pid: str) -> dict[str, Any]:
     """Erzeugen abbrechen (Knopf neben „Übernehmen“, Nutzer 31.10.2026: „neben dem Übernehmen button soll es den
     forschritt anzeigen und dor kann ich es auch abrechen“): alle wartenden und laufenden Aufträge der Szenen, dazu die
     Anschluss-Szenen, die noch auf ihre Vorlage warten. Fertige Takes bleiben."""
-    p = await asyncio.to_thread(refresh, pid)
-    cancelled = []
-    for s in p["scenes"]:
-        for job_id in list(s.get("jobs") or []):
-            job = db.get_job(job_id)
-            if job is not None and job.status in ("queued", "running"):
-                await jobs.cancel_job(job_id)
-                cancelled.append(job_id)
+    await asyncio.to_thread(refresh, pid)
+    # Erst die wartenden Anschluss-Szenen anhalten, dann die Aufträge: Sonst sah ein Anschluss, der während des
+    # Abbrechens nachschaute, seine eben abgebrochene Vorlage als fertig an und schickte seinen Auftrag noch ab
     with _lock:
         p = load(pid)
         for s in p["scenes"]:
@@ -2120,6 +2234,13 @@ async def cancel(pid: str) -> dict[str, Any]:
                     task.cancel()
         p["updated_at"] = time.time()
         _save(p)
+    cancelled = []
+    for s in p["scenes"]:
+        for job_id in list(s.get("jobs") or []):
+            job = db.get_job(job_id)
+            if job is not None and job.status in ("queued", "running"):
+                if (await jobs.cancel_job(job_id)).get("ok"):  # nicht, wenn er beim Anhalten doch fertig wurde
+                    cancelled.append(job_id)
     await asyncio.to_thread(refresh, pid)
     return {"cancelled": cancelled}
 
@@ -2144,7 +2265,18 @@ async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
                 continue
             job_id, error, next_id = None, None, None
             audio_source = (s.get("params") or {}).get("audio_from")
-            if source is None or source.get("error") or not source.get("take"):
+            if source is not None and source.get("cancelled"):
+                # Ihr Auftrag wurde abgebrochen: nicht mit ihrem alten Take weitermachen
+                error = (t("Die Szene, deren Stimme diese übernimmt, wurde abgebrochen: sie zuerst neu erzeugen.",
+                           "The scene whose voice this one takes over was cancelled: generate it again first.")
+                         if s["lane"] == "voice" else
+                         t("Die Sprecher-Szene, deren Satz diese Szene spricht, wurde abgebrochen: sie zuerst neu "
+                           "erzeugen.",
+                           "The narrator scene whose line this scene speaks was cancelled: generate it again first.")
+                         if source_id == audio_source else
+                         t("Die Szene, an die diese anschließt, wurde abgebrochen: sie zuerst neu erzeugen.",
+                           "The scene this one continues from was cancelled: generate it again first."))
+            elif source is None or source.get("error") or not source.get("take"):
                 error = (t("Die Szene, deren Stimme diese übernimmt, ist fehlgeschlagen.",
                            "The scene whose voice this one takes over failed.") if s["lane"] == "voice" else
                          t("Die Sprecher-Szene, deren Satz diese Szene spricht, ist fehlgeschlagen.",
@@ -2177,6 +2309,7 @@ async def _chain_later(pid: str, scene_id: str, source_id: str) -> None:
                 if job_id:
                     s.setdefault("jobs", []).append(job_id)
                     s["error"] = None
+                    s.pop("cancelled", None)
                 else:
                     s["error"] = error
                 p["updated_at"] = time.time()
@@ -2364,16 +2497,23 @@ PACKAGE_MANIFEST = "nvai-studio.json"
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,150}$")
 
 
-def _used_assets(p: dict[str, Any]) -> list[str]:
-    ids = {c["asset_id"] for c in p["clips"]}
+def _source_assets(p: dict[str, Any]) -> set[str]:
+    """Vorlagen der Szenen und Figuren: Start- und Endbild, vorgegebener Ton, Aufnahme für die Stimme, Layout-Video,
+    Referenzen und die Stimmen der Figuren aus einer Aufnahme (seit 0.5.24; die LoRA-Dateien selbst sind Modelle)."""
+    ids: set[str] = set()
     for s in p["scenes"]:
-        ids.update(s.get("takes") or [])
         params = s.get("params") or {}
         ids.update(params[k] for k in ("image_asset_id", "end_image_asset_id", "audio_asset_id", "voice_asset_id",
                                        "guide_asset_id") if params.get(k))
         ids.update(params.get("reference_asset_ids") or [])
-    # Stimmen der Figuren aus einer Aufnahme (seit 0.5.24); die LoRA-Dateien selbst sind Modelle, nicht im Paket
     ids.update(c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id"))
+    return ids
+
+
+def _used_assets(p: dict[str, Any]) -> list[str]:
+    ids = {c["asset_id"] for c in p["clips"]} | _source_assets(p)
+    for s in p["scenes"]:
+        ids.update(s.get("takes") or [])
     return sorted(ids)
 
 
@@ -2686,6 +2826,12 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
     for s in out["scenes"]:
         s["status"] = scene_status(s)
         s["hints"] = _hints(out, s, vram)
+        stale = scene_stale(out, s)  # veraltete Anschluss-Szene (seit 0.5.42), nur abgeleitet
+        if stale:
+            s["stale"] = stale
+        carry = scene_carry(out, s)  # wessen Ende der Take fortsetzt (seit 0.5.42), nur abgeleitet
+        if carry:
+            s["carry_from"] = carry
     out["tps"] = TICKS_PER_SECOND
     out["edit_duration"] = edit_duration(p)
     out["composition_duration"] = composition_duration(p)
@@ -2729,7 +2875,11 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                     **{k: (s.get("params") or {})[k] for k in ("characters", "character", "audio_from")
                        if (s.get("params") or {}).get(k)},
                     # Hinweise wie in der Oberfläche (seit 0.5.30): zu lang für die Karte, Figur ohne Startbild …
-                    **({"hints": h} if (h := _hints(p, s, vram)) else {})} for s in p["scenes"]],
+                    **({"hints": h} if (h := _hints(p, s, vram)) else {}),
+                    # Veraltete Anschluss-Szene (seit 0.5.42): beginnt noch mit dem alten Ende ihrer Vorlage; carry_from:
+                    # Szene, deren Ende der Take fortsetzt
+                    **({"stale": st} if (st := scene_stale(p, s)) else {}),
+                    **({"carry_from": cf} if (cf := scene_carry(p, s)) else {})} for s in p["scenes"]],
         "characters": p.get("characters") or [],
         "markers": [{"id": m["id"], "at_s": round(seconds(m["at"]), 3), "kind": m["kind"], "name": m["name"],
                      "comment": m["comment"], "params": m["params"], "done": m["done"]} for m in p["markers"]],
@@ -2748,3 +2898,24 @@ def summary(p: dict[str, Any]) -> dict[str, Any]:
                   for c in p["clips"]],
         "duration_s": round(seconds(edit_duration(p)), 3),
     }
+
+
+def estimate_scenes(pid: str, scene_ids: list[str] | None, comfy_up: bool) -> dict[str, dict[str, Any]]:
+    """Geschätzte Rechenzeit je Szene (seit 0.5.42, Konzept „NVAI im Fluss“: „Ein Knopf sagt den nächsten Schritt, er
+    nennt Aktion und Zeit“). Gebaut aus derselben Anfrage wie beim Erzeugen (`_job_request`), nur gelesen. Ohne
+    `scene_ids` alle Szenen ohne Take. Szenen, deren Anfrage noch nicht geht (kein Prompt, Vorlage fehlt), bekommen
+    `error` statt einer Zeit."""
+    from . import estimate  # erst hier: estimate liest registry und hardware, studio wird früh importiert
+
+    p = load(pid)
+    _resolve_chain_markers(p)
+    wanted = [s for s in p["scenes"] if (s["id"] in scene_ids if scene_ids else not s.get("take"))]
+    out: dict[str, dict[str, Any]] = {}
+    for s in wanted:
+        try:
+            kind, params = _job_request(p, s, dry=True)
+        except Exception as exc:  # noqa: BLE001 - je Szene, die anderen bekommen ihre Zeit
+            out[s["id"]] = {"seconds": None, "source": "unknown", "runs": 0, "cold": {}, "error": str(exc)}
+            continue
+        out[s["id"]] = {**estimate.one(kind, params, comfy_up), "kind": kind}
+    return out

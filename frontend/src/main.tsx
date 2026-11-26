@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { getLang } from './i18n'
 import './styles.css'
+// Geführte Oberfläche (seit 0.5.42): Wegwahl, Phasen, Schrittleiste, Auftragsleiste
+import './flow/flow.css'
 
 // index.html sagt fest lang="de" -- fuer Browser und Screenreader die gewaehlte Sprache setzen.
 document.documentElement.lang = getLang()

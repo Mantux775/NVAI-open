@@ -454,6 +454,10 @@ async def run_text_workflow(workflow: dict[str, Any], timeout: float = 600.0) ->
     return texts
 
 
+# Knoten, die Schritte rechnen und dabei Fortschritt melden (je einer eine Stufe des Balkens)
+STEP_NODES = ("KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerCustomAdvanced", "Kandinsky6Sampler")
+
+
 async def _execute(
     workflow: dict[str, Any],
     on_progress: ProgressCb | None,
@@ -465,15 +469,17 @@ async def _execute(
     client_id = uuid.uuid4().hex
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://")
 
-    # Mehrstufige Graphen (Hires-Fix, Wan 2.2 mit zwei Experten) haben mehr als einen
+    # Mehrstufige Graphen (Hires-Fix, Wan 2.2 mit zwei Experten, LTX-2.5 mit zwei Stufen) haben mehr als einen
     # Sampler. ComfyUI zaehlt je Sampler bei 0 los -- ohne diese Aufteilung faellt der
     # Balken beim Uebergang zurueck. Die IDs vergeben wir aufsteigend in Laufreihenfolge.
+    # Seit 0.5.42 nur Knoten, die wirklich Schritte rechnen: vorher zählte „KSamplerSelect“ (wählt nur den Sampler) mit,
+    # SamplerCustomAdvanced (LTX-2.5) nicht, und der Balken sprang bei jedem LTX-Video von 98 auf 34 % zurück.
     sampler_ids = sorted(
-        (nid for nid, n in workflow.items()
-         if str(n.get("class_type", "")).startswith("KSampler")),
+        (nid for nid, n in workflow.items() if str(n.get("class_type", "")) in STEP_NODES),
         key=lambda x: int(x) if str(x).isdigit() else 0,
     )
     stages = max(1, len(sampler_ids))
+    last_idx = 0
 
     async with websockets.connect(f"{ws_url}/ws?clientId={client_id}", max_size=None) as ws:
         async with httpx.AsyncClient(timeout=60.0) as http:
@@ -502,7 +508,9 @@ async def _execute(
                         mx = max(1, data.get("max", 1))
                         val = data.get("value", 0)
                         node = str(data.get("node"))
-                        idx = sampler_ids.index(node) if node in sampler_ids else 0
+                        # Fortschritt anderer Knoten (etwa gekacheltes Dekodieren) gehört zur laufenden Stufe
+                        idx = sampler_ids.index(node) if node in sampler_ids else last_idx
+                        last_idx = idx
                         stage = t(f"Schritt {val}/{mx}", f"Step {val}/{mx}")
                         if stages > 1:
                             stage = t(f"Durchgang {idx + 1}/{stages} · {stage}",

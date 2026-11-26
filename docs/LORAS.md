@@ -79,7 +79,7 @@ one page" shows all settings at once.
    (kohya), or Qwen-Image-Edit-2511 draws your template in 24 poses, framings and settings, about 44 s per image. A
    caption names what changes from image to image (pose, framing, background), not the character itself; trigger word
    and class go in front by themselves. Without a finished drawing, a sketch, a photo or only the description is
-   enough: "Generate drafts" draws the character frontally in full, and one draft becomes the template. A description
+   enough: "Make 4 drafts" draws the character frontally in full, and one draft becomes the template. A description
    in English that names how the character differs from the ordinary (body shape, ears, what is missing) decides more
    than the sketch. Images that came out well can be ticked to generate more from them.
 3. **Sort out:** look at every image at full size and reject what does not fit. The LoRA learns mistakes too.

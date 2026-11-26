@@ -12,6 +12,9 @@ import { ModelsPanel } from './panels/Models'
 import { StudioPanel } from './panels/Studio'
 import { VhsPanel } from './panels/Vhs'
 import { AudioPanel } from './panels/Audio'
+import { JobDock, JobsChip, originTab } from './flow/JobDock'
+import { applyJobEvent, syncJobs, type TrackedJob } from './flow/jobs'
+import { Welcome, type Intent } from './flow/Welcome'
 
 type Tab = 'generate' | 'studio' | 'vhs' | 'history' | 'models' | 'loras' | 'audio'
 
@@ -42,9 +45,12 @@ const LANGS: { id: Lang; name: string }[] = [
 export function App() {
   const [tab, setTab] = useState<Tab>('studio')
   // Reiter, die nach dem ersten Besuch bestehen bleiben (siehe unten bei <main>)
-  const [kept, setKept] = useState<{ generate?: boolean; vhs?: boolean; loras?: boolean; audio?: boolean }>({})
+  // Seit 26.11.2026 auch das Studio: ein laufender Export, Abspielkopf und Auswahl gingen sonst beim Reiterwechsel verloren
+  const [kept, setKept] = useState<{ generate?: boolean; vhs?: boolean; loras?: boolean; audio?: boolean; studio?: boolean }>({})
   useEffect(() => {
-    if ((tab === 'generate' || tab === 'vhs' || tab === 'loras' || tab === 'audio') && !kept[tab]) setKept((k) => ({ ...k, [tab]: true }))
+    if ((tab === 'generate' || tab === 'vhs' || tab === 'loras' || tab === 'audio' || tab === 'studio') && !kept[tab]) {
+      setKept((k) => ({ ...k, [tab]: true }))
+    }
   }, [tab, kept])
   const [health, setHealth] = useState<Health | null>(null)
   const [events, setEvents] = useState<ServerEvent | null>(null)
@@ -58,7 +64,9 @@ export function App() {
   const [stopping, setStopping] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
-  const [versions, setVersions] = useState<{ version: string; comfyui: string | null } | null>(null)
+  const [versions, setVersions] = useState<{ version: string; comfyui: string | null; ui?: { vhs?: boolean } } | null>(null)
+  // VHS ist seit 0.5.42 ausgeblendet; der Server schaltet den Reiter über <Daten>/ui.json wieder ein
+  const showVhs = !!versions?.ui?.vhs
   const downloads = useDownloads(events, setNotice)
   const dlList = Object.entries(downloads.active)
 
@@ -80,12 +88,75 @@ export function App() {
   // Ein WS-Abo fuer die ganze App; die Panels bekommen das letzte Event durchgereicht.
   useEffect(() => {
     return connectEvents((e) => {
+      // Auftragsliste mit Phasen (seit 0.5.42): jedes Ereignis einzeln, auch wenn React mehrere bündelt
+      applyJobEvent(e)
       if (e.type === 'studio.changed') setStudioEvent(e)
       else if (e.type === 'assets.changed') setAssetsVersion((v) => v + 1)
       else if (e.type === 'models.changed') setModelsVersion((v) => v + 1)
       else if (e.type !== 'ping') setEvents(e)
     })
   }, [])
+
+  // Abgleich mit der Auftragsliste des Servers: beim Laden (laufende Aufträge von vorher, auch von Claude per MCP) und
+  // regelmäßig, falls ein Ereignis beim Wiederverbinden des WebSockets fehlte
+  useEffect(() => {
+    syncJobs()
+    const timer = setInterval(syncJobs, 8000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Auftragsleiste (Konzept „NVAI im Fluss“, Bildschirm F): offen, bis man sie schließt; je Sitzung gemerkt
+  const [dockOpen, setDockOpenState] = useState(() => {
+    try {
+      return sessionStorage.getItem('nvai-dock') !== '0'
+    } catch {
+      return true
+    }
+  })
+  // Vom Nutzer über „Aufträge“ geöffnet: bleibt auch offen, wenn nichts mehr läuft (sonst klappt sie dann von selbst weg)
+  const [dockPinned, setDockPinned] = useState(false)
+  const setDockOpen = (open: boolean) => {
+    setDockOpenState(open)
+    try {
+      sessionStorage.setItem('nvai-dock', open ? '1' : '0')
+    } catch {
+      /* nur für diese Ansicht */
+    }
+  }
+
+  // Wohin ein anderer Bereich führt (Konzept „NVAI im Fluss“): Szene im Studio, Auftrag unter Generieren, Assistent.
+  // `n` zählt bei jedem Wunsch hoch, damit derselbe Wunsch zweimal wirkt.
+  const [studioFocus, setStudioFocus] = useState<{ projectId: string; sceneId?: string | null; n: number } | null>(null)
+  const [wizardN, setWizardN] = useState(0)
+  const [genFocus, setGenFocus] = useState<{ jobId: string; n: number } | null>(null)
+  const [genPreset, setGenPreset] = useState<{ mode: 'image' | 'video' | 'audio' | 'speech' | '3d' | 'restore'; n: number } | null>(null)
+
+  const openStudio = (projectId: string, sceneId?: string | null) => {
+    setTab('studio')
+    setStudioFocus({ projectId, sceneId: sceneId ?? null, n: Date.now() })
+  }
+
+  // „Zeigen“ aus der Auftragsleiste: in den Reiter des Auftrags, im Studio gleich zur Szene
+  const showJob = (job: TrackedJob, sceneId: string | null) => {
+    const where = originTab(job)
+    const pid = String(job.params?.studio_project ?? (job.kind === 'studio_export' ? job.params?.project_id ?? '' : ''))
+    if (where === 'studio' && pid) openStudio(pid, sceneId)
+    else if (where === 'generate') {
+      setTab('generate')
+      setGenFocus({ jobId: job.id, n: Date.now() })
+    } else setTab(where)
+  }
+
+  // Erster Start: nach der Wahl der Absicht in den passenden Reiter; ein Video beginnt mit dem Assistenten
+  const startIntent = (intent: Intent) => {
+    if (intent === 'video') {
+      setTab('studio')
+      setWizardN((n) => n + 1)
+    } else {
+      setTab('generate')
+      setGenPreset({ mode: intent === 'audio' ? 'audio' : intent === 'photo' ? 'restore' : 'image', n: Date.now() })
+    }
+  }
 
   const startBackend = async () => {
     setStarting(true)
@@ -161,7 +232,7 @@ export function App() {
         </div>
 
         <nav className="tabs">
-          {TABS.map((tb) => (
+          {TABS.filter((tb) => tb.id !== 'vhs' || showVhs).map((tb) => (
             <button
               key={tb.id}
               className={tab === tb.id ? 'tab active' : 'tab'}
@@ -173,6 +244,7 @@ export function App() {
         </nav>
 
         <div className="status">
+          <JobsChip open={dockOpen} pinned={dockPinned} onToggle={(shown) => { setDockOpen(!shown); setDockPinned(!shown) }} />
           {health?.cpu_mode && <CpuModeChip mode={health.cpu_mode} vulkan={!!health.vulkan_engine} audio={!!health.vulkan_audio} />}
           <span className={health?.comfy_running ? 'dot ok' : 'dot off'} />
 
@@ -303,13 +375,21 @@ export function App() {
         </div>
       )}
 
+      {/* Erster Start ohne Modell (Konzept „NVAI im Fluss“, Bildschirm A): erst die Absicht, dann die Modelle dafür */}
+      {(tab === 'studio' || tab === 'generate') && (
+        <Welcome downloads={downloads} modelsVersion={modelsVersion} onGo={startIntent} onShowModels={() => setTab('models')} />
+      )}
+
+      <JobDock open={dockOpen} pinned={dockPinned} onClose={() => { setDockOpen(false); setDockPinned(false) }} onShow={showJob}
+        tab={tab} studioEvent={studioEvent} />
+
       <main className={tab === 'studio' ? 'content studio-mode' : 'content'}>
         {/* Generieren und VHS bleiben nach dem ersten Besuch bestehen, nur ausgeblendet: Ein laufender Auftrag behält so
             Fortschritt und „Abbrechen“, Prompt und Einstellungen bleiben (vorher war beim Zurückkommen alles weg) */}
         {(tab === 'generate' || kept.generate) && (
           <div hidden={tab !== 'generate'}>
             <GeneratePanel health={health} event={events} downloads={downloads} modelsVersion={modelsVersion}
-              onShowModels={() => setTab('models')} />
+              onShowModels={() => setTab('models')} focus={genFocus} preset={genPreset} onOpenStudio={openStudio} />
           </div>
         )}
         {(tab === 'vhs' || kept.vhs) && (
@@ -329,10 +409,15 @@ export function App() {
         )}
         {tab === 'history' && <HistoryPanel event={events} />}
         {tab === 'models' && (
-          <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} modelsVersion={modelsVersion} />
+          // Ein gelöschtes Modell: Generieren und Studio lesen ihre Modellliste neu (der Server meldet nur LoRAs)
+          <ModelsPanel event={events} onChanged={refreshHealth} downloads={downloads} modelsVersion={modelsVersion}
+            onDeleted={() => setModelsVersion((v) => v + 1)} />
         )}
-        {tab === 'studio' && (
-          <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} modelsVersion={modelsVersion} />
+        {/* Das Studio bleibt wie die anderen bestehen; ausgeblendet blendet es sich selbst aus (seine Wurzel ist ein Grid) */}
+        {(tab === 'studio' || kept.studio) && (
+          <StudioPanel event={events} studioEvent={studioEvent} assetsVersion={assetsVersion} modelsVersion={modelsVersion}
+            visible={tab === 'studio'} onShowModels={() => setTab('models')} downloads={downloads}
+            focus={studioFocus} wizard={wizardN} />
         )}
       </main>
     </div>

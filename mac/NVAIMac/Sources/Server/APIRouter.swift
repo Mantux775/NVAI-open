@@ -17,7 +17,7 @@ enum APIRouter {
     static var features: [String] {
         ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
          "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel",
-         "speech", "lora_upload", "studio_characters"]
+         "speech", "lora_upload", "studio_characters", "estimate"]
             + (HelperModel.vision.installed ? ["restore_auto"] : [])
     }
 
@@ -93,6 +93,12 @@ enum APIRouter {
             if route("POST", "/api/loras/inspect") != nil { return try loraInspect(req) }
             if route("POST", "/api/loras/upload") != nil { return try loraUpload(req) }
             if let c = route("PUT", "/api/loras/:id") { return try loraUpdate(c[0], req) }
+            if route("POST", "/api/estimate") != nil {
+                // Geschätzte Rechenzeit je Auftrag wie unter Windows (seit Mac 1.0): {"items": [{"kind", "params"}]} ergibt
+                // je Eintrag seconds (null = unbekannt), source (history, estimate, rough, unknown), runs, cold (load)
+                let items = req.json?["items"]?.arrayValue ?? []
+                return .json(["items": await Estimate.many(items.filter { $0.objectValue != nil }).map(\.json.any)])
+            }
             if route("POST", "/api/generate/image") != nil {
                 let request = try ImageJobRequest.parse(req.json)
                 try await checkProject(req.json)

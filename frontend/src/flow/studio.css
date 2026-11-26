@@ -1,0 +1,129 @@
+/* Studio im Fluss (seit 0.5.42, Konzept „NVAI im Fluss“, Bildschirme D und E). Bausteine aus flow.css (flow-rail,
+   flow-card, flow-chip, flow-seg, flow-note, flow-big …), hier nur, was das Studio enger braucht: Es muss bei 900 px
+   Breite und auf einem 14-Zoll-Notebook (rund 800 px Fensterhöhe) benutzbar bleiben, lieber knapp als hoch. */
+
+/* ------------------------------------------------------------------ D: Leiste, nächster Schritt, Karten */
+.sf-flow {
+  display: grid; gap: 5px; min-width: 0; padding: 5px 10px; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.sf-top {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(180px, 260px); gap: 8px; align-items: stretch;
+  min-width: 0;
+}
+.sf-fold {
+  width: 22px; padding: 0; background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
+  cursor: pointer; font: inherit; font-size: 11px;
+}
+.sf-fold:hover { color: var(--text); border-color: var(--accent-dim); }
+.sf-flow .flow-rail { margin: 0; padding: 0; list-style: none; }
+.sf-flow .flow-rail .step { padding: 4px 8px; gap: 1px; line-height: 1.25; font-size: 12.5px; }
+.sf-flow .flow-rail .step b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-flow .flow-rail .step small { font-size: 11px; }
+.sf-flow .btn.flow-big.sf-next {
+  height: 100%; min-height: 38px; min-width: 0; padding: 3px 12px; flex-direction: column; align-items: center;
+  justify-content: center; gap: 0; font-size: 13px; line-height: 1.25;
+}
+.sf-next-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-next .flow-eta { font-size: 11.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sf-cards {
+  display: flex; gap: 6px; align-items: stretch; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+.sf-cards .flow-card {
+  flex: 0 0 auto; width: 188px; grid-template-columns: 56px minmax(0, 1fr); align-items: center;
+}
+.sf-cards .flow-card:hover { border-color: var(--accent-dim); }
+.sf-cards .flow-card.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.sf-cards .flow-card .pic {
+  width: 56px; height: 38px; display: grid; place-items: center; color: var(--muted); font-size: 15px; overflow: hidden;
+}
+.sf-cards .flow-card .meta { padding: 3px 7px; gap: 2px; }
+.sf-cards .flow-card .meta b { font-size: 12px; font-weight: 600; }
+.sf-cards .flow-chip {
+  justify-self: start; max-width: 100%; padding: 0 7px; font-size: 11px; line-height: 16px; overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sf-cards .flow-card.sf-add {
+  width: auto; grid-template-columns: none; place-items: center; padding: 0 12px; color: var(--muted); font-size: 12px;
+  border-style: dashed;
+}
+.sf-cards .flow-card.sf-add:hover { color: var(--text); }
+.sf-empty { align-self: center; white-space: nowrap; }
+/* Karten löschen (× beim Überfahren), per Rechtsklick bedienen und ziehen (Nutzer 26.11.2026) */
+.sf-cards .flow-card { position: relative; user-select: none; }
+.sf-cards .flow-card:not(.sf-add) .meta { padding-right: 18px; }
+.sf-cards .flow-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sf-card-x {
+  position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; padding: 0; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff; font: inherit; font-size: 12px;
+  line-height: 1; cursor: pointer; visibility: hidden;
+}
+.sf-cards .flow-card:hover .sf-card-x, .sf-cards .flow-card:focus-within .sf-card-x { visibility: visible; }
+.sf-card-x:hover { background: var(--danger); color: #2a0a0a; }
+.sf-cards .flow-card.sf-dragging { opacity: 0.45; }
+/* Einfügemarke: wohin die gezogene Karte käme (innen, weil die Karte überstehende Teile abschneidet) */
+.sf-cards .flow-card.sf-drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.sf-cards .flow-card.sf-drop-after { box-shadow: inset -3px 0 0 var(--accent); }
+/* Klappknopf der ganzen Leiste in der Werkzeugleiste, hinter „Exportieren“ */
+.st-toolbar .st-flow-fold { flex: none; width: 24px; height: 26px; }
+
+@media (max-width: 1100px) {
+  .sf-top { grid-template-columns: auto minmax(0, 1fr) minmax(170px, 220px); }
+  .sf-flow .flow-rail .step { padding: 4px 6px; }
+}
+@media (max-width: 720px) {
+  .sf-top { grid-template-columns: auto minmax(0, 1fr); }
+  .sf-flow .btn.flow-big.sf-next { grid-column: 1 / -1; }
+}
+
+/* ---------------------------------------------------------------------- E: Szene im Fokus (Eigenschaften) */
+.st-side > .sf-scene { flex: 1 0 auto; padding-bottom: 0; }
+.sf-stack { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.st-inspector .sf-head { justify-content: flex-start; gap: 6px; min-width: 0; }
+.sf-head .sf-num { flex: none; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.sf-head .flow-chip { flex: none; margin-left: auto; }
+.sf-title {
+  flex: 1; width: auto; min-width: 40px; padding: 1px 5px; background: none; border: 1px solid transparent;
+  border-radius: 6px; color: var(--text); font: inherit; font-weight: 600; resize: none;
+}
+.sf-title:hover { border-color: var(--line); }
+.sf-title:focus { border-color: var(--accent-dim); background: var(--panel-2); outline: none; }
+.sf-scene .flow-note { line-height: 1.45; }
+.sf-note-actions { margin-top: 6px; gap: 6px; }
+.sf-run-line { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; }
+.sf-run-left { flex: none; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sf-model { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 12px; }
+.sf-model .flow-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.flow-seg.sf-ways button { padding: 4px 8px; font-size: 12px; }
+.sf-can { display: flex; flex-direction: column; gap: 5px; }
+.sf-toggles { gap: 5px; }
+.sf-toggle {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line);
+  border-radius: 999px; background: var(--bg); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sf-toggle:hover { color: var(--text); border-color: var(--accent-dim); }
+.sf-toggle.on { border-color: var(--accent-dim); color: #b6e35f; }
+.sf-takes { display: flex; flex-direction: column; gap: 5px; border-radius: 8px; }
+.sf-takes.sf-attn { padding: 5px; box-shadow: 0 0 0 1px #284a70; }
+.sf-fine { border-top: 1px solid var(--line); padding-top: 6px; }
+.sf-fine > summary {
+  cursor: pointer; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+.sf-fine > summary:hover { color: var(--text); }
+.sf-fine[open] > summary { margin-bottom: 6px; }
+/* Aktionen fest unten in der Spalte, statt mit langen Eigenschaften nach unten zu wandern */
+.sf-foot {
+  position: sticky; bottom: 0; z-index: 3; margin: auto -10px 0; padding: 8px 10px; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 8px; background: var(--panel-2); border-top: 1px solid var(--line);
+}
+.sf-foot .btn { min-width: 0; }
+.sf-foot .btn.primary { overflow: hidden; white-space: nowrap; }
+.sf-foot .flow-eta { margin-left: -4px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sf-toggle, .sf-cards .flow-card, .sf-flow .flow-rail .step { transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; }
+}

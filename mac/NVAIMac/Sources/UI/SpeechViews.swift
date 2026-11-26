@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Sprecherstimme im Reiter „Erzeugen“ (seit 0.5.3): Text, Stimme beschreiben oder aus einer Aufnahme übernehmen,
-/// Sprache. Wie der Reiter „Sprache“ unter Windows.
+/// Sprache. Wie der Reiter „Sprache“ unter Windows. Seit Mac 1.0 schickt der große Knopf unten in „Generieren“ den Satz
+/// ab (mit Zeit und Phasen), der Seed steht dort unter „Feineinstellung“.
 struct SpeechForm: View {
     @EnvironmentObject var state: AppState
     // Im Fenster gemerkt statt @State (seit 0.5.9): Das Formular entsteht bei jedem Wechsel der Aufgabe neu und verlor
@@ -12,9 +13,6 @@ struct SpeechForm: View {
     @SceneStorage("speech.recording") private var recordingID: String?
     @SceneStorage("speech.voiceText") private var voiceText = ""
     @SceneStorage("speech.language") private var language = "auto"
-    @SceneStorage("speech.seed") private var seedText = ""
-    @SceneStorage("speech.lastJob") private var lastJobID: String?
-    @State private var message: String?
 
     /// Berechnet statt einmal gespeichert (seit 0.5.9): „Automatisch“ folgt so dem Sprachwechsel der App.
     static var languageNames: [(id: String, label: String)] { [
@@ -23,18 +21,11 @@ struct SpeechForm: View {
         ("ja", "日本語"), ("ko", "한국어"),
     ] }
 
-    private var currentJob: JobRecord? { lastJobID.flatMap { id in state.jobs.first { $0.id == id } } }
     /// Aufnahmen, aus denen sich eine Stimme übernehmen lässt: Ton (auch eigene Sprecherzeilen), Videos, Uploads.
     private var recordings: [AssetRecord] { state.audios + state.videos + state.mediaUploads }
     private var spoken: [AssetRecord] { state.audios.filter { $0.meta["speech"]?.boolValue == true } }
 
     var body: some View {
-        if !state.speechInstalled {
-            Text(String(format: t("Braucht Qwen3-TTS (%.1f GB).", "Needs Qwen3-TTS (%.1f GB)."), SpeechCatalog.downloadGB))
-                .font(.callout).foregroundStyle(.orange)
-            Button(t("Unter „Modelle“ laden …", "Download under \"Models\" …")) { state.selectedTab = "models" }
-                .buttonStyle(.link)
-        }
         Text("Text").font(.subheadline.bold())
         TextEditor(text: $text)
             .font(.body)
@@ -94,56 +85,9 @@ struct SpeechForm: View {
             ForEach(Self.languageNames, id: \.id) { Text($0.label).tag($0.id) }
         }
         .frame(maxWidth: 260)
-        HStack {
-            Text("Seed")
-            TextField(t("zufällig", "random"), text: $seedText).frame(width: 140)
-        }
-        HStack {
-            Button {
-                Task { await submit() }
-            } label: {
-                Text(t("Erzeugen", "Generate")).frame(minWidth: 120)
-            }
-            .keyboardShortcut(.return, modifiers: .command)
-            .buttonStyle(.borderedProminent)
-            .disabled(!state.speechInstalled || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                      || (fromRecording && recordingID == nil))
-            if let job = currentJob, !job.isFinished {
-                ProgressView().controlSize(.small)
-                Text(job.stage).font(.caption).foregroundStyle(.secondary)
-                Button(t("Abbrechen", "Cancel")) { Task { _ = try? await JobQueue.shared.cancel(job.id) } }
-            }
-        }
-        if let message { Text(message).foregroundStyle(.red).font(.callout) }
-        if let job = currentJob, job.status == "error", let error = job.error {
-            Text(error).foregroundStyle(.red).font(.callout)
-        }
         if !spoken.isEmpty {
             Text(t("Zuletzt gesprochen", "Recently spoken")).font(.subheadline.bold()).padding(.top, 6)
             ForEach(spoken.prefix(20)) { asset in AudioRow(asset: asset) }
-        }
-    }
-
-    private func submit() async {
-        message = nil
-        var body: [String: JSONValue] = [
-            "text": .string(text.trimmingCharacters(in: .whitespacesAndNewlines)), "language": .string(language),
-            "model_id": .string(SpeechCatalog.id),
-        ]
-        if fromRecording, let recordingID {
-            body["voice_asset_id"] = .string(recordingID)
-            body["voice_text"] = .string(voiceText)
-        } else {
-            body["voice"] = .string(voice)
-        }
-        if let seed = Int(seedText.trimmingCharacters(in: .whitespaces)) { body["seed"] = .int(seed) }
-        do {
-            let request = try SpeechJobRequest.parse(.object(body))
-            let job = await JobQueue.shared.submitSpeech(request)
-            lastJobID = job.id
-            await state.refresh()
-        } catch {
-            message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         }
     }
 }

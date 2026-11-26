@@ -73,6 +73,8 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Erster Start (seit Mac 1.0, Konzept „NVAI im Fluss“, Bildschirm A): erst die Absicht, dann die Modelle dafür
+            if state.showWelcome { WelcomeView() }
             TabView(selection: $state.selectedTab) {
                 // Wie unter Windows: das Studio zuerst und beim Start offen
                 StudioView().tabItem { Text("Studio") }.tag("studio")
@@ -84,6 +86,8 @@ struct ContentView: View {
                 SettingsView().tabItem { Text(t("Einstellungen", "Settings")) }.tag("settings")
             }
             .padding(.top, 6)
+            // Eine Auftragsleiste über alle Reiter (Bildschirm F) und der Hinweis, wenn anderswo etwas fertig wird
+            .overlay(alignment: .bottom) { JobDockHost() }
             StatusBar()
         }
     }
@@ -108,6 +112,8 @@ struct StatusBar: View {
             } else {
                 Text("\(SystemInfo.chip), \(SystemInfo.memoryGB) GB").foregroundStyle(.secondary)
             }
+            // Alle Aufträge mit Restzeit (seit Mac 1.0)
+            JobsChip()
             // Versionsnummer wie in der Weboberfläche unter Windows (Nutzerwunsch 26.10.2026).
             Divider().frame(height: 12)
             Text("NVAI-open \(SystemInfo.appVersion)").foregroundStyle(.secondary)

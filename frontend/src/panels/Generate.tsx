@@ -17,7 +17,7 @@ function chainWheel(el: HTMLDivElement | null) {
     page.scrollBy({ top: e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? page.clientHeight : 1) })
   }, { passive: false })
 }
-import { api, LORA_BASE_LABEL, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type LoraUploadResult, type Asset, type GenKind, type Health, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
+import { api, LORA_BASE_LABEL, SPEECH_LANGUAGES, type SpeechLanguage, type ExpandTarget, type LoraRef, type LoraUploadResult, type Asset, type GenKind, type Health, type Job, type Mesh3DParams, type ModelInfo, type RestoreMode, type ServerEvent, type SparseAttention, type StudioProjectInfo } from '../api'
 import { LoraUpload } from '../components/LoraFile'
 import { AssetView } from '../components/AssetView'
 import type { Downloads } from '../downloads'
@@ -28,7 +28,22 @@ import { ModelEstimate } from '../components/HardwareInfo'
 import { Lightbox } from '../components/Lightbox'
 import { PhotoCrop } from '../components/PhotoCrop'
 import { locale, t } from '../i18n'
-import { I2V_WORKFLOWS, OPTIONAL_START_WORKFLOWS } from '../videoStart'
+import { I2V_WORKFLOWS, OPTIONAL_START_WORKFLOWS, startImageUse } from '../videoStart'
+// Konzept „NVAI im Fluss“ (seit 0.5.42), Bildschirme B und C: Weg statt Klappen, Modell-Chip, Knopf mit Zeit, Phasen,
+// nächste Schritte unter dem Ergebnis
+import { sourceText, totalSeconds, useEstimates, type Estimate } from '../flow/estimate'
+import { isActive, trackJob, useJob } from '../flow/jobs'
+import { JobPhases } from '../flow/JobPhases'
+import { ModelNeed } from '../flow/ModelNeed'
+import { fmtClock, fmtEta } from '../flow/time'
+import { MODE_FAMILIES, MODE_OF_KIND, fitsMode, missingChoices, pickMissing, pickRunnable, type GenMode } from '../flow/generate/models'
+import { ChipNumber, ChipSelect, NextSteps, RunningEta, SeedCopy, Slot, type NextStep, type SlotAsset } from '../flow/generate/parts'
+import { estimateItem, rerunPlan, sendPlan, type Plan } from '../flow/generate/plan'
+import {
+  aspectDiffers, closestSize, ltxFramesFor, padToAspect, videoWays, wayDetail, wayLabel, wayNote, wayRules,
+  type VideoWay,
+} from '../flow/generate/ways'
+import '../flow/generate.css'
 
 // Dezimalzahl im Format der gewählten Sprache (Deutsch mit Komma)
 const dec = (n: number, digits: number) =>
@@ -165,6 +180,55 @@ interface Props {
   /** zählt hoch, wenn eine LoRA hinzukam, zugeordnet oder gelöscht wurde (auch per MCP): Modellliste neu laden */
   modelsVersion?: number
   onShowModels: () => void
+  /** Auftragsleiste „Zeigen“ (Konzept „NVAI im Fluss“, Bildschirm F): diesen Auftrag samt Ergebnis zeigen, den Reiter
+   *  passend umschalten; n zählt bei jedem Klick hoch */
+  focus?: { jobId: string; n: number } | null
+  /** Willkommen-Bildschirm: mit diesem Reiter anfangen; n zählt bei jedem Klick hoch */
+  preset?: { mode: Mode; n: number } | null
+  /** „Ins Studio“ unter einem Ergebnis: das Projekt öffnen, die neue Szene gewählt */
+  onOpenStudio?: (projectId: string, sceneId?: string | null) => void
+}
+
+// Was nach dem ersten Auftrag nur noch rechnet (JobPhases: „… braucht nur die Rechenzeit“), je Reiter schon übersetzt
+const NEXT_TEXT: Record<Mode, string> = {
+  image: t('das nächste Bild', 'the next image'),
+  video: t('das nächste Video', 'the next video'),
+  audio: t('der nächste Ton', 'the next sound'),
+  speech: t('der nächste Satz', 'the next line'),
+  '3d': t('das nächste Mesh', 'the next mesh'),
+  restore: t('das nächste Foto', 'the next photo'),
+}
+
+/** Kurzer Titel für eine Szene im Studio: die ersten Wörter des Prompts */
+function sceneTitle(a: Asset): string {
+  const text = String(a.meta?.text || a.prompt || a.meta?.original_name || a.filename)
+    .replace(/^Cinematic film still\. /, '').replace(/\s+/g, ' ').trim()
+  const words = text.split(' ').slice(0, 6).join(' ')
+  return words.length > 48 ? `${words.slice(0, 46)}…` : words
+}
+
+/** Kurzer Name eines Assets für einen Platz („Startbild: Holzfass …“) */
+function assetName(a: Asset): string {
+  const text = String(a.prompt || a.meta?.original_name || a.filename).replace(/^Cinematic film still\. /, '')
+  return text.length > 60 ? `${text.slice(0, 58)}…` : text
+}
+
+/** Holt ein Element in den sichtbaren Bereich, wenn sein Anfang nicht schon gut zu sehen ist */
+function bringIntoView(el: Element | null | undefined) {
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  if (!r.width && !r.height) return // ausgeblendet (anderer Reiter)
+  const box = (el.closest('main.content') as HTMLElement | null)?.getBoundingClientRect()
+  const top = box?.top ?? 0
+  const bottom = box?.bottom ?? window.innerHeight
+  if (r.top >= top && r.top <= bottom - Math.min(r.height, 220)) return
+  let smooth = true
+  try {
+    smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    /* alter Browser: weich scrollen */
+  }
+  el.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' })
 }
 
 /** Hochgeladene Dateien, die als Quellbild taugen */
@@ -175,7 +239,7 @@ const IMAGE_FILE = /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i
 const EXTEND_PROMPT = 'The same scene continues seamlessly beyond the edges, in the same style, with the same lighting '
   + 'and the same perspective.'
 
-export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onShowModels }: Props) {
+export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onShowModels, focus, preset, onOpenStudio }: Props) {
   const [mode, setMode] = useState<Mode>('image')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [modelId, setModelId] = useState<Record<Mode, string>>({
@@ -196,7 +260,12 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const [ltxFps, setLtxFps] = useState(24)
   const [autoDuration, setAutoDuration] = useState(false)
   const [endId, setEndId] = useState('')
-  const [loop, setLoop] = useState(false)
+  // Konzept „NVAI im Fluss“, Bildschirm B: der Weg (Nur Text, Mit Startbild, Start und Ende, Schleife, Layout-Video,
+  // Verlängern) statt einzelner Klappen; was nicht zum Weg passt, wirkt nicht (flow/generate/ways.ts). Die Schleife ist
+  // seitdem ein Weg und kein eigener Schalter mehr.
+  const [way, setWay] = useState<VideoWay>('text')
+  // Welche Auswahl unter den Plätzen des Wegs offen ist
+  const [slotOpen, setSlotOpen] = useState<'start' | 'end' | 'layout' | 'extend' | null>(null)
   const [quality, setQuality] = useState<'standard' | 'dfr'>('standard')
   // DFR ist die Vorgabe, sobald das Detail-LoRA installiert ist (Nutzer, 24.10.: "die höhere Qualität
   // immer bevorzugen, aber darauf hinweisen"), bis jemand die Qualität selbst umstellt.
@@ -204,10 +273,6 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const chooseQuality = (q: 'standard' | 'dfr') => {
     qualityTouched.current = true
     setQuality(q)
-  }
-  // Endbild und Schleife gehen nur ohne DFR: Wer eines davon wählt, bekommt Standard.
-  const leaveDfr = () => {
-    if (quality === 'dfr') setQuality('standard')
   }
   const [temporal, setTemporal] = useState(false)
   const [audioId, setAudioId] = useState('')
@@ -226,6 +291,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const [guideId, setGuideId] = useState('')
   const [layoutUploads, setLayoutUploads] = useState<Asset[]>([])
   const videoInput = useRef<HTMLInputElement>(null)
+  // Endbild des Wegs „Start und Ende“ hochladen
+  const endFileRef = useRef<HTMLInputElement>(null)
   // Breite der Einstellungen ziehen wie die Spalten im Studio (Nutzer 22.11.2026: „den abstand zwischen linken und
   // rechten bereich im generieren … verschieben können wie in studio fenstern“); Doppelklick stellt sie zurück
   const splitRef = useRef<HTMLDivElement>(null)
@@ -316,7 +383,6 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   })
   const [facePhoto, setFacePhoto] = useState<{ id: string; asset: Asset | null } | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
-  const [personJobId, setPersonJobId] = useState<string | null>(null)
   // Unter Bild hat der Abschnitt eine eigene Fotoauswahl: Das Quellbild dort gehört zum Überarbeiten (img2img)
   const [personPhotoId, setPersonPhotoId] = useState('')
   const personFileRef = useRef<HTMLInputElement>(null)
@@ -354,6 +420,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   // FLUX 3: Upsampler und Referenzbilder (Reihenfolge = "the first image", ...)
   const [upsample, setUpsample] = useState(true)
   const [refIds, setRefIds] = useState<string[]>([])
+  // Für loadSources, das auch aus älteren Effekten heraus läuft: die aktuelle Auswahl
+  const refIdsRef = useRef(refIds)
+  refIdsRef.current = refIds
   const [loraPicks, setLoraPicks] = useState<LoraRef[]>([])
   // Beschleuniger für Videomodelle, die sie kennen (MiniMax H3); beim Wechsel aufs Modell mit dessen Empfehlung belegt
   const [sparse, setSparse] = useState<SparseAttention | ''>('')
@@ -382,8 +451,6 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const fileInput = useRef<HTMLInputElement>(null)
 
   const [jobId, setJobId] = useState<string | null>(null)
-  const [progress, setProgress] = useState(0)
-  const [stage, setStage] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [results, setResults] = useState<Asset[]>([])
   // Große Ansicht eines Ergebnisbildes (Index in results), siehe components/Lightbox.tsx
@@ -394,6 +461,36 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
   const jobRef = useRef<string | null>(null)
   jobRef.current = jobId
+  // Konzept „NVAI im Fluss“, Bildschirm C: Welcher Auftrag rechts zu sehen ist (der eigene, oder einer aus der
+  // Auftragsleiste über „Zeigen“), samt Phasen, Ergebnis und nächsten Schritten
+  const [viewId, setViewId] = useState<string | null>(null)
+  const viewRef = useRef<string | null>(null)
+  viewRef.current = viewId
+  // Der Auftrag hinter dem Ergebnis, wie der Server ihn kennt: Dauer, Parameter für „4 Varianten“
+  const [viewJob, setViewJob] = useState<Job | null>(null)
+  // Ergebnisse schon geladen für diesen Auftrag (sonst lüde jedes Ereignis sie neu)
+  const loadedFor = useRef<string | null>(null)
+  // Was beim Abschicken feststand: Titel, Modell für „Modell lädt (…)“, geschätzte Rechenzeit für die Restzeit
+  const [run, setRun] = useState<{ id: string; title: string; modelName?: string; modelGb?: number;
+    expected: number | null; next: string } | null>(null)
+  // Reiter des eigenen Auftrags beim Abschicken: Das Ergebnis wird danach eingeordnet, auch wenn inzwischen ein anderer
+  // Reiter offen ist (etwa nach „Zeigen“ in der Auftragsleiste)
+  const jobModeRef = useRef<Mode>('image')
+  // Das Ergebnis, mit dem die nächsten Schritte weitergehen (bei mehreren Bildern wählbar, Vorgabe das erste)
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  // Ein nächster Schritt braucht ein Modell, das noch fehlt: dann steht ModelNeed unter den Schritten
+  const [nextNeed, setNextNeed] = useState<{ step: string; model: ModelInfo; alternative?: ModelInfo; alt?: () => void } | null>(null)
+  const [studioNote, setStudioNote] = useState<string | null>(null)
+  const [studioBusy, setStudioBusy] = useState(false)
+  // Zählt hoch: Phasen bzw. Ergebnis ins Bild holen; Prompt fokussieren nach einem vorbereitenden Schritt
+  const [reveal, setReveal] = useState(0)
+  const [focusPrompt, setFocusPrompt] = useState(0)
+  const outputRef = useRef<HTMLElement>(null)
+  const resultRef = useRef<HTMLDivElement>(null)
+  // Ein Auftrag ist unterwegs zum Server (noch ohne Antwort): ein zweiter Klick schickt ihn nicht doppelt
+  const sending = useRef(false)
+  const controlsRef = useRef<HTMLElement>(null)
+  const promptRef = useRef<HTMLTextAreaElement>(null)
 
   // Nur neu laden, wenn sich die aktiven Modelle wirklich ändern: health kommt alle 5 s als neues Objekt, und jedes Mal
   // die ganze Modellliste (samt Fragen an Hugging Face) zu holen belastete den Server
@@ -439,6 +536,16 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         sourceAuto.current = !!all[0]
         return all[0]?.id || ''
       })
+      // Gewählte Referenzen, die aus den neuesten Bildern gefallen sind, bleiben sichtbar und gewählt (vorher fielen sie
+      // nach ein paar Läufen still aus dem Auftrag); gelöschte fallen aus der Auswahl
+      const outside = refIdsRef.current.filter((id) => !all.some((a) => a.id === id))
+      if (!outside.length) return
+      Promise.all(outside.map((id) => api.asset(id).catch(() => null))).then((found) => {
+        const kept = found.filter((a): a is Asset => !!a)
+        if (kept.length) setSourceImages((list) => [...list, ...kept.filter((a) => !list.some((x) => x.id === a.id))])
+        const gone = outside.filter((id) => !kept.some((a) => a.id === id))
+        if (gone.length) setRefIds((list) => list.filter((id) => !gone.includes(id)))
+      })
     }).catch(() => { /* die Auswahl bleibt, wie sie war; der nächste Abgleich holt sie */ })
   }
   const loadMoreSources = () => {
@@ -462,19 +569,32 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     loadSources()
   }, [mode])
 
+  // Ergebnis eines Auftrags rechts zeigen und ins Bild holen (Konzept, Bildschirm C: „Das Ergebnis rückt ins Bild“;
+  // vorher erschien es oben rechts außer Sicht, während die Seite unten beim Knopf stand)
+  const showResults = (id: string, assets: Asset[]) => {
+    if (viewRef.current !== id) return
+    loadedFor.current = id
+    setResults(assets)
+    setPickedId(assets[0]?.id ?? null)
+    setReveal((n) => n + 1)
+    api.job(id).then((j) => { if (viewRef.current === id) setViewJob(j) }).catch(() => {})
+  }
+
   const applyDone = (id: string) => {
+    const jobMode = jobModeRef.current
+    // Schon hier: Die gemeinsame Auftragsliste meldet das Ende auch, das Ergebnis soll aber nur einmal kommen
+    if (viewRef.current === id) loadedFor.current = id
     api.jobAssets(id).then((assets) => {
-      setResults(assets)
+      showResults(id, assets)
       // 3D aus Text und Person aus einem Foto: das frische Bild gleich als Quell- bzw. Startbild auswählen.
-      if ((mode === '3d' || mode === 'video') && assets[0]?.kind === 'image') {
+      if ((jobMode === '3d' || jobMode === 'video') && assets[0]?.kind === 'image') {
         pickSource(assets[0].id)
+        if (jobMode === 'video') setWay((w) => (w === 'text' || w === 'refs' || w === 'extend' ? 'start' : w))
         loadSources()
       }
     })
     setJobId(null)
-    setProgress(1)
-    setStage(t('fertig', 'done'))
-    if (mode === 'image') loadSources()
+    if (jobMode === 'image') loadSources()
   }
 
   // Rückfall, wenn das Ende-Ereignis verpasst wurde (der Auftrag scheiterte schon vor der Antwort auf das Absenden,
@@ -491,10 +611,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           if (j.status === 'done') applyDone(jobId)
           else if (j.status === 'error') {
             setError(j.error ?? t('Fehler', 'Error'))
-            setJobId(null)
+            endOwn(jobId)
           } else if (j.status === 'cancelled') {
-            setJobId(null)
-            setStage(t('abgebrochen', 'cancelled'))
+            endOwn(jobId)
           }
         })
         .catch(() => {})
@@ -506,41 +625,123 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     }
   }, [jobId])
 
+  // Eigener Auftrag ohne Ergebnis zu Ende (Fehler, abgebrochen): Knopf frei, die Phasen verschwinden
+  const endOwn = (id: string) => {
+    setJobId(null)
+    if (viewRef.current === id) {
+      viewRef.current = null
+      setViewId(null)
+    }
+  }
+
+  // Fortschritt und Phasen zeigt JobPhases aus der gemeinsamen Auftragsliste (flow/jobs.ts); hier nur das Ende
   useEffect(() => {
     if (!event || !('job_id' in event) || event.job_id !== jobRef.current) return
-    if (event.type === 'job.progress') {
-      setProgress(event.progress)
-      setStage(event.stage)
-    } else if (event.type === 'job.done') {
+    if (event.type === 'job.done') {
       applyDone(event.job_id)
     } else if (event.type === 'job.error') {
       setError(event.error)
-      setJobId(null)
+      endOwn(event.job_id)
     } else if (event.type === 'job.cancelled') {
       // Auch ein Stopp über die Kopfleiste oder aus dem PhotoCraft-Add-on landet hier.
-      setJobId(null)
-      setStage(t('abgebrochen', 'cancelled'))
+      endOwn(event.job_id)
     }
-  }, [event, mode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyDone liest den Reiter des Auftrags aus jobModeRef
+  }, [event])
 
   const cancelJob = async () => {
     if (!jobId) return
+    const id = jobId
     try {
-      const res = await api.cancelJob(jobId)
+      const res = await api.cancelJob(id)
       if (!res.ok) {
         // „schon beendet“: dann den Endstand übernehmen, statt gesperrt zu bleiben
-        const j = await api.job(jobId).catch(() => null)
-        if (j && ['done', 'error', 'cancelled'].includes(j.status)) {
-          setJobId(null)
+        const j = await api.job(id).catch(() => null)
+        if (j?.status === 'done') {
+          applyDone(id)
+        } else if (j && ['error', 'cancelled'].includes(j.status)) {
+          endOwn(id)
           if (j.status === 'error') setError(j.error ?? res.reason ?? null)
         } else if (res.reason) setError(res.reason)
       } else {
-        setJobId(null)
-        setStage(t('abgebrochen', 'cancelled'))
+        endOwn(id)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  // Der gezeigte Auftrag, wie die gemeinsame Auftragsliste ihn kennt (Phasen, Ende eines fremden Auftrags). Sind seine
+  // Ergebnisse schon da, läuft er nicht mehr, auch wenn die Liste das Ende noch nicht kennt.
+  const viewTracked = useJob(viewId)
+  const viewActive = !!viewId && (viewId === jobId
+    || (loadedFor.current !== viewId && !!viewTracked && isActive(viewTracked)))
+  // Abbrechen gilt dem gezeigten Auftrag: dem eigenen wie bisher, sonst dem aus der Auftragsleiste
+  const cancelView = async () => {
+    if (!viewId) return
+    if (viewId === jobId) {
+      await cancelJob()
+      return
+    }
+    try {
+      const res = await api.cancelJob(viewId)
+      if (!res.ok && res.reason) setError(res.reason)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+  // Ein fremder gezeigter Auftrag (Studio, Claude per MCP) wird fertig: sein Ergebnis zeigen
+  useEffect(() => {
+    if (!viewId || viewId === jobId || !viewTracked) return
+    if (viewTracked.status === 'done' && loadedFor.current !== viewId) {
+      loadedFor.current = viewId
+      const id = viewId
+      api.jobAssets(id).then((assets) => showResults(id, assets)).catch(() => {})
+    } else if (viewTracked.status === 'error' && viewTracked.error) {
+      setError(viewTracked.error)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Wechsel des Zustands
+  }, [viewId, jobId, viewTracked?.status])
+
+  // Phasen bzw. Ergebnis ins Bild holen, nachdem sie gerendert sind
+  useEffect(() => {
+    if (!reveal) return
+    const id = window.requestAnimationFrame(() => bringIntoView(resultRef.current ?? outputRef.current))
+    return () => window.cancelAnimationFrame(id)
+  }, [reveal])
+
+  // Nach einem vorbereitenden Schritt (Video daraus, Überarbeiten, Verlängern): Weg und Prompt ins Bild, der Prompt
+  // markiert, damit man gleich die Bewegung bzw. die Änderung schreibt (Strg+Z holt den alten Text zurück)
+  useEffect(() => {
+    if (!focusPrompt) return
+    const id = window.requestAnimationFrame(() => {
+      bringIntoView(controlsRef.current)
+      const el = promptRef.current
+      if (el) {
+        el.focus({ preventScroll: true })
+        el.select()
+      }
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [focusPrompt])
+
+  /** Ein abgeschickter Auftrag: in die gemeinsame Auftragsliste, rechts mit seinen Phasen zeigen (Konzept, Bildschirm C) */
+  const startJob = (job: Job, info: { mode: Mode; title: string; model?: ModelInfo | null; est?: Estimate | null }) => {
+    trackJob(job, info.est)
+    jobModeRef.current = info.mode
+    loadedFor.current = null
+    setRun({
+      id: job.id, title: info.title, modelName: info.model ? shortName(info.model) : undefined,
+      modelGb: info.model?.vram_gb || undefined, expected: info.est?.seconds ?? null, next: NEXT_TEXT[info.mode],
+    })
+    setViewId(job.id)
+    setViewJob(null)
+    setResults([])
+    setPickedId(null)
+    setNextNeed(null)
+    setStudioNote(null)
+    setJobId(job.id)
+    setReveal((n) => n + 1)
   }
 
   // Restaurieren nimmt Bildmodelle, die per Referenzbild bearbeiten (FLUX 3); Stilvorlagen (Krea 2) zählen nicht.
@@ -567,6 +768,35 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     ),
     [models, selected],
   )
+  // Ein gelöschtes oder hier nicht lauffähiges Modell bleibt nicht gewählt (die Auswahl zeigte sonst ein anderes, der
+  // Auftrag ging aber an das alte): dann das aktive, sonst das empfohlene, sonst das erste geladene
+  useEffect(() => {
+    if (!available.length || available.some((m) => m.id === modelId[mode])) return
+    const activeId = mode === 'restore' ? undefined : health?.active_models?.[mode]
+    const pick = available.find((m) => m.id === activeId)
+      ?? available.find((m) => (mode === 'restore' ? m.workflow === 'flux3_klein' : m.recommended))
+      ?? available[0]
+    setModelId((cur) => ({ ...cur, [mode]: pick.id }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeKey steht für health.active_models
+  }, [available, mode, modelId, activeKey])
+  // Ein ControlNet, das nicht zum gewählten Modell passt (andere Familie, gelöscht), fällt weg; es wirkte sonst unsichtbar
+  // weiter, und der Auftrag scheiterte
+  useEffect(() => {
+    if (mode === 'image' && cnId && !controlnets.some((m) => m.id === cnId)) setCnId('')
+  }, [mode, cnId, controlnets])
+  // Eigene CFG, Sampler und Scheduler gehören zum Modell, für das sie eingestellt wurden: Beim Wechsel gelten wieder die
+  // Vorgaben des neuen, solange die Feineinstellung zugeklappt ist (sonst wirkten sie dort ungesehen weiter)
+  const tunedFor = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (mode !== 'image' || !selected) return
+    if (tunedFor.current && tunedFor.current !== selected.id && !advanced) {
+      setCfg('')
+      setSampler('')
+      setScheduler('')
+    }
+    tunedFor.current = selected.id
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur beim Wechsel des Modells
+  }, [mode, selected?.id])
   // Bild-zu-Video: diese Modelle brauchen zwingend ein Startbild, Wan 2.2 TI2V
   // kann beides. Reine Text-zu-Video-Modelle bekommen die Auswahl gar nicht erst.
   const needsStart = mode === 'video' && I2V_WORKFLOWS.has(selected?.workflow ?? '')
@@ -610,14 +840,11 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       ? list.filter((p) => p.model_id !== id)
       : [...list, { model_id: id, strength }]))
   // LoRAs mit features.use "loop" (Cinemagraph) wirken nur mit Schleife: gemessen 25.10. bewegten sich
-  // ohne Schleife 82–89 % des Bildes, mit Schleife 6 %. Beim Einschalten deshalb die Schleife mit an.
+  // ohne Schleife 82–89 % des Bildes, mit Schleife 6 %. Beim Einschalten deshalb den Weg „Schleife“ wählen (DFR,
+  // Endbild und Layout gelten dort nicht).
   const pickLora = (l: ModelInfo, strength?: number) => {
     const on = !loraPicks.some((p) => p.model_id === l.id)
-    if (on && l.features?.use === 'loop' && sourceId) {
-      leaveDfr()
-      setEndId('')
-      setLoop(true)
-    }
+    if (on && l.features?.use === 'loop' && sourceId && ways.includes('loop')) setWay('loop')
     // Turbo-LoRAs (MiniMax H3) legen Schritte und Shift fest: immer nur eine
     if (on && l.features?.turbo) {
       setLoraPicks((list) => list.filter((p) => !models.find((m) => m.id === p.model_id)?.features?.turbo))
@@ -655,13 +882,49 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const vfeat = mode === 'video' ? selected?.features : undefined
   const isLtx25 = mode === 'video' && selected?.family === 'ltx25'
   const dfrReady = !!vfeat?.dfr
+  // Konzept „NVAI im Fluss“, Bildschirm B: Der Weg bestimmt, welche Felder, Qualitäten und Zusätze gelten. Was nicht
+  // zum Weg passt, bleibt eingestellt (zurück auf den Weg ist es wieder da), wirkt aber nicht und geht nicht in den
+  // Auftrag; vorher löste die Oberfläche Konflikte still oder der Server lehnte den Auftrag ab.
+  const ways = useMemo(() => (mode === 'video' ? videoWays(selected) : []), [mode, selected])
+  const rules = wayRules(way)
+  const wayStart = mode === 'video' && usesStart && rules.start !== 'none'
+  const effStart = wayStart ? sourceId : ''
+  const effEnd = isLtx25 && way === 'ends' ? endId : ''
+  const effLoop = isLtx25 && way === 'loop' && !!sourceId
+  const effGuide = isLtx25 && way === 'layout' && vfeat?.layout ? guideId : ''
+  const effExtend = isLtx25 && way === 'extend' ? extendId : ''
+  const effAudio = isLtx25 && vfeat?.audio_input && rules.audio ? audioId : ''
+  const dfrWay = isLtx25 && rules.dfr
+  const effQuality: 'standard' | 'dfr' = dfrWay && dfrReady && quality === 'dfr' ? 'dfr' : 'standard'
+  const effTemporal = effQuality === 'dfr' && temporal && !!vfeat?.temporal_upscale
+  const effAuto = isLtx25 && !!vfeat?.auto_duration && rules.auto && autoDuration && !effAudio
+  const effMultishot = isLtx25 && !!vfeat?.multishot && rules.multishot && multishot
+  const effMotion = isLtx25 && vfeat?.motion_speed && rules.motion ? motionSpeed : 1
+  // DFR ist die Vorgabe, sobald das Detail-LoRA da ist, bis jemand die Qualität selbst umstellt; ob der Weg DFR
+  // erlaubt, entscheidet effQuality. Nur unter Video: sonst fiel eine eigene DFR-Wahl bei jedem Reiterwechsel weg.
   useEffect(() => {
+    if (mode !== 'video') return
     if (!dfrReady) {
       if (quality === 'dfr') setQuality('standard')
-    } else if (!qualityTouched.current && quality !== 'dfr' && !loop && !endId) {
+    } else if (!qualityTouched.current && quality !== 'dfr') {
       setQuality('dfr')
     }
-  }, [dfrReady, quality, loop, endId])
+  }, [mode, dfrReady, quality])
+  // Ein Weg, den das gewählte Modell nicht kann, fällt auf den naheliegenden zurück: mit gewähltem Startbild (oder bei
+  // reinen Bild-zu-Video-Modellen) „Mit Startbild“, sonst den ersten
+  useEffect(() => {
+    if (mode !== 'video' || !ways.length || ways.includes(way)) return
+    setWay(ways.includes('start') && (sourceId || !ways.includes('text')) ? 'start' : ways[0])
+  }, [mode, ways, way, sourceId])
+  const chooseWay = (w: VideoWay) => {
+    setWay(w)
+    // Was der Weg noch braucht, gleich zur Auswahl öffnen
+    const r = wayRules(w)
+    setSlotOpen(r.start === 'required' && !sourceId ? 'start'
+      : w === 'ends' && !endId ? 'end'
+        : w === 'layout' && !guideId ? 'layout'
+          : w === 'extend' && !extendId ? 'extend' : null)
+  }
   const videoSizes = vfeat?.sizes?.length ? vfeat.sizes : VIDEO_SIZES
   // Andere Videomodelle mit festen Angaben im Katalog (features.fps, default_frames): Bildrate und Länge des Modells
   // statt der Wan-Vorgaben, sobald es gewählt wird.
@@ -673,8 +936,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   // 8n+1 Frames, der nächste Wert zu ltxSeconds (wie workflows.ltx_frames_for_seconds: 5 s = 121).
   // Höchstens 481 Frames (API-Grenze): 20 s bei 24 fps, 19 s bei 25, 16 s bei 30.
   const ltxMaxSeconds = Math.min(vfeat?.max_seconds ?? 20, Math.floor(480 / ltxFps))
-  const ltxFrames = Math.max(9, Math.min(481,
-    1 + Math.floor((Math.min(ltxSeconds, ltxMaxSeconds) * ltxFps - 1) / 8 + 0.5) * 8))
+  const ltxFrames = ltxFramesFor(ltxSeconds, ltxFps, vfeat?.max_seconds ?? 20)
   // Empfohlene LoRAs für die gewählte Videofamilie (catalog.LORA_MODELS, features.recommended_for)
   const recLoras = useMemo(
     () => models.filter((m) => m.kind === 'lora'
@@ -725,6 +987,29 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     const [w, h] = vfeat?.recommended?.size ?? [0, 0]
     setVidSize(videoSizes.find((s) => s.w === w && s.h === h) ?? videoSizes[0])
   }, [videoSizes, vidSize.label])
+  // „Das Format folgt dem Startbild“ (Konzept, Weg „Mit Startbild“; CLAUDE.md: Seitenverhältnis des Startbilds treffen):
+  // Wird ein Startbild gewählt, stellt sich das Format auf das nächste passende Seitenverhältnis, bei gleich gutem auf
+  // die Größe nahe der bisherigen. Einmal je Startbild; ein danach selbst gewähltes Format bleibt.
+  const videoSizesRef = useRef(videoSizes)
+  videoSizesRef.current = videoSizes
+  const startAspectFor = useRef('')
+  useEffect(() => {
+    if (!wayStart || !sourceId || startAspectFor.current === sourceId) return
+    const url = sourceImages.find((a) => a.id === sourceId)?.url
+    if (!url) return
+    let alive = true
+    const img = new Image()
+    img.onload = () => {
+      if (!alive || !img.naturalWidth || !img.naturalHeight) return
+      startAspectFor.current = sourceId
+      const aspect = img.naturalWidth / img.naturalHeight
+      setVidSize((cur) => (aspectDiffers(cur, aspect) ? closestSize(videoSizesRef.current, aspect, cur) ?? cur : cur))
+    }
+    img.src = url
+    return () => {
+      alive = false
+    }
+  }, [wayStart, sourceId, sourceImages])
   useEffect(() => {
     if (isLtx25) api.assets('audio', 30).then(setAudioAssets).catch(() => setAudioAssets([]))
     if (isLtx25) api.assets('video', 30).then(setVideoAssets).catch(() => setVideoAssets([]))
@@ -742,18 +1027,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         ...up.filter((a) => /\.(wav|mp3|flac|ogg|m4a|aac|opus|mp4|mov|mkv|webm)$/i.test(a.filename))]))
       .catch(() => setVoiceRefs([]))
   }, [mode, results])
-  // Fehlt eine optionale Datei (eigene Freigabe auf Hugging Face), steht der Weg dorthin daneben.
-  const missingNote = (name: string) => {
-    const url = vfeat?.missing?.[name]
-    if (!url) return null
-    return (
-      <>
-        {' '}{t('Fehlt noch: ', 'Not available yet: ')}
-        <a href={url} target="_blank" rel="noreferrer">{t('Freigabe auf Hugging Face', 'access on Hugging Face')}</a>
-        {t(', dann unter „Modelle“ bei LTX-2.5 „Zusätze laden“.', ', then “Download extras” for LTX-2.5 under “Models”.')}
-      </>
-    )
-  }
+  // Fehlt eine optionale Datei (eigene Freigabe auf Hugging Face), nennt der Weg sie mit „Zusätze laden“ (extrasLine)
   const setLoraStrength = (id: string, strength: number) =>
     setLoraPicks((list) => list.map((p) => (p.model_id === id ? { ...p, strength } : p)))
 
@@ -772,10 +1046,23 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const outpainting = mode === 'image' && useSource && canOutpaint && outpaintOn
     && pad.left + pad.top + pad.right + pad.bottom > 0
   const maxRefs = (mode === 'image' ? feat?.references : vfeat?.references) ?? 0
-  // MiniMax H3 Referenz: Referenzbilder statt Startbild, mindestens eins (im Prompt <Picture 1> …)
-  const needsRefs = mode === 'video' && maxRefs > 0 && !usesStart
-  const videoRefs = mode === 'video'
-    ? refIds.filter((id) => sourceImages.some((a) => a.id === id)).slice(0, maxRefs) : []
+  // MiniMax H3 Referenz: Referenzbilder statt Startbild, mindestens eins (im Prompt <Picture 1> …); seit dem Konzept
+  // „NVAI im Fluss“ der Weg „Mit Referenzbildern“ (videoWays)
+  const videoRefs = mode === 'video' ? refIds.slice(0, maxRefs) : []
+  // Nimmt das neue Modell weniger Referenzen, gilt seine Grenze auch in der Auswahl (sonst „5 von 4“, und der Auftrag
+  // scheiterte mit „höchstens 4 Referenzbilder“)
+  useEffect(() => {
+    if (maxRefs > 0) setRefIds((list) => (list.length > maxRefs ? list.slice(0, maxRefs) : list))
+  }, [maxRefs])
+  /** Die gewählten Referenzen, die es noch gibt (anderswo gelöschte fallen aus der Auswahl), höchstens so viele, wie
+   *  das Modell nimmt; auch solche, die nicht mehr unter den neuesten Bildern stehen */
+  const liveRefs = async (): Promise<string[]> => {
+    const ids = refIds.slice(0, maxRefs)
+    const ok = await Promise.all(ids.map((id) => api.asset(id).then(() => true, () => false)))
+    const gone = ids.filter((_, i) => !ok[i])
+    if (gone.length) setRefIds((list) => list.filter((id) => !gone.includes(id)))
+    return ids.filter((_, i) => ok[i])
+  }
   const sizes = useMemo(() => [...IMAGE_SIZES, ...(feat?.sizes ?? [])], [feat])
   const chips = useMemo(() => {
     if (!feat) return []
@@ -839,6 +1126,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         }
         return rest
       })
+      setRefIds((list) => list.filter((id) => id !== asset.id))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -856,6 +1144,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       const rest = sourceImages.filter((a) => !deleted.has(a.id))
       setSourceImages(rest)
       setSourceId((cur) => (rest.some((a) => a.id === cur) ? cur : ''))
+      setRefIds((list) => list.filter((id) => !deleted.has(id)))
       const kept = gone.length - deleted.size
       if (kept) {
         setError(t(`${kept} Bild(er) liegen als Clip im Studio-Schnitt und bleiben.`,
@@ -915,6 +1204,14 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const seedvr2 = models.find((m) => m.kind === 'upscale' && m.recommended) ?? models.find((m) => m.kind === 'upscale')
   const restoreEdits = restoreRepair || restoreColorize
   const restoreReady = !!sourceId && (restoreEdits ? available.length > 0 : restoreSharpen && !!upscaler)
+  // Hat der Video-Weg, was er braucht (Startbild, Endbild, Layout-Video, Video zum Verlängern, Referenzbilder)?
+  const wayReady = mode !== 'video' ? true
+    : way === 'refs' ? videoRefs.length > 0
+      : way === 'start' || way === 'loop' ? !!sourceId
+        : way === 'ends' ? !!endId
+          : way === 'layout' ? !!guideId && !!vfeat?.layout
+            : way === 'extend' ? !!extendId
+              : true
   const canGenerate =
     mode === 'speech'
       ? !!prompt.trim() && (voiceMode === 'design' || !!voiceAsset)
@@ -922,10 +1219,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       ? restoreReady
       : mode === '3d'
       ? !!sourceId
-      : needsStart
-        ? !!prompt.trim() && !!sourceId
-        : needsRefs
-        ? !!prompt.trim() && videoRefs.length > 0
+      : mode === 'video'
+        ? !!prompt.trim() && wayReady
         : mode === 'image' && outpainting
           ? !!sourceId
           : mode === 'image' && useSource && (canImg2img || outpainting)
@@ -933,6 +1228,26 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           : mode === 'image' && cnId
             ? !!prompt.trim() && !!cnImageId
             : !!prompt.trim()
+  // Warum „Generieren“ gesperrt ist (oder nicht erweitert), wenn es sonst nirgends zu sehen ist, etwa bei zugeklappter
+  // Feineinstellung
+  const blockedHint = busy ? null
+    : mode === 'image' && cnId && !cnImageId
+      ? t('ControlNet ist an, aber ohne Vorlage: unter „Feineinstellung“ eine wählen oder das ControlNet ausschalten.',
+        'ControlNet is on but has no template: choose one under “Advanced settings” or switch it off.')
+      : mode === 'image' && useSource && canOutpaint && outpaintOn && !outpainting
+        ? t('Zum Erweitern erst einen Rand angeben, etwa „↔ breiter“.', 'To extend, set a border first, for example “↔ wider”.')
+        : mode === 'restore' && !restoreEdits && !(restoreSharpen && upscaler)
+          ? t('Mindestens einen Schritt wählen.', 'Choose at least one step.')
+          : mode === 'video' && !wayReady
+            ? (way === 'refs' ? t('Für diesen Weg fehlt noch: mindestens ein Referenzbild.', 'This path still needs: at least one reference image.')
+              : way === 'ends' ? t('Für diesen Weg fehlt noch: das Endbild.', 'This path still needs: the end image.')
+                : way === 'layout' ? (vfeat?.layout
+                  ? t('Für diesen Weg fehlt noch: das Layout-Video.', 'This path still needs: the layout video.')
+                  : t('Für Layout-Videos fehlt noch die Layout-To-Render-LoRA (oben bei „Weg“).',
+                    'Layout videos still need the Layout-To-Render LoRA (see “Path” above).'))
+                  : way === 'extend' ? t('Für diesen Weg fehlt noch: das Video zum Verlängern.', 'This path still needs: the video to extend.')
+                    : t('Für diesen Weg fehlt noch: das Startbild.', 'This path still needs: the start image.'))
+            : null
 
   // Prompt ausbauen geht mit jedem Modell, braucht aber die Upsampler-Datei von FLUX 3.
   const canExpand = models.some((m) => m.files.some((f) => f.installed && f.file.includes('upsampler')))
@@ -940,8 +1255,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     mode === 'image' ? 'image'
       : mode === '3d' ? '3d'
         : mode === 'audio' ? (selected?.family === 'stable_audio3' ? 'music_sa3' : 'sfx')
-          : isLtx25 && multishot ? 'video_multishot'
-            : usesStart && sourceId ? 'video_start'
+          : effMultishot ? 'video_multishot'
+            : effStart ? 'video_start'
               : selected?.family === 'ltx25' || selected?.family === 'ltx23' ? 'video_sound' : 'video'
 
   const expandPrompt = async () => {
@@ -949,8 +1264,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     setExpanding(true)
     setError(null)
     try {
-      const refs = expandTarget === 'image' && maxRefs > 0 ? refIds
-        : expandTarget === 'video_start' ? [sourceId] : []
+      const refs = expandTarget === 'image' && maxRefs > 0 ? await liveRefs()
+        : expandTarget === 'video_start' ? [effStart] : []
       const r = await api.expandPrompt({
         prompt, width: imgSize.w, height: imgSize.h, target: expandTarget,
         ...(refs.length ? { reference_asset_ids: refs } : {}),
@@ -977,23 +1292,24 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
   // 3D aus Text: erst ein Bild mit dem aktiven Bildmodell, das dann als Quellbild dient.
   const imageModel = models.find((m) => m.kind === 'image' && m.runnable && m.id === modelId.image)
+  // Der Auftrag „Quellbild erzeugen“ (auch für seine Zeit am Knopf)
+  const meshImagePlan = (): Plan => ({
+    kind: 'txt2img',
+    params: {
+      // Ein für 3D ausgebauter Prompt enthält die Angaben schon.
+      prompt: promptBefore !== null ? prompt : `${prompt.trim().replace(/[ .,]+$/, '')}. ${MESH_SUFFIX}`,
+      negative_prompt: imageModel?.features?.negative_prompt === false ? '' : MESH_NEGATIVE,
+      model_id: imageModel?.id ?? null,
+      steps: null, seed: seed ? Number(seed) : null,
+      width: 1024, height: 1024, batch_size: 1,
+    },
+  })
   const meshImage = async () => {
     if (busy || !prompt.trim()) return
     setError(null)
-    setResults([])
-    setProgress(0)
-    setStage(t('in der Warteschlange', 'queued'))
-    // Ein für 3D ausgebauter Prompt enthält die Angaben schon.
-    const full = promptBefore !== null ? prompt : `${prompt.trim().replace(/[ .,]+$/, '')}. ${MESH_SUFFIX}`
     try {
-      const job = await api.generateImage({
-        prompt: full,
-        negative_prompt: imageModel?.features?.negative_prompt === false ? '' : MESH_NEGATIVE,
-        model_id: imageModel?.id ?? null,
-        steps: null, seed: seed ? Number(seed) : null,
-        width: 1024, height: 1024, batch_size: 1,
-      })
-      setJobId(job.id)
+      const job = await sendPlan(meshImagePlan())
+      startJob(job, { mode: '3d', title: t('Quellbild erzeugen', 'Create source image'), model: imageModel, est: meshEst })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -1052,26 +1368,37 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       alive = false
     }
   }, [personSrc, sourceImages])
+  // Der Auftrag „Vier Bilder“ bzw. „Vier Startbilder“ (auch für seine Zeit am Knopf)
+  const personPlan = (): Plan | null => {
+    if (!personModel) return null
+    const role = roleText.trim().replace(/[ .]+$/, '')
+    // Unter Video ein Filmstandbild mit Luft über dem Kopf (die Kamera bewegt sich noch), unter Bild bestimmt die
+    // Rolle den Stil; halbnah in beiden, damit das Gesicht genug Pixel hat
+    const tail = `, with exactly the same face, eyes, nose, mouth and hair color: ${role}. `
+      + 'Medium shot from the waist up, the face clearly visible'
+    return {
+      kind: 'txt2img',
+      params: {
+        prompt: mode === 'video' ? `${PERSON_HEAD}${tail}, free space above the head.` : `${PERSON_IMAGE_HEAD}${tail}.`,
+        negative_prompt: '', model_id: personModel.id, steps: null, seed: seed ? Number(seed) : null,
+        width: personWork.w, height: personWork.h, batch_size: 4,
+        reference_asset_ids: [facePhoto?.id ?? personSrc ?? 'ref'],
+        project_id: projectId || null,
+      },
+    }
+  }
   const personImages = async () => {
     if (busy || !roleText.trim() || !facePhoto?.asset || !personModel) return
     setError(null)
-    setResults([])
-    setProgress(0)
-    setStage(t('in der Warteschlange', 'queued'))
-    const role = roleText.trim().replace(/[ .]+$/, '')
+    const p = personPlan()
+    if (!p) return
     try {
-      // Unter Video ein Filmstandbild mit Luft über dem Kopf (die Kamera bewegt sich noch), unter Bild bestimmt die
-      // Rolle den Stil; halbnah in beiden, damit das Gesicht genug Pixel hat
-      const tail = `, with exactly the same face, eyes, nose, mouth and hair color: ${role}. `
-        + 'Medium shot from the waist up, the face clearly visible'
-      const job = await api.generateImage({
-        prompt: mode === 'video' ? `${PERSON_HEAD}${tail}, free space above the head.` : `${PERSON_IMAGE_HEAD}${tail}.`,
-        negative_prompt: '', model_id: personModel.id, steps: null, seed: seed ? Number(seed) : null,
-        width: personWork.w, height: personWork.h, batch_size: 4, reference_asset_ids: [facePhoto.id],
-        project_id: projectId || null,
+      const job = await sendPlan(p)
+      startJob(job, {
+        mode,
+        title: mode === 'video' ? t('Vier Startbilder erzeugen', 'Create four start images') : t('Vier Bilder erzeugen', 'Create four images'),
+        model: personModel, est: personEst,
       })
-      setPersonJobId(job.id)
-      setJobId(job.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -1147,12 +1474,16 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                   </p>
                 ) : facePhoto.id !== personSrc && (
                   <p className="muted small">
-                    {t('Neue Versuche nehmen immer dieses Foto, nicht das gewählte '
-                      + (forVideo ? 'Startbild' : 'Ergebnis') + ': sonst malt das '
-                      + 'Modell jedes Mal das letzte Ergebnis nach, und das Gesicht wird von Runde zu Runde schlechter.',
-                    'New attempts always use this photo, not the selected '
-                      + (forVideo ? 'start image' : 'result') + ': otherwise the model repaints '
-                      + 'the last result each time and the face gets worse with every round.')}
+                    {/* Je ein ganzer Satz, damit die Sprachpakete (zh, fr) ihn finden */}
+                    {forVideo
+                      ? t('Neue Versuche nehmen immer dieses Foto, nicht das gewählte Startbild: sonst malt das Modell '
+                        + 'jedes Mal das letzte Ergebnis nach, und das Gesicht wird von Runde zu Runde schlechter.',
+                      'New attempts always use this photo, not the selected start image: otherwise the model repaints '
+                        + 'the last result each time and the face gets worse with every round.')
+                      : t('Neue Versuche nehmen immer dieses Foto, nicht das gewählte Ergebnis: sonst malt das Modell '
+                        + 'jedes Mal das letzte Ergebnis nach, und das Gesicht wird von Runde zu Runde schlechter.',
+                      'New attempts always use this photo, not the selected result: otherwise the model repaints '
+                        + 'the last result each time and the face gets worse with every round.')}
                   </p>
                 )}
                 <button className="btn small ghost" disabled={!facePhoto.asset || busy}
@@ -1192,10 +1523,13 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                     + 'characters; for real people use FLUX 3.')
                   : t(`${personModel.name}: mit echten Gesichtern hier nicht gemessen.`,
                     `${personModel.name}: not measured here with real faces.`)}
-              {personWork.w !== personTarget.w && t(` Gerechnet in ${personWork.w} × ${personWork.h}, damit das `
-                + (forVideo ? 'Gesicht genug Pixel hat; das Video zieht es auf sein Format.' : 'Gesicht genug Pixel hat.'),
-              ` Rendered at ${personWork.w} × ${personWork.h} so the face gets enough pixels`
-                + (forVideo ? '; the video scales it to its format.' : '.'))}
+              {personWork.w !== personTarget.w && (forVideo
+                ? t(` Gerechnet in ${personWork.w} × ${personWork.h}, damit das Gesicht genug Pixel hat; das Video `
+                  + 'zieht es auf sein Format.',
+                ` Rendered at ${personWork.w} × ${personWork.h} so the face gets enough pixels; the video scales it `
+                  + 'to its format.')
+                : t(` Gerechnet in ${personWork.w} × ${personWork.h}, damit das Gesicht genug Pixel hat.`,
+                  ` Rendered at ${personWork.w} × ${personWork.h} so the face gets enough pixels.`))}
             </p>
           )}
           {morePersonModels.length > 0 && (
@@ -1222,18 +1556,23 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               : !facePhoto?.asset
                 ? (forVideo ? t('Erst oben das Foto als Startbild wählen', 'First pick the photo as the start image above')
                   : t('Erst hier ein Foto wählen oder hochladen', 'First pick or upload a photo here'))
-                : t(`Vier Bilder mit ${personModel.name} in ${personWork.w} × ${personWork.h}`
-                  + (personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''),
-                `Four images with ${personModel.name} at ${personWork.w} × ${personWork.h}`
-                  + (personMinutes ? `, about ${personMinutes} minutes` : ''))}
+                : personMinutes
+                  ? t(`Vier Bilder mit ${personModel.name} in ${personWork.w} × ${personWork.h}, rund `
+                    + `${String(personMinutes).replace('.', ',')} Minuten`,
+                  `Four images with ${personModel.name} at ${personWork.w} × ${personWork.h}, about ${personMinutes} minutes`)
+                  : t(`Vier Bilder mit ${personModel.name} in ${personWork.w} × ${personWork.h}`,
+                    `Four images with ${personModel.name} at ${personWork.w} × ${personWork.h}`)}
           >
             {forVideo ? t('Vier Startbilder erzeugen', 'Create four start images')
               : t('Vier Bilder erzeugen', 'Create four images')}
+            {/* Ehrliche Zeit auch hier (Konzept „NVAI im Fluss“) */}
+            {personEst && <span className="flow-eta">{fmtEta(totalSeconds(personEst))}</span>}
           </button>
           {!personModel && (
             <p className="hint small warn">
-              {t('Braucht ein Bildmodell mit Referenzbildern, z. B. FLUX 3 Image Klein: unter „Modelle“ laden.',
-                'Needs an image model with reference images, e.g. FLUX 3 Image Klein: download it under “Models”.')}
+              {t('Braucht ein Bildmodell mit Referenzbildern, z. B. FLUX 3 Image Klein:',
+                'Needs an image model with reference images, e.g. FLUX 3 Image Klein:')}{' '}
+              <button className="link-btn" onClick={onShowModels}>{t('unter „Modelle“ laden', 'download it under “Models”')}</button>
             </p>
           )}
         </details>
@@ -1270,6 +1609,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     <>
       <h3>{t('Text', 'Text')}</h3>
       <textarea
+        ref={promptRef}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder={`${t('z. B.', 'e.g.')} ${PLACEHOLDER.speech}`}
@@ -1392,6 +1732,9 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               : t('Braucht FLUX 3 Image Klein (Upsampler).', 'Needs FLUX 3 Image Klein (upsampler).')}
         </span>
       )}
+      {!canExpand && !expanding && promptBefore === null && (
+        <button className="link-btn small" onClick={onShowModels}>{t('unter „Modelle“ laden', 'download it under “Models”')}</button>
+      )}
     </div>
   )
 
@@ -1478,13 +1821,25 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     )
   }
 
-  const generate = async () => {
-    if (busy || !canGenerate) return
-    setError(null)
-    setResults([])
-    setProgress(0)
-    setStage(t('in der Warteschlange', 'queued'))
+  // Mesh-Auftrag für ein Bild mit den Einstellungen unter „Mesh“ und „Freistellen“ (großer Knopf und „◈ 3D-Modell“)
+  const meshParams = (m: ModelInfo | undefined, imageId: string): Mesh3DParams => {
+    const textured = m?.workflow === 'trellis2'
+    return {
+      image_asset_id: imageId,
+      model_id: m?.id ?? (modelId['3d'] || null),
+      steps: steps ? Number(steps) : 50,
+      seed: seed ? Number(seed) : null,
+      faces: faces ? Number(faces) : textured ? 100000 : -1,
+      remove_background: bgMode !== 'alpha',
+      background_mode: bgMode,
+      project_front: projectFront,
+      ...(textured ? { resolution: 512, texture_size: textureSize, clean_specks: cleanSpecks } : {}),
+    }
+  }
 
+  /** Der Auftrag des großen Knopfs mit genau den Parametern, die abgeschickt werden; dieselben gehen in die Schätzung.
+   *  refs: beim Abschicken die noch vorhandenen Referenzbilder, für die Schätzung die gewählten. */
+  const plan = (refs: string[]): Plan => {
     const common = {
       // Bild erweitern ohne eigenen Prompt (Nutzer 22.11.2026): ein neutraler Satz; FLUX 3 beschreibt das Vorlagenbild
       // dazu selbst (Upsampler), die Maskenmodelle bekommen wenigstens Stil, Licht und Perspektive vorgegeben
@@ -1495,10 +1850,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
       seed: seed ? Number(seed) : null,
       project_id: projectId || null,
     }
-    try {
-      let job
-      if (mode === 'image') {
-        job = await api.generateImage({
+    if (mode === 'image') {
+      return {
+        kind: 'txt2img',
+        params: {
           ...common,
           width: imgSize.w, height: imgSize.h, batch_size: batch,
           cfg: cfg ? Number(cfg) : null,
@@ -1509,7 +1864,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           image_asset_id: useSource && (canImg2img || outpainting) && sourceId ? sourceId : null,
           denoise: outpainting ? 1.0 : useSource && canImg2img ? denoise : 1.0,
           outpaint: outpainting ? [pad.left, pad.top, pad.right, pad.bottom] : null,
-          reference_asset_ids: maxRefs > 0 && !outpainting ? refIds.filter((id) => sourceImages.some((a) => a.id === id)) : [],
+          reference_asset_ids: !outpainting ? refs : [],
           upsample_prompt: feat?.upsampler ? upsample : null,
           controlnet_model_id: cnId || null,
           controlnet_image_asset_id: cnId ? cnImageId || null : null,
@@ -1517,9 +1872,13 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           controlnet_end: cnEnd,
           controlnet_preprocess: cnPre,
           loras: activeLoras,
-        })
-      } else if (mode === 'restore') {
-        job = await api.restoreImage({
+        },
+      }
+    }
+    if (mode === 'restore') {
+      return {
+        kind: 'restore',
+        params: {
           image_asset_id: sourceId,
           repair: restoreRepair,
           repair_mode: restoreMode,
@@ -1532,24 +1891,32 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           upscale_model_id: restoreSharpen && upscaler ? upscaler.id : null,
           seed: seed ? Number(seed) : null,
           project_id: projectId || null,
-        })
-      } else if (mode === 'speech') {
-        job = await api.generateSpeech({
+        },
+      }
+    }
+    if (mode === 'speech') {
+      return {
+        kind: 'tts',
+        params: {
           text: prompt,
           voice: voiceMode === 'design' ? voiceDesc : '',
           voice_asset_id: voiceMode === 'clone' ? voiceAsset || null : null,
           voice_text: voiceMode === 'clone' ? voiceText : '',
           language: speechLang,
           model_id: common.model_id, seed: common.seed, project_id: common.project_id,
-        })
-      } else if (mode === 'audio') {
-        job = await api.generateAudio({ ...common, seconds })
-      } else if (mode === 'video') {
-        job = await api.generateVideo({
+        },
+      }
+    }
+    if (mode === 'audio') return { kind: 'txt2audio', params: { ...common, seconds } }
+    if (mode === 'video') {
+      return {
+        kind: 'txt2video',
+        params: {
           ...common, width: vidSize.w, height: vidSize.h,
           frames: isLtx25 ? ltxFrames : frames, fps: isLtx25 ? ltxFps : fps,
-          image_asset_id: usesStart && !(isLtx25 && extendId) ? sourceId || null : null,
-          reference_asset_ids: videoRefs,
+          // Nur, was zum Weg gehört (Konzept, Bildschirm B); der Rest bleibt eingestellt, wirkt aber nicht
+          image_asset_id: effStart || null,
+          reference_asset_ids: way === 'refs' ? refs : [],
           loras: activeLoras,
           sparse_attention: sparse && vfeat?.sparse_attention?.includes(sparse) ? sparse : null,
           int8_attention: vfeat?.int8_attention ? int8 : null,
@@ -1558,45 +1925,635 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           master,
           ...(vfeat?.audio_prompt ? { audio_prompt: audioPrompt } : {}),
           ...(isLtx25 ? {
-            loop: loop && !!sourceId && quality !== 'dfr' && !extendId,
-            end_image_asset_id: !loop && quality !== 'dfr' && endId ? endId : null,
-            quality,
-            temporal_upscale: quality === 'dfr' && temporal,
-            auto_duration: autoDuration && !audioId,
-            audio_asset_id: extendId ? null : audioId || null,
-            motion_speed: motionSpeed,
-            extend_asset_id: guideId ? null : extendId || null,
-            guide_asset_id: vfeat?.layout && guideId ? guideId : null,
+            loop: effLoop,
+            end_image_asset_id: effEnd || null,
+            quality: effQuality,
+            temporal_upscale: effTemporal,
+            auto_duration: effAuto,
+            audio_asset_id: effAudio || null,
+            motion_speed: effMotion,
+            extend_asset_id: effExtend || null,
+            guide_asset_id: effGuide || null,
           } : {}),
-        })
-      } else {
-        job = await api.generate3D({
-          image_asset_id: sourceId,
-          model_id: modelId['3d'] || null,
-          steps: steps ? Number(steps) : 50,
-          seed: seed ? Number(seed) : null,
-          faces: faces ? Number(faces) : isTextured ? 100000 : -1,
-          remove_background: bgMode !== 'alpha',
-          background_mode: bgMode,
-          project_front: projectFront,
-          ...(isTextured
-            ? { resolution: 512, texture_size: textureSize, clean_specks: cleanSpecks }
-            : {}),
-        })
+        },
       }
-      setJobId(job.id)
+    }
+    return { kind: 'img23d', params: meshParams(selected, sourceId) }
+  }
+
+  // Was der große Knopf tut, in Worten (Konzept „NVAI im Fluss“: „Ein Knopf nennt Aktion und Zeit“)
+  const actionLabel = mode === 'image'
+    ? (outpainting ? t('Bild erweitern', 'Extend image')
+      : useSource && canImg2img && sourceId ? t('Bild überarbeiten', 'Rework image')
+        : batch > 1 ? t(`${batch} Bilder erzeugen`, `Create ${batch} images`) : t('Bild erzeugen', 'Create image'))
+    : mode === 'video' ? (way === 'extend' ? t('Video verlängern', 'Extend video') : t('Video erzeugen', 'Create video'))
+      : mode === 'audio' ? (selected?.family === 'stable_audio3' ? t('Musik erzeugen', 'Create music') : t('Ton erzeugen', 'Create sound'))
+        : mode === 'speech' ? t('Text sprechen', 'Speak the text')
+          : mode === '3d' ? t('Mesh erzeugen', 'Create mesh')
+            : t('Foto restaurieren', 'Restore photo')
+
+  // ---------------------------------------------- Fehlendes Modell an Ort und Stelle (Konzept „NVAI im Fluss“)
+  // Ein noch nicht geladenes Modell lässt sich in der Modellwahl vormerken; geladen wird erst nach dem Klick auf „Laden“
+  // (ModelNeed), danach ist es gewählt. Ohne geladenes Modell der Art steht das empfohlene da. Vorher stand „Kein
+  // Bild-Modell installiert“ unter dem Knopf außer Sicht und führte nirgends hin.
+  const [want, setWant] = useState<Partial<Record<Mode, string>>>({})
+  // Auf Radeon allein läuft 3D nicht (CUDA-Erweiterungen): dann kein Laden anbieten, textureNotice sagt es
+  const amdOnly = !!health?.gpus?.some((g) => g.vendor === 'amd') && !health?.gpus?.some((g) => g.vendor === 'nvidia')
+  const missing = useMemo(() => (mode === '3d' && amdOnly ? [] : missingChoices(models, mode)), [models, mode, amdOnly])
+  const wantModel = want[mode] ? models.find((m) => m.id === want[mode] && !available.some((a) => a.id === m.id)) : undefined
+  const need = mode === 'restore' && !restoreEdits ? undefined : wantModel ?? (noModel ? missing[0] : undefined)
+  // Das empfohlene Modell fehlt, gewählt ist eins außerhalb der empfohlenen Familien (etwa Wan statt LTX-2.5): ModelNeed
+  // bietet es an, ohne das Erzeugen zu sperren; „Lieber … (geladen)“ blendet den Hinweis für diesen Reiter aus (gemerkt)
+  const [recDismissed, setRecDismissed] = useState<Partial<Record<Mode, boolean>>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('nvai-generate-rec-ok') || '{}') as Partial<Record<Mode, boolean>>
+    } catch {
+      return {}
+    }
+  })
+  const recMissing = !need && selected && !recDismissed[mode] && !MODE_FAMILIES[mode].includes(selected.family)
+    && !(mode === '3d' && amdOnly) && (mode !== 'restore' || restoreEdits)
+    ? pickMissing(models, (m) => fitsMode(m, mode as GenMode), MODE_FAMILIES[mode].slice(0, 1)) : undefined
+  // Hier geladen: danach gleich dieses Modell wählen
+  const recLoading = useRef<Partial<Record<Mode, string>>>({})
+  useEffect(() => {
+    if (recMissing && downloads.active[recMissing.id]) recLoading.current[mode] = recMissing.id
+  }, [recMissing, downloads.active, mode])
+  useEffect(() => {
+    const id = recLoading.current[mode]
+    if (id && available.some((m) => m.id === id)) {
+      recLoading.current[mode] = undefined
+      setModelId((cur) => ({ ...cur, [mode]: id }))
+    }
+  }, [available, mode])
+  const dismissRec = () => {
+    const next = { ...recDismissed, [mode]: true }
+    setRecDismissed(next)
+    try {
+      localStorage.setItem('nvai-generate-rec-ok', JSON.stringify(next))
+    } catch {
+      /* privates Fenster: nur diese Sitzung */
+    }
+  }
+  useEffect(() => {
+    const id = want[mode]
+    if (id && available.some((m) => m.id === id)) {
+      setModelId((cur) => ({ ...cur, [mode]: id }))
+      setWant((w) => ({ ...w, [mode]: undefined }))
+    }
+  }, [available, mode, want])
+  const chooseModel = (id: string) => {
+    if (!id) return
+    if (available.some((m) => m.id === id)) {
+      setModelId((cur) => ({ ...cur, [mode]: id }))
+      setWant((w) => ({ ...w, [mode]: undefined }))
+    } else {
+      setWant((w) => ({ ...w, [mode]: id }))
+    }
+  }
+  const NEED_WHY: Record<Mode, string> = {
+    image: t('für Bilder', 'for images'),
+    video: t('für Video mit Ton', 'for video with sound'),
+    audio: t('für Musik und Geräusche', 'for music and sound effects'),
+    speech: t('für die Sprecherstimme', 'for the narrator voice'),
+    '3d': t('für 3D aus Bildern', 'for 3D from images'),
+    restore: t('zum Restaurieren', 'for restoring'),
+  }
+  /** Chip mit Zustand: „LTX-2.5 · bereit“, „· lädt 42 %“, „· fehlt“ */
+  const modelChip = (m: ModelInfo | undefined, isMissing: boolean, key = 'model') => {
+    if (!m) return null
+    const dl = downloads.active[m.id]
+    const worker = mode === '3d' && !isMissing && m.workflow ? health?.mesh_workers?.[m.workflow] : undefined
+    const [cls, text] = dl
+      ? ['info', dl.status === 'queued' ? t(`${shortName(m)} · wartet auf den Download`, `${shortName(m)} · waiting to download`)
+        : t(`${shortName(m)} · lädt ${Math.round(dl.progress * 100)} %`, `${shortName(m)} · downloading ${Math.round(dl.progress * 100)} %`)]
+      : isMissing ? ['warn', t(`${shortName(m)} · fehlt`, `${shortName(m)} · missing`)]
+        : worker && !worker.ready ? ['warn', t(`${shortName(m)} · nicht eingerichtet`, `${shortName(m)} · not set up`)]
+          : ['ok', t(`${shortName(m)} · bereit`, `${shortName(m)} · ready`)]
+    return <span key={key} className={`flow-chip ${cls}`} title={m.name}>{text}</span>
+  }
+
+  // ---------------------------------------------- Zeit am Knopf (Konzept „NVAI im Fluss“: „Ehrliche Zeit“)
+  const mainPlan = plan(mode === 'image' ? refIds.slice(0, maxRefs) : mode === 'video' && way === 'refs' ? videoRefs : [])
+  // Video: dieselbe Einstellung mit der anderen Qualität, für „Standard · DFR ≈ 13 min“
+  const altPlan: Plan | null = mainPlan.kind === 'txt2video' && dfrWay && dfrReady
+    ? { kind: 'txt2video', params: { ...mainPlan.params, quality: effQuality === 'dfr' ? 'standard' : 'dfr', temporal_upscale: false } }
+    : null
+  const meshPlanNow = mode === '3d' && imageModel ? meshImagePlan() : null
+  const personPlanNow = mode === 'image' || wayStart ? personPlan() : null
+  const estItems = [estimateItem(mainPlan), estimateItem(altPlan), estimateItem(meshPlanNow), estimateItem(personPlanNow)]
+  const ests = useEstimates(estItems, JSON.stringify(estItems))
+  // Eine Antwort für ein anderes Modell (die Anfrage zum neuen Reiter läuft noch) zeigt keine falsche Zeit
+  const fitEst = (e: Estimate | undefined, p: Plan | null): Estimate | null => {
+    if (!e || !p) return null
+    const wanted = (p.params as { model_id?: string | null }).model_id
+    return wanted && e.model_id && e.model_id !== wanted ? null : e
+  }
+  const mainEst = fitEst(ests?.[0], mainPlan)
+  const altEst = fitEst(ests?.[1], altPlan)
+  const meshEst = fitEst(ests?.[2], meshPlanNow)
+  const personEst = fitEst(ests?.[3], personPlanNow)
+
+  const generate = async () => {
+    if (busy || !canGenerate || need || sending.current) return
+    sending.current = true
+    setError(null)
+    try {
+      // Referenzen auch dann, wenn sie nicht mehr unter den neuesten Bildern stehen; gelöschte fallen weg
+      const refs = maxRefs > 0 && (mode === 'image' || (mode === 'video' && way === 'refs')) ? await liveRefs() : []
+      const job = await sendPlan(plan(refs))
+      startJob(job, {
+        mode, title: actionLabel, model: mode === 'restore' && !restoreEdits ? upscaler : selected, est: mainEst,
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      sending.current = false
     }
   }
 
-  const est = mode === 'video' ? (frames / Math.max(fps, 1)).toFixed(1) : null
+  // ---------------------------------------------- Willkommen und Auftragsleiste
+  // Willkommen-Bildschirm: mit diesem Reiter anfangen
+  useEffect(() => {
+    if (preset) setMode(preset.mode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei einem neuen Klick
+  }, [preset?.n])
+  // Auftragsleiste „Zeigen“ (Bildschirm F): diesen Auftrag samt Ergebnis zeigen, den Reiter passend umschalten; läuft er
+  // noch, stehen rechts seine Phasen
+  useEffect(() => {
+    if (!focus) return
+    let alive = true
+    const id = focus.jobId
+    api.job(id).then((j) => {
+      if (!alive) return
+      trackJob(j)
+      const m = MODE_OF_KIND[j.kind] as Mode | undefined
+      if (m) setMode(m)
+      viewRef.current = j.id
+      setViewId(j.id)
+      setViewJob(j)
+      setNextNeed(null)
+      setStudioNote(null)
+      if (j.id !== jobRef.current) {
+        const known = models.find((x) => x.id === j.params?.model_id)
+        const label = MODES.find((x) => x.id === m)?.label ?? t('Auftrag', 'Job')
+        setRun({
+          id: j.id, title: known ? `${label} · ${shortName(known)}` : label,
+          modelName: known ? shortName(known) : undefined, modelGb: known?.vram_gb || undefined, expected: null,
+          next: NEXT_TEXT[m ?? 'image'],
+        })
+      }
+      if (j.status === 'done') {
+        api.jobAssets(j.id).then((assets) => { if (alive) showResults(j.id, assets) }).catch(() => {})
+      } else {
+        loadedFor.current = null
+        setResults([])
+        setPickedId(null)
+        setError(j.status === 'error' ? j.error ?? t('Fehler', 'Error') : null)
+        setReveal((n) => n + 1)
+      }
+    }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : String(e)) })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nur bei einem neuen Klick
+  }, [focus?.n])
+
+  // ---------------------------------------------- Nächste Schritte unter dem Ergebnis (Konzept, Bildschirm C)
+  const picked = results.find((a) => a.id === pickedId) ?? results[0]
+  // Größe des gewählten Ergebnisses (für „ins Videoformat“ und das passende Format); ohne Angabe aus dem Bild selbst
+  const [pickedDims, setPickedDims] = useState<{ id: string; w: number; h: number } | null>(null)
+  useEffect(() => {
+    if (!picked || (picked.kind !== 'image' && picked.kind !== 'video')) return
+    const w = Number(picked.meta?.width)
+    const h = Number(picked.meta?.height)
+    if (w > 0 && h > 0) {
+      setPickedDims({ id: picked.id, w, h })
+      return
+    }
+    if (picked.kind !== 'image') return
+    let alive = true
+    const img = new Image()
+    img.onload = () => { if (alive) setPickedDims({ id: picked.id, w: img.naturalWidth, h: img.naturalHeight }) }
+    img.src = picked.url
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- je Ergebnis einmal
+  }, [picked?.id])
+  const dims = picked && pickedDims?.id === picked.id ? pickedDims : null
+  // Ein fertig geladenes Modell für einen Schritt: Der Hinweis darunter erledigt sich
+  useEffect(() => {
+    if (nextNeed && models.some((m) => m.id === nextNeed.model.id && m.runnable)) setNextNeed(null)
+  }, [models, nextNeed])
+
+  /** Format, Länge und Qualität, mit denen der Reiter Video für dieses Modell rechnen würde: die Vorwahl des Modells,
+   *  solange sie noch nicht gesetzt ist, sonst die eigene Einstellung */
+  const videoSetupFor = (m: ModelInfo) => {
+    const f = m.features ?? {}
+    const sizes = f.sizes?.length ? f.sizes : VIDEO_SIZES
+    const applied = presetFor.current.video === m.id
+    const rec = f.recommended ?? {}
+    const rs = rec.size
+    const recSize = rs ? sizes.find((s) => s.w === rs[0] && s.h === rs[1]) : undefined
+    const size = (applied && sizes.some((s) => s.label === vidSize.label) ? vidSize : recSize) ?? sizes[0]
+    const ltx = m.family === 'ltx25'
+    const secs = applied ? ltxSeconds : rec.seconds ?? ltxSeconds
+    const wantDfr = qualityTouched.current ? quality === 'dfr' : (rec.quality ?? 'dfr') === 'dfr'
+    return {
+      size, sizes, ltx,
+      quality: (ltx && f.dfr && wantDfr ? 'dfr' : 'standard') as 'standard' | 'dfr',
+      fps: ltx ? ltxFps : f.fps ?? fps,
+      frames: ltx ? ltxFramesFor(secs, ltxFps, f.max_seconds ?? 20) : f.default_frames ?? frames,
+    }
+  }
+  const addSource = (a: Asset) => setSourceImages((list) => (list.some((x) => x.id === a.id) ? list : [a, ...list]))
+  const curVideoModel = models.find((m) => m.id === modelId.video && m.runnable && m.usable !== false)
+  const takesStart = (m: ModelInfo) => m.kind === 'video' && !!startImageUse(m)
+  // ▶ Video daraus: das gewählte Videomodell, wenn es ein Startbild nimmt, sonst LTX-2.5
+  const startModel = curVideoModel && startImageUse(curVideoModel) ? curVideoModel : pickRunnable(models, takesStart, ['ltx25'])
+  const startNeed = startModel ? undefined : pickMissing(models, takesStart, ['ltx25'])
+  const startTarget = startModel ?? startNeed
+  const videoFromPlan: Plan | null = picked?.kind === 'image' && startTarget ? (() => {
+    const s = videoSetupFor(startTarget)
+    const size = dims && aspectDiffers(s.size, dims.w / dims.h) ? closestSize(s.sizes, dims.w / dims.h, s.size) ?? s.size : s.size
+    return {
+      kind: 'txt2video' as const,
+      params: {
+        prompt: '', model_id: startTarget.id, width: size.w, height: size.h, frames: s.frames, fps: s.fps,
+        image_asset_id: picked.id, recommended: false, ...(s.ltx ? { quality: s.quality } : {}),
+      },
+    }
+  })() : null
+  // ◈ 3D-Modell: das gewählte 3D-Modell, sonst TripoSG; auf Radeon gibt es kein 3D
+  const meshOnly = (m: ModelInfo) => m.kind === '3d'
+  const meshNext = models.find((m) => m.id === modelId['3d'] && m.runnable && m.usable !== false)
+    ?? pickRunnable(models, meshOnly, ['triposg', 'trellis2'])
+  const meshNeed = meshNext ? undefined : pickMissing(models, meshOnly, ['triposg', 'trellis2'])
+  const meshNextPlan: Plan | null = picked?.kind === 'image' && !amdOnly && (meshNext ?? meshNeed)
+    ? { kind: 'img23d', params: meshParams(meshNext ?? meshNeed, picked.id) } : null
+  // ⤢ Erweitern ins Videoformat: per Referenz (FLUX 3), nahtloser als über eine Maske
+  const outByRef = (m: ModelInfo) => m.kind === 'image' && m.features?.outpaint === 'reference' && (m.features?.references ?? 0) > 0
+  const outModel = pickRunnable(models, outByRef, ['flux3'])
+  const outNeed = outModel ? undefined : pickMissing(models, outByRef, ['flux3'])
+  const outMask = outModel ? undefined : pickRunnable(models, (m) => m.kind === 'image' && m.features?.img2img !== false
+    && m.features?.mask !== false, ['qwenimage'])
+  const outSize = startTarget ? videoSetupFor(startTarget).size : vidSize
+  const outPad = picked?.kind === 'image' && dims ? padToAspect(dims.w, dims.h, outSize.w / outSize.h) : null
+  const outPlanFor = (m: ModelInfo | undefined): Plan | null => (outPad && dims && picked ? {
+    kind: 'txt2img',
+    params: {
+      prompt: EXTEND_PROMPT, negative_prompt: '', model_id: m?.id ?? null, steps: null, seed: null, batch_size: 1,
+      width: Math.round((dims.w + outPad[0] + outPad[2]) / 16) * 16,
+      height: Math.round((dims.h + outPad[1] + outPad[3]) / 16) * 16,
+      image_asset_id: picked.id, denoise: 1.0, outpaint: [...outPad], reference_asset_ids: [],
+      upsample_prompt: m?.features?.upsampler ? true : null, project_id: projectId || null,
+    },
+  } : null)
+  const outPlan = outPlanFor(outModel ?? outNeed)
+  // ⟳ Varianten: derselbe Auftrag noch einmal, neuer Seed (Bilder und Fotos zu viert)
+  const variantPlan: Plan | null = viewJob?.status === 'done' && results.length > 0 ? rerunPlan(viewJob, 4) : null
+  // ✎ Überarbeiten: Bearbeiten mit diesem Bild als Referenz (FLUX 3), im Format des Bildes
+  const editByRef = (m: ModelInfo) => m.kind === 'image' && (m.features?.references ?? 0) > 0 && m.features?.reference_kind !== 'style'
+  const editModel = pickRunnable(models, editByRef, ['flux3'])
+  const editNeed = editModel ? undefined : pickMissing(models, editByRef, ['flux3'])
+  const editImg2img = editModel ? undefined : pickRunnable(models, (m) => m.kind === 'image' && m.features?.img2img !== false, ['qwenimage'])
+  const editSizeFor = (m: ModelInfo) => {
+    const list = [...IMAGE_SIZES, ...(m.features?.sizes ?? [])]
+    const rs = m.features?.recommended?.size
+    const near = rs ? { w: rs[0], h: rs[1] } : imgSize
+    return (dims ? closestSize(list, dims.w / dims.h, near) : undefined)
+      ?? list.find((s) => s.w === near.w && s.h === near.h) ?? list[0]
+  }
+  const editTarget = editModel ?? editNeed
+  const editPlan: Plan | null = picked?.kind === 'image' && editTarget ? {
+    kind: 'txt2img',
+    params: {
+      prompt: '', model_id: editTarget.id, width: editSizeFor(editTarget).w, height: editSizeFor(editTarget).h,
+      batch_size: 1, reference_asset_ids: [picked.id],
+    },
+  } : null
+  // Video: ⇥ Verlängern (LTX-2.5) und ⤡ Hochskalieren (RelayVSR, Eingang bis 1920 × 1088)
+  const ltxOnly = (m: ModelInfo) => m.kind === 'video' && m.family === 'ltx25'
+  const ltxNext = (curVideoModel?.family === 'ltx25' ? curVideoModel : undefined) ?? pickRunnable(models, ltxOnly, ['ltx25'])
+  const ltxNeed = ltxNext ? undefined : pickMissing(models, ltxOnly, ['ltx25'])
+  const extendPlan: Plan | null = picked?.kind === 'video' && (ltxNext ?? ltxNeed) ? (() => {
+    const m = (ltxNext ?? ltxNeed)!
+    const s = videoSetupFor(m)
+    const w = Number(picked.meta?.width) || s.size.w
+    const h = Number(picked.meta?.height) || s.size.h
+    // Ein 48-fps-Video lässt sich nur mit DFR und 48 fps fortsetzen (jobs._prepare_extension)
+    const fast = Number(picked.meta?.fps) > 30
+    return {
+      kind: 'txt2video' as const,
+      params: {
+        prompt: '', model_id: m.id, width: Math.max(256, Math.floor(w / 64) * 64), height: Math.max(256, Math.floor(h / 64) * 64),
+        frames: s.frames, fps: 24, extend_asset_id: picked.id, quality: fast ? 'dfr' as const : s.quality,
+        temporal_upscale: fast, recommended: false,
+      },
+    }
+  })() : null
+  const vupOnly = (m: ModelInfo) => m.kind === 'video_upscale'
+  const vupModel = pickRunnable(models, vupOnly)
+  const vupNeed = vupModel ? undefined
+    : models.find((m) => vupOnly(m) && !m.installed && m.recommended && m.usable !== false)
+      ?? models.find((m) => vupOnly(m) && !m.installed && m.usable !== false)
+  const vw = Number(picked?.meta?.width) || 0
+  const vh = Number(picked?.meta?.height) || 0
+  const upscalable = picked?.kind === 'video' && vw > 0 && Math.max(vw, vh) <= 1920 && Math.min(vw, vh) <= 1088
+  const upscalePlan: Plan | null = upscalable && picked && (vupModel ?? vupNeed)
+    ? { kind: 'video_upscale', params: { asset_id: picked.id, model_id: (vupModel ?? vupNeed)!.id, project_id: projectId || null } }
+    : null
+  const nextPlans = [videoFromPlan, meshNextPlan, outPlan, variantPlan, editPlan, extendPlan, upscalePlan]
+  const nextItems = results.length ? nextPlans.map(estimateItem) : null
+  const nextEsts = useEstimates(nextItems, JSON.stringify(nextItems))
+  const nextEta = (i: number) => fmtEta(totalSeconds(fitEst(nextEsts?.[i], nextPlans[i])))
+  const nextTitle = (i: number) => sourceText(fitEst(nextEsts?.[i], nextPlans[i]))
+
+  // Ins Studio: das gewählte Zielprojekt, sonst das zuletzt bearbeitete, sonst ein neues
+  const studioTarget = projects.find((p) => p.id === projectId) ?? [...projects].sort((a, b) => b.updated_at - a.updated_at)[0]
+  const toStudio = async (a: Asset) => {
+    if (studioBusy) return
+    setStudioBusy(true)
+    setError(null)
+    setStudioNote(null)
+    try {
+      let pid = studioTarget?.id
+      let name = studioTarget?.name ?? ''
+      if (!pid) {
+        const p = await api.studioCreate(sceneTitle(a) || t('Neues Projekt', 'New project'))
+        pid = p.id
+        name = p.name
+        refreshProjects()
+      }
+      const title = sceneTitle(a)
+      const secs = Number(a.meta?.duration_s ?? a.meta?.seconds) || undefined
+      const family = models.find((m) => m.id === a.model_id)?.family
+      const taken = { takes: [a.id], take: a.id, ...(secs ? { duration_s: secs } : {}) }
+      // Ein Bild wird das Startbild einer Videoszene (die Bewegung beschreibt man dort); Video, Ton und Stimme kommen als
+      // Take und gleich in den Schnitt
+      const add: Record<string, unknown> = a.kind === 'image'
+        ? { lane: 'video', kind: 'video', title, prompt: '', params: { image_asset_id: a.id } }
+        : a.kind === 'video'
+          ? { lane: 'video', kind: 'video', title, prompt: a.prompt, model_id: a.model_id || null, ...taken }
+          : a.meta?.speech
+            ? { lane: 'voice', title, prompt: String(a.meta?.text ?? a.prompt), model_id: a.model_id || null, ...taken,
+              params: { voice: String(a.meta?.voice ?? ''), language: String(a.meta?.language ?? 'auto') } }
+            : { lane: family === 'stable_audio3' ? 'music' : 'sfx', kind: 'audio', title, prompt: a.prompt,
+              model_id: a.model_id || null, ...taken }
+      const r = await api.studioCommand(pid, 'scene.add', add)
+      const sceneId: string | null = r.result?.id ?? null
+      if (sceneId && a.kind !== 'image') await api.studioCommand(pid, 'edit.conform', { scenes: [sceneId] }).catch(() => null)
+      setStudioNote(a.kind === 'image'
+        ? t(`Als Szene mit diesem Startbild im Studio-Projekt „${name}“; dort die Bewegung beschreiben.`,
+          `Added as a scene with this start image to the Studio project “${name}”; describe the motion there.`)
+        : t(`Als Szene im Studio-Projekt „${name}“ und im Schnitt.`, `Added as a scene to the Studio project “${name}” and to the edit.`))
+      onOpenStudio?.(pid, sceneId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setStudioBusy(false)
+    }
+  }
+
+  /** Schritt mit fehlendem Modell: ModelNeed darunter zeigen, statt etwas zu starten (geladen wird erst nach „Laden“) */
+  const needOr = (step: string, model: ModelInfo | undefined, missingModel: ModelInfo | undefined, run: () => void,
+    alternative?: ModelInfo, alt?: () => void) => () => {
+    if (!model && missingModel) {
+      setNextNeed({ step, model: missingModel, alternative, alt })
+      return
+    }
+    setNextNeed(null)
+    run()
+  }
+  /** Ein Schritt, der gleich rechnet: abschicken und rechts mit Phasen zeigen */
+  const runNext = async (p: Plan | null, m: Mode, title: string, model: ModelInfo | undefined, i: number) => {
+    if (!p || busy || sending.current) return
+    sending.current = true
+    setError(null)
+    try {
+      const job = await sendPlan(p)
+      startJob(job, { mode: m, title, model, est: fitEst(nextEsts?.[i], p) })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      sending.current = false
+    }
+  }
+
+  const nextSteps: NextStep[] = []
+  // Unter 3D (Quellbild aus Text) ist das Mesh der naheliegende Schritt, sonst das Video
+  const meshFirst = mode === '3d'
+  if (picked && !viewActive) {
+    if (picked.kind === 'image' && startTarget) {
+      nextSteps.push({
+        key: 'video', icon: '▶', label: t('Video daraus', 'Video from it'), primary: !meshFirst,
+        small: [t('Startbild', 'start image'), shortName(startTarget) + (startModel ? '' : t(' fehlt', ' missing')), nextEta(0)]
+          .filter(Boolean).join(', '),
+        title: nextTitle(0),
+        onClick: needOr('video', startModel, startNeed, () => {
+          const m = startModel!
+          addSource(picked)
+          setMode('video')
+          setModelId((c) => ({ ...c, video: m.id }))
+          setWay('start')
+          setSlotOpen(null)
+          pickSource(picked.id)
+          setFocusPrompt((n) => n + 1)
+        }),
+      })
+    }
+    // Für restaurierte Fotos gibt es kein 3D (ein Mesh braucht ein freigestelltes Objekt)
+    if (meshNextPlan && viewJob?.kind !== 'restore') {
+      const m = meshNext ?? meshNeed!
+      nextSteps.push({
+        key: '3d', icon: '◈', label: t('3D-Modell', '3D model'), primary: meshFirst,
+        small: [shortName(m) + (meshNext ? '' : t(' fehlt', ' missing')), nextEta(1)].filter(Boolean).join(', '),
+        title: nextTitle(1), disabled: busy,
+        onClick: needOr('3d', meshNext, meshNeed, () => {
+          addSource(picked)
+          setMode('3d')
+          setModelId((c) => ({ ...c, '3d': m.id }))
+          pickSource(picked.id)
+          runNext(meshNextPlan, '3d', t('Mesh erzeugen', 'Create mesh'), m, 1)
+        }),
+      })
+    }
+    if (outPlan && outPad && dims) {
+      const m = outModel ?? outNeed
+      const run = (use: ModelInfo) => {
+        const p = outPlanFor(use)
+        addSource(picked)
+        setMode('image')
+        setModelId((c) => ({ ...c, image: use.id }))
+        setUseSource(true)
+        setOutpaintOn(true)
+        pickSource(picked.id)
+        setPad({ left: outPad[0], top: outPad[1], right: outPad[2], bottom: outPad[3] })
+        runNext(p, 'image', t('Bild erweitern', 'Extend image'), use, 2)
+      }
+      if (m) {
+        nextSteps.push({
+          key: 'outpaint', icon: '⤢', label: t('Erweitern', 'Extend'),
+          small: [shortName(m) + (outModel ? '' : t(' fehlt', ' missing')),
+            t(`ins Videoformat ${outSize.w} × ${outSize.h}`, `to the video format ${outSize.w} × ${outSize.h}`), nextEta(2)]
+            .filter(Boolean).join(', '),
+          title: nextTitle(2), disabled: busy,
+          onClick: needOr('outpaint', outModel, outNeed, () => run(outModel!), outMask, outMask ? () => run(outMask) : undefined),
+        })
+      }
+    }
+    if (variantPlan && viewJob) {
+      const four = variantPlan.kind === 'txt2img' || variantPlan.kind === 'restore'
+      const vm = (MODE_OF_KIND[viewJob.kind] ?? mode) as Mode
+      nextSteps.push({
+        key: 'variants', icon: '⟳', label: four ? t('4 Varianten', '4 variants') : t('Noch eine Variante', 'One more variant'),
+        small: [variantPlan.kind === 'tts' ? t('gleicher Text, neuer Seed', 'same text, new seed')
+          : variantPlan.kind === 'restore' ? t('gleiches Foto, neuer Seed', 'same photo, new seed')
+            : t('gleicher Prompt', 'same prompt'), nextEta(3)].filter(Boolean).join(', '),
+        title: nextTitle(3), disabled: busy,
+        onClick: () => {
+          setNextNeed(null)
+          if (vm !== mode) setMode(vm)
+          const known = models.find((x) => x.id === (variantPlan.params as { model_id?: string | null }).model_id)
+          runNext(variantPlan, vm, four ? t('4 Varianten', '4 variants') : t('Noch eine Variante', 'One more variant'), known, 3)
+        },
+      })
+    }
+    if (picked.kind === 'image' && editTarget) {
+      const run = (use: ModelInfo) => {
+        addSource(picked)
+        setMode('image')
+        setModelId((c) => ({ ...c, image: use.id }))
+        // Format wie das Bild, sonst schnitte das Bearbeiten es neu zu; die Vorwahl des Modells gilt damit als gesetzt
+        presetFor.current.image = use.id
+        setImgSize(editSizeFor(use))
+        setUseSource(false)
+        setOutpaintOn(false)
+        setRefIds([picked.id])
+        setFocusPrompt((n) => n + 1)
+      }
+      // Ohne Bearbeitungsmodell: „Vorhandenes Bild überarbeiten“ mit dem geladenen Bildmodell
+      const viaImg2img = editImg2img ? () => {
+        const use = editImg2img
+        addSource(picked)
+        setMode('image')
+        setModelId((c) => ({ ...c, image: use.id }))
+        setOutpaintOn(false)
+        setUseSource(true)
+        pickSource(picked.id)
+        setFocusPrompt((n) => n + 1)
+      } : undefined
+      nextSteps.push({
+        key: 'edit', icon: '✎', label: t('Überarbeiten', 'Rework'),
+        small: [t('mit Referenz', 'with reference'), shortName(editTarget) + (editModel ? '' : t(' fehlt', ' missing'))].join(', '),
+        title: nextTitle(4),
+        onClick: needOr('edit', editModel, editNeed, () => run(editModel!), editImg2img, viaImg2img),
+      })
+    }
+    if (extendPlan) {
+      const m = ltxNext ?? ltxNeed!
+      nextSteps.push({
+        key: 'extend', icon: '⇥', label: t('Verlängern', 'Extend'), primary: true,
+        small: [shortName(m) + (ltxNext ? '' : t(' fehlt', ' missing')), t('die letzte Sekunde trägt über', 'the last second carries over'),
+          nextEta(5)].filter(Boolean).join(', '),
+        title: nextTitle(5),
+        onClick: needOr('extend', ltxNext, ltxNeed, () => {
+          setVideoAssets((list) => (list.some((x) => x.id === picked.id) ? list : [picked, ...list]))
+          setMode('video')
+          setModelId((c) => ({ ...c, video: m.id }))
+          setWay('extend')
+          setSlotOpen(null)
+          setExtendId(picked.id)
+          // 48 fps fortsetzen geht nur mit DFR und 48 fps: gleich so einstellen
+          if (Number(picked.meta?.fps) > 30) {
+            chooseQuality('dfr')
+            setTemporal(true)
+          }
+          setFocusPrompt((n) => n + 1)
+        }),
+      })
+    }
+    if (upscalePlan) {
+      const m = vupModel ?? vupNeed!
+      nextSteps.push({
+        key: 'upscale', icon: '⤡', label: t('Hochskalieren', 'Upscale'),
+        small: [`${shortName(m)}${vupModel ? '' : t(' fehlt', ' missing')}`, `${vw * 2} × ${vh * 2}`, nextEta(6)].filter(Boolean).join(', '),
+        title: nextTitle(6), disabled: busy,
+        onClick: needOr('upscale', vupModel, vupNeed, () => runNext(upscalePlan, 'video', t('Video hochskalieren', 'Upscale video'), m, 6)),
+      })
+    }
+    if (picked.kind === 'audio' && picked.meta?.speech) {
+      nextSteps.push({
+        key: 'voice', icon: '◎', label: t('Als Stimmvorlage', 'As voice template'),
+        small: t('gleiche Stimme für den nächsten Satz', 'same voice for the next line'),
+        onClick: () => {
+          setNextNeed(null)
+          setMode('speech')
+          setVoiceRefs((list) => (list.some((x) => x.id === picked.id) ? list : [picked, ...list]))
+          setVoiceMode('clone')
+          setVoiceAsset(picked.id)
+          setVoiceText(String(picked.meta?.text ?? picked.prompt ?? ''))
+          setFocusPrompt((n) => n + 1)
+        },
+      })
+    }
+    if (picked.kind !== 'mesh') {
+      nextSteps.push({
+        key: 'studio', icon: '➜', label: t('Ins Studio', 'To the Studio'), disabled: studioBusy,
+        small: studioTarget ? t(`als Szene in „${studioTarget.name}“`, `as a scene in “${studioTarget.name}”`)
+          : t('als Szene in ein neues Projekt', 'as a scene in a new project'),
+        onClick: () => {
+          setNextNeed(null)
+          toStudio(picked)
+        },
+      })
+    }
+  }
+  const nextHeading = picked?.kind === 'video' ? t('Weiter mit diesem Video', 'Continue with this video')
+    : picked?.kind === 'audio' ? (picked.meta?.speech ? t('Weiter mit diesem Satz', 'Continue with this line')
+      : t('Weiter mit diesem Ton', 'Continue with this sound'))
+      : t('Weiter mit diesem Bild', 'Continue with this image')
+  const NEXT_WHY: Record<string, string> = {
+    video: t('für ein Video aus diesem Bild', 'for a video from this image'),
+    '3d': t('für 3D aus diesem Bild', 'for 3D from this image'),
+    outpaint: t('zum Erweitern ins Videoformat', 'to extend to the video format'),
+    edit: t('zum Überarbeiten mit Referenz', 'to rework with a reference'),
+    extend: t('zum Verlängern', 'to extend'),
+    upscale: t('zum Hochskalieren', 'to upscale'),
+  }
+  // Kopf über dem Ergebnis: „Fertig nach 3:38“, Modell · Größe, Seed genau zum Kopieren (Konzept, Bildschirm C)
+  const resultSeeds = [...new Set(results.map((a) => a.meta?.seed).filter((s) => s !== undefined && s !== null).map(String))]
+  const resultHead = () => {
+    const j = viewJob && viewJob.id === viewId ? viewJob : null
+    const secs = j?.finished_at && j.created_at ? j.finished_at - j.created_at : null
+    const first = picked ?? results[0]
+    const known = first ? models.find((m) => m.id === first.model_id) : undefined
+    const modelName = known ? shortName(known) : String(first?.meta?.model_name ?? first?.model_id ?? '').split(' (')[0]
+    const w = Number(first?.meta?.width)
+    const h = Number(first?.meta?.height)
+    const size = w > 0 && h > 0 ? `${w} × ${h}`
+      : first?.kind === 'audio' && first.meta?.seconds ? `${dec(Number(first.meta.seconds), 1)} s` : ''
+    return (
+      <div className="gen-result-head">
+        <b>{secs != null ? t(`Fertig nach ${fmtClock(secs)}`, `Done after ${fmtClock(secs)}`) : t('Fertig', 'Done')}</b>
+        <span className="muted small">
+          {[modelName, size, results.length > 1 ? t(`${results.length} Ergebnisse`, `${results.length} results`) : '']
+            .filter(Boolean).join(' · ')}
+        </span>
+        {resultSeeds.length === 1 && <SeedCopy seed={resultSeeds[0]} />}
+      </div>
+    )
+  }
 
   // Quellbild-Auswahl. Identisch fuer 3D und Bild-zu-Video -- nur dass Video
-  // ohne Startbild auskommen darf, wenn das Modell auch Text-zu-Video kann.
-  const sourcePicker = (allowNone: boolean) => (
+  // ohne Startbild auskommen darf, wenn das Modell auch Text-zu-Video kann. Unter Video steht sie im Platz des Wegs
+  // (ohne eigene Überschrift) und schließt sich nach der Wahl.
+  const sourcePicker = (allowNone: boolean, opts: { heading?: boolean; onPicked?: () => void } = {}) => (
     <>
-      <h3>{mode === 'video' ? t('Startbild', 'Start image') : mode === 'restore' ? t('Foto', 'Photo') : t('Quellbild', 'Source image')}</h3>
+      {opts.heading !== false && (
+        <h3>{mode === 'video' ? t('Startbild', 'Start image') : mode === 'restore' ? t('Foto', 'Photo') : t('Quellbild', 'Source image')}</h3>
+      )}
       {sourceImages.length === 0 ? (
         <p className="hint warn">
           {t(
@@ -1622,7 +2579,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 className={sourceId === a.id ? 'source selected' : 'source'}
                 title={a.prompt || a.filename}
               >
-                <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => pickSource(a.id)} />
+                <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => {
+                  pickSource(a.id)
+                  opts.onPicked?.()
+                }} />
                 {/* Bilder in Projektordnern gehören dem Studio (Startbilder, Takes): hier nicht löschbar */}
                 {!a.folder && (
                   <button
@@ -1641,7 +2601,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </div>
           <div className="row-between source-actions">
             <span className="muted small">
-              {t(`${sourceImages.length} Bilder`, `${sourceImages.length} images`)} {moreSourcesButton}
+              {sourceImages.length === 1 ? t('1 Bild', '1 image')
+                : t(`${sourceImages.length} Bilder`, `${sourceImages.length} images`)} {moreSourcesButton}
             </span>
             {confirmClearSources ? (
               <span className="confirm">
@@ -1836,10 +2797,598 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     </>
   )
 
+  // ---------------------------------------------- Konzept „NVAI im Fluss“, Bildschirm B: Weg, Plätze, Zusätze, Chips
+  const slotImage = (id: string): SlotAsset | null => {
+    if (!id) return null
+    const a = sourceImages.find((x) => x.id === id) ?? results.find((x) => x.id === id)
+    return a ? { url: a.url, thumb: a.thumb_url, name: assetName(a) } : { url: '', name: t('gewählt', 'selected') }
+  }
+  const slotVideo = (id: string): SlotAsset | null => {
+    if (!id) return null
+    const a = [...layoutUploads, ...videoAssets].find((x) => x.id === id) ?? results.find((x) => x.id === id)
+    if (!a) return { url: '', video: true, name: t('gewählt', 'selected') }
+    const secs = a.meta?.seconds ?? a.meta?.duration_s
+    const name = String(a.meta?.original_name || a.prompt || a.filename).slice(0, 60)
+    return { url: a.url, thumb: a.thumb_url, video: true, name: secs ? `${name} (${secs} s)` : name }
+  }
+  // Ein Bild aus der Auswahl oder vom Rechner auf einen Platz ziehen
+  const uploadImage = async (f: File): Promise<Asset | null> => {
+    setError(null)
+    try {
+      const a = await api.upload(f)
+      setSourceImages((s) => [a, ...s])
+      return a
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      return null
+    }
+  }
+  const dropImage = (set: (id: string) => void) => ({
+    onDropFile: (f: File) => { uploadImage(f).then((a) => a && set(a.id)) },
+    onDropUrl: (url: string) => {
+      const a = sourceImages.find((x) => url === x.url || url.endsWith(x.url) || (!!x.thumb_url && url.endsWith(x.thumb_url)))
+      if (a) set(a.id)
+      return !!a
+    },
+  })
+  const imageGrid = (selectedId: string, onPick: (id: string) => void) => (
+    sourceImages.length === 0 ? (
+      <p className="hint small">{t('Noch keine Bilder da. Erst eines generieren oder hochladen.', 'No images yet. Generate or upload one first.')}</p>
+    ) : (
+      <div className="source-grid" ref={chainWheel}>
+        {sourceImages.map((a) => (
+          <div key={a.id} className={selectedId === a.id ? 'source selected' : 'source'} title={a.prompt || a.filename}>
+            <img src={a.url} alt={a.prompt} loading="lazy" onClick={() => onPick(a.id)} />
+          </div>
+        ))}
+      </div>
+    )
+  )
+  // Fehlende Zusätze von LTX-2.5, die dieser Weg nutzen würde: an Ort und Stelle nachladen (lädt nur, was fehlt)
+  const extrasMissing = !isLtx25 || !selected ? [] : [
+    rules.dfr && vfeat?.missing?.dfr ? t('Höchste Qualität (DFR)', 'Best quality (DFR)') : '',
+    rules.dfr && vfeat?.missing?.temporal_upscale ? '48 fps' : '',
+    rules.auto && vfeat?.missing?.auto_duration ? t('Länge automatisch', 'Automatic length') : '',
+    way === 'layout' && vfeat?.missing?.layout ? t('Layout-Video (Layout to Render)', 'Layout video (layout to render)') : '',
+  ].filter(Boolean)
+  const extrasLine = () => {
+    if (!selected || !extrasMissing.length) return null
+    const dl = downloads.active[selected.id]
+    const url = vfeat?.missing?.[way === 'layout' && vfeat?.missing?.layout ? 'layout' : 'dfr']
+      ?? Object.values(vfeat?.missing ?? {})[0]
+    return (
+      <p className="gen-muted-line">
+        {t(`Noch nicht geladen: ${extrasMissing.join(', ')}.`, `Not downloaded yet: ${extrasMissing.join(', ')}.`)}{' '}
+        {dl ? (
+          <span>{dl.status === 'queued' ? t('wartet auf den Download', 'waiting to download') : `${Math.round(dl.progress * 100)} %`}</span>
+        ) : (
+          <>
+            {url && (
+              <><a href={url} target="_blank" rel="noreferrer">{t('Freigabe auf Hugging Face', 'access on Hugging Face')}</a>{', '}</>
+            )}
+            <button type="button" className="link-btn"
+              title={t('Lädt nur die fehlenden Zusatzdateien von LTX-2.5; gesperrte Repos brauchen vorher die Freigabe.',
+                'Downloads only the missing extra files of LTX-2.5; gated repos need access first.')}
+              onClick={() => downloads.start(selected.id).catch((e) => setError(e instanceof Error ? e.message : String(e)))}>
+              {t('Zusätze laden', 'Download extras')}
+            </button>
+          </>
+        )}
+      </p>
+    )
+  }
+
+  const videoWaySection = () => {
+    const startSlot = (label: string, required: boolean) => (
+      <Slot key="start" label={label} asset={slotImage(sourceId)} required={required} accept="image"
+        empty={required ? t('wählen oder hierher ziehen', 'choose or drag here') : t('optional, wählen oder hierher ziehen', 'optional, choose or drag here')}
+        open={slotOpen === 'start'} onToggle={() => setSlotOpen((o) => (o === 'start' ? null : 'start'))}
+        onClear={() => pickSource('')} {...dropImage((id) => pickSource(id))} />
+    )
+    const slots: React.ReactNode[] = []
+    if (way === 'start') slots.push(startSlot(t('Startbild', 'Start image'), true))
+    if (way === 'ends') {
+      slots.push(startSlot(t('Startbild', 'Start image'), false))
+      slots.push(
+        <Slot key="end" label={t('Endbild', 'End image')} asset={slotImage(endId)} required accept="image"
+          empty={t('wählen oder hierher ziehen', 'choose or drag here')}
+          open={slotOpen === 'end'} onToggle={() => setSlotOpen((o) => (o === 'end' ? null : 'end'))}
+          onClear={() => setEndId('')} {...dropImage((id) => setEndId(id))} />,
+      )
+    }
+    if (way === 'loop') slots.push(startSlot(t('Startbild = Endbild', 'Start image = end image'), true))
+    if (way === 'layout' && vfeat?.layout) {
+      slots.push(
+        <Slot key="layout" label={t('Layout-Video', 'Layout video')} asset={slotVideo(guideId)} required accept="video"
+          empty={t('grobe Animation wählen oder hochladen', 'choose or upload a rough animation')}
+          open={slotOpen === 'layout'} onToggle={() => setSlotOpen((o) => (o === 'layout' ? null : 'layout'))}
+          onClear={() => setGuideId('')}
+          onDropFile={async (f) => {
+            try {
+              const a = await api.upload(f)
+              setLayoutUploads((list) => [a, ...list])
+              setGuideId(a.id)
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e))
+            }
+          }} />,
+      )
+      slots.push(startSlot(t('Erstes Bild', 'First image'), false))
+    }
+    if (way === 'extend') {
+      slots.push(
+        <Slot key="extend" label={t('Video', 'Video')} asset={slotVideo(extendId)} required
+          empty={t('das Video wählen, das weitergehen soll', 'choose the video to continue')}
+          open={slotOpen === 'extend'} onToggle={() => setSlotOpen((o) => (o === 'extend' ? null : 'extend'))}
+          onClear={() => setExtendId('')} />,
+      )
+    }
+    return (
+      <div className="gen-way">
+        <span className="flow-label">{t('Weg', 'Path')}</span>
+        {ways.length > 1 && (
+          <div className="flow-seg" role="group" aria-label={t('Weg', 'Path')}>
+            {ways.map((w) => (
+              <button key={w} type="button" aria-pressed={way === w} onClick={() => chooseWay(w)}>{wayLabel(w)}</button>
+            ))}
+          </div>
+        )}
+        {ways.length === 1 && <span className="flow-chip">{wayLabel(ways[0])}</span>}
+        {way === 'refs' ? refPicker() : slots.length > 0 ? (
+          <div className="gen-slots">{slots}</div>
+        ) : way === 'text' && (
+          <span className="muted small">{t('Kein Bild nötig.', 'No image needed.')}</span>
+        )}
+        {slotOpen === 'start' && rules.start !== 'none' && (
+          <div className="gen-pick">
+            {sourcePicker(rules.start === 'optional', { heading: false, onPicked: () => setSlotOpen(null) })}
+          </div>
+        )}
+        {slotOpen === 'end' && way === 'ends' && (
+          <div className="gen-pick">
+            {imageGrid(endId, (id) => {
+              setEndId(id)
+              setSlotOpen(null)
+            })}
+            <button type="button" className="btn small ghost full" onClick={() => endFileRef.current?.click()}>
+              {t('Bild hochladen', 'Upload image')}
+            </button>
+          </div>
+        )}
+        {slotOpen === 'layout' && way === 'layout' && vfeat?.layout && (
+          <div className="gen-pick">
+            <div className="row">
+              <select value={guideId} onChange={(e) => {
+                setGuideId(e.target.value)
+                if (e.target.value) setSlotOpen(null)
+              }}>
+                <option value="">{t('— kein Layout —', '— no layout —')}</option>
+                {[...layoutUploads, ...videoAssets].map((a) => (
+                  <option key={a.id} value={a.id}>{String(a.meta?.original_name || a.prompt || a.filename).slice(0, 60)}</option>
+                ))}
+              </select>
+              <button type="button" className="btn small ghost" onClick={() => videoInput.current?.click()}>
+                {t('Video hochladen', 'Upload video')}
+              </button>
+            </div>
+          </div>
+        )}
+        {slotOpen === 'extend' && way === 'extend' && (
+          <div className="gen-pick">
+            <select value={extendId} onChange={(e) => {
+              setExtendId(e.target.value)
+              if (e.target.value) setSlotOpen(null)
+            }}>
+              <option value="">{t('Video wählen …', 'Choose a video …')}</option>
+              {videoAssets.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {(a.prompt || a.filename).slice(0, 60)}
+                  {a.meta?.seconds || a.meta?.duration_s ? ` (${a.meta?.seconds ?? a.meta?.duration_s} s)` : ''}
+                </option>
+              ))}
+            </select>
+            {videoAssets.length === 0 && (
+              <p className="hint small">{t('Noch kein Video da. Erst eines erzeugen.', 'No video yet. Create one first.')}</p>
+            )}
+          </div>
+        )}
+        {way === 'layout' && !vfeat?.layout ? (
+          <p className="flow-note warn small">
+            {t('Das Layout-Video braucht die Layout-To-Render-LoRA, einen Zusatz von LTX-2.5.',
+              'The layout video needs the Layout-To-Render LoRA, an extra for LTX-2.5.')}
+          </p>
+        ) : (
+          <p className="flow-note small" title={wayDetail(way) || undefined}>{wayNote(way, { ltx: isLtx25, dfr: dfrReady })}</p>
+        )}
+        {way === 'layout' && vfeat?.layout && (
+          <p className="gen-muted-line">
+            {t('Der erste Auftrag lädt zwei Knoten von Lightricks (LTX-2 Community License) von GitHub.',
+              'The first job downloads two nodes by Lightricks (LTX-2 Community License) from GitHub.')}
+          </p>
+        )}
+        {extrasLine()}
+        {wayStart && personSection()}
+      </div>
+    )
+  }
+
+  // Zusätze, die zum Weg passen (LTX-2.5): Zeitlupe, Ton vorgeben, Länge automatisch, mehrere Einstellungen
+  const videoExtras = () => {
+    if (!isLtx25) return null
+    const chips: React.ReactNode[] = []
+    const lines: string[] = []
+    if (vfeat?.motion_speed && rules.motion) {
+      const speeds: [number, string][] = [[1, t('aus (Echtzeit)', 'off (real time)')], [0.5, '2×'], [0.2, '5×'], [0.1, '10×'],
+        [0.05, '20×'], [0.025, '40×']]
+      const slow = speeds.find(([v]) => v === motionSpeed)?.[1] ?? ''
+      chips.push(
+        <ChipSelect key="motion" className={motionSpeed < 1 ? 'ok' : ''} label={t('Zeitlupe', 'Slow motion')}
+          value={String(motionSpeed)} options={speeds.map(([v, l]) => ({ value: String(v), label: l }))}
+          onChange={(v) => setMotionSpeed(Number(v))}
+          display={motionSpeed < 1 ? t(`Zeitlupe ${slow}`, `Slow motion ${slow}`) : t('Zeitlupe aus', 'Slow motion off')} />,
+      )
+      if (motionSpeed < 1) {
+        lines.push(t('Zeitlupe mit der LoRA „Slow Motion Control“ (empfohlene LoRAs) und einem Startbild. Gemessen bei 1080p '
+          + 'und 5×: Gischt sank über 5 s statt in 1,5 s; ohne LoRA stand sie als milchiger Schleier.',
+        'Slow motion with the “Slow Motion Control” LoRA (recommended LoRAs) and a start image. Measured at 1080p and 5×: '
+          + 'spray fell over 5 s instead of 1.5 s; without the LoRA it stood still as a milky veil.'))
+      }
+    }
+    if (vfeat?.audio_input && rules.audio) {
+      const given = audioAssets.find((a) => a.id === audioId)
+      chips.push(
+        <ChipSelect key="audio" className={audioId ? 'ok' : ''} label={t('Ton vorgeben', 'Given sound')} value={audioId}
+          options={[{ value: '', label: t('— keiner, LTX-2.5 erzeugt den Ton —', '— none, LTX-2.5 creates the sound —') },
+            ...audioAssets.map((a) => ({
+              value: a.id, label: `${(a.prompt || a.filename).slice(0, 60)}${a.meta?.seconds ? ` (${a.meta.seconds} s)` : ''}`,
+            }))]}
+          onChange={setAudioId}
+          display={audioId ? t(`Ton: ${(given?.prompt || given?.filename || '').slice(0, 24)}`, `Sound: ${(given?.prompt || given?.filename || '').slice(0, 24)}`)
+            : t('Ton vorgeben', 'Given sound')} />,
+      )
+      if (effAudio) {
+        lines.push(t('Der Ton bleibt unverändert im Video, das Bild richtet sich nach ihm; er bestimmt die Länge (höchstens 20 s).',
+          'The sound stays unchanged in the video and the picture follows it; it sets the length (at most 20 s).'))
+      }
+    }
+    if (vfeat?.auto_duration && rules.auto && !effAudio) {
+      chips.push(
+        <button key="auto" type="button" className="flow-chip" aria-pressed={autoDuration}
+          onClick={() => setAutoDuration((v) => !v)}
+          title={t('Länge automatisch aus der beschriebenen Handlung (1–20 s)', 'Automatic length from the described action (1–20 s)')}>
+          {t('Länge automatisch', 'Automatic length')}
+        </button>,
+      )
+      if (effAuto) {
+        lines.push(t('Pausen ausschreiben („a beat of silence“), sonst wird der Clip kurz.',
+          'Write pauses out (“a beat of silence”), otherwise the clip gets short.'))
+      }
+    }
+    if (vfeat?.multishot && rules.multishot) {
+      chips.push(
+        <button key="multishot" type="button" className="flow-chip" aria-pressed={multishot}
+          onClick={() => setMultishot((v) => !v)}
+          title={t('Mehrere Einstellungen (Multishot): „Prompt ausbauen“ schreibt 2–4 Einstellungen mit Schnitten',
+            'Several shots (multi-shot): “Expand prompt” writes 2–4 shots with cuts')}>
+          {t('Mehrere Einstellungen', 'Several shots')}
+        </button>,
+      )
+      if (effMultishot) {
+        lines.push(t('„Prompt ausbauen“ schreibt 2–4 Einstellungen mit Schnitten.', '“Expand prompt” writes 2–4 shots with cuts.'))
+      }
+    }
+    if (!chips.length) return null
+    return (
+      <div className="gen-extras">
+        <span className="flow-label">{t('Zusätze', 'Extras')}</span>
+        <div className="gen-chips">{chips}</div>
+        {lines.map((l) => <p key={l} className="gen-muted-line">{l}</p>)}
+      </div>
+    )
+  }
+
+  // Chips über dem großen Knopf: Modell mit Zustand, Format, Länge bzw. Anzahl, Qualität (Konzept, Bildschirm B)
+  const chipRow = () => {
+    const chips: React.ReactNode[] = []
+    if (mode === 'restore') {
+      if (restoreEdits) chips.push(modelChip(need ?? selected, !!need, 'edit'))
+      if (restoreSharpen) chips.push(modelChip(upscaler ?? seedvr2, !upscaler, 'sharp'))
+    } else {
+      chips.push(modelChip(need ?? selected, !!need))
+    }
+    if (mode === 'image') {
+      chips.push(outpainting ? (
+        <span key="size" className="flow-chip" title={t('Beim Erweitern ergibt sich das Format aus Bild und Rand',
+          'When extending, the size follows from image and border')}>
+          {padTo ? `${padTo.w} × ${padTo.h}` : t('Format aus Bild und Rand', 'size from image and border')}
+        </span>
+      ) : (
+        <ChipSelect key="size" label={t('Format', 'Size')} value={imgSize.label}
+          options={sizes.map((s) => ({ value: s.label, label: s.label }))}
+          onChange={(v) => setImgSize(sizes.find((s) => s.label === v) ?? sizes[0])}
+          display={`${imgSize.w} × ${imgSize.h}`}
+          title={t('Stehende Figuren im Hochformat — im Quadrat fehlen ihnen oft die Beine.',
+            'Standing figures in portrait format — in a square they often lose their legs.')
+            + (feat?.sizes?.length ? t(' Die modelleigenen Formate unten in der Liste geben mehr Detail und kosten mehr Zeit.',
+              ' The model-specific sizes at the end of the list give more detail and take longer.') : '')} />
+      ))
+      chips.push(
+        <ChipNumber key="count" label={t('Anzahl', 'Count')} value={batch} min={1} max={8}
+          onChange={setBatch}
+          unit={batch === 1 ? t('Bild', 'image') : t('Bilder', 'images')} />,
+      )
+    }
+    if (mode === 'restore') {
+      chips.push(
+        <ChipNumber key="count" label={t('Varianten', 'Variants')} value={Math.min(4, batch)} min={1} max={4}
+          onChange={setBatch}
+          unit={Math.min(4, batch) === 1 ? t('Variante', 'variant') : t('Varianten', 'variants')} />,
+      )
+    }
+    if (mode === 'audio') {
+      chips.push(
+        <ChipNumber key="len" label={t('Länge in Sekunden', 'Length in seconds')} value={seconds} min={1} max={300}
+          onChange={setSeconds} unit="s" />,
+      )
+    }
+    if (mode === 'video') {
+      chips.push(way === 'extend' ? (
+        <span key="size" className="flow-chip" title={t('Format und Bildrate kommen vom Video.', 'Size and frame rate come from the video.')}>
+          {t('Format wie das Video', 'Size as the video')}
+        </span>
+      ) : (
+        <ChipSelect key="size" label={t('Format', 'Size')} value={vidSize.label}
+          options={videoSizes.map((s) => ({ value: s.label, label: s.label }))}
+          onChange={(v) => setVidSize(videoSizes.find((s) => s.label === v) ?? videoSizes[0])}
+          display={`${vidSize.w} × ${vidSize.h}`} />
+      ))
+      if (isLtx25) {
+        chips.push(effAudio ? (
+          <span key="len" className="flow-chip" title={t('Mit vorgegebenem Ton bestimmt der Ton die Länge.', 'With a given sound, the sound sets the length.')}>
+            {t('Länge wie der Ton', 'Length as the sound')}
+          </span>
+        ) : effAuto ? (
+          <span key="len" className="flow-chip">{t('Länge automatisch', 'Automatic length')}</span>
+        ) : (
+          <ChipNumber key="len" label={t('Länge in Sekunden', 'Length in seconds')} value={ltxSeconds} min={1} max={ltxMaxSeconds}
+            onChange={setLtxSeconds} unit="s"
+            title={t(`${ltxFrames} Frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`, `${ltxFrames} frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`)
+              + (way === 'extend' ? t('; gilt für das neue Stück', '; applies to the new part')
+                : way === 'layout' ? t('; höchstens so lang wie das Layout', '; at most as long as the layout') : '')} />
+        ))
+      } else {
+        chips.push(
+          <ChipNumber key="len" label={t('Frames', 'Frames')} value={frames} min={vfeat?.min_frames ?? 9}
+            max={vfeat?.max_frames ?? 201} step={vfeat?.frame_step ?? 4} onChange={setFrames}
+            unit={t(`Frames ≈ ${dec(frames / Math.max(fps, 1), 1)} s`, `frames ≈ ${dec(frames / Math.max(fps, 1), 1)} s`)}
+            title={t(`Frames werden auf ${vfeat?.frame_rule ?? '4n+1'} gerundet`, `frames are rounded to ${vfeat?.frame_rule ?? '4n+1'}`)} />,
+        )
+      }
+      if (dfrWay) {
+        const value = effQuality === 'dfr' ? (effTemporal ? 'dfr48' : 'dfr') : 'standard'
+        const options = [
+          { value: 'standard', label: t('Standard', 'Standard') },
+          { value: 'dfr', label: t('Höchste Qualität (DFR)', 'Best quality (DFR)'), disabled: !dfrReady },
+          ...(vfeat?.temporal_upscale ? [{ value: 'dfr48', label: t('DFR mit 48 fps (zeitlich verdoppelt, langsamer)', 'DFR at 48 fps (temporal upscale, slower)'), disabled: !dfrReady }] : []),
+        ]
+        const altTime = fmtEta(totalSeconds(altEst))
+        chips.push(
+          <ChipSelect key="quality" label={t('Qualität', 'Quality')} value={value} options={options}
+            onChange={(v) => {
+              chooseQuality(v === 'standard' ? 'standard' : 'dfr')
+              setTemporal(v === 'dfr48')
+            }}
+            className={effQuality === 'dfr' ? 'ok' : ''}
+            title={t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem Detail-IC-LoRA: Gesicht und Stoffe '
+              + 'bleiben über die ganze Länge scharf (gemessen 5 s in 1080p: 13 statt 4 Minuten).',
+            'DFR computes detail keyframes and a second stage with a detail IC-LoRA: faces and fabric stay sharp over the '
+              + 'whole clip (measured 5 s at 1080p: 13 instead of 4 minutes).')
+              + (dfrReady ? '' : t(' Das Detail-IC-LoRA fehlt noch (oben „Zusätze laden“).', ' The detail IC-LoRA is still missing (“Download extras” above).'))}
+            display={<>
+              {effQuality === 'dfr' ? (effTemporal ? 'DFR · 48 fps' : 'DFR') : t('Standard', 'Standard')}
+              {altTime && <span className="gen-chip-alt"> · {effQuality === 'dfr' ? t('Standard', 'Standard') : 'DFR'} {altTime}</span>}
+            </>} />,
+        )
+      } else if (isLtx25) {
+        chips.push(
+          <span key="quality" className="flow-chip" title={t('DFR entfällt bei diesem Weg.', 'DFR is not available on this path.')}>
+            {t('Standard', 'Standard')}
+          </span>,
+        )
+      }
+    }
+    return <div className="gen-chips">{chips}</div>
+  }
+
+  // Bild: CFG, Sampler, Scheduler und ControlNet (vorher eigener Knopf „Feineinstellung“ im Bild-Reiter)
+  const imageFine = () => (
+    <>
+      <div className="row">
+        <label>
+          CFG
+          <input value={cfg} onChange={(e) => setCfg(e.target.value)}
+            placeholder={feat?.cfg !== undefined ? String(feat.cfg) : 'auto'} inputMode="decimal" />
+        </label>
+        <label>
+          Sampler
+          <select value={sampler} onChange={(e) => setSampler(e.target.value)}>
+            <option value="">{t('Standard', 'Default')}</option>
+            {SAMPLERS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </label>
+        <label>
+          Scheduler
+          <select value={scheduler} onChange={(e) => setScheduler(e.target.value)}>
+            <option value="">{t('Standard', 'Default')}</option>
+            {SCHEDULERS.map((s) => <option key={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="hint small">
+        {t(
+          'Leer lassen = Modellstandard. Eine höhere CFG gibt verbrannte Farben, keine besseren Formen',
+          'Leave empty = model default. A higher CFG gives burnt colors, not better shapes',
+        )}
+        {feat?.cfg === 1
+          ? t('; dieses Modell ist auf CFG 1 destilliert', '; this model is distilled to CFG 1')
+          : ''}
+        {t(
+          '. karras und exponential stehen bewusst nicht zur Wahl.',
+          '. karras and exponential are deliberately not offered.',
+        )}
+      </p>
+
+      <h3>{t('Form vorgeben (ControlNet)', 'Guide the shape (ControlNet)')}</h3>
+      {controlnets.length === 0 ? (
+        <p className="hint small">
+          {t(
+            `Für ${selected?.name ?? 'dieses Modell'} ist kein passendes ControlNet `
+              + 'installiert. ControlNets gelten immer nur für die Architektur, für die sie '
+              + 'trainiert wurden.',
+            `No matching ControlNet is installed for ${selected?.name ?? 'this model'}. `
+              + 'ControlNets only ever work with the architecture they were trained for.',
+          )}
+        </p>
+      ) : (
+        <>
+          <select value={cnId} onChange={(e) => setCnId(e.target.value)}>
+            <option value="">{t('— aus —', '— off —')}</option>
+            {controlnets.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          {cnId && (
+            <>
+              <p className="hint small">{t('Vorlage wählen:', 'Choose a template:')}</p>
+              <div className="source-grid" ref={chainWheel}>
+                {sourceImages.map((a) => (
+                  <div key={a.id}
+                    className={cnImageId === a.id ? 'source selected' : 'source'}
+                    title={a.prompt || a.filename}>
+                    <img src={a.url} alt={a.prompt} loading="lazy"
+                      onClick={() => setCnImageId(a.id)} />
+                  </div>
+                ))}
+              </div>
+              <div className="row">
+                <label>
+                  {t('Stärke', 'Strength')}
+                  <input type="number" min={0} max={2} step={0.05} value={cnStrength}
+                    onChange={(e) => setCnStrength(Number(e.target.value))} />
+                </label>
+                <label>
+                  {t('Loslassen ab', 'Release at')}
+                  <input type="number" min={0} max={1} step={0.05} value={cnEnd}
+                    onChange={(e) => setCnEnd(Number(e.target.value))} />
+                </label>
+                <label>
+                  {t('Vorlage', 'Template')}
+                  <select value={cnPre}
+                    onChange={(e) => setCnPre(e.target.value as 'none' | 'canny')}>
+                    <option value="none">{t('unverändert', 'unchanged')}</option>
+                    <option value="canny">{t('Kanten daraus', 'extract edges')}</option>
+                  </select>
+                </label>
+              </div>
+              <p className="hint small">
+                {t(
+                  '„unverändert" für fertige Tiefenkarten, „Kanten daraus" für Fotos und Skizzen.',
+                  '“unchanged” for finished depth maps, “extract edges” for photos and sketches.',
+                )}
+              </p>
+            </>
+          )}
+        </>
+      )}
+    </>
+  )
+
+  // Feineinstellung (Konzept: „Schritte, Seed, Sampler und Formate bleiben unter „Feineinstellung“, nur nicht mehr im
+  // Weg“); die Zeile sagt, was davon gesetzt ist
+  const fineSet = [
+    steps && mode !== 'restore' && mode !== 'speech' ? t(`${steps} Schritte`, `${steps} steps`) : '',
+    seed ? `Seed ${seed}` : '',
+    mode === 'image' && cfg ? `CFG ${cfg}` : '',
+    mode === 'image' && sampler ? sampler : '',
+    mode === 'image' && scheduler ? scheduler : '',
+    mode === 'image' && cnId ? 'ControlNet' : '',
+    mode === 'video' && isLtx25 && ltxFps !== 24 ? `${ltxFps} fps` : '',
+    mode === 'video' && !master ? t('ohne verlustfreie Kopie', 'no lossless copy') : '',
+  ].filter(Boolean)
+  const fineSettings = () => (
+    <details className="flow-fine" open={advanced} onToggle={(e) => setAdvanced(e.currentTarget.open)}>
+      <summary>
+        {t('Feineinstellung', 'Advanced settings')}
+        {fineSet.length > 0 && <span className="gen-fine-set"> · {fineSet.join(', ')}</span>}
+      </summary>
+      <div className="advanced">
+        <div className="row">
+          {mode !== 'restore' && mode !== 'speech' && (
+            <label>
+              {t('Schritte', 'Steps')}
+              <input value={steps} onChange={(e) => setSteps(e.target.value)}
+                placeholder={mode === '3d' ? '50' : feat?.steps ? String(feat.steps) : 'auto'}
+                inputMode="numeric" />
+            </label>
+          )}
+          <label>
+            {t('Seed', 'Seed')}
+            <input value={seed} onChange={(e) => setSeed(e.target.value)}
+              placeholder={t('zufällig', 'random')} inputMode="numeric" />
+          </label>
+          {mode === 'video' && (
+            <label>
+              fps
+              {isLtx25 ? (
+                <select value={ltxFps} onChange={(e) => setLtxFps(Number(e.target.value))}>
+                  {[24, 25, 30].map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+              ) : (
+                <input type="number" min={1} max={60} value={fps} onChange={(e) => setFps(Number(e.target.value))} />
+              )}
+            </label>
+          )}
+        </div>
+        {mode === 'image' && imageFine()}
+        {mode === 'video' && ((vfeat?.sparse_attention?.length ?? 0) > 0 || vfeat?.int8_attention) && (
+          <div className="accel-row">
+            <span className="muted small">{t('Beschleuniger', 'Speed-up')}</span>
+            {(vfeat?.sparse_attention?.length ?? 0) > 0 && (
+              <select value={sparse} onChange={(e) => setSparse(e.target.value as SparseAttention | '')}
+                title={t('Sparse Attention lässt unwichtige Teile der Attention aus',
+                  'Sparse attention skips unimportant parts of the attention')}>
+                <option value="">{t('Sparse Attention aus', 'Sparse attention off')}</option>
+                {vfeat?.sparse_attention?.map((m) => (
+                  <option key={m} value={m}>{m === 'veda' ? t('Veda (springt evtl. am Ende)', 'Veda (may jump near the end)') : 'sol-attn'}</option>
+                ))}
+              </select>
+            )}
+            {vfeat?.int8_attention && (
+              <label className="check">
+                <input type="checkbox" checked={int8} onChange={(e) => setInt8(e.target.checked)} />
+                {t('INT8-Attention', 'INT8 attention')}
+              </label>
+            )}
+          </div>
+        )}
+        {mode === 'video' && (
+          <label className="check" title={t('Speichert das Video zusätzlich Bild für Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus: gemessen 42,3 statt 37,7 dB PSNR beim YouTube-Export, Anschluss-Startbilder pixelgenau. Kostet Platz: rund 32 MB je Sekunde bei 1080p, 16 MB bei 720p (5 s 1080p: 162 statt 10 MB).',
+              'Also stores the video frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it: measured 42.3 instead of 37.7 dB PSNR for the YouTube export, chain start images pixel-exact. Costs space: about 32 MB per second at 1080p, 16 MB at 720p (5 s at 1080p: 162 instead of 10 MB).')}>
+            <input type="checkbox" checked={master} onChange={(e) => setMaster(e.target.checked)} />
+            <span>
+              {t('Verlustfreie Kopie für den Schnitt (MKV)', 'Lossless copy for editing (MKV)')}{' '}
+              <span className="muted small">{t('— bessere Exporte, rund 32 MB je Sekunde', '— better exports, about 32 MB per second')}</span>
+            </span>
+          </label>
+        )}
+      </div>
+    </details>
+  )
+
   return (
     <div className="split split-resizable" ref={splitRef}
       style={leftWidth ? { gridTemplateColumns: `${leftWidth}px 9px minmax(0, 1fr)` } : undefined}>
-      <section className="panel controls">
+      <section className="panel controls" ref={controlsRef}>
         {/* Einmal für alle Auswahlen: Quellbild, Startbild und Referenzbilder. */}
         <input
           ref={fileInput}
@@ -1852,6 +3401,31 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             e.target.value = ''
           }}
         />
+        {/* Endbild und Layout-Video des Video-Wegs hochladen */}
+        <input ref={endFileRef} type="file" accept="image/*" style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (f) uploadImage(f).then((a) => {
+              if (!a) return
+              setEndId(a.id)
+              setSlotOpen(null)
+            })
+          }} />
+        <input ref={videoInput} type="file" accept="video/*" style={{ display: 'none' }}
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            if (!f) return
+            try {
+              const a = await api.upload(f)
+              setLayoutUploads((list) => [a, ...list])
+              setGuideId(a.id)
+              setSlotOpen(null)
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err))
+            }
+          }} />
         <div className={(MODES.length === 6 ? 'mode-switch six' : MODES.length === 5 ? 'mode-switch five' : 'mode-switch four')
           + (leftWidth && leftWidth < 600 ? ' narrow' : '')}>
           {MODES.map((m) => (
@@ -1891,96 +3465,19 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                   : t('Kein Bildmodell installiert', 'No image model installed')}
               >
                 {t('Quellbild erzeugen', 'Create source image')}
+                {meshEst && <span className="flow-eta">{fmtEta(totalSeconds(meshEst))}</span>}
               </button>
             </details>
             {sourcePicker(false)}
           </>
         ) : (
           <>
-            {needsRefs && refPicker()}
-            {usesStart && (
-              <>
-                {sourcePicker(!needsStart)}
-                <p className="hint small">
-                  {needsStart
-                    ? t(
-                        'Dieses Modell belebt ein Standbild — Startbild ist Pflicht. Im Prompt nur die Bewegung beschreiben.',
-                        'This model animates a still image — a start image is required. Describe only the motion in the prompt.',
-                      )
-                    : t(
-                        'Optional: mit Startbild wird daraus Bild-zu-Video, ohne reines Text-zu-Video.',
-                        'Optional: with a start image this becomes image-to-video, without one pure text-to-video.',
-                      )}
-                </p>
-                {personSection()}
-                {/* Als Klappmenue wie die Referenzbilder, standardmaessig zu (Nutzer 22.11.2026: „End image optional beim
-                    viedeo auch als klapp menü“); die Kopfzeile zeigt, ob schon etwas gewaehlt ist */}
-                {isLtx25 && vfeat?.end_image && sourceImages.length > 0 && (
-                  <details className="lora-picker end-picker" open={loop || !!endId || undefined}>
-                    <summary>
-                      {t('Endbild', 'End image')}{' '}
-                      <span className="muted small">
-                        {loop ? t('— Schleife', '— loop') : endId ? t('— gewählt', '— selected') : t('— optional', '— optional')}
-                      </span>
-                    </summary>
-                    <label className="check">
-                      <input type="checkbox" checked={loop} disabled={!sourceId}
-                        onChange={(e) => {
-                          if (e.target.checked) leaveDfr()
-                          setLoop(e.target.checked)
-                        }} />
-                      {t('Schleife: das Startbild ist auch das Endbild (nahtloser Loop)',
-                        'Loop: the start image is also the end image (seamless loop)')}
-                    </label>
-                    {loop && (
-                      <p className="hint small">
-                        {t('Die Kamera ruhig lassen, mit Kamerafahrt zerfiel im Test der Schluss. Mit Schleife bewegt '
-                          + 'sich nur die beschriebene Handlung: Wasser und Rauch standen so still wie das Ufer, auch '
-                          + 'wenn der Prompt sie bewegen sollte.',
-                        'Keep the camera still, with a camera move the ending fell apart in the test. With a loop only '
-                          + 'the described action moves: water and smoke stood as still as the shore, even when the '
-                          + 'prompt asked them to move.')}
-                      </p>
-                    )}
-                    {!loop && (
-                      <div className="source-grid" ref={chainWheel}>
-                        <button className={endId ? 'source none' : 'source none selected'}
-                          title={t('Ohne Endbild', 'No end image')} onClick={() => setEndId('')}>
-                          {t('ohne', 'none')}
-                        </button>
-                        {sourceImages.map((a) => (
-                          <div key={a.id} className={endId === a.id ? 'source selected' : 'source'}
-                            title={a.prompt || a.filename}>
-                            <img src={a.url} alt={a.prompt} loading="lazy"
-                              onClick={() => {
-                                leaveDfr()
-                                setEndId(a.id)
-                              }} />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <p className="hint small">
-                      {quality === 'dfr'
-                        ? t('Endbild und Schleife gehen nur ohne „Höchste Qualität (DFR)“; wer eines wählt, '
-                            + 'rechnet in Standardqualität.',
-                          'End image and loop only work without “Best quality (DFR)”; choosing one switches to '
-                            + 'standard quality.')
-                        : t('Mit Endbild läuft das Video vom Startbild zum Endbild (Übergang). Eine Stufe in '
-                            + 'voller Auflösung, deshalb langsamer als ohne. Was in beiden Bildern gleich ist, '
-                            + 'steht dazwischen still (Wasser und Rauch im Test wie das Ufer); für bewegten '
-                            + 'Hintergrund ohne Endbild.',
-                          'With an end image the video runs from the start image to the end image (a '
-                            + 'transition). One stage at full resolution, so slower than without. Whatever is the '
-                            + 'same in both images stands still in between (water and smoke as still as the shore '
-                            + 'in the test); for a moving background, leave it out.')}
-                    </p>
-                  </details>
-                )}
-              </>
-            )}
+            {/* Konzept „NVAI im Fluss“, Bildschirm B: ein Weg statt der Klappen für Endbild, Schleife, Layout-Video und
+                Verlängern; die Plätze und der Hinweis gehören zum gewählten Weg */}
+            {mode === 'video' && videoWaySection()}
             <h3>{t('Prompt', 'Prompt')}</h3>
             <textarea
+              ref={promptRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder={placeholder}
@@ -1990,6 +3487,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               }}
             />
             {expandRow()}
+            {mode === 'video' && videoExtras()}
 
             {mode === 'video' && vfeat?.audio_prompt && (
               <>
@@ -2039,12 +3537,14 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
         )}
 
         <h3>{t('Modell', 'Model')}</h3>
+        {/* Noch nicht geladene Modelle stehen mit Größe darunter: gewählt, erscheint unten „Laden“ (ModelNeed), geladen
+            wird erst nach dem Klick (Konzept „NVAI im Fluss“: „Fehlendes an Ort und Stelle“) */}
         <select
-          value={modelId[mode]}
-          onChange={(e) => setModelId({ ...modelId, [mode]: e.target.value })}
-          disabled={noModel}
+          value={wantModel?.id ?? (noModel ? need?.id ?? '' : modelId[mode])}
+          onChange={(e) => chooseModel(e.target.value)}
+          disabled={noModel && missing.length === 0}
         >
-          {noModel && <option>{t(`— kein ${modeLabel}-Modell —`, `— no ${modeLabel} model —`)}</option>}
+          {noModel && missing.length === 0 && <option>{t(`— kein ${modeLabel}-Modell —`, `— no ${modeLabel} model —`)}</option>}
           {available.map((m) => (
             <option key={m.id} value={m.id}>
               {m.favorite ? '★ ' : ''}
@@ -2052,11 +3552,18 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
               {m.name}
             </option>
           ))}
+          {missing.length > 0 && (
+            <optgroup label={t('Noch nicht geladen', 'Not downloaded yet')}>
+              {missing.map((m) => (
+                <option key={m.id} value={m.id}>{m.name} · {dec(m.size_gb, 1)} GB</option>
+              ))}
+            </optgroup>
+          )}
         </select>
-        {selected && <p className="hint small">{selected.best_for}</p>}
-        {selected?.features?.tested && <p className="hint small tested">{selected.features.tested}</p>}
-        <ModelTip mode={mode} model={selected} />
-        <ModelEstimate id={selected?.id} />
+        {(need ?? selected) && <p className="hint small">{(need ?? selected)?.best_for}</p>}
+        {(need ?? selected)?.features?.tested && <p className="hint small tested">{(need ?? selected)?.features?.tested}</p>}
+        <ModelTip mode={mode} model={need ?? selected} />
+        <ModelEstimate id={need?.id ?? selected?.id} />
         {/* Merkmale und Lizenz als Klappmenü unter dem Tipp, kompakt und standardmäßig zu (Nutzer 22.11.2026: „sollte als
             aufklappmenü unter tip sein (auch kompakter) mit icon model infos“); die harte Lizenzgrenze bleibt sichtbar */}
         {selected && ((mode === 'image' || mode === 'video') || chips.length > 0 || !!infoWarning) && (
@@ -2206,27 +3713,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             )}
           </div>
         )}
-        {mode === 'video' && ((vfeat?.sparse_attention?.length ?? 0) > 0 || vfeat?.int8_attention) && (
-          <div className="accel-row">
-            <span className="muted small">{t('Beschleuniger', 'Speed-up')}</span>
-            {(vfeat?.sparse_attention?.length ?? 0) > 0 && (
-              <select value={sparse} onChange={(e) => setSparse(e.target.value as SparseAttention | '')}
-                title={t('Sparse Attention lässt unwichtige Teile der Attention aus',
-                  'Sparse attention skips unimportant parts of the attention')}>
-                <option value="">{t('Sparse Attention aus', 'Sparse attention off')}</option>
-                {vfeat?.sparse_attention?.map((m) => (
-                  <option key={m} value={m}>{m === 'veda' ? t('Veda (springt evtl. am Ende)', 'Veda (may jump near the end)') : 'sol-attn'}</option>
-                ))}
-              </select>
-            )}
-            {vfeat?.int8_attention && (
-              <label className="check">
-                <input type="checkbox" checked={int8} onChange={(e) => setInt8(e.target.checked)} />
-                {t('INT8-Attention', 'INT8 attention')}
-              </label>
-            )}
-          </div>
-        )}
+        {/* Die Beschleuniger (MiniMax H3) stehen unter „Feineinstellung“ */}
         {mode === 'video' && recLoras.length > 0 && (
           <details className="lora-picker rec-loras">
             <summary>
@@ -2294,38 +3781,7 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
 
         {mode === 'image' && (
           <>
-            <h3>{t('Format', 'Size')}</h3>
-            {outpainting ? (
-              <p className="hint small">
-                {t('Beim Erweitern ergibt sich das Format aus Bild und Rand',
-                  'When extending, the size follows from image and border')}
-                {padTo ? ` (${padTo.w} × ${padTo.h}).` : '.'}
-              </p>
-            ) : (
-              <>
-                <select
-                  value={imgSize.label}
-                  onChange={(e) => setImgSize(sizes.find((s) => s.label === e.target.value)!)}
-                >
-                  {sizes.map((s) => (
-                    <option key={s.label}>{s.label}</option>
-                  ))}
-                </select>
-                <p className="hint small">
-                  {t(
-                    'Stehende Figuren im Hochformat — im Quadrat fehlen ihnen oft die Beine.',
-                    'Standing figures in portrait format — in a square they often lose their legs.',
-                  )}
-                  {feat?.sizes?.length
-                    ? t(
-                        ' Die modelleigenen Formate unten in der Liste geben mehr Detail und kosten mehr Zeit.',
-                        ' The model-specific sizes at the end of the list give more detail and take longer.',
-                      )
-                    : ''}
-                </p>
-              </>
-            )}
-
+            {/* Format und Anzahl stehen als Chips über dem Knopf (Konzept „NVAI im Fluss“, Bildschirm B) */}
             {feat?.upsampler && (
               <label className="check" title={t(
                 'Der mitgelieferte Upsampler schreibt aus dem Prompt die lange Bildbeschreibung, auf die das Modell '
@@ -2500,390 +3956,12 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                 )}
               </>
             )}
-
-            <button className="btn small ghost full" onClick={() => setAdvanced((v) => !v)}>
-              {advanced
-                ? t('Feineinstellung ausblenden', 'Hide advanced settings')
-                : t('Feineinstellung', 'Advanced settings')}
-            </button>
-
-            {advanced && (
-              <div className="advanced">
-                <div className="row">
-                  <label>
-                    CFG
-                    <input value={cfg} onChange={(e) => setCfg(e.target.value)}
-                      placeholder={feat?.cfg !== undefined ? String(feat.cfg) : 'auto'} inputMode="decimal" />
-                  </label>
-                  <label>
-                    Sampler
-                    <select value={sampler} onChange={(e) => setSampler(e.target.value)}>
-                      <option value="">{t('Standard', 'Default')}</option>
-                      {SAMPLERS.map((s) => <option key={s}>{s}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    Scheduler
-                    <select value={scheduler} onChange={(e) => setScheduler(e.target.value)}>
-                      <option value="">{t('Standard', 'Default')}</option>
-                      {SCHEDULERS.map((s) => <option key={s}>{s}</option>)}
-                    </select>
-                  </label>
-                </div>
-                <p className="hint small">
-                  {t(
-                    'Leer lassen = Modellstandard. Eine höhere CFG gibt verbrannte Farben, keine besseren Formen',
-                    'Leave empty = model default. A higher CFG gives burnt colors, not better shapes',
-                  )}
-                  {feat?.cfg === 1
-                    ? t('; dieses Modell ist auf CFG 1 destilliert', '; this model is distilled to CFG 1')
-                    : ''}
-                  {t(
-                    '. karras und exponential stehen bewusst nicht zur Wahl.',
-                    '. karras and exponential are deliberately not offered.',
-                  )}
-                </p>
-
-                <h3>{t('Form vorgeben (ControlNet)', 'Guide the shape (ControlNet)')}</h3>
-                {controlnets.length === 0 ? (
-                  <p className="hint small">
-                    {t(
-                      `Für ${selected?.name ?? 'dieses Modell'} ist kein passendes ControlNet `
-                        + 'installiert. ControlNets gelten immer nur für die Architektur, für die sie '
-                        + 'trainiert wurden.',
-                      `No matching ControlNet is installed for ${selected?.name ?? 'this model'}. `
-                        + 'ControlNets only ever work with the architecture they were trained for.',
-                    )}
-                  </p>
-                ) : (
-                  <>
-                    <select value={cnId} onChange={(e) => setCnId(e.target.value)}>
-                      <option value="">{t('— aus —', '— off —')}</option>
-                      {controlnets.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                    {cnId && (
-                      <>
-                        <p className="hint small">{t('Vorlage wählen:', 'Choose a template:')}</p>
-                        <div className="source-grid" ref={chainWheel}>
-                          {sourceImages.map((a) => (
-                            <div key={a.id}
-                              className={cnImageId === a.id ? 'source selected' : 'source'}
-                              title={a.prompt || a.filename}>
-                              <img src={a.url} alt={a.prompt} loading="lazy"
-                                onClick={() => setCnImageId(a.id)} />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="row">
-                          <label>
-                            {t('Stärke', 'Strength')}
-                            <input type="number" min={0} max={2} step={0.05} value={cnStrength}
-                              onChange={(e) => setCnStrength(Number(e.target.value))} />
-                          </label>
-                          <label>
-                            {t('Loslassen ab', 'Release at')}
-                            <input type="number" min={0} max={1} step={0.05} value={cnEnd}
-                              onChange={(e) => setCnEnd(Number(e.target.value))} />
-                          </label>
-                          <label>
-                            {t('Vorlage', 'Template')}
-                            <select value={cnPre}
-                              onChange={(e) => setCnPre(e.target.value as 'none' | 'canny')}>
-                              <option value="none">{t('unverändert', 'unchanged')}</option>
-                              <option value="canny">{t('Kanten daraus', 'extract edges')}</option>
-                            </select>
-                          </label>
-                        </div>
-                        <p className="hint small">
-                          {t(
-                            '„unverändert" für fertige Tiefenkarten, „Kanten daraus" für Fotos und Skizzen.',
-                            '“unchanged” for finished depth maps, “extract edges” for photos and sketches.',
-                          )}
-                        </p>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
           </>
         )}
 
-        {mode === 'video' && (
-          <>
-            <h3>{t('Format', 'Size')}</h3>
-            <select
-              value={vidSize.label}
-              onChange={(e) => setVidSize(videoSizes.find((s) => s.label === e.target.value)!)}
-            >
-              {videoSizes.map((s) => (
-                <option key={s.label}>{s.label}</option>
-              ))}
-            </select>
-            {isLtx25 ? (
-              <>
-                <h3>{t('Länge', 'Length')}</h3>
-                <div className="row">
-                  <label>
-                    {t('Sekunden', 'Seconds')}
-                    <input type="number" min={1} max={ltxMaxSeconds} step={1} value={ltxSeconds}
-                      disabled={autoDuration || !!audioId}
-                      onChange={(e) => setLtxSeconds(Number(e.target.value))} />
-                  </label>
-                  <label>
-                    fps
-                    <select value={ltxFps} onChange={(e) => setLtxFps(Number(e.target.value))}>
-                      {[24, 25, 30].map((f) => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  </label>
-                </div>
-                <label className="check">
-                  <input type="checkbox" checked={autoDuration} disabled={!vfeat?.auto_duration || !!audioId}
-                    onChange={(e) => setAutoDuration(e.target.checked)} />
-                  {t('Länge automatisch aus der beschriebenen Handlung (1–20 s)',
-                    'Automatic length from the described action (1–20 s)')}
-                </label>
-                <p className="hint small">
-                  {audioId
-                    ? t('Mit vorgegebenem Ton bestimmt der Ton die Länge.', 'With a given sound, the sound sets the length.')
-                    : autoDuration
-                      ? t('Pausen ausschreiben („a beat of silence“), sonst wird der Clip kurz.',
-                        'Write pauses out (“a beat of silence”), otherwise the clip gets short.')
-                      : t(`${ltxFrames} Frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`,
-                        `${ltxFrames} frames ≈ ${dec(ltxFrames / ltxFps, 1)} s`)}
-                  {!vfeat?.auto_duration && missingNote('auto_duration')}
-                </p>
-
-                <h3>{t('Qualität', 'Quality')}</h3>
-                {/* row-gap statt row: .row stellt Beschriftungen über das Feld, hier gehören sie daneben */}
-                <div className="row-gap">
-                  <label className="check">
-                    <input type="radio" checked={quality === 'standard'} onChange={() => chooseQuality('standard')} />
-                    {t('Standard', 'Standard')}
-                  </label>
-                  <label className="check">
-                    <input type="radio" checked={quality === 'dfr'} disabled={!vfeat?.dfr}
-                      onChange={() => {
-                        chooseQuality('dfr')
-                        setLoop(false)
-                        setEndId('')
-                      }} />
-                    {t('Höchste Qualität (DFR)', 'Best quality (DFR)')}
-                  </label>
-                </div>
-                {quality === 'dfr' && (
-                  <label className="check">
-                    <input type="checkbox" checked={temporal} disabled={!vfeat?.temporal_upscale}
-                      onChange={(e) => setTemporal(e.target.checked)} />
-                    {t('48 fps (zeitlich verdoppelt, langsamer)', '48 fps (temporal upscale, slower)')}
-                  </label>
-                )}
-                <p className="hint small" title={t('DFR rechnet Detail-Keyframes mit und eine zweite Stufe mit einem '
-                    + 'Detail-IC-LoRA: Gesicht und Stoffe bleiben über die ganze Länge scharf (gemessen 5 s in 1080p: 13 '
-                    + 'statt 4 Minuten).',
-                  'DFR computes detail keyframes and a second stage with a detail IC-LoRA: faces and fabric stay sharp '
-                    + 'over the whole clip (measured 5 s at 1080p: 13 instead of 4 minutes).')}>
-                  {t('DFR: über die ganze Länge scharf, rund dreimal so lang.',
-                    'DFR: sharp over the whole clip, about three times the time.')}
-                  {!vfeat?.dfr && missingNote('dfr')}
-                </p>
-
-                {/* Layout-To-Render (seit 0.5.36): ein grobes Layout-Video gibt Kamera, Bewegung und Lage vor, das
-                    Startbild Look, Licht und Material; die zwei Knoten dazu lädt der Server beim ersten Mal von GitHub */}
-                <details className="lora-picker layout-picker" open={!!guideId || undefined}>
-                  <summary>
-                    {t('Layout-Video (Layout to Render)', 'Layout video (layout to render)')}{' '}
-                    <span className="muted small">{guideId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
-                  </summary>
-                  {vfeat?.layout ? (
-                    <>
-                      <input ref={videoInput} type="file" accept="video/*" style={{ display: 'none' }}
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0]
-                          e.target.value = ''
-                          if (!f) return
-                          try {
-                            const a = await api.upload(f)
-                            setLayoutUploads((list) => [a, ...list])
-                            setGuideId(a.id)
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : String(err))
-                          }
-                        }} />
-                      <div className="row">
-                        <select value={guideId} onChange={(e) => {
-                          setGuideId(e.target.value)
-                          if (e.target.value) {
-                            // geht nicht zusammen mit Endbild, Schleife, Ton, Verlängern und DFR
-                            setEndId('')
-                            setLoop(false)
-                            setAudioId('')
-                            setExtendId('')
-                            if (quality === 'dfr') chooseQuality('standard')
-                          }
-                        }}>
-                          <option value="">{t('— kein Layout —', '— no layout —')}</option>
-                          {[...layoutUploads, ...videoAssets].map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {String(a.meta?.original_name || a.prompt || a.filename).slice(0, 60)}
-                            </option>
-                          ))}
-                        </select>
-                        <button type="button" className="btn small ghost" onClick={() => videoInput.current?.click()}>
-                          {t('Video hochladen', 'Upload video')}
-                        </button>
-                      </div>
-                      <p className="hint small">
-                        {t('Eine grobe Ton- oder Klötzchen-Animation, etwa aus Blender mit 24 fps, gibt Kamera, Bewegung '
-                            + 'und Lage der Dinge vor. Als Startbild ein Bild wählen, das aus dem ersten Bild des Layouts '
-                            + 'gemalt ist, nicht das graue Bild selbst: Es gibt Look, Licht und Material. Ohne Ton, '
-                            + 'höchstens so lang wie das Layout. Der erste Auftrag lädt zwei Knoten von Lightricks (LTX-2 '
-                            + 'Community License) von GitHub.',
-                          'A rough clay or blocky animation, for example from Blender at 24 fps, sets the camera, the '
-                            + 'motion and where things sit. As the start image pick a picture painted from the first frame '
-                            + 'of the layout, not the grey frame itself: it sets the look, light and materials. No sound, '
-                            + 'at most as long as the layout. The first job downloads two nodes by Lightricks (LTX-2 '
-                            + 'Community License) from GitHub.')}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="hint small">
-                      {t('Braucht die Layout-To-Render-LoRA.', 'Needs the Layout-To-Render LoRA.')}
-                      {missingNote('layout')}
-                    </p>
-                  )}
-                </details>
-
-                {/* Klappmenue wie Endbild und Referenzbilder (Nutzer 22.11.2026: „Extend a video optional auch“) */}
-                <details className="lora-picker extend-picker" open={!!extendId || undefined}>
-                <summary>
-                  {t('Video verlängern', 'Extend a video')}{' '}
-                  <span className="muted small">{extendId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
-                </summary>
-                <select value={extendId} onChange={(e) => setExtendId(e.target.value)}>
-                  <option value="">{t('— kein Video, neu beginnen —', '— no video, start fresh —')}</option>
-                  {videoAssets.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {(a.prompt || a.filename).slice(0, 60)}
-                      {a.meta?.seconds || a.meta?.duration_s ? ` (${a.meta?.seconds ?? a.meta?.duration_s} s)` : ''}
-                    </option>
-                  ))}
-                </select>
-                {extendId && (
-                  <p className="hint small">
-                    {t('Die letzte Sekunde des Videos steht fest am Anfang des neuen Stücks, es setzt die Bewegung '
-                        + 'fort und wird mit einer Überblendung über diese Sekunde angehängt (Latent-Kette, seit '
-                        + '0.5.17; im Test ragte die Naht nicht mehr heraus). Format und Bildrate kommen vom Video. Der '
-                        + 'Prompt beschreibt, was als Nächstes passiert; die Länge gilt für das neue Stück. Startbild, '
-                        + 'Schleife und vorgegebener Ton bleiben dabei außen vor.',
-                      'The last second of the video is pinned at the start of the new part, which continues the '
-                        + 'motion and is appended with a crossfade over that second (latent chain, since 0.5.17; in '
-                        + 'our test the seam no longer stood out). Size and frame rate come from the video. The prompt '
-                        + 'describes what happens next; the length applies to the new part. Start image, loop and '
-                        + 'given sound are not used.')}
-                  </p>
-                )}
-                </details>
-
-                {vfeat?.audio_input && (
-                  <details className="lora-picker sound-picker" open={!!audioId || undefined}>
-                    <summary>
-                      {t('Ton vorgeben', 'Given sound')}{' '}
-                      <span className="muted small">{audioId ? t('— gewählt', '— selected') : t('— optional', '— optional')}</span>
-                    </summary>
-                    <select value={audioId} onChange={(e) => setAudioId(e.target.value)}>
-                      <option value="">{t('— keiner, LTX-2.5 erzeugt den Ton —', '— none, LTX-2.5 creates the sound —')}</option>
-                      {audioAssets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {(a.prompt || a.filename).slice(0, 60)}
-                          {a.meta?.seconds ? ` (${a.meta.seconds} s)` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="hint small">
-                      {t('Der Ton bleibt unverändert im Video, das Bild richtet sich nach ihm. Höchstens 20 s.',
-                        'The sound stays unchanged in the video and the picture follows it. At most 20 s.')}
-                    </p>
-                  </details>
-                )}
-
-                {vfeat?.motion_speed && (
-                  <>
-                    <h3>{t('Zeitlupe', 'Slow motion')}</h3>
-                    <select value={motionSpeed} onChange={(e) => setMotionSpeed(Number(e.target.value))}>
-                      {([[1, t('aus (Echtzeit)', 'off (real time)')], [0.5, '2×'], [0.2, '5×'], [0.1, '10×'],
-                        [0.05, '20×'], [0.025, '40×']] as [number, string][]).map(([v, label]) => (
-                        <option key={v} value={v}>{label}</option>
-                      ))}
-                    </select>
-                    {motionSpeed < 1 && (
-                      <p className="hint small">
-                        {t('Mit der LoRA „Slow Motion Control“ (empfohlene LoRAs) und einem Startbild. Gemessen bei '
-                            + '1080p und 5×: Gischt sank über 5 s statt in 1,5 s; ohne LoRA stand sie als milchiger Schleier.',
-                          'With the “Slow Motion Control” LoRA (recommended LoRAs) and a start image. Measured at 1080p '
-                            + 'and 5×: spray fell over 5 s instead of 1.5 s; without the LoRA it stood still as a milky veil.')}
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {vfeat?.multishot && (
-                  <label className="check">
-                    <input type="checkbox" checked={multishot} onChange={(e) => setMultishot(e.target.checked)} />
-                    {t('Mehrere Einstellungen (Multishot): „Prompt ausbauen“ schreibt 2–4 Einstellungen mit Schnitten',
-                      'Several shots (multi-shot): “Expand prompt” writes 2–4 shots with cuts')}
-                  </label>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="row">
-                  <label>
-                    Frames
-                    <input type="number" min={vfeat?.min_frames ?? 9} max={vfeat?.max_frames ?? 201}
-                      step={vfeat?.frame_step ?? 4} value={frames}
-                      onChange={(e) => setFrames(Number(e.target.value))} />
-                  </label>
-                  <label>
-                    fps
-                    <input type="number" min={1} max={60} value={fps}
-                      onChange={(e) => setFps(Number(e.target.value))} />
-                  </label>
-                </div>
-                <p className="hint small">
-                  {t(
-                    `≈ ${est} s Clip · Frames werden auf ${vfeat?.frame_rule ?? '4n+1'} gerundet`,
-                    `≈ ${est} s clip · frames are rounded to ${vfeat?.frame_rule ?? '4n+1'}`,
-                  )}
-                </p>
-              </>
-            )}
-
-            <label className="check" title={t('Speichert das Video zusätzlich Bild für Bild ohne Kompression (FFV1, Ton als Float-PCM). Das Studio schneidet und exportiert daraus: gemessen 42,3 statt 37,7 dB PSNR beim YouTube-Export, Anschluss-Startbilder pixelgenau. Kostet Platz: rund 32 MB je Sekunde bei 1080p, 16 MB bei 720p (5 s 1080p: 162 statt 10 MB).',
-                'Also stores the video frame by frame without compression (FFV1, sound as float PCM). The Studio cuts and exports from it: measured 42.3 instead of 37.7 dB PSNR for the YouTube export, chain start images pixel-exact. Costs space: about 32 MB per second at 1080p, 16 MB at 720p (5 s at 1080p: 162 instead of 10 MB).')}>
-              <input type="checkbox" checked={master} onChange={(e) => setMaster(e.target.checked)} />
-              <span>
-                {t('Verlustfreie Kopie für den Schnitt (MKV)', 'Lossless copy for editing (MKV)')}{' '}
-                <span className="muted small">{t('— bessere Exporte, rund 32 MB je Sekunde', '— better exports, about 32 MB per second')}</span>
-              </span>
-            </label>
-          </>
-        )}
-
-        {mode === 'audio' && (
-          <>
-            <h3>{t('Länge', 'Length')}</h3>
-            <div className="row">
-              <label>
-                {t('Sekunden', 'Seconds')}
-                <input type="number" min={1} max={300} value={seconds}
-                  onChange={(e) => setSeconds(Number(e.target.value))} />
-              </label>
-            </div>
-          </>
-        )}
+        {/* Video und Ton: Format, Länge und Qualität stehen als Chips über dem Knopf, Layout-Video und Verlängern
+            als Weg, Ton vorgeben, Zeitlupe und Multishot unter „Zusätze“, Bildrate und verlustfreie Kopie unter
+            „Feineinstellung“ (Konzept „NVAI im Fluss“, Bildschirm B) */}
 
         {mode === '3d' && (
           <>
@@ -2971,28 +4049,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </>
         )}
 
-        <div className="row">
-          {mode !== 'restore' && mode !== 'speech' && (
-            <label>
-              Steps
-              <input value={steps} onChange={(e) => setSteps(e.target.value)}
-                placeholder={mode === '3d' ? '50' : feat?.steps ? String(feat.steps) : 'auto'}
-                inputMode="numeric" />
-            </label>
-          )}
-          <label>
-            Seed
-            <input value={seed} onChange={(e) => setSeed(e.target.value)}
-              placeholder={t('zufällig', 'random')} inputMode="numeric" />
-          </label>
-          {(mode === 'image' || mode === 'restore') && (
-            <label>
-              {mode === 'restore' ? t('Varianten', 'Variants') : t('Anzahl', 'Count')}
-              <input type="number" min={1} max={mode === 'restore' ? 4 : 8} value={batch}
-                onChange={(e) => setBatch(Number(e.target.value))} />
-            </label>
-          )}
-        </div>
+        {/* Schritte, Seed, Sampler, Bildrate … unter einer Klappe (Konzept: „nur nicht mehr im Weg“) */}
+        {fineSettings()}
 
         {mode !== '3d' && projects.length > 0 && (
           <label className="gen-target"
@@ -3010,42 +4068,6 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           </label>
         )}
 
-        {/* Klebt unten an der linken Spalte: Knopf ohne Scrollen erreichbar, auch wenn Erweitern, Referenzen oder die
-            Video-Teile aufgeklappt sind (Nutzer 22.11.2026: „kann nicht nach unten scrollen um es zu bestätigen“) */}
-        <div className="gen-submit">
-        <button className="btn primary" onClick={generate}
-          disabled={busy || (mode === 'restore' ? false : noModel) || !canGenerate}>
-          {busy
-            ? (mode === 'image' && outpainting ? t('Erweitert…', 'Extending…') : t('Generiert…', 'Generating…'))
-            : mode === '3d'
-              ? t('Mesh erzeugen', 'Create mesh')
-              : mode === 'restore'
-                ? t('Foto restaurieren', 'Restore photo')
-                : mode === 'image' && outpainting
-                  ? t('Bild erweitern', 'Extend image')
-                  : t('Generieren', 'Generate')}
-          {mode !== '3d' && <kbd>{t('Strg+Enter', 'Ctrl+Enter')}</kbd>}
-        </button>
-        </div>
-
-        {noModel && mode === 'restore' && restoreEdits && (
-          <p className="hint warn">
-            {t('Schäden entfernen und Einfärben brauchen FLUX 3 Image Klein — unter ',
-              'Removing damage and colorizing need FLUX 3 Image Klein — download it under ')}
-            <strong>{t('Modelle', 'Models')}</strong>
-            {t(' laden.', '.')}
-          </p>
-        )}
-        {noModel && mode !== 'restore' && (
-          <p className="hint warn">
-            {t(
-              `Kein ${modeLabel}-Modell installiert — unter `,
-              `No ${modeLabel} model installed — download one under `,
-            )}
-            <strong>{t('Modelle', 'Models')}</strong>
-            {t(' eines herunterladen.', '.')}
-          </p>
-        )}
         {mode === '3d' && selected && meshWorker && !meshWorker.ready && (
           <p className="hint warn">
             {t(
@@ -3056,7 +4078,10 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             {t(' ausführen.', '.')}
           </p>
         )}
-        {selected && selected.vram_gb > 13 && (
+        {/* Nur, wenn gerade ein anderes Modell den Grafikspeicher belegt (dieselbe Angabe wie oben in der Leiste); liegt
+            genau dieses schon dort, gibt es nichts zu leeren */}
+        {selected && selected.vram_gb > 13
+          && (health?.vram_loaded ?? []).some((l) => l.model !== selected.name) && (
           <p className="hint warn">
             {t(
               `${selected.vram_gb} GB VRAM: eng auf 16 GB. Vorher „VRAM leeren“ drücken.`,
@@ -3064,70 +4089,127 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
             )}
           </p>
         )}
+
+        {/* Klebt unten an der linken Spalte: Knopf ohne Scrollen erreichbar, auch wenn Erweitern, Referenzen oder die
+            Video-Teile aufgeklappt sind (Nutzer 22.11.2026: „kann nicht nach unten scrollen um es zu bestätigen“). Seit
+            dem Konzept „NVAI im Fluss“ (Bildschirm B) darüber die Chips mit Modell, Format, Länge und Qualität und, wenn
+            ein Modell fehlt, „Laden“ an Ort und Stelle; der Knopf nennt Aktion und Zeit. */}
+        <div className="gen-submit">
+          {chipRow()}
+          {need && (
+            <ModelNeed model={need} why={NEED_WHY[mode]} downloads={downloads}
+              alternative={wantModel ? selected ?? null : null}
+              onUseAlternative={() => setWant((w) => ({ ...w, [mode]: undefined }))}
+              onShowModels={onShowModels} />
+          )}
+          {recMissing && selected && (
+            <ModelNeed model={recMissing} why={NEED_WHY[mode]} downloads={downloads} compact
+              alternative={selected} onUseAlternative={dismissRec} onShowModels={onShowModels} />
+          )}
+          {!need && noModel && (mode !== 'restore' || restoreEdits) && (
+            <p className="hint warn small">
+              {mode === 'restore'
+                ? t('Schäden entfernen und Einfärben brauchen FLUX 3 Image Klein:', 'Removing damage and colorizing need FLUX 3 Image Klein:')
+                : t(`Kein ${modeLabel}-Modell installiert:`, `No ${modeLabel} model installed:`)}{' '}
+              <button className="link-btn" onClick={onShowModels}>{t('unter „Modelle“ laden', 'download it under “Models”')}</button>
+            </p>
+          )}
+          <button className="btn primary flow-big" onClick={generate}
+            disabled={busy || !!need || (mode === 'restore' ? false : noModel) || !canGenerate}
+            title={[sourceText(mainEst), mode !== '3d' ? t('Strg+Enter', 'Ctrl+Enter') : ''].filter(Boolean).join(' · ') || undefined}>
+            <span>{busy ? t('Läuft …', 'Running …') : actionLabel}</span>
+            {busy && jobId
+              ? <RunningEta jobId={jobId} expected={run?.id === jobId ? run.expected : null} />
+              : <span className="flow-eta">{fmtEta(totalSeconds(mainEst))}</span>}
+          </button>
+          {blockedHint && <p className="hint warn small">{blockedHint}</p>}
+        </div>
       </section>
 
       <div className="gen-vsplit" onPointerDown={dragSplit} onDoubleClick={resetSplit}
         title={t('Ziehen: Breite der Einstellungen · Doppelklick: zurücksetzen',
           'Drag: width of the settings · double-click: reset')} />
 
-      <section className="panel output">
-        {busy && (
-          <div className="progress-wrap">
-            <div className="progress">
-              <div className="bar" style={{ width: `${Math.round(progress * 100)}%` }} />
-            </div>
-            <div className="muted small progress-line">
-              <span>
-                {stage} · {Math.round(progress * 100)} %
-                {mode === 'video' && (jobId === personJobId
-                  ? t(` · vier Startbilder${personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''}`,
-                    ` · four start images${personMinutes ? t(`, rund ${String(personMinutes).replace('.', ',')} Minuten`, `, about ${personMinutes} minutes`) : ''}`)
-                  : t(' · Video dauert mehrere Minuten', ' · video takes several minutes'))}
-                {mode === 'image' && jobId === personJobId
-                  && t(` · vier Bilder${personMinutes ? `, rund ${String(personMinutes).replace('.', ',')} Minuten` : ''}`,
-                    ` · four images${personMinutes ? t(`, rund ${String(personMinutes).replace('.', ',')} Minuten`, `, about ${personMinutes} minutes`) : ''}`)}
-                {mode === '3d' && t(' · erster Lauf lädt das Modell', ' · the first run loads the model')}
-                {mode === 'restore' && t(' · meist 1–3 Minuten', ' · usually 1–3 minutes')}
-              </span>
-              <button className="btn small ghost danger-text" onClick={cancelJob}>
+      <section className="panel output" ref={outputRef}>
+        {/* Konzept „NVAI im Fluss“, Bildschirm C: Phasen mit Restzeit statt „generiert · 2 %“ */}
+        {viewActive && viewId && (
+          <div className="gen-run">
+            <div className="gen-run-head">
+              <span className="flow-label">{run?.id === viewId ? run.title : t('Auftrag', 'Job')}</span>
+              <button className="btn small ghost danger-text" onClick={cancelView}>
                 {t('Abbrechen', 'Cancel')}
               </button>
             </div>
+            <JobPhases jobId={viewId}
+              modelName={run?.id === viewId ? run.modelName : undefined}
+              modelGb={run?.id === viewId ? run.modelGb : undefined}
+              expected={run?.id === viewId ? run.expected : null}
+              next={run?.id === viewId ? run.next : undefined} />
           </div>
         )}
 
         {error && <div className="error">{error}</div>}
 
         {results.length > 0 ? (
-          <div className={results[0].kind === 'image' ? 'grid' : 'stack'}>
-            {results.map((a) => (
-              <figure key={a.id} className="card result">
-                {a.kind === 'image' ? (
-                  <div className="result-open" role="button" tabIndex={0} title={t('Groß ansehen', 'View large')}
-                    onClick={() => setPreview(imageResults.indexOf(a))}
-                    onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setPreview(imageResults.indexOf(a)))}>
-                    <AssetView asset={a} />
-                  </div>
-                ) : (
-                  <AssetView asset={a} />
-                )}
-                <figcaption className="muted small">
-                  <OutputBadge model={available.find((m) => m.id === a.model_id)} />{' '}
-                  {a.kind === 'mesh' ? a.model_id : `seed ${String(a.meta.seed ?? '?')} · ${a.model_id}`}
-                  {' · '}
-                  <a href={a.url} download>Download</a>
-                  {typeof a.meta.caption === 'string' && (
-                    <details className="caption">
-                      <summary>{t('Beschreibung vom Upsampler', 'Description from the upsampler')}</summary>
-                      <p>{a.meta.caption}</p>
-                    </details>
-                  )}
-                </figcaption>
-              </figure>
-            ))}
+          <div className="gen-result" ref={resultRef}>
+            {resultHead()}
+            <div className={results[0].kind === 'image' ? 'grid' : 'stack'}>
+              {results.map((a) => {
+                const isPicked = results.length > 1 && picked?.id === a.id
+                return (
+                  <figure key={a.id} className={isPicked ? 'card result picked' : 'card result'}>
+                    {a.kind === 'image' ? (
+                      <div className="result-open" role="button" tabIndex={0} title={t('Groß ansehen', 'View large')}
+                        onClick={() => setPreview(imageResults.indexOf(a))}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setPreview(imageResults.indexOf(a)))}>
+                        <AssetView asset={a} />
+                      </div>
+                    ) : (
+                      <AssetView asset={a} />
+                    )}
+                    <figcaption className="muted small">
+                      <OutputBadge model={models.find((m) => m.id === a.model_id)} />{' '}
+                      {resultSeeds.length > 1 && a.meta.seed != null && <><SeedCopy seed={a.meta.seed} />{' · '}</>}
+                      <a href={a.url} download>{t('Download', 'Download')}</a>
+                      {/* Mehrere Bilder: Mit welchem es weitergeht, wählt man hier (Vorgabe das erste) */}
+                      {results.length > 1 && a.kind === 'image' && (
+                        <button type="button" className={isPicked ? 'btn small primary gen-pick-btn' : 'btn small ghost gen-pick-btn'}
+                          aria-pressed={isPicked} onClick={() => {
+                            setPickedId(a.id)
+                            setNextNeed(null)
+                          }}>
+                          {isPicked ? t('✓ weiter damit', '✓ continue with this') : t('weiter damit', 'continue with this')}
+                        </button>
+                      )}
+                      {typeof a.meta.caption === 'string' && (
+                        <details className="caption">
+                          <summary>{t('Beschreibung vom Upsampler', 'Description from the upsampler')}</summary>
+                          <p>{a.meta.caption}</p>
+                        </details>
+                      )}
+                    </figcaption>
+                  </figure>
+                )
+              })}
+            </div>
+            {/* Jedes Ergebnis führt weiter: die naheliegenden nächsten Schritte mit Modell und Zeit */}
+            <NextSteps heading={nextHeading} steps={nextSteps}>
+              {nextNeed && (
+                <ModelNeed model={models.find((m) => m.id === nextNeed.model.id) ?? nextNeed.model}
+                  why={NEXT_WHY[nextNeed.step]} downloads={downloads}
+                  alternative={nextNeed.alternative ?? null}
+                  onUseAlternative={nextNeed.alt ? () => {
+                    const go = nextNeed.alt
+                    setNextNeed(null)
+                    go?.()
+                  } : undefined}
+                  onShowModels={onShowModels} />
+              )}
+              {studioNote && <p className="ok-text small gen-studio-note">{studioNote}</p>}
+            </NextSteps>
           </div>
         ) : (
-          !busy && <div className="placeholder">{t('Ergebnisse erscheinen hier.', 'Results appear here.')}</div>
+          !viewActive && <div className="placeholder">{t('Ergebnisse erscheinen hier.', 'Results appear here.')}</div>
         )}
         {preview !== null && imageResults[preview] && (
           <Lightbox assets={imageResults} index={preview} onIndex={setPreview} onClose={() => setPreview(null)} />

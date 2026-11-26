@@ -28,6 +28,7 @@ from starlette.routing import Route
 import httpx
 
 from . import __version__, civitai, comfy, config, db, folders, hfsearch, i18n, jobs, loras, mesh_workers, registry, report, studio, wizard, hardware
+from . import estimate
 from .i18n import t
 from . import gpu as gpu_info
 from . import audiocpp, engine, sdcpp
@@ -312,6 +313,7 @@ class _McpHttp:
     def _load() -> tuple[Any, Any]:
         from mcp.server.transport_security import TransportSecuritySettings
         from . import mcp_server
+        mcp_server.IN_SERVER = True  # Dateipfade aus dem eigenen Asset-Ordner, ohne Rückfrage (mcp_server._asset_dir)
         return mcp_server, TransportSecuritySettings(enable_dns_rebinding_protection=False)
 
     async def _serve(self, ready: asyncio.Event, stop: asyncio.Event) -> None:
@@ -377,6 +379,17 @@ async def _port_open(port: int, timeout: float = 0.3) -> bool:
         return False
 
 
+def _ui_flags() -> dict[str, bool]:
+    """Bereiche der Oberfläche, die erst auf Wunsch erscheinen (seit 0.5.42): VHS ist ausgeblendet und erscheint nur,
+    wenn `<Daten>/ui.json` es mit {"vhs": true} einschaltet. Die REST-Aufrufe unter /api/vhs bleiben immer da."""
+    try:
+        import json as _json
+        data = _json.loads((config.DATA_DIR / "ui.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: bool(v) for k, v in data.items() if k in ("vhs",)} if isinstance(data, dict) else {}
+
+
 @app.get("/api/version", response_model=VersionInfo)
 async def version(request: Request) -> VersionInfo:
     """Wer antwortet hier, mit welchem Vertrag? Ohne Token abrufbar, damit ein Client
@@ -390,6 +403,7 @@ async def version(request: Request) -> VersionInfo:
         auth="token" if config.API_TOKEN else "local",
         authorized=_authorized(request.headers, request.client),
         instance=config.INSTANCE_ID,
+        ui=_ui_flags(),
     )
 
 
@@ -1234,6 +1248,7 @@ async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
             raise HTTPException(404, t(f"Bild-Asset nicht gefunden: {asset_id}",
                                        f"Image asset not found: {asset_id}"))
     started = time.monotonic()
+    limit = 900.0
     job = await jobs.submit("expand_prompt", req.model_dump())
     current = None
     try:
@@ -1242,9 +1257,24 @@ async def expand_prompt(req: ExpandPromptRequest) -> ExpandPromptResult:
             current = db.get_job(job.id)
             if current is None or current.status in ("done", "error", "cancelled"):
                 break
-            if time.monotonic() - started > 900:
-                raise HTTPException(504, t("Prompt ausbauen dauerte zu lange.",
-                                           "Expanding the prompt took too long."))
+            if time.monotonic() - started > limit:
+                # Hat er hinter anderen Auftraegen gewartet, das sagen: sonst wirkt der Upsampler kaputt
+                queue = (t("in der Warteschlange", "in the queue") if gpu_info.separate_text_backend()
+                         else t("in der Warteschlange der Grafikkarte", "in the GPU queue"))
+                waited = ((current.started_at or time.time()) - current.created_at) / 60
+                if current.started_at is None:
+                    detail = t(f"Prompt ausbauen kam nicht dran: Es hat {limit / 60:.0f} min {queue} hinter anderen "
+                               "Aufträgen gewartet. Später noch einmal versuchen.",
+                               f"Expanding the prompt did not get its turn: it waited {limit / 60:.0f} min {queue} "
+                               "behind other jobs. Please try again later.")
+                elif waited >= 1:
+                    detail = t(f"Prompt ausbauen dauerte zu lange, davon {waited:.0f} min {queue} hinter anderen "
+                               "Aufträgen.",
+                               f"Expanding the prompt took too long, {waited:.0f} min of it {queue} behind other "
+                               "jobs.")
+                else:
+                    detail = t("Prompt ausbauen dauerte zu lange.", "Expanding the prompt took too long.")
+                raise HTTPException(504, detail)
     finally:
         if jobs.current_job_id() != job.id:
             db.delete_job(job.id)
@@ -1328,11 +1358,20 @@ async def get_asset(asset_id: str) -> Asset:
 @app.delete("/api/assets/{asset_id}")
 async def delete_asset(asset_id: str) -> dict[str, Any]:
     """Loescht ein einzelnes Asset samt Datei. Was als Clip im Schnitt eines Studio-Projekts liegt, nicht (erst den Clip
-    loeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern."""
+    loeschen, wie in der Medienleiste des Studios): Sonst fehlte der Clip, etwa nach „Alle loeschen“ bei den Quellbildern.
+    Ebenso nicht, was eine Szene oder Figur als Vorlage nutzt (Start- oder Endbild, Referenz, Ton, Layout, Stimme): Der
+    naechste Lauf scheiterte sonst an einer fehlenden Datei. Takes darf man loeschen, die Szene verliert sie dann."""
     owner = await asyncio.to_thread(studio.clip_owner, asset_id)
     if owner:
         raise HTTPException(409, t(f"Liegt als Clip im Schnitt von „{owner}“. Erst den Clip im Studio löschen.",
                                    f"It is a clip in the edit of \"{owner}\". Delete the clip in the Studio first."))
+    user = await asyncio.to_thread(studio.source_owner, asset_id)
+    if user:
+        raise HTTPException(409, t(
+            f"Das Studio-Projekt „{user}“ nutzt es in einer Szene oder Figur (Start- oder Endbild, Referenz, Ton, "
+            "Layout oder Stimme). Erst dort entfernen.",
+            f"The Studio project \"{user}\" uses it in a scene or character (start or end image, reference, sound, "
+            "layout or voice). Remove it there first."))
     ok, freed = db.delete_asset(asset_id)
     if not ok:
         raise HTTPException(404, t("Asset nicht gefunden", "Asset not found"))
@@ -1505,6 +1544,26 @@ async def hardware_info() -> dict[str, Any]:
         return {"device": hardware.profile(), "estimates": hardware.estimates(registry.list_models()),
                 "catalog": {"devices": len(cat.get("devices", [])), "generated": cat.get("generated")}}
     return await asyncio.to_thread(_info)
+
+
+@app.post("/api/estimate")
+async def estimate_jobs(body: dict[str, Any]) -> dict[str, Any]:
+    """Geschätzte Rechenzeit je Auftrag (seit 0.5.42): {"items": [{"kind": "txt2video", "params": {…}}]} ergibt je
+    Eintrag seconds (Rechenzeit, null = unbekannt), source (history, estimate, rough, unknown), runs und cold (Sekunden
+    für Backend-Start und Modell-Laden, nur wenn sie anfallen). Die Knöpfe zeigen sie vor dem Start."""
+    items = body.get("items") if isinstance(body.get("items"), list) else []
+    up = await comfy.is_running(timeout=1.0)
+    return {"items": await asyncio.to_thread(estimate.many, [i for i in items if isinstance(i, dict)], up)}
+
+
+@app.post("/api/studio/projects/{pid}/estimate")
+async def studio_estimate(pid: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Geschätzte Rechenzeit je Szene (seit 0.5.42), aus derselben Anfrage wie beim Erzeugen; ohne scene_ids alle
+    Szenen ohne Take."""
+    ids = body.get("scene_ids")
+    ids = [str(x) for x in ids] if isinstance(ids, list) else None
+    up = await comfy.is_running(timeout=1.0)
+    return {"scenes": await asyncio.to_thread(studio.estimate_scenes, pid, ids, up)}
 
 
 @app.post("/api/studio/wizard/plan")

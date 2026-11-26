@@ -80,7 +80,7 @@ mit einer kurzen Empfehlung; „Alles auf einer Seite“ zeigt alle Einstellunge
 2. **Datensatz:** ein Name, ein Auslösewort, das kein echtes Wort ist (etwa `somi_dark1`), und die Gattung
    (`a cartoon rabbit`). Bilder kommen aus dem Verlauf, vom Rechner oder aus einem Ordner mit `.txt`-Beschreibungen
    (kohya), oder Qwen-Image-Edit-2511 zeichnet deine Vorlage in 24 Haltungen, Ausschnitten und Umgebungen, rund 44 s je
-   Bild. Ohne fertige Zeichnung reicht eine Skizze, ein Foto oder nur die Beschreibung: „Entwürfe erzeugen“ zeichnet
+   Bild. Ohne fertige Zeichnung reicht eine Skizze, ein Foto oder nur die Beschreibung: „4 Entwürfe erzeugen“ zeichnet
    die Figur frontal und ganz, ein Entwurf wird die Vorlage. Mehr als die Skizze entscheidet eine englische
    Beschreibung, die nennt, worin die Figur vom Gewöhnlichen abweicht (Körperform, Ohren, was fehlt). Gelungene Bilder
    lassen sich anhaken, um daraus weitere zu erzeugen. Die Bildbeschreibung nennt, was sich von Bild zu Bild ändert

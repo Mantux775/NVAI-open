@@ -1066,7 +1066,7 @@ export interface Mesh3DParams {
   speck_ratio?: number
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
+export async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: {
@@ -1112,7 +1112,8 @@ export interface UpsamplerFit {
 
 export const api = {
   health: () => req<Health>('/api/health'),
-  version: () => req<{ version: string; comfyui: string | null }>('/api/version'),
+  /** ui (seit 0.5.42): Bereiche, die nur auf Wunsch erscheinen, etwa {vhs: true} aus <Daten>/ui.json */
+  version: () => req<{ version: string; comfyui: string | null; ui?: { vhs?: boolean } }>('/api/version'),
   startBackend: () => req<{ started: boolean }>('/api/backend/start', { method: 'POST' }),
   freeVram: () => req<{ ok: boolean; freed: string[] }>('/api/backend/free', { method: 'POST' }),
   gpus: () =>
@@ -1527,7 +1528,8 @@ export type ServerEvent =
   | { type: 'ping' }
   | { type: 'job.queued'; job_id: string; kind: string }
   | { type: 'job.started'; job_id: string }
-  | { type: 'job.progress'; job_id: string; progress: number; stage: string }
+  /** phase (seit 0.5.42): 'start' GPU-Backend startet, 'load' Modell lädt, 'save' speichert; sonst leer */
+  | { type: 'job.progress'; job_id: string; progress: number; stage: string; phase?: 'start' | 'load' | 'save' }
   | { type: 'job.done'; job_id: string; asset_ids: string[] }
   | { type: 'job.error'; job_id: string; error: string }
   | { type: 'job.cancelled'; job_id: string }
@@ -1629,8 +1631,18 @@ export interface StudioScene {
   jobs: string[]
   error: string | null
   status: 'empty' | 'waiting' | 'running' | 'done' | 'error'
+  /** Der letzte Auftrag der Szene wurde abgebrochen (Stopp, Verlauf, Serverneustart); wer auf sie wartet, nimmt dann
+   *  nicht ihren alten Take (seit 26.11.2026) */
+  cancelled?: boolean
   /** Hinweise wie im Assistenten: zu lang für die Karte, Figur ohne Startbild, Prompt nicht englisch … (seit 0.5.30) */
   hints?: string[]
+  /** Veraltet (seit 0.5.42, studio.scene_stale): Der Take dieser Anschluss-Szene ging von einem anderen Take der Vorlage
+   *  aus als dem jetzt gewählten. source: Szene, take: deren gewählter Take, used: der, von dem diese ausging; why
+   *  'scene': der Anschluss zeigt inzwischen auf eine andere Szene. „So lassen“ setzt params.chain_keep {take, source}. */
+  stale?: { source: string; take: string; used: string; why: 'take' | 'scene'; reason: string }
+  /** Szene, deren Ende der gewählte Take fortsetzt (Anschluss, auch aus einem Marker; seit 0.5.42, studio.scene_carry):
+   *  Liegt sie nach dem Umordnen nicht mehr direkt davor, warnt die Kartenreihe */
+  carry_from?: string
 }
 
 export interface StudioMarker {

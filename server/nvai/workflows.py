@@ -170,7 +170,9 @@ def defaults_for(workflow: str) -> dict[str, Any]:
 
 def _seed(p: dict[str, Any]) -> int:
     s = p.get("seed")
-    return random.randint(0, 2**63 - 1) if s is None else int(s)
+    # Höchstens 2^53 - 1: Die Oberfläche liest den Seed als JavaScript-Zahl, die darüber rundet (7044001977690445456
+    # wurde als ...446000 angezeigt und so auch wieder gesendet); dann ließ sich kein Ergebnis per Seed wiederholen.
+    return random.randint(0, 2**53 - 1) if s is None else int(s)
 
 
 def _pick(p: dict[str, Any], d: dict[str, Any], key: str) -> Any:

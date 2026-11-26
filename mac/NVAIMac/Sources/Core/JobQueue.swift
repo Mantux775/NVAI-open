@@ -41,6 +41,9 @@ struct JobRecord: Sendable, Identifiable {
     var expandTarget: PromptTarget?
     var expanded: String?
     var cancelRequested = false
+    /// Abschnitt während des Laufs (seit Mac 1.0, Konzept „NVAI im Fluss“, wie `phase` der Ereignisse unter Windows):
+    /// prepare (bereitet vor), load (Modell lädt), run (rechnet), save (speichert); leer, solange er wartet oder fertig ist
+    var phase = ""
     /// Sprache des Clients bzw. der App; Stufen und Fehler des Auftrags folgen ihr.
     var lang: Lang = .en
     /// Je Bild: Sekunden und Speicherspitze – für den Messbericht.
@@ -71,7 +74,21 @@ struct JobRecord: Sendable, Identifiable {
         // Ergebnisordner, wenn es einen gibt (Ton-Forensik: der Fall); vorher erfuhr ein REST-Client nicht, wo sein neuer
         // Fall liegt. Der Server lauscht nur auf 127.0.0.1, GET /api/forensic/cases nennt die Ordner ebenso.
         if let resultPath { out["result_path"] = resultPath }
+        // Abschnitt nur während des Laufs; der Mac hat keinen WebSocket, die Anzeige in Phasen liest ihn hier
+        if status == "running", !phase.isEmpty { out["phase"] = phase }
         return out
+    }
+
+    /// Modell, mit dem der Auftrag rechnet (für die Schätzung, ob es noch geladen ist)
+    var modelKey: String? {
+        switch kind {
+        case "txt2audio": return AudioCatalog.id
+        case "tts": return SpeechCatalog.id
+        case "txt2img", "img2img": return request?.modelID ?? params["model_id"]?.stringValue
+        case "txt2video", "img2video": return video?.model.id ?? params["model_id"]?.stringValue
+        case "restore": return restore?.modelID
+        default: return nil
+        }
     }
 }
 
@@ -127,6 +144,15 @@ actor JobQueue {
     var currentJobID: String? {
         guard let id = runningID, jobs[id]?.kind != "download" else { return nil }
         return id
+    }
+
+    /// Liegt das Modell wohl noch im Speicher? Nur ungefähr, ohne die Engines zu fragen (die sind während eines
+    /// Auftrags belegt): Es rechnete in dieser Sitzung, und auf Macs, die ein großes Modell zur Zeit laden, war es das
+    /// zuletzt benutzte. Für `cold.load` der Schätzung.
+    func recentlyUsed(_ model: String) -> Bool {
+        let ran = order.compactMap { jobs[$0] }.filter { $0.startedAt != nil && $0.modelKey != nil }
+        guard let last = ran.last(where: { $0.status != "queued" }) else { return false }
+        return SystemInfo.oneModelAtATime ? last.modelKey == model : ran.contains { $0.modelKey == model }
     }
 
     var queueDepth: Int { jobs.values.filter { $0.status == "queued" && $0.kind != "download" }.count }
@@ -488,6 +514,7 @@ actor JobQueue {
             $0.status = "running"
             $0.startedAt = Date().timeIntervalSince1970
             $0.stage = t("startet", "starting")
+            $0.phase = $0.kind == "download" ? "" : "prepare"
         }
         guard let job = jobs[id] else { return }
         let started = Date()
@@ -544,12 +571,14 @@ actor JobQueue {
                 $0.status = cancelled ? "cancelled" : "done"
                 $0.stage = cancelled ? t("abgebrochen", "cancelled") : t("fertig", "done")
                 $0.progress = 1
+                $0.phase = ""
             }
         } catch where jobs[id]?.cancelRequested == true {
             // Abgebrochen (z. B. Download mitten in der Datei): kein Fehler.
             update(id) {
                 $0.status = "cancelled"
                 $0.stage = t("abgebrochen", "cancelled")
+                $0.phase = ""
             }
             AppLog.info("Job \(id) cancelled by the user")
         } catch {
@@ -558,6 +587,7 @@ actor JobQueue {
                 $0.status = "error"
                 $0.error = message
                 $0.stage = t("Fehler", "error")
+                $0.phase = ""
             }
             AppLog.error("Job \(id) failed: \(message)")
         }
@@ -666,6 +696,16 @@ actor JobQueue {
         update(id) {
             $0.progress = max($0.progress, min(0.99, fraction))
             $0.stage = stage
+            $0.phase = "run"
+        }
+    }
+
+    /// Abschnitt eines laufenden Auftrags setzen (Modell lädt, rechnet, speichert), mit passender Stufe
+    private func setPhase(_ id: String, _ phase: String, stage: String? = nil) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            $0.phase = phase
+            if let stage { $0.stage = stage }
         }
     }
 
@@ -688,6 +728,7 @@ actor JobQueue {
         let result = try await task.value
         // abgebrochen, während der Export gerade fertig wurde: kein Asset ablegen
         if jobs[id]?.cancelRequested == true { throw CancellationError() }
+        setPhase(id, "save", stage: t("speichert", "saving"))
         let meta: [String: JSONValue] = [
             "studio_project": .string(p.id), "preset": .string(req.preset), "encoder": .string(result.encoder),
             "render_seconds": .double((result.renderSeconds * 10).rounded() / 10), "frames": .int(result.frames),
@@ -702,10 +743,11 @@ actor JobQueue {
 
     /// Fortschritt des Studio-Exports; späte Meldungen nach dem Ende überschrieben vorher „fertig“ (seit 0.5.9 nicht mehr).
     private func exportProgress(_ id: String, fraction: Double, stage: String) {
-        guard jobs[id]?.status == "running" else { return }
+        guard jobs[id]?.status == "running", jobs[id]?.phase != "save" else { return }
         update(id) {
             $0.progress = fraction
             $0.stage = stage
+            $0.phase = "run"
         }
     }
 
@@ -716,6 +758,8 @@ actor JobQueue {
             let percent = Int((max(0, min(1, fraction)) * 100).rounded())
             $0.stage = message.isEmpty ? t("lädt Modell (\(percent) %)", "loading model (\(percent) %)") : "\(message) (\(percent) %)"
             if isDownload { $0.progress = max(0, min(0.99, fraction)) }
+            // ein Modell lädt in den Speicher: Phase „Modell lädt“ (die erste Rechenstufe schaltet auf „rechnet“)
+            if !isDownload && $0.phase != "run" { $0.phase = "load" }
         }
     }
 
@@ -724,8 +768,9 @@ actor JobQueue {
         update(id) {
             let inImage = total > 0 ? Double(step) / Double(total) : 0
             $0.progress = min(0.99, (Double(index) + inImage) / Double(max(1, count)))
-            let prefix = count > 1 ? t("Bild \(index + 1) von \(count), ", "image \(index + 1) of \(count), ") : ""
+            let prefix = count > 1 ? t("Bild \(index + 1) von \(count) · ", "image \(index + 1) of \(count) · ") : ""
             $0.stage = prefix + t("Schritt \(step) von \(total)", "step \(step) of \(total)")
+            $0.phase = "run"
         }
     }
 
@@ -851,7 +896,10 @@ actor JobQueue {
             await ZImageEngine.shared.unload()
             MemoryLog.release()
         }
-        update(id) { $0.stage = t("baut den Prompt aus", "expanding the prompt") }
+        update(id) {
+            $0.stage = t("baut den Prompt aus", "expanding the prompt")
+            $0.phase = "run"
+        }
         var text = try await Flux2Engine.shared.expand(prompt, model: model, target: target)
         // Ein einzelner Text ohne Nummern kam trotzdem als „[1] A fishing boat …“ bzw. „[A] A fisher boat …“ zurück
         // (Qwen3-4B, gemessen 18.11. per REST): Der Systemprompt beschreibt die Nummern für den Assistenten. Ohne Nummern
@@ -927,9 +975,12 @@ actor JobQueue {
             mode = .text   // auch beim Erweitern; dort setzt jeder Durchgang seine Referenz selbst
         }
 
-        update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         let loadStart = Date()
         let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
+        update(id) {
+            $0.stage = t("lädt \(model.name)", "loading \(model.name)")
+            if !alreadyLoaded { $0.phase = "load" }
+        }
         try await Flux2Engine.shared.load(model, loras: req.loras) { fraction, message in
             Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
         }
@@ -939,7 +990,11 @@ actor JobQueue {
         for index in 0..<req.batch {
             if jobs[id]?.cancelRequested == true { break }
             var seed = baseSeed &+ UInt64(index)
-            update(id) { $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)") : t("rechnet", "generating") }
+            // Vor dem ersten Schritt liest FLUX.2 bzw. Core ML den Prompt (Text-Encoder): so heißt es auch in „Bereitet vor“
+            update(id) {
+                $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)")
+                    : $0.phase == "run" ? t("rechnet", "generating") : t("liest den Prompt", "reading the prompt")
+            }
             let sampler = PeakMemorySampler()
             sampler.start()
             let started = Date()
@@ -1021,6 +1076,7 @@ actor JobQueue {
 
             // Abgebrochen, während das Bild noch dekodiert wurde: nicht mehr in den Verlauf (wie beim Ton)
             if jobs[id]?.cancelRequested == true { throw CancellationError() }
+            if index == req.batch - 1 { setPhase(id, "save", stage: t("speichert", "saving")) }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
                                                              modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: index == 0 ? loadSeconds : 0,
@@ -1039,11 +1095,14 @@ actor JobQueue {
             // mittig zugeschnitten statt gestreckt (seit 0.5.9, wie FLUX.2 seit 0.5.8): Core ML rechnet quadratisch
             start = ImageFiles.filled(try await loadImage(a, t("Ausgangsbild", "Start image")), width: model.resolution, height: model.resolution)
         }
-        update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
         await Flux2Engine.shared.unload()
         await freeHelpers()  // ein Modell zur Zeit, wie bei den anderen Wegen (Stable Audio blieb sonst daneben geladen)
         let loadStart = Date()
         let alreadyLoaded = await CoreMLEngine.shared.currentModelID() == model.id
+        update(id) {
+            $0.stage = t("lädt \(model.name)", "loading \(model.name)")
+            if !alreadyLoaded { $0.phase = "load" }
+        }
         try await CoreMLEngine.shared.load(model)
         let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
 
@@ -1051,7 +1110,11 @@ actor JobQueue {
         for index in 0..<req.batch {
             if jobs[id]?.cancelRequested == true { break }
             let seed = baseSeed &+ UInt32(index)
-            update(id) { $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)") : t("rechnet", "generating") }
+            // Vor dem ersten Schritt liest FLUX.2 bzw. Core ML den Prompt (Text-Encoder): so heißt es auch in „Bereitet vor“
+            update(id) {
+                $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)")
+                    : $0.phase == "run" ? t("rechnet", "generating") : t("liest den Prompt", "reading the prompt")
+            }
             let sampler = PeakMemorySampler()
             sampler.start()
             let started = Date()
@@ -1086,6 +1149,7 @@ actor JobQueue {
             if let a = req.imageAssetID { meta["image_asset_id"] = .string(a); meta["denoise"] = .double(req.denoise) }
             // Abgebrochen, während das Bild noch dekodiert wurde: nicht mehr in den Verlauf (wie beim Ton)
             if jobs[id]?.cancelRequested == true { throw CancellationError() }
+            if index == req.batch - 1 { setPhase(id, "save", stage: t("speichert", "saving")) }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt,
                                                              modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: index == 0 ? loadSeconds : 0,
@@ -1122,12 +1186,15 @@ actor JobQueue {
             MemoryLog.release()
         }
         let baseSeed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        // Z-Image lädt beim ersten Bild selbst: bis zum ersten Schritt „Modell lädt“
+        let zLoaded = await ZImageEngine.shared.currentModelID() == model.id
         for index in 0..<req.batch {
             if jobs[id]?.cancelRequested == true { break }
             let seed = baseSeed &+ UInt64(index)
             update(id) {
                 $0.stage = req.batch > 1 ? t("Bild \(index + 1) von \(req.batch)", "image \(index + 1) of \(req.batch)")
                     : t("rechnet", "generating")
+                if index == 0 && !zLoaded { $0.phase = "load" }
             }
             let sampler = PeakMemorySampler()
             sampler.start()
@@ -1166,6 +1233,7 @@ actor JobQueue {
                 "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
             ]
             if jobs[id]?.cancelRequested == true { throw CancellationError() }
+            if index == req.batch - 1 { setPhase(id, "save", stage: t("speichert", "saving")) }
             let asset = try await AssetStore.shared.addImage(png: png, jobID: id, prompt: req.prompt, modelID: model.id, meta: meta)
             let timing = JobRecord.Timing(seconds: seconds, peakMB: peak, loadSeconds: 0, width: req.width, height: req.height,
                                           steps: req.steps, mode: "txt2img", modelID: model.id)
@@ -1190,11 +1258,14 @@ actor JobQueue {
             await SpeechEngine.shared.unload()
             MemoryLog.release()
         }
-        update(id) { $0.stage = t("lädt Stable Audio 3", "loading Stable Audio 3") }
         let sampler = PeakMemorySampler()
         sampler.start()
         let loadStart = Date()
         let wasLoaded = await AudioEngine.shared.isLoaded
+        update(id) {
+            $0.stage = t("lädt Stable Audio 3", "loading Stable Audio 3")
+            if !wasLoaded { $0.phase = "load" }
+        }
         do {
             try await AudioEngine.shared.load()
         } catch {
@@ -1206,6 +1277,7 @@ actor JobQueue {
         update(id) {
             $0.stage = t("rechnet \(Int(req.seconds)) s Klang", "generating \(Int(req.seconds)) s of audio")
             $0.progress = 0.1
+            $0.phase = "run"
         }
         let started = Date()
         let wav: Data
@@ -1230,6 +1302,7 @@ actor JobQueue {
             "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
         ]
         if loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+        setPhase(id, "save", stage: t("speichert", "saving"))
         let asset = try await AssetStore.shared.addAudio(wav: wav, jobID: id, prompt: req.prompt, modelID: AudioCatalog.id,
                                                          meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
@@ -1265,11 +1338,14 @@ actor JobQueue {
             MemoryLog.release()
         }
         let kind: Qwen3TTSKindChoice = reference == nil ? .design : .clone
-        update(id) { $0.stage = t("lädt Qwen3-TTS", "loading Qwen3-TTS") }
         let sampler = PeakMemorySampler()
         sampler.start()
         let loadStart = Date()
         let wasLoaded = await SpeechEngine.shared.loadedKind == kind.engineKind
+        update(id) {
+            $0.stage = t("lädt Qwen3-TTS", "loading Qwen3-TTS")
+            if !wasLoaded { $0.phase = "load" }
+        }
         do {
             try await SpeechEngine.shared.load(kind.engineKind)
         } catch {
@@ -1281,6 +1357,7 @@ actor JobQueue {
         update(id) {
             $0.stage = t("spricht", "speaking")
             $0.progress = 0.15
+            $0.phase = "run"
         }
         let started = Date()
         let text = req.text, voice = req.voice, language = req.language
@@ -1327,6 +1404,7 @@ actor JobQueue {
             meta["voice_text"] = .string(req.voiceText)
             meta["voice_reference"] = .string(referenceMode ?? "klang")
         }
+        setPhase(id, "save", stage: t("speichert", "saving"))
         let asset = try await AssetStore.shared.addAudio(wav: SpeechEngine.wav(samples, sampleRate: sampleRate), jobID: id,
                                                          prompt: req.text, modelID: SpeechCatalog.id, meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
@@ -1405,23 +1483,27 @@ actor JobQueue {
             try? FileManager.default.removeItem(at: result.url)
             throw CancellationError()
         }
+        setPhase(id, "save", stage: t("speichert", "saving"))
         let asset = try await AssetStore.shared.addVideo(mp4: result.url, jobID: id, prompt: req.prompt,
                                                          modelID: req.model.id, meta: meta)
         update(id) { $0.assetIDs.append(asset.id) }
     }
 
-    /// Phase 0: Entrauschen (bis 85 %), Phase 1: Dekodieren in Kacheln.
+    /// Phase 0: Entrauschen, Phase 1: Dekodieren in Kacheln. Der Anteil folgt der Zeit (seit Mac 1.0, für die Restzeit):
+    /// am M1 entrauschte LTX-Video 2B 104–114 s und dekodierte 58–64 s, deshalb Entrauschen bis 64 %, Dekodieren bis 99 %
+    /// (vorher 85 % und 14 %: Die Restzeit lief beim Dekodieren eine Minute lang ins Leere).
     private func videoProgress(_ id: String, phase: Int, done: Int, total: Int) {
         guard jobs[id]?.status == "running" else { return }
         update(id) {
             let fraction = total > 0 ? Double(done) / Double(total) : 0
             if phase == 0 {
-                $0.progress = min(0.85, 0.85 * fraction)
+                $0.progress = min(0.64, 0.02 + 0.62 * fraction)
                 $0.stage = t("Schritt \(done) von \(total)", "step \(done) of \(total)")
             } else {
-                $0.progress = min(0.99, 0.85 + 0.14 * fraction)
+                $0.progress = min(0.99, 0.64 + 0.35 * fraction)
                 $0.stage = t("dekodiert · Kachel \(done) von \(total)", "decoding · tile \(done) of \(total)")
             }
+            $0.phase = "run"
         }
     }
 
@@ -1433,6 +1515,7 @@ actor JobQueue {
             let inRun = total > 0 ? Double(step) / Double(total) : 0
             $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
             $0.stage = "\(label) · " + t("Schritt \(step) von \(total)", "step \(step) of \(total)")
+            $0.phase = "run"
         }
     }
 
@@ -1440,8 +1523,9 @@ actor JobQueue {
     private func decodeProgress(_ id: String, index: Int, of count: Int, done: Int, total: Int) {
         guard jobs[id]?.status == "running" else { return }
         update(id) {
-            let prefix = count > 1 ? t("Bild \(index + 1) von \(count), ", "image \(index + 1) of \(count), ") : ""
+            let prefix = count > 1 ? t("Bild \(index + 1) von \(count) · ", "image \(index + 1) of \(count) · ") : ""
             $0.stage = prefix + t("dekodiert · Kachel \(done) von \(total)", "decoding · tile \(done) of \(total)")
+            $0.phase = "run"
         }
     }
 
@@ -1451,6 +1535,7 @@ actor JobQueue {
             let inRun = total > 0 ? Double(done) / Double(total) : 0
             $0.progress = min(0.99, (Double(run) + inRun) / Double(max(1, count)))
             $0.stage = t("Schärfen · Kachel \(done) von \(total)", "Sharpening · tile \(done) of \(total)")
+            $0.phase = "run"
         }
     }
 
@@ -1534,9 +1619,12 @@ actor JobQueue {
         var outputs: [(image: CGImage, meta: [String: JSONValue], seconds: [String: JSONValue], peak: Double)] = []
 
         if let model = fluxModel {
-            update(id) { $0.stage = t("lädt \(model.name)", "loading \(model.name)") }
             let loadStart = Date()
             let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
+            update(id) {
+                $0.stage = t("lädt \(model.name)", "loading \(model.name)")
+                if !alreadyLoaded { $0.phase = "load" }
+            }
             try await Flux2Engine.shared.load(model) { fraction, message in
                 Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
             }
@@ -1637,9 +1725,12 @@ actor JobQueue {
                 MemoryLog.release()
             }
             MemoryLog.line("before SeedVR2")
-            update(id) { $0.stage = label + " · " + t("lädt SeedVR2", "loading SeedVR2") }
             let loadStart = Date()
             let wasLoaded = await SeedVR2Engine.shared.isLoaded
+            update(id) {
+                $0.stage = label + " · " + t("lädt SeedVR2", "loading SeedVR2")
+                if !wasLoaded { $0.phase = "load" }
+            }
             try await SeedVR2Engine.shared.load(dir)
             let loadSeconds = wasLoaded ? 0 : Date().timeIntervalSince(loadStart)
             MemoryLog.line("SeedVR2 loaded")
@@ -1690,6 +1781,7 @@ actor JobQueue {
         let parts = [req.repair ? repaired : nil, req.colorize ? t("eingefärbt", "colorized") : nil,
                      req.sharpen ? t("geschärft", "sharpened") : nil].compactMap { $0 }
         let label = t("Foto ", "Photo ") + parts.joined(separator: ", ")
+        setPhase(id, "save", stage: t("speichert", "saving"))
         for out in outputs {
             var meta = out.meta
             meta["seconds"] = .object(out.seconds)

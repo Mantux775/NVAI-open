@@ -55,6 +55,8 @@ def current() -> dict[str, Any]:
     models = config.COMFY_MODEL_DIR if config.MODEL_DIR_OVERRIDE else config.COMFY_ROOT / "models"
     return {
         "data_dir": str(config.DATA_DIR),
+        # Für das MCP über stdio, das einen anderen Datenordner haben kann als der Server (mcp_server._asset_dir)
+        "assets_dir": str(config.ASSET_DIR),
         "models_dir": str(models),
         "models_dir_set": bool(config.MODEL_DIR_OVERRIDE),
         "data_free_gb": _free_gb(config.DATA_DIR),

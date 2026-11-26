@@ -70,6 +70,20 @@ With **a face from a photo**, every start image is made from the portrait, and e
 again so that the face holds through the whole clip. A moving background (water, smoke) then stays rather still. The
 photo stays on your computer.
 
+## The step bar
+
+Above the workspace a bar shows where the project stands: Idea, Scenes, Start images, Videos, Edit, Export, each with a
+short count such as "3 of 4". The green button next to it takes the next step and says how long it takes on your
+hardware, for example "Generate start images for scenes 1 and 2 ≈ 5:00" or "Put everything into the edit · 2 clips".
+Below it, a row of scene cards shows the state of each scene: start image missing, waiting for scene 3, running with
+the time left, choose a take, done, or **outdated**: a chained scene whose source got a new take still begins with the
+old ending, and its properties offer "Render again" or "Keep as is". Right-click or × removes a card (Ctrl+Z brings it
+back), dragging reorders the scenes of a lane. The ▾ button behind "Export" folds the whole bar away; the card row
+starts folded.
+
+While jobs run, the job list at the bottom right of every tab shows what runs, what waits and what is done, with the
+time left; "Show" jumps to the result.
+
 ## Step by step
 
 1. **New project:** "+" next to the project list at the top left, then "New project". It starts at 1920 × 1080 and
@@ -89,7 +103,8 @@ photo stays on your computer.
    before. An image dropped onto the scene itself still becomes a take. "References and extras" below it (since 0.5.40)
    offers what the chosen model can do, as under Generate: **reference images** (FLUX 3, Qwen-Image-Edit, Krea 2 as a
    style template, Wan VACE), an **end image** or a loop and a **layout video** with LTX-2.5, a sound description with
-   Kandinsky 6. Drag them from the media list or pick them from the project folder; a click removes one. On the Mac
+   Kandinsky 6. Since 0.5.41 also the quality, 48 fps and slow motion of an LTX-2.5 scene, its LoRAs and its seed.
+   Drag them from the media list or pick them from the project folder; a click removes one. On the Mac
    (since 0.5.15) still images offer reference images with FLUX.2 Klein.
 
    ![References and extras of a scene with FLUX 3](images/studio-extras.jpg)
@@ -99,7 +114,9 @@ photo stays on your computer.
    chained scene waits for the one before it, a voice scene for the voice it
    takes over. While it runs, the bar next to "Conform" shows the scene being made,
    its percentage and how many are done (for example "Far view 63 % · 2/5"). "✕ Cancel" (click twice) stops every
-   running and queued job of the project; finished takes stay.
+   running and queued job of the project; finished takes stay. To make a scene again, select it: the button then reads
+   "Generate selected", and the scene's properties offer "Generate again". Every take stays under "Takes" in the
+   properties; a click there picks the one that Conform puts into the edit.
 5. **Conform**, then **edit:** with Selection (V) drag clips and their edges, with the Razor (C) click to cut; Ctrl+K
    cuts at the playhead. A right-click anywhere shows what you can do.
 6. **Export:** pick a format and click "Export". The video also lands in the History.

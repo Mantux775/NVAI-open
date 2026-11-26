@@ -136,9 +136,12 @@ cat > "$OUT/dmg/Getting Started.txt" <<'TXT'
 NVAI-open for Mac: Getting Started
 
 1. Drag "NVAI-open" (and the PhotoCraft add-on app, if included) into the Applications folder.
-2. Open NVAI-open. Under "Models", download FLUX.2 Klein (about 9 to 11 GB, once).
-   With 24 GB of memory or more pick the 8-bit version, otherwise the 4-bit version.
-3. Under "Generate", enter a prompt. The first image takes longer because the model loads.
+2. Open NVAI-open. On the first start it asks what you want to make (a video, an image, music or
+   a sound, an old photo) and downloads exactly the models for it, with size and time. Or download
+   them yourself under "Models": FLUX.2 Klein (about 9 to 11 GB, once), with 24 GB of memory or more
+   the 8-bit version, otherwise the 4-bit version.
+3. Under "Generate", enter a prompt. The button shows how long it takes on your Mac; the first image
+   takes longer because the model loads.
 4. Only a few words? Click "✨ Expand prompt": the text encoder of FLUX.2 Klein writes a full
    image description from them. Read it and delete what was invented; "Back to my prompt" restores yours.
 5. Old photos: under "Generate", switch to "Restore photo", pick the photo or drag it in, and choose
@@ -181,10 +184,12 @@ cat > "$OUT/dmg/Erste Schritte.txt" <<'TXT'
 NVAI-open für Mac: Erste Schritte
 
 1. „NVAI-open“ (und, falls enthalten, „NVAI-open für PhotoCraft“) in den Ordner „Programme“ ziehen.
-2. NVAI-open öffnen. Unter „Modelle“ FLUX.2 Klein laden (rund 9 bis 11 GB, einmalig).
-   Ab 24 GB Arbeitsspeicher die 8-Bit-Fassung wählen, darunter die 4-Bit-Fassung.
-3. Unter „Generieren“ einen Prompt eingeben. Das erste Bild dauert länger, weil das
-   Modell geladen wird.
+2. NVAI-open öffnen. Beim ersten Start fragt es, was du machen willst (ein Video, ein Bild, Musik
+   oder ein Geräusch, ein altes Foto), und lädt genau die Modelle dafür, mit Größe und Zeit. Oder
+   selbst unter „Modelle“ laden: FLUX.2 Klein (rund 9 bis 11 GB, einmalig), ab 24 GB Arbeitsspeicher
+   die 8-Bit-Fassung, darunter die 4-Bit-Fassung.
+3. Unter „Generieren“ einen Prompt eingeben. Der Knopf zeigt, wie lange es auf deinem Mac dauert;
+   das erste Bild dauert länger, weil das Modell geladen wird.
 4. Nur ein paar Worte? „✨ Prompt ausbauen“ klicken: Der Text-Encoder von FLUX.2 Klein schreibt
    daraus eine volle Bildbeschreibung. Lesen und Erfundenes streichen; „Zurück zum eigenen Prompt“ holt deinen
    Text zurück.

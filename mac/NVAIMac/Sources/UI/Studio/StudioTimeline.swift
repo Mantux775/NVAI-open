@@ -174,7 +174,7 @@ struct StudioTimeline: View {
             }))
             .simultaneousGesture(bandGesture(section, p: p))
             .dropDestination(for: String.self) { ids, location in
-                guard let track, let id = ids.first else { return false }
+                guard let track, let id = ids.first, !id.hasPrefix(StudioFlowBar.dragPrefix) else { return false }
                 let start = model.snapped(model.ticks(atX: location.x))
                 model.snapLine = nil
                 Task {
@@ -600,7 +600,7 @@ struct SceneBlock: View {
             Task { await model.batch(group.map { ("scene.update", ["id": .string($0.id), "start": .int($0.start + d)]) }) }
         })
         .dropDestination(for: String.self) { ids, _ in
-            guard let id = ids.first else { return false }
+            guard let id = ids.first, !id.hasPrefix(StudioFlowBar.dragPrefix) else { return false }
             Task {
                 await model.run("scene.take", ["id": .string(scene.id), "asset_id": .string(id)])
                 model.select(.scene, scene.id)

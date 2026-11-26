@@ -18,6 +18,7 @@ die Anfrage von Hand.
 | [black-forest-labs/flux-3-image-klein-comfy](https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy) | FLUX 3 Image Klein, jede Fassung (NVFP4, INT8, bf16 für AMD Radeon, Base) |
 | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) | LTX-2.5, Video mit Ton (NVFP4, INT8) |
 | [Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler) | optional: „Höchste Qualität (DFR)“ bei LTX-2.5 |
+| [Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render) | optional: „Layout-Video“ (Layout to Render) bei LTX-2.5 |
 | [Lightricks/LTX-2.5-22b-LoRA-Cinemagraph](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Cinemagraph) | optionale LoRA: Cinemagraph (stehendes Bild, einzelne Teile bewegen sich) |
 | [Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control) | optionale LoRA: Zeitlupe |
 

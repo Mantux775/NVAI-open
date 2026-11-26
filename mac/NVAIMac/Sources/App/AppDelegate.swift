@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 ///               [--review-package <ordner>] [--review-script <js>] [--review-save-dir <ordner>] [--review-shot <png>]
 ///               (Ton-Forensik, siehe `ReviewTest` in ForensicView.swift)
 ///               [--studio-select <id>]   (im Studio: cl_ Clip, sc_ Szene, mk_ Marker, ast_ Material als Quelle)
+///               [--studio-focus sc_… [--studio-field prompt|takes|way|state]]   (Szene wählen wie der große Knopf)
+///               [--flow-welcome [--flow-intent video|image|audio|photo]] [--flow-dock]
+///               [--flow-prompt <text> [--flow-submit [--flow-mid-snapshot <png> --flow-mid-after <s>]]]
+///               (NVAI im Fluss, seit Mac 1.0: Willkommen, Auftragsleiste; Prompt der Aufgabe aus --tab vorgeben, den
+///               großen Knopf drücken, mitten im Lauf und nach dem Ende fotografieren, Phasen ins Protokoll)
 ///     Optionen der Form „-schlüssel wert“ (etwa -serverPort) verhindern unter macOS 27 das Fenster: vorher per
 ///     `defaults write` setzen.
 ///     NVAI-open --restore-kind <ordner> --kind-out <json> [--quit]
@@ -132,6 +137,48 @@ enum LaunchOptions {
             if tab == "audio" { AppState.shared.showAudio = true }
             if tab == "video" { AppState.shared.showVideo = true }
             if tab == "speech" { AppState.shared.showSpeech = true }
+            // NVAI im Fluss (seit Mac 1.0): Willkommen auch mit geladenen Modellen, Auftragsleiste offen
+            if args.contains("--flow-welcome") {
+                AppState.shared.forceWelcome = true
+                AppState.shared.updateWelcome()
+                if let intent = value("--flow-intent") { UserDefaults.standard.set(intent, forKey: "flow.welcome.intent") }
+            }
+            if args.contains("--flow-dock") { AppState.shared.dockOpen = true }
+            if let text = args.firstIndex(of: "--flow-prompt").flatMap({ $0 + 1 < args.count ? args[$0 + 1] : nil }) {
+                // Prompt der offenen Aufgabe vorgeben und auf Wunsch den großen Knopf drücken (Phasen, Ergebnis, nächste Schritte)
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                AppState.shared.flowPrefill = text
+                if args.contains("--flow-submit") {
+                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    AppState.shared.flowSubmit += 1
+                    let t0 = Date()
+                    if let mid = value("--flow-mid-snapshot") {
+                        try? await Task.sleep(nanoseconds: UInt64((Double(value("--flow-mid-after") ?? "") ?? 6) * 1e9))
+                        write(mid, sheet: false)
+                    }
+                    // in einen anderen Reiter wechseln: Wird der Auftrag dort fertig, erscheint der Hinweis „… ist fertig“
+                    if let other = value("--flow-switch-tab") { AppState.shared.selectedTab = other }
+                    // auf das Ende des Auftrags warten (höchstens 15 min), Phasen ins Protokoll
+                    var seen = ""
+                    while Date().timeIntervalSince(t0) < 900 {
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        guard let id = AppState.shared.generateJobID, let job = AppState.shared.jobs.first(where: { $0.id == id }) else { continue }
+                        let now = "\(job.status) \(job.phase)"
+                        if now != seen {
+                            AppLog.info(String(format: "Flow test: %.1f s %@ %@ %.2f %@", Date().timeIntervalSince(t0), job.status, job.phase,
+                                               job.progress, job.stage))
+                            seen = now
+                        }
+                        if job.isFinished { break }
+                    }
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                }
+            }
+            if tab == "studio", let id = value("--studio-focus") {
+                // Studio erst laden lassen, dann eine Szene mit Feld in den Blick holen (wie der große Knopf)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                StudioModel.shared.focus(id, field: value("--studio-field"))
+            }
             if tab == "player" { AppState.shared.snapshotPlayVideo = AppState.shared.videos.first }
             if tab == "studio", let pick = value("--studio-select") {
                 // Studio erst laden lassen, dann auswählen (Prüfstand für Eigenschaften und Quellansicht)

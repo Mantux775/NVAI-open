@@ -283,10 +283,36 @@ def _pending(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _asset_paths(assets: list[dict[str, Any]]) -> list[str]:
-    from . import config
+# Asset-Ordner des Servers: Ein über stdio gestartetes MCP kann einen anderen Datenordner haben als der Server (aus dem
+# Repo gestartet, während die Installation oder ein Testserver mit NVAI_DATA_DIR rechnet); Pfade aus dem eigenen
+# config.ASSET_DIR zeigten dann ins Leere. Deshalb einmal beim Server nachfragen (GET /api/settings/folders, dieselbe
+# Angabe wie „Modelle → Speicherorte“). Das MCP über HTTP läuft im Server selbst (main._McpHttp setzt IN_SERVER) und
+# nimmt wie bisher config.ASSET_DIR.
+IN_SERVER = False
+_server_asset_dir: Path | None = None
 
-    return [str(config.ASSET_DIR / a["filename"]) for a in assets]
+
+async def _asset_dir() -> Path:
+    """Wo der Server seine Dateien ablegt; antwortet er nicht, der eigene Ordner (und beim nächsten Mal neu gefragt)."""
+    global _server_asset_dir
+    if IN_SERVER:
+        return config.ASSET_DIR
+    if _server_asset_dir is None:
+        try:
+            async with await _client() as c:
+                r = await c.get("/api/settings/folders")
+            info = r.json() if r.status_code == 200 else {}
+            found = info.get("assets_dir") or (str(Path(info["data_dir"]) / "assets") if info.get("data_dir") else "")
+            if found:
+                _server_asset_dir = Path(found)
+        except (httpx.HTTPError, ValueError, AttributeError):
+            pass
+    return _server_asset_dir or config.ASSET_DIR
+
+
+async def _asset_paths(assets: list[dict[str, Any]]) -> list[str]:
+    base = await _asset_dir()
+    return [str(base / a["filename"]) for a in assets]
 
 
 async def _model_features(kind: str, model_id: str | None) -> dict[str, Any]:
@@ -348,7 +374,7 @@ async def _job_output(job: dict[str, Any]) -> dict[str, Any]:
     out = {
         "ok": True,
         "job_id": job["id"],
-        "files": _asset_paths(assets),
+        "files": await _asset_paths(assets),
         "asset_ids": [a["id"] for a in assets],
         "urls": [f"{API}{a['url']}" for a in assets],
         "kind": first.get("kind"),
@@ -359,9 +385,8 @@ async def _job_output(job: dict[str, Any]) -> dict[str, Any]:
     # Verlustfreie Kopien der Videos (FFV1/MKV, meta.master): Ausgangsmaterial fuer Schnitt und Export
     masters = [a["meta"]["master"] for a in assets if (a.get("meta") or {}).get("master")]
     if masters:
-        from . import config
-
-        out["lossless_files"] = [str(config.ASSET_DIR / name) for name in masters]
+        base = await _asset_dir()
+        out["lossless_files"] = [str(base / name) for name in masters]
     # FLUX 3: die Bildbeschreibung, die der Upsampler aus dem Prompt gemacht hat. Stimmt
     # am Bild etwas nicht, zeigt sie, ob es schon in der Beschreibung fehlte.
     if meta.get("caption"):
@@ -1212,8 +1237,8 @@ async def generate_video(
             keyframes plus a detail IC-LoRA). Measured at 1080p: faces and fabric stay sharp over
             the whole clip (face 2.5 to 3 times the edge sharpness of 'standard' after 2 s), at
             about three times the time (5 s: 786 instead of 241 s). Empty = 'dfr' when the model preselects
-            it and features.dfr is true, else 'standard'; tell the user the time. Not with an end image or a
-            loop (empty then means 'standard').
+            it and features.dfr is true, else 'standard'; tell the user the time. Not with an end image, a
+            loop or guide_asset_id (empty then means 'standard').
         temporal_upscale: LTX-2.5 with quality='dfr': double frame rate at the same
             duration (24 -> 48 fps).
         auto_duration: LTX-2.5: the model picks the length from the described action
@@ -1267,8 +1292,8 @@ async def generate_video(
     """
     d = await _video_defaults(model_id)
     if quality is None:
-        # DFR geht nicht mit Endbild oder Schleife; wer eines gibt, bekommt Standard
-        quality = "standard" if end_image_asset_id or loop else d["quality"]
+        # DFR geht nicht mit Endbild, Schleife oder Layout-Video; wer eines gibt, bekommt Standard (wie im Studio)
+        quality = "standard" if end_image_asset_id or loop or guide_asset_id else d["quality"]
     payload = {
         "prompt": prompt, "negative_prompt": negative_prompt,
         "width": width or d["width"], "height": height or d["height"], "frames": frames or d["frames"],
@@ -1451,8 +1476,6 @@ async def list_assets(kind: str | None = None, limit: int = 20, folder: str | No
         folder: Only this folder: '' = the general history, 'Studio/<project name>' = a project's folder;
             None = everything.
     """
-    from . import config
-
     params: dict[str, Any] = {"limit": limit}
     if kind:
         params["kind"] = kind
@@ -1460,10 +1483,11 @@ async def list_assets(kind: str | None = None, limit: int = 20, folder: str | No
         params["folder"] = folder
     async with await _client() as c:
         assets = (await c.get("/api/assets", params=params)).json()
+    base = await _asset_dir()
     return [
         {
             "id": a["id"], "kind": a["kind"], "prompt": a["prompt"], "model_id": a["model_id"],
-            "path": str(config.ASSET_DIR / a["filename"]), "folder": a.get("folder", ""),
+            "path": str(base / a["filename"]), "folder": a.get("folder", ""),
             "created_at": a["created_at"],
         }
         for a in assets
@@ -1514,15 +1538,13 @@ async def copy_asset(asset_id: str, destination: str) -> dict[str, Any]:
     """
     import shutil
 
-    from . import config
-
     async with await _client() as c:
         r = await c.get(f"/api/assets/{asset_id}")
         if r.status_code >= 400:
             return {"ok": False, "error": "Asset not found"}
         asset = r.json()
 
-    src = config.ASSET_DIR / asset["filename"]
+    src = (await _asset_dir()) / asset["filename"]
     dest = Path(destination)
     if dest.is_dir() or not dest.suffix:
         dest.mkdir(parents=True, exist_ok=True)
@@ -1570,7 +1592,10 @@ async def studio_create(name: str, width: int = 1920, height: int = 1080, fps: i
 async def studio_get(project_id: str, conform_plan: bool = False) -> dict[str, Any]:
     """A Studio project in compact form: scenes (status empty/running/done/error, take, error, hints), markers (kind,
     name, comment, params, done), tracks (hidden, muted), clips (track, start_s, end_s, speed, transition) and the
-    edit length. Finished generation jobs are already entered as takes. Markers of kind 'ai' that are not done are
+    edit length. Finished generation jobs are already entered as takes. A scene with 'stale' continues an earlier
+    scene but its take began from an older take of that scene (stale.reason says which): regenerate it with
+    studio_generate, or, if the user wants to keep it, scene.update params.chain_keep = {take, source} with the take ids
+    from 'stale' (studio_command). Markers of kind 'ai' that are not done are
     tasks the user left for you: carry them out, then set them done with marker.update. 'folder' is the project's
     own folder on disk (assets/Studio/<name>, renamed with the project): its takes, exports and last frames land
     there, and list_assets(folder='Studio/<name>') lists them. Start or reference images for the project: pass
@@ -1604,7 +1629,9 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
                     audio_asset_id = a given sound such as an approved spoken line ...)
       scene.update  id + any of title, prompt, kind, model_id, lane, chain_from (scene id this one continues:
                     LTX-2.5 carries its last 25 frames over, otherwise its last frame becomes the start image),
-                    params (merged), start_s, duration_s
+                    params (merged), start_s, duration_s. LTX-2.5 options (quality, temporal_upscale,
+                    motion_speed, end image, loop, given sound, audio_from) stay in params after a switch to
+                    another model but are not used with it
       scene.delete  id
       scene.take    id, asset_id: choose a take or add any asset as a take
       marker.add    at_s, kind (place|transition|chain|audio|ai|note), name, comment, duration_s, params
@@ -1662,14 +1689,17 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
 @server.tool()
 async def studio_generate(project_id: str, scene_ids: list[str] | None = None, wait: bool = True,
                           ctx: Context | None = None) -> dict[str, Any]:
-    """Generates scenes with the existing models: video scenes with the active video model (LTX-2.5: frames from
-    the duration at 24 fps, 1280 x 704 or 1920 x 1088 depending on the project), still images with the active image
-    model, music and sound with the active audio model. Without scene_ids it generates every scene without a take.
+    """Generates scenes with their own model. scene.add preselects the best downloaded one per lane (video LTX-2.5,
+    voice Qwen3-TTS, music Stable Audio 3, sound Stable Audio Open); still images and scenes with model_id null use
+    the active model of their kind. LTX-2.5: frames from the duration at 24 fps, 1280 x 704 or 1920 x 1088 depending
+    on the project. Voice scenes are spoken with Qwen3-TTS: the prompt is the text, the voice comes from the scene's
+    character or its params (voice, voice_from, voice_asset_id), and the scene takes the length of its take. Without
+    scene_ids it generates every scene without a take.
     A scene with chain_from (or behind a 'chain' marker) continues the earlier scene: with LTX-2.5 it starts with its
     last 25 frames (latent chain; edit.conform then lays the take 25 frames earlier and dissolves over them), with an
     end image, a loop or another model with its last frame. If the earlier scene is generated in the same run, the
-    chained scene has status 'waiting' and follows automatically. The voice lane
-    has no text-to-speech yet: add an audio file as a take instead.
+    chained scene has status 'waiting' and follows automatically; so do voice scenes with voice_from and video scenes
+    with audio_from. If that scene fails or is cancelled, the waiting one gets an error instead of a take.
 
     Args:
         project_id: The project.
@@ -1731,7 +1761,7 @@ async def studio_export(project_id: str, preset: str = "youtube-1080p", ctx: Con
         return {"ok": False, "error": result.get("error") or result["status"]}
     async with await _client() as c:
         assets = (await c.get(f"/api/jobs/{job['id']}/assets")).json()
-    return {"ok": True, "files": _asset_paths(assets), "asset_ids": [a["id"] for a in assets],
+    return {"ok": True, "files": await _asset_paths(assets), "asset_ids": [a["id"] for a in assets],
             "meta": assets[0].get("meta", {}) if assets else {}}
 
 def main() -> None:
