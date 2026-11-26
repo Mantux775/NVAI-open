@@ -78,7 +78,7 @@ deiner Hardware dauert, etwa „Startbilder für Szene 1 und 2 erzeugen ≈ 5:00
 2 Clips“. Darunter zeigt eine Reihe Szenenkarten den Zustand jeder Szene: Startbild fehlt, wartet auf Szene 3, rechnet
 mit Restzeit, Take wählen, fertig oder **veraltet**: Eine Anschluss-Szene, deren Vorlage einen neuen Take bekam,
 beginnt noch mit dem alten Ende, und ihre Eigenschaften bieten „Neu rechnen“ oder „So lassen“. Rechtsklick oder ×
-entfernt eine Karte (Strg+Z holt sie zurück), Ziehen sortiert die Szenen einer Bahn um. Der Knopf ▾ hinter „Exportieren“
+entfernt eine Karte (Strg+Z holt sie zurück), Ziehen sortiert die Szenen einer Bahn um. Der Klappknopf (⌄) hinter „Exportieren“
 klappt die ganze Leiste weg; die Kartenreihe startet zugeklappt.
 
 Während Aufträge laufen, zeigt die Auftragsleiste unten rechts in jedem Reiter, was läuft, was wartet und was fertig

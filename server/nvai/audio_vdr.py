@@ -1,4 +1,4 @@
-"""VDR-Aufzeichnungen im Bereich „Audio“ (seit 17.11.2026): der Export eines Voyage Data Recorders (Furuno VR-7000,
+"""VDR-Aufzeichnungen im Bereich „Audio“ (seit 17.11.2026): der Export eines Voyage Data Recorders (Ship Blackbox,
 Ordner „VDR Data files“) wird ein Projekt mit einer Mono-Spur je Eingang (Funk, Mikrofone; 16 kHz), Daten
 (Navigation, Alarme, Digital/Analog, AIS: data/*.json), Radar- und ECDIS-Bildern (images/) und den seriellen
 Rohdaten, die direkt aus dem Export gelesen werden. Gerechnet wird in vdr.py als eigener Prozess (wie audio_tools.py),

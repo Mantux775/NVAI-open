@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import zlib
 
 /// Radar- und ECDIS-Bilder eines VDR-Exports (seit 0.5.11), wie `task_images` in `server/nvai/vdr.py`: je Quelle nach
-/// images/<quelle>/<block>.<png|jpg>. PNG und JPEG bleiben unverändert (der VR-7000 legt „image/bmp“ als PNG ab); echte
+/// images/<quelle>/<block>.<png|jpg>. PNG und JPEG bleiben unverändert (der Schreiber legt „image/bmp“ als PNG ab); echte
 /// BMP und rohe Pixel werden PNG, außer das PNG wird mehr als dreimal so groß wie ein JPEG mit Qualität 92.
 enum VDRImages {
     struct Stats {

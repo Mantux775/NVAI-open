@@ -1,6 +1,6 @@
 import Foundation
 
-/// „Neuer Fall“ aus einem VDR-Export (Furuno VR-7000, Ordner „VDR Data files“; seit 0.5.11), wie `cmd_import` in
+/// „Neuer Fall“ aus einem VDR-Export (Ship Blackbox, Ordner „VDR Data files“; seit 0.5.11), wie `cmd_import` in
 /// `server/nvai/vdr.py` und das Projekt aus `audio_vdr.py`, im Format des Prüfpakets: je Toneingang eine Mono-Spur
 /// (Spur-IDs v_vhf1, v_mic1 … wie unter Windows; Original 16 Bit, AAC, Wellenform, Spektrogramm, Aktivität), dazu
 /// data/vdr.json, series.json, events.json, ais.json, images.json, levels.json, act_<Spur>.json und die Radar-/ECDIS-

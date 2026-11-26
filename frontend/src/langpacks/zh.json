@@ -952,7 +952,7 @@
  "Load {0} more": "再加载 {0} 个",
  "Loading 3D preview…": "正在加载 3D 预览...",
  "Loading …": "加载中 …",
- "Loads the data of a voyage data recorder (VDR, Furuno VR-7000 first) with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.": "加载航行数据记录仪（VDR，目前首先支持 Furuno VR-7000）的数据及其记录的全部内容：每个麦克风和无线电频道各成一条轨道，以及艏向、航速、舵、主机、风、水深、警报、门和跳板、AIS、雷达和 ECDIS 图片以及校验和。源文件只会被读取，绝不会被修改。",
+ "The VDR import (Ship Blackbox) loads the data of a voyage data recorder with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.": "VDR 导入（Ship Blackbox）加载航行数据记录仪的数据及其记录的全部内容：每个麦克风和无线电频道各成一条轨道，以及艏向、航速、舵、主机、风、水深、警报、门和跳板、AIS、雷达和 ECDIS 图片以及校验和。源文件只会被读取，绝不会被修改。",
  "Location": "存储位置",
  "Log": "日志",
  "Long recordings": "长录音",

@@ -41,6 +41,16 @@ interface Props {
   onReorder: (lane: string, ids: string[]) => void
 }
 
+/** Winkel der Klappknöpfe (Leiste hinter „Exportieren“ und ihre Kartenreihe): nach rechts, wenn eingeklappt, nach
+ *  unten, wenn offen (Nutzer 26.11.2026: „ja winkel nehmen“; das Dreieck ▶ sah eingeklappt aus wie der Abspielknopf). */
+export function FoldChevron({ open }: { open: boolean }) {
+  return (
+    <svg className="sf-fold-arrow" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d={open ? 'M3.5 6 8 10.5 12.5 6' : 'M6 3.5 10.5 8 6 12.5'} />
+    </svg>
+  )
+}
+
 export function FlowBar({ p, models, active, selectedId, startRuns, jobProgress, exportInfo, open, onToggle, onSelect, onNext, onAddScene, onMenu, onDelete, onReorder }: Props) {
   const jobs = useJobs()
   const progress = (s: StudioScene): number | null => {
@@ -78,9 +88,9 @@ export function FlowBar({ p, models, active, selectedId, startRuns, jobProgress,
   return (
     <div className="sf-flow">
       <div className="sf-top">
-        <button type="button" className="sf-fold" onClick={onToggle} aria-expanded={open}
+        <button type="button" className="btn small sf-fold" onClick={onToggle} aria-expanded={open}
           title={open ? t('Szenenreihe einklappen', 'Collapse the scene row') : t('Szenenreihe zeigen', 'Show the scene row')}>
-          {open ? '▾' : '▸'}
+          <FoldChevron open={open} />
         </button>
         <ol className="flow-rail" aria-label={t('Stand des Projekts', 'Project progress')}>
           {rail.map((r, i) => (

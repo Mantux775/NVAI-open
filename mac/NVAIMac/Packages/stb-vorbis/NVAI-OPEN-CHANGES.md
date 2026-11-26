@@ -6,7 +6,7 @@ choice (text at the end of the file and in `LICENSE`). The file is **unchanged**
 (a C target with `STB_VORBIS_NO_PULLDATA_API`: push API only, no stdio) and `include/StbVorbis.h`, which includes the
 header part of the original file for Swift.
 
-Used by the audio forensics of NVAI-open for Mac to read VDR exports (Furuno VR-7000): every 15 s block holds one Ogg
+Used by the audio forensics of NVAI-open for Mac to read VDR exports (Ship Blackbox): every 15 s block holds one Ogg
 Vorbis file per channel pair, cut from one continuous encoder, so one decoder runs across all files
 (`Sources/Forensic/VDROgg.swift`). The Swift side rewrites the audio pages into one ordinary Ogg stream (page numbers,
 summed granule positions, no BOS/EOS flags in between, new CRC). Two points that matter for this version:

@@ -1,7 +1,7 @@
 // swift-tools-version: 5.9
 //
 // stb-vorbis — der Ogg-Vorbis-Dekoder stb_vorbis von Sean Barrett (MIT oder Public Domain, nach Wahl) als
-// C-Bibliothek für NVAI-open für Mac: Ton der VDR-Exporte (Furuno VR-7000) fortlaufend über alle Blockdateien
+// C-Bibliothek für NVAI-open für Mac: Ton der VDR-Exporte (Ship Blackbox) fortlaufend über alle Blockdateien
 // dekodieren (Push-API). Die Datei Sources/StbVorbis/stb_vorbis.c ist unverändert, siehe NVAI-OPEN-CHANGES.md.
 import PackageDescription
 

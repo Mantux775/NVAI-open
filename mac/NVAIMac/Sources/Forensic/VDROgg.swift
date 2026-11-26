@@ -4,7 +4,7 @@ import StbVorbis
 /// Ogg-Seiten der VDR-Tondateien und ein Vorbis-Dekoder, der über alle Blockdateien eines Kanalpaars durchläuft
 /// (seit 0.5.11), wie `task_audio` in `server/nvai/vdr.py`.
 ///
-/// Der VR-7000 kodiert je Datei-Nummer (audio0, audio1 …) EINEN durchlaufenden Vorbis-Strom und schneidet ihn alle 15 s an
+/// Der Schreiber kodiert je Datei-Nummer (audio0, audio1 …) EINEN durchlaufenden Vorbis-Strom und schneidet ihn alle 15 s an
 /// einer Seitengrenze; jede Datei bekommt die drei Kopfpakete neu, die Granule-Positionen beginnen je Datei neu.
 /// Einzeln dekodiert fehlen je Datei die ersten 512 Proben (das erste Paket braucht das letzte der Vordatei). Darum
 /// bekommt ein Dekoder (stb_vorbis, Push-API) nur die Kopfseiten der ersten Datei und danach die Tonseiten aller

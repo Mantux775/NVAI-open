@@ -1,4 +1,4 @@
-"""VDR-Aufzeichnungen (Voyage Data Recorder) für den Bereich „Audio“ lesen, seit 17.11.2026: Furuno VR-7000, Export
+"""VDR-Aufzeichnungen (Voyage Data Recorder, Ship Blackbox) für den Bereich „Audio“ lesen, seit 17.11.2026: Export
 „VDR Data files“. Läuft als eigener Prozess wie audio_tools.py (python -I vdr.py <befehl> <einstellungen.json>,
 Fortschritt und Ergebnis als JSON-Zeilen); der Server nutzt die reinen Python-Teile (inspect, raw_lines) direkt, die
 Ton- und Bildteile laden numpy und PyAV erst beim Gebrauch.
@@ -440,7 +440,7 @@ def inspect(path: str | Path, track: int | None = None) -> dict[str, Any]:
         size += f.stat().st_size
     missing_audio = [c["file"] for c in summ["audio"] if first is not None and c["file"] not in first]
     return {
-        "product": summ["system"].get("vdr_type") or "VDR", "format": "Furuno VR-7000 (VDR Data files)",
+        "product": summ["system"].get("vdr_type") or "VDR", "format": "VDR-Import (Ship Blackbox)",
         "folder": str(ex["folder"]), "layout": ex["layout"], "track": ex["track"], "tracks": ex["tracks"],
         "blocks": len(ex["blocks"]), "first_id": ex["blocks"][0]["id"], "last_id": ex["blocks"][-1]["id"],
         "start_utc": ex["t0"], "end_utc": ex["end"], "start": _utc(ex["t0"]), "end": _utc(ex["end"]),
@@ -1430,7 +1430,7 @@ def _dump(path: Path, data: Any) -> None:
 # ------------------------------------------------------------------------------------------------ Bilder
 
 def task_images(job: dict[str, Any]) -> dict[str, Any]:
-    """Bilder je Quelle nach images/<quelle>/<block>.<png|jpg>: PNG und JPEG unverändert (der VR-7000 legt „image/bmp“
+    """Bilder je Quelle nach images/<quelle>/<block>.<png|jpg>: PNG und JPEG unverändert (der Schreiber legt „image/bmp“
     als PNG ab); echte BMP werden PNG, außer das PNG wird mehr als dreimal so groß wie ein JPEG mit Qualität 92."""
     out_dir = Path(job["out_dir"]) / "images"
     frames: dict[str, list[Any]] = {}

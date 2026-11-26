@@ -162,7 +162,7 @@ API_FEATURES = [
     "hardware_catalog",  # GET /api/hardware: erkannte Karte im Hardware-Katalog und typische Rechenzeit je Modell
                          # (Modelle-Seite, Generieren; seit 0.5.28)
     "audio_lab",       # /api/audio/*: Bereich „Audio“ (Stimme trennen, entrauschen, Filter, Export), seit 17.11.2026
-    "audio_vdr",       # /api/audio/vdr/* und /api/audio/projects/{pid}/vdr/*: VDR-Export (Furuno VR-7000) als Projekt
+    "audio_vdr",       # /api/audio/vdr/* und /api/audio/projects/{pid}/vdr/*: VDR-Import (Ship Blackbox) als Projekt
                        # mit Mono-Spuren, data/*.json (Reihen, Ereignisse, AIS, Bilder), Prüfsummen, Rohdaten
     "lora_train",      # /api/lora-train/*: eigene LoRAs fuer Qwen-Image-2512 trainieren (Datensaetze, Vorlage mit
                        # Qwen-Image-Edit-2511, musubi-tuner, Probebilder, Uebernehmen); Ereignis lora.changed, trained

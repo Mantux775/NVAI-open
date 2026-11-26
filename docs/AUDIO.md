@@ -70,7 +70,7 @@ microphones and radio channels, for example from a voyage data recorder.
 
 ![Audio forensics with a made-up fire alarm drill: tracks, read-along, translation track, events and notes](images/audio-forensics.jpg)
 
-- **Open a case:** a recording or a video, or the data files of a voyage data recorder (VR-7000 format). From a
+- **Open a case:** a recording or a video, or the data files of a voyage data recorder (VDR import, Ship Blackbox). From a
   recorder every microphone and radio channel becomes a track, with heading, speed, rudder, engine, wind and alarms
   next to it, and the recorder's own checksums are verified. The original stays unchanged; NVAI-open records its
   checksum.
@@ -105,7 +105,7 @@ release as a single file.
 On the Mac, NVAI-open opens review packages in its "Audio forensics" tab, with the same review app. Since NVAI-open
 for Mac 0.5.11 the Mac also makes cases itself: "New case …" takes audio or video files, every channel becomes a track,
 and uncompressed original audio stays bit-exact. "Import VDR export …" reads the data of a voyage data recorder
-(VR-7000) as on Windows, with heading, speed, alarms, AIS and radar and ECDIS pictures; before it starts, it shows the
+(Ship Blackbox) as on Windows, with heading, speed, alarms, AIS and radar and ECDIS pictures; before it starts, it shows the
 recording, its channels and the space the case will need, and it stops before the drive runs full. "Recognise speech" runs
 Whisper large-v3 (Core ML, 3.1 GB) wherever the speech finder Silero VAD hears speech, and "Translate" translates the
 blocks via English with Qwen3.5 (9B from 16 GB of memory, otherwise 4B). Everything runs on the Mac, and every block

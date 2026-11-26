@@ -354,7 +354,7 @@ Qwen3.5-9B translates via English), `GET …/transcript` (blocks with `status` d
 models, licenses, graphics card, program), `PUT …/markers {"markers": [...]}` (notes are `kind: "note"`) and
 `POST …/package {dest_dir, images, video, originals}`, which writes a review package: a folder with the review app
 NVAI-Pruefer.html, the case, the original audio as bit-exact WAV and PRUEFSUMMEN.sha256. Data files of a voyage data
-recorder (VR-7000 format) are read under `/api/audio/vdr/*`. Every block is a draft until a person checks it; never
+recorder (VDR import, Ship Blackbox) are read under `/api/audio/vdr/*`. Every block is a draft until a person checks it; never
 present the translation as certified. Measured on a 95-second demo case: spectrogram 2 s, translation track with 15
 blocks 34 s, review package 2 s.
 

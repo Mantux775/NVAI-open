@@ -30,7 +30,7 @@ import {
 } from '../api'
 import type { Downloads } from '../downloads'
 import '../flow/studio.css'
-import { FlowBar } from '../flow/studio/FlowBar'
+import { FlowBar, FoldChevron } from '../flow/studio/FlowBar'
 import { trackJob } from '../flow/jobs'
 import { presetShort, reorderStarts, sceneOrder, type ExportInfo, type FocusField, type Next, type SceneFlow, type StartRun } from '../flow/studio/logic'
 import { t } from '../i18n'
@@ -1455,10 +1455,10 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         </button>
         {/* Die ganze Leiste mit dem nächsten Schritt ein- und ausklappen, mit demselben Zeichen wie ihre Kartenreihe;
             eingeklappt nimmt sie keinen Platz (Nutzer 26.11.2026: „es soll hinter dem export button sein“) */}
-        <button type="button" className="sf-fold st-flow-fold" onClick={toggleFlow} aria-expanded={flowOpen}
+        <button type="button" className="btn small sf-fold" onClick={toggleFlow} aria-expanded={flowOpen}
           title={flowOpen ? t('Leiste mit dem nächsten Schritt einklappen', 'Collapse the bar with the next step')
             : t('Leiste mit dem nächsten Schritt zeigen', 'Show the bar with the next step')}>
-          {flowOpen ? '▾' : '▸'}
+          <FoldChevron open={flowOpen} />
         </button>
         {exporting && (
           <span className={`st-export ${exporting.status}`}>

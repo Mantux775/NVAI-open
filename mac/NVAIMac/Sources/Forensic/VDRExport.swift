@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import zlib
 
-/// VDR-Aufzeichnungen (Voyage Data Recorder, Furuno VR-7000, Export „VDR Data files“) auf dem Mac lesen (seit 0.5.11),
+/// VDR-Aufzeichnungen (Voyage Data Recorder, Ship Blackbox, Export „VDR Data files“) auf dem Mac lesen (seit 0.5.11),
 /// nach `server/nvai/vdr.py` unter Windows. Aufbau des Exports:
 ///
 ///     block.<spur>.<id>.gz  je 15 s ein tar (gzip) mit audio<n> (Ogg Vorbis, 16 kHz, Stereo = zwei Eingänge),
@@ -19,7 +19,7 @@ import zlib
 enum VDR {
     static let blockSeconds = 15
     static let sampleRate = 16000
-    static let format = "Furuno VR-7000 (VDR Data files)"
+    static let format = "VDR-Import (Ship Blackbox)"
 
     struct Block {
         var track: Int

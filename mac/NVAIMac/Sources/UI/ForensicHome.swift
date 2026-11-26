@@ -254,8 +254,8 @@ struct ForensicHome: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(running != nil)
             }
-            Text(t("Ein Fall entsteht aus Audio- oder Videodateien: Jeder Kanal wird eine Spur, der Originalton bleibt bitgenau, dazu Wellenform, Spektrogramm und Sprachaktivität. Ein VDR-Export (Schiffsdatenschreiber, zuerst Furuno VR-7000) bringt jeden Mikrofon- und Funkkanal als Spur mit, dazu Kurs, Geschwindigkeit, Alarme, AIS sowie Radar- und ECDIS-Bilder. Fälle aus NVAI-open unter Windows öffnet „Prüfpaket öffnen …“.",
-                   "A case is made from audio or video files: every channel becomes a track, the original audio stays bit-exact, plus waveform, spectrogram and speech activity. A VDR export (voyage data recorder, Furuno VR-7000 first) brings every microphone and radio channel as a track, plus heading, speed, alarms, AIS and radar and ECDIS pictures. Cases from NVAI-open on Windows open with “Open review package …”."))
+            Text(t("Ein Fall entsteht aus Audio- oder Videodateien: Jeder Kanal wird eine Spur, der Originalton bleibt bitgenau, dazu Wellenform, Spektrogramm und Sprachaktivität. Ein VDR-Import (Ship Blackbox, Schiffsdatenschreiber) bringt jeden Mikrofon- und Funkkanal als Spur mit, dazu Kurs, Geschwindigkeit, Alarme, AIS sowie Radar- und ECDIS-Bilder. Fälle aus NVAI-open unter Windows öffnet „Prüfpaket öffnen …“.",
+                   "A case is made from audio or video files: every channel becomes a track, the original audio stays bit-exact, plus waveform, spectrogram and speech activity. A VDR import (Ship Blackbox, voyage data recorder) brings every microphone and radio channel as a track, plus heading, speed, alarms, AIS and radar and ECDIS pictures. Cases from NVAI-open on Windows open with “Open review package …”."))
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 Image(systemName: store.modelsReady ? "checkmark.circle.fill" : "arrow.down.circle")

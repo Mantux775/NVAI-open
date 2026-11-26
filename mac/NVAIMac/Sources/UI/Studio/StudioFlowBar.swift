@@ -8,6 +8,21 @@ import SwiftUI
 /// Karten (Nutzer 26.11.2026: „wenn ich eine scene einfüge soll ich es auch mit rechtsklick entfernen oder mit x icon
 /// rechts oben (bei mouse over) löschen, genau so für andere elemente, dann via drag and drop schieben“): × beim
 /// Überfahren löscht, Rechtsklick zeigt „Entfernen“ und Schieben, Ziehen ordnet innerhalb der Bahn um (ein Rückgängig).
+/// Winkel der Klappknöpfe (Leiste hinter „Exportieren“ und ihre Kartenreihe). Die Knöpfe sind umrandet wie „Exportieren“
+/// und genauso hoch, der Pfeil doppelt so groß wie vorher (Nutzer 26.11.2026: „kaum zu sehen, umrande den wie einen
+/// Button (gleiche höhe wie export) und mach den pfeil doppelt so gross, auch bei der Kartenleiste“), als Winkel statt
+/// Dreieck („ja winkel nehmen“: ▶ sah eingeklappt aus wie der Abspielknopf). Der Rahmen hält den Winkel eine Textzeile
+/// hoch, damit der Knopf nicht höher wird als „Exportieren“.
+struct StudioFoldArrow: View {
+    let open: Bool
+
+    var body: some View {
+        Image(systemName: open ? "chevron.down" : "chevron.right")
+            .font(.system(size: 15, weight: .bold))
+            .frame(width: 18, height: 14)
+    }
+}
+
 struct StudioFlowBar: View {
     @EnvironmentObject var state: AppState
     @ObservedObject var model: StudioModel
@@ -31,8 +46,8 @@ struct StudioFlowBar: View {
         let scenes = StudioFlow.sceneOrder(c.p)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 8) {
-                Button { cardsOpen.toggle() } label: { Text(cardsOpen ? "▾" : "▸").font(.body.weight(.semibold)).frame(width: 18) }
-                    .buttonStyle(.borderless)
+                Button { cardsOpen.toggle() } label: { StudioFoldArrow(open: cardsOpen) }
+                    .buttonStyle(.bordered)
                     .help(cardsOpen ? t("Szenenreihe einklappen", "Collapse the scene row") : t("Szenenreihe zeigen", "Show the scene row"))
                 railView(rail, now: next.step)
                 nextButton(c, next)

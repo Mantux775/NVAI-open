@@ -557,7 +557,7 @@ class ClockReader:
 
 
 def cmd_clockalign(s: dict[str, Any]) -> dict[str, Any]:
-    """Video über die im Bild angezeigte Uhr der Aufnahme zuordnen (z. B. „System Time“ des Furuno Live Players):
+    """Video über die im Bild angezeigte Uhr der Aufnahme zuordnen (z. B. „System Time“ des Live Players):
     an Stellen alle step_s Sekunden das Bild suchen, in dem die Sekunde umspringt (±1 Bild), Punkte (Aufnahme-Zeit,
     Video-Zeit), Gerade und Restfehler. s: video, box, origin (UTC-Sekunden von t=0), step_s, out."""
     import datetime as dt

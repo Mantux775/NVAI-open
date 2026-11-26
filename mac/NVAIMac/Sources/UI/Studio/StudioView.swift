@@ -343,8 +343,8 @@ struct StudioView: View {
                 .disabled(model.project?.clips.isEmpty ?? true || exporting)
             // Die ganze Leiste mit dem nächsten Schritt ein- und ausklappen, mit demselben Zeichen wie ihre Kartenreihe
             // (Nutzer 26.11.2026: „es soll hinter dem export button sein“)
-            Button { flowOpen.toggle() } label: { Text(flowOpen ? "▾" : "▸").font(.body.weight(.semibold)).frame(width: 18) }
-                .buttonStyle(.borderless)
+            Button { flowOpen.toggle() } label: { StudioFoldArrow(open: flowOpen) }
+                .buttonStyle(.bordered)
                 .disabled(model.project == nil)
                 .help(flowOpen ? t("Leiste mit dem nächsten Schritt einklappen", "Collapse the bar with the next step")
                       : t("Leiste mit dem nächsten Schritt zeigen", "Show the bar with the next step"))

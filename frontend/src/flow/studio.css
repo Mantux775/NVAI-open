@@ -11,11 +11,17 @@
   display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(180px, 260px); gap: 8px; align-items: stretch;
   min-width: 0;
 }
-.sf-fold {
-  width: 22px; padding: 0; background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--muted);
-  cursor: pointer; font: inherit; font-size: 11px;
+/* Klappknöpfe der Leiste (hinter „Exportieren“) und ihrer Kartenreihe: umrandet wie „Exportieren“ und genauso hoch, der
+   Pfeil doppelt so groß (Nutzer 26.11.2026: „kaum zu sehen, umrande den wie einen Button (gleiche höhe wie export) und
+   mach den pfeil doppelt so gross, auch bei der Kartenleiste“), als Winkel statt Dreieck („ja winkel nehmen“: ▶ sah
+   eingeklappt aus wie der Abspielknopf). Der Winkel liegt absolut über dem Knopf; im Fluss steht nur ein unsichtbares
+   Zeichen in der Schrift von „Exportieren“, so ergibt dieselbe Zeile dieselbe Höhe. */
+.btn.sf-fold { position: relative; flex: none; align-self: center; width: 32px; }
+.btn.sf-fold::before { content: '\200b'; }
+.sf-fold-arrow {
+  position: absolute; inset: 0; width: 18px; height: 18px; margin: auto; fill: none; stroke: currentColor;
+  stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none;
 }
-.sf-fold:hover { color: var(--text); border-color: var(--accent-dim); }
 .sf-flow .flow-rail { margin: 0; padding: 0; list-style: none; }
 .sf-flow .flow-rail .step { padding: 4px 8px; gap: 1px; line-height: 1.25; font-size: 12.5px; }
 .sf-flow .flow-rail .step b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -66,8 +72,6 @@
 /* Einfügemarke: wohin die gezogene Karte käme (innen, weil die Karte überstehende Teile abschneidet) */
 .sf-cards .flow-card.sf-drop-before { box-shadow: inset 3px 0 0 var(--accent); }
 .sf-cards .flow-card.sf-drop-after { box-shadow: inset -3px 0 0 var(--accent); }
-/* Klappknopf der ganzen Leiste in der Werkzeugleiste, hinter „Exportieren“ */
-.st-toolbar .st-flow-fold { flex: none; width: 24px; height: 26px; }
 
 @media (max-width: 1100px) {
   .sf-top { grid-template-columns: auto minmax(0, 1fr) minmax(170px, 220px); }

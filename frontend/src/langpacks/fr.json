@@ -952,7 +952,7 @@
  "Load {0} more": "Charger {0} de plus",
  "Loading 3D preview…": "Chargement de l’aperçu 3D…",
  "Loading …": "Chargement …",
- "Loads the data of a voyage data recorder (VDR, Furuno VR-7000 first) with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.": "Charge les données d’un enregistreur des données du voyage (VDR, d’abord le Furuno VR-7000) avec tout ce qu’il enregistre : chaque microphone et canal radio comme piste propre, cap, vitesse, barre, machine, vent, profondeur, alarmes, portes et rampes, AIS, images radar et ECDIS ainsi que les sommes de contrôle. Les fichiers source sont seulement lus, jamais modifiés.",
+ "The VDR import (Ship Blackbox) loads the data of a voyage data recorder with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.": "L’import VDR (Ship Blackbox) charge les données d’un enregistreur des données du voyage avec tout ce qu’il enregistre : chaque microphone et canal radio comme piste propre, cap, vitesse, barre, machine, vent, profondeur, alarmes, portes et rampes, AIS, images radar et ECDIS ainsi que les sommes de contrôle. Les fichiers source sont seulement lus, jamais modifiés.",
  "Location": "Emplacement",
  "Log": "Journal",
  "Long recordings": "Enregistrements longs",

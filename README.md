@@ -8,14 +8,14 @@ A studio for whole videos with sound, plus images, speech, music and 3D models o
 
 | | |
 |---|---|
-| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-1.0.0.exe](https://github.com/Mantux775/NVAI-open/releases/download/v1.0.0/NVAI-open-Setup-1.0.0.exe) |
-| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-1.0.0.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v1.0.0/NVAI-open-1.0.0.dmg) |
+| Windows 10/11, NVIDIA, AMD Radeon or Intel | [NVAI-open-Setup-1.0.1.exe](https://github.com/Mantux775/NVAI-open/releases/download/v1.0.1/NVAI-open-Setup-1.0.1.exe) |
+| macOS 15+ on Apple Silicon, signed and notarized | [NVAI-open-1.0.1.dmg](https://github.com/Mantux775/NVAI-open/releases/download/v1.0.1/NVAI-open-1.0.1.dmg) |
 
 Install, open, pick what you want to make: NVAI-open downloads exactly the models for it, the setup brings everything else along. [Installation details](docs/INSTALL.md) · [All releases](https://github.com/Mantux775/NVAI-open/releases)
 
 ## What's new? / Was gibt's Neues?
 
-November 2026: NVAI-open 1.0.0 for Windows and the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.0))
+November 2026: NVAI-open 1.0.1 with easier-to-see fold buttons in the Studio ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.1)), after 1.0.0 for Windows and the Mac ([release notes](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.0))
 
 - **Every button says what comes next** (1.0.0) and how long it takes on your hardware; while it runs you see the phase (starting, loading, computing) and the time left. [Details](docs/STUDIO.md#step-by-step)
 - **Pick a way, see only what fits** (1.0.0): text, start image, start and end, loop, layout video or extend. A finished result offers the next steps: a video from it, 3D, variants, into the Studio.
@@ -319,7 +319,7 @@ Getestet ist sie auf meiner eigenen Hardware: Windows mit RTX 5060 Ti (16 GB) un
 
 ### Was gibt's Neues?
 
-November 2026: NVAI-open 1.0.0 für Windows und den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.0)), die erste stabile Fassung.
+November 2026: NVAI-open 1.0.1 mit besser sichtbaren Klappknöpfen im Studio ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.1)), nach 1.0.0 für Windows und den Mac ([Release-Notizen](https://github.com/Mantux775/NVAI-open/releases/tag/v1.0.0)), der ersten stabilen Fassung.
 
 - **Jeder Knopf sagt, was als Nächstes kommt** (1.0.0), und wie lange es auf deiner Hardware dauert; während es läuft, siehst du die Phase (Start, Laden, Rechnen) und die Restzeit. [Einzelheiten](docs/de/STUDIO.md#schritt-für-schritt)
 - **Einen Weg wählen, nur Passendes sehen** (1.0.0): Text, Startbild, Start und Ende, Schleife, Layout-Video oder Verlängern. Ein fertiges Ergebnis bietet die nächsten Schritte an: ein Video daraus, 3D, Varianten, ins Studio.

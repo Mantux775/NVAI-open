@@ -71,7 +71,7 @@ Aufnahmen mit mehreren Mikrofonen und Funkkanälen, etwa aus einem Schiffsdatens
 
 ![Ton-Forensik mit einer erfundenen Feueralarm-Übung: Spuren, Mitlesen, Übersetzer-Spur, Ereignisse und Notizen](../images/audio-forensics-de.jpg)
 
-- **Fall öffnen:** eine Aufnahme oder ein Video oder die Datendateien eines Schiffsdatenschreibers (Format VR-7000).
+- **Fall öffnen:** eine Aufnahme oder ein Video oder die Datendateien eines Schiffsdatenschreibers (VDR-Import, Ship Blackbox).
   Aus einem Schreiber wird jeder Mikrofon- und Funkkanal eine Spur, daneben Kurs, Geschwindigkeit, Ruder, Maschine,
   Wind und Alarme, und die Prüfsummen des Schreibers werden geprüft. Das Original bleibt unverändert; NVAI-open hält
   seine Prüfsumme fest.
@@ -108,7 +108,7 @@ Prüf-App hängt außerdem als einzelne Datei an jedem Release.
 Auf dem Mac öffnet NVAI-open Prüfpakete im Reiter „Ton-Forensik“, mit derselben Prüf-App. Seit NVAI-open für Mac
 0.5.11 legt der Mac auch selbst Fälle an: „Neuer Fall …“ nimmt Audio- oder Videodateien, jeder Kanal wird eine Spur,
 unkomprimierter Originalton bleibt bitgenau. „VDR-Export einlesen …“ liest die Daten eines Schiffsdatenschreibers
-(VR-7000) wie unter Windows, mit Kurs, Geschwindigkeit, Alarmen, AIS sowie Radar- und ECDIS-Bildern; vorher zeigt es
+(Ship Blackbox) wie unter Windows, mit Kurs, Geschwindigkeit, Alarmen, AIS sowie Radar- und ECDIS-Bildern; vorher zeigt es
 Aufzeichnung, Kanäle und den Platzbedarf des Falls und bricht ab, bevor der Datenträger voll ist. „Sprache erkennen“ lässt
 Whisper large-v3 (Core ML, 3,1 GB) dort hören, wo der Sprachfinder Silero VAD Sprache findet, und „Übersetzen“ übersetzt
 die Blöcke über Englisch mit Qwen3.5 (ab 16 GB Speicher 9B, sonst 4B). Alles läuft auf dem Mac, und jeder Block bleibt

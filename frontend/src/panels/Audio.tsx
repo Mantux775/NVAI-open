@@ -366,8 +366,8 @@ function VdrView({ st, busy, running, progress, onOpen, onCreate, onError }: {
   return (
     <div className="lt-home fx-vdr">
       <h3>🚢 {t('Forensik Player · MaintenanceViewer', 'Forensic player · MaintenanceViewer')}</h3>
-      <p className="hint">{t('Lädt die Daten eines Schiffsdatenschreibers (VDR, zuerst Furuno VR-7000) mit allem, was er aufzeichnet: jeden Mikrofon- und Funkkanal als eigene Spur, Kurs, Geschwindigkeit, Ruder, Maschine, Wind, Tiefe, Alarme, Türen und Rampen, AIS, Radar- und ECDIS-Bilder sowie die Prüfsummen. Die Quelldateien werden nur gelesen, nie verändert.',
-        'Loads the data of a voyage data recorder (VDR, Furuno VR-7000 first) with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.')}</p>
+      <p className="hint">{t('Der VDR-Import (Ship Blackbox) lädt die Daten eines Schiffsdatenschreibers mit allem, was er aufzeichnet: jeden Mikrofon- und Funkkanal als eigene Spur, Kurs, Geschwindigkeit, Ruder, Maschine, Wind, Tiefe, Alarme, Türen und Rampen, AIS, Radar- und ECDIS-Bilder sowie die Prüfsummen. Die Quelldateien werden nur gelesen, nie verändert.',
+        'The VDR import (Ship Blackbox) loads the data of a voyage data recorder with everything it records: every microphone and radio channel as its own track, heading, speed, rudder, engine, wind, depth, alarms, doors and ramps, AIS, radar and ECDIS pictures and the checksums. The source files are only read, never changed.')}</p>
       <div className="au-new">
         <input className="au-path" value={path} onChange={(e) => setPath(e.target.value)} placeholder={t('Ordner der VDR-Daten (mit block.1.….gz und Track.txt)', 'Folder of the VDR data (with block.1.….gz and Track.txt)')} />
         <button className="btn" disabled={!path.trim() || checking} onClick={inspect}>{checking ? t('prüft …', 'checking …') : t('Prüfen', 'Check')}</button>

@@ -545,7 +545,7 @@ def automix_decisions(pid: str, tid: str) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------- Video zuordnen und exportieren
 
-# Lage der Uhr „System Time“ im Furuno Live Player V5, Fenster maximiert auf 1920 × 1080 (gemessen 17.11.)
+# Lage der Uhr „System Time“ im Live Player V5, Fenster maximiert auf 1920 × 1080 (gemessen 17.11.)
 LIVEPLAYER_CLOCK = [150, 84, 156, 22]
 
 

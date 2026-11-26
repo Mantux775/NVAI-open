@@ -78,7 +78,7 @@ hardware, for example "Generate start images for scenes 1 and 2 ≈ 5:00" or "Pu
 Below it, a row of scene cards shows the state of each scene: start image missing, waiting for scene 3, running with
 the time left, choose a take, done, or **outdated**: a chained scene whose source got a new take still begins with the
 old ending, and its properties offer "Render again" or "Keep as is". Right-click or × removes a card (Ctrl+Z brings it
-back), dragging reorders the scenes of a lane. The ▾ button behind "Export" folds the whole bar away; the card row
+back), dragging reorders the scenes of a lane. The fold button (⌄) behind "Export" folds the whole bar away; the card row
 starts folded.
 
 While jobs run, the job list at the bottom right of every tab shows what runs, what waits and what is done, with the

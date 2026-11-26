@@ -83,11 +83,12 @@ enum Estimate {
 
     /// Foto restaurieren auf dem M1 (FLUX.2 Klein 4B mit dem Foto als Referenz, Sekunden je MP der Arbeitsgröße):
     /// Schäden 69 s bei 0,31 MP und 180 s bei 0,79 MP, Einfärben 67 s bei 0,31 MP und 111 s bei 0,52 MP;
-    /// „Automatisch“ fragt Qwen3.5 4B vorher (~20 s), Schärfen mit SeedVR2 ~20 s je Kachel von 384 px (25.10.2026).
+    /// „Automatisch“ fragt Qwen3.5 4B vorher (~20 s). Schärfen mit SeedVR2 3B je Kachel von 384 px: gemessen 26.11.2026
+    /// am Mac mini M1 8 GB, 512² auf 1024² in 9 Kacheln 150,4 s (16,7 s je Kachel, Spitze 6,5 GB).
     static let restoreRepairPerMP = 228.0
     static let restoreColorPerMP = 216.0
     static let restoreAutoSeconds = 20.0
-    static let sharpenTileSeconds = 20.0
+    static let sharpenTileSeconds = 16.7
 
     /// Studio-Export (VideoToolbox, H.264) am M1: 1080p 144 Bilder in 0,9 s, 216 Bilder in 1,3 s (Sekunden je Bild und MP)
     static let exportPerFrameMP = 0.003
@@ -304,7 +305,8 @@ enum Estimate {
         let repair = p["repair"]?.boolValue ?? true, colorize = p["colorize"]?.boolValue ?? false
         let sharpen = p["sharpen"]?.boolValue ?? false
         let batch = Double((repair || colorize) ? min(4, max(1, p["batch_size"]?.intValue ?? 1)) : 1)
-        let model = given(p) ?? Models.expansionModel?.id
+        // nur Schärfen rechnet SeedVR2, nicht FLUX.2 (die Schätzung nannte vorher FLUX.2)
+        let model = given(p) ?? ((repair || colorize) ? Models.expansionModel?.id : HelperModel.sharpen.id)
         guard let id = p["image_asset_id"]?.stringValue, let size = pixelSize(id) else { return JobEstimate(modelID: model) }
         let rates = await restoreRates()
         var m1 = 0.0
