@@ -62,7 +62,7 @@ It is tested on my own hardware: Windows with an RTX 5060 Ti (16 GB) and a Mac m
 - **Video with sound:** LTX-2.5 makes picture and sound in one pass, speech included: clips of up to 20 seconds, in up to 1080p.
 - **Music and sounds:** instrumental music up to 5 minutes, sound effects.
 - **Speech:** a narrator voice you describe in one sentence or take over from a recording, in 10 languages. In the Studio one speaker keeps the same voice over many lines.
-- **3D models:** from an image to a textured model for Unity, Blender or any engine.
+- **3D models:** from an image to a GLB model for Unity, Blender or any engine; with textures through TRELLIS.2, installed from source.
 - **Old photos:** remove scratches, tears and water stains, colorize, sharpen.
 - **Audio and audio forensics:** separate voices from music, speech from noise, remove one recurring sound such as an alarm, also in recordings of many hours; examine a case with a translation track and hand it over as a review package. [Details](docs/AUDIO.md)
 - **A few words are enough:** "Expand prompt" writes the full description for you.
@@ -80,6 +80,7 @@ The Studio is the first tab when NVAI-open starts. At the top you compose: scene
 - **Editing:** selection, razor and magnet with their keys, right-click menus, speed in percent, cross dissolve, dips and wipes, zoom with keyframes, video and audio tracks with eye and mute.
 - **Generating:** next to "Conform" you see which scene is being made and how far it is; "✕ Cancel" stops the run, finished takes stay.
 - **Seamless shots:** a chain marker makes a clip continue the one before it, so two shots join without a jump.
+- **References and extras:** depending on the model, a scene takes reference images, an end image or a loop, a rough layout video for camera and motion, or a description of the sound.
 - **Narrator voice:** voice scenes speak their text with Qwen3-TTS; "Same voice as" keeps one speaker over all lines, and each scene takes the length of its line.
 - **Characters:** a look from a LoRA (also one you trained yourself) and a voice in one. Picture scenes show them, voice scenes speak with their voice, and a video scene can speak a voice line with its lips.
 - **Media:** every project has its own folder for what it generates, exports and uploads. Whole projects can be packed into a ZIP file and opened on another computer.
@@ -117,7 +118,7 @@ Step by step with screenshots: [docs/PHOTO_TO_VIDEO.md](docs/PHOTO_TO_VIDEO.md)
 
 ### Video with sound
 
-LTX-2.5 by Lightricks makes picture and sound together: speech, footsteps, wind, music. Start from a text, a start image or a start and an end image, make a seamless loop, let the picture follow a sound you give it, or extend a clip you already have.
+LTX-2.5 by Lightricks makes picture and sound together: speech, footsteps, wind, music. Start from a text, a start image or a start and an end image, make a seamless loop, let the picture follow a sound you give it, let a rough layout video set camera and motion, or extend a clip you already have.
 
 ![A knight says "Hold the wall. They come at dawn.", four frames of a clip with sound](docs/images/ltx25-knight.jpg)
 
@@ -133,7 +134,7 @@ All ways and measured times: [docs/MODELS.md](docs/MODELS.md#ltx-25)
 
 ### 3D: from an image to a model
 
-Generate an image of an object and turn it into a GLB model. TRELLIS.2 paints the textures too, TripoSG builds the shape only.
+Generate an image of an object and turn it into a GLB model. TripoSG, which the setup brings along, builds the shape. TRELLIS.2 paints the textures too, but needs an installation from source ([details](docs/INSTALL.md#optional-3d-workers)).
 
 <p align="center">
   <img src="docs/images/image-to-3d-source.jpg" width="400" alt="Weathered wooden crate with iron handles, generated with FLUX 3">
@@ -236,13 +237,13 @@ Then just ask your agent: "Make a weathered wooden barrel as a 3D model and put 
 
 ### Graphics cards and uncensored models
 
-NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40. With several cards it uses the strongest one. AMD Radeon works experimentally (PyTorch with ROCm); testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
+NVAI-open picks the right model versions for your card: NVFP4 on an RTX 50, INT8 on RTX 20, 30 and 40. With several cards it uses the strongest one. Radeon cards work experimentally: from the RX 6600 up with ROCm, the RX 5000, RX 6500/6400 and older Radeons through Vulkan (on the RX 5000 and RX 6500/6400 ROCm can be chosen instead). Intel Arc cards also run through Vulkan. Testers are very welcome in [#2](https://github.com/Mantux775/NVAI-open/issues/2). Details: [docs/INSTALL.md](docs/INSTALL.md)
 
 NVAI-open has no content filter of its own. The model list marks every model as censored, partly censored or uncensored, and more models and LoRAs from Hugging Face and Civitai are under "Models" → "Search models and LoRAs". Respect the law and each model's license; the FLUX 3 license, for example, requires a review of every image before it is published. Overview: [docs/MODELS.md](docs/MODELS.md#censored-or-uncensored)
 
 ### Mac app, PhotoCraft add-on, iOS
 
-- **Mac:** a native app for Apple Silicon. Images with FLUX.2 Klein and Z-Image Turbo (generate, edit, fill, reference images, LoRAs), restoring old photos, music and sounds with Stable Audio 3, short videos with LTX-Video (bigger video models with sound from 16 GB of memory), the Studio, and review packages from audio forensics. On a Mac mini M1 with 8 GB, 30 seconds of music take about 13 seconds and 2 seconds of video about 95 seconds.
+- **Mac:** a native app for Apple Silicon. Images with FLUX.2 Klein and Z-Image Turbo (generate, edit, fill, reference images, LoRAs), restoring old photos, music and sounds with Stable Audio 3, a narrator voice with Qwen3-TTS, short videos with LTX-Video (bigger video models from 16 GB of memory, with sound from 32 GB), the Studio, and audio forensics with review packages. On a Mac mini M1 with 8 GB, 30 seconds of music take about 13 seconds and 2 seconds of video about 95 seconds.
 - **[PhotoCraft](https://github.com/storytold/photocraft) add-on:** select an area in this great open-source photo editor, fill it, rework it or restore it, and the result comes back as a layer. Tested with PhotoCraft 0.23.1. Thanks to the PhotoCraft developers for such a well-scriptable editor.
 - **iOS (closed beta):** a 3D scanner that turns photos of real objects into models. Tell me in an issue if you would use it.
 
@@ -251,7 +252,7 @@ NVAI-open has no content filter of its own. The model list marks every model as 
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (2004+) or 11, 64-bit | macOS 15 or newer, Apple Silicon |
-| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 5000 and RX 6000 experimental): driver 26.2.2+; older Radeons and Intel cards through Vulkan (experimental) | 16 GB RAM or more recommended (8 GB works for small images) |
+| Graphics / memory | 12 GB+ VRAM recommended (8 GB works with the INT8 models). NVIDIA: driver 580.88+. AMD Radeon RX 7000/9000 (RX 5000 and RX 6000 experimental): driver 26.2.2+; older Radeons and Intel cards through Vulkan (experimental) | 16 GB RAM or more recommended (8 GB works for images and short videos) |
 | Disk | about 10 GB for the program, plus 5 to 40 GB per model | about 1 GB for the app, plus about 10 GB for FLUX.2 Klein |
 | Internet | for setup (about 3 GB) and model downloads | for model downloads |
 
@@ -365,7 +366,7 @@ November 2026: NVAI-open 0.5.40 für Windows und 0.5.15 für den Mac ([Release-N
 - **Video mit Ton:** LTX-2.5 macht Bild und Ton in einem Durchgang, samt Sprache: Clips bis 20 Sekunden, bis 1080p.
 - **Musik und Sounds:** instrumentale Musik bis 5 Minuten, Soundeffekte.
 - **Sprache:** eine Sprecherstimme, die du in einem Satz beschreibst oder aus einer Aufnahme übernimmst, in 10 Sprachen. Im Studio behält ein Sprecher über viele Zeilen dieselbe Stimme.
-- **3D-Modelle:** aus einem Bild ein texturiertes Modell für Unity, Blender oder jede Engine.
+- **3D-Modelle:** aus einem Bild ein GLB-Modell für Unity, Blender oder jede Engine; mit Texturen über TRELLIS.2, installiert aus dem Quelltext.
 - **Alte Fotos:** Kratzer, Risse und Wasserflecken entfernen, einfärben, schärfen.
 - **Audio und Ton-Forensik:** Stimmen von Musik trennen, Sprache von Rauschen, ein wiederkehrendes Geräusch wie einen Alarm entfernen, auch in Aufnahmen von vielen Stunden; einen Fall mit Übersetzer-Spur untersuchen und als Prüfpaket weitergeben. [Einzelheiten](docs/de/AUDIO.md)
 - **Ein paar Worte reichen:** „Prompt ausbauen“ schreibt die volle Beschreibung für dich.
@@ -383,6 +384,7 @@ Das Studio ist der erste Reiter, wenn NVAI-open startet. Oben komponierst du: Sz
 - **Schneiden:** Auswahl, Schneiden und Magnet mit ihren Tasten, Rechtsklick-Menüs, Geschwindigkeit in Prozent, Überblendung, Abblende und Wischblende, Zoomen mit Keyframes, Video- und Tonspuren mit Auge und Stummschalter.
 - **Erzeugen:** Neben „Übernehmen“ siehst du, welche Szene gerade entsteht und wie weit sie ist; „✕ Abbrechen“ beendet den Lauf, fertige Takes bleiben.
 - **Nahtlose Einstellungen:** Ein Anschluss-Marker lässt einen Clip den vorigen fortsetzen, so gehen zwei Einstellungen ohne Sprung ineinander über.
+- **Vorlagen und Zusätze:** Je nach Modell nimmt eine Szene Referenzbilder, ein Endbild oder eine Schleife, ein grobes Layout-Video für Kamera und Bewegung oder eine Beschreibung des Tons.
 - **Sprecherstimme:** Sprecher-Szenen sprechen ihren Text mit Qwen3-TTS; „Gleiche Stimme wie“ hält einen Sprecher über alle Zeilen, und jede Szene wird so lang wie ihre Zeile.
 - **Figuren:** Aussehen aus einer LoRA (auch einer selbst trainierten) und Stimme in einem. Bildszenen zeigen sie, Sprecher-Szenen sprechen mit ihrer Stimme, und eine Videoszene spricht einen Satz mit den Lippen.
 - **Material:** Jedes Projekt hat einen eigenen Ordner für das, was es erzeugt, exportiert und hochlädt. Ganze Projekte lassen sich als ZIP-Datei packen und auf einem anderen Rechner öffnen.
@@ -420,7 +422,7 @@ Schritt für Schritt mit Screenshots: [docs/de/FOTO_ZU_VIDEO.md](docs/de/FOTO_ZU
 
 ### Video mit Ton
 
-LTX-2.5 von Lightricks macht Bild und Ton zusammen: Sprache, Schritte, Wind, Musik. Starten lässt es sich mit einem Text, einem Startbild oder einem Start- und einem Endbild; es macht nahtlose Schleifen, das Bild kann einem vorgegebenen Ton folgen, und ein vorhandener Clip lässt sich verlängern.
+LTX-2.5 von Lightricks macht Bild und Ton zusammen: Sprache, Schritte, Wind, Musik. Starten lässt es sich mit einem Text, einem Startbild oder einem Start- und einem Endbild; es macht nahtlose Schleifen, das Bild kann einem vorgegebenen Ton folgen, ein grobes Layout-Video kann Kamera und Bewegung vorgeben, und ein vorhandener Clip lässt sich verlängern.
 
 ![Ein Ritter sagt „Hold the wall. They come at dawn.“, vier Frames eines Clips mit Ton](docs/images/ltx25-knight-de.jpg)
 
@@ -436,7 +438,7 @@ Alle Wege und gemessenen Zeiten: [docs/de/MODELLE.md](docs/de/MODELLE.md#ltx-25)
 
 ### 3D: vom Bild zum Modell
 
-Ein Bild eines Objekts erzeugen und daraus ein GLB-Modell machen. TRELLIS.2 malt die Texturen gleich mit, TripoSG baut nur die Form.
+Ein Bild eines Objekts erzeugen und daraus ein GLB-Modell machen. TripoSG, das das Setup mitbringt, baut die Form. TRELLIS.2 malt die Texturen gleich mit, braucht aber eine Installation aus dem Quelltext ([Einzelheiten](docs/de/INSTALL.md#optional-3d-worker)).
 
 <p align="center">
   <img src="docs/images/image-to-3d-source.jpg" width="400" alt="Verwitterte Holzkiste mit Eisengriffen, erzeugt mit FLUX 3">
@@ -540,13 +542,13 @@ Dann einfach deinem Agenten sagen: „Mach ein verwittertes Holzfass als 3D-Mode
 
 ### Grafikkarten und unzensierte Modelle
 
-NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40. Mit mehreren Karten rechnet die stärkste. AMD Radeon läuft experimentell (PyTorch mit ROCm); Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
+NVAI-open wählt die passenden Modellfassungen für deine Karte: NVFP4 auf einer RTX 50, INT8 auf RTX 20, 30 und 40. Mit mehreren Karten rechnet die stärkste. Radeon-Karten laufen experimentell: ab der RX 6600 mit ROCm, die RX 5000, RX 6500/6400 und ältere Radeons über Vulkan (auf der RX 5000 und RX 6500/6400 lässt sich stattdessen ROCm wählen). Auch Intel-Arc-Karten rechnen über Vulkan. Tester sind in [#2](https://github.com/Mantux775/NVAI-open/issues/2) sehr willkommen. Details: [docs/de/INSTALL.md](docs/de/INSTALL.md)
 
 NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes Modell als zensiert, teilweise zensiert oder unzensiert, und weitere Modelle und LoRAs von Hugging Face und Civitai gibt es unter „Modelle“ → „Modelle und LoRAs suchen“. Gesetze und die Lizenz des Modells gelten; die FLUX-3-Lizenz etwa verlangt, jedes Bild vor der Veröffentlichung zu prüfen. Überblick: [docs/de/MODELLE.md](docs/de/MODELLE.md#zensiert-oder-unzensiert)
 
 ### Mac-App, PhotoCraft-Add-on, iOS
 
-- **Mac:** eine native App für Apple Silicon. Bilder mit FLUX.2 Klein und Z-Image Turbo (generieren, überarbeiten, füllen, Referenzbilder, LoRAs), alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3, kurze Videos mit LTX-Video (größere Videomodelle mit Ton ab 16 GB Speicher), das Studio und Prüfpakete aus der Ton-Forensik. Auf einem Mac mini M1 mit 8 GB dauern 30 Sekunden Musik rund 13 Sekunden und 2 Sekunden Video rund 95 Sekunden.
+- **Mac:** eine native App für Apple Silicon. Bilder mit FLUX.2 Klein und Z-Image Turbo (generieren, überarbeiten, füllen, Referenzbilder, LoRAs), alte Fotos restaurieren, Musik und Klänge mit Stable Audio 3, eine Sprecherstimme mit Qwen3-TTS, kurze Videos mit LTX-Video (größere Videomodelle ab 16 GB Speicher, mit Ton ab 32 GB), das Studio und Ton-Forensik mit Prüfpaketen. Auf einem Mac mini M1 mit 8 GB dauern 30 Sekunden Musik rund 13 Sekunden und 2 Sekunden Video rund 95 Sekunden.
 - **Add-on für [PhotoCraft](https://github.com/storytold/photocraft):** in diesem tollen Open-Source-Bildeditor einen Bereich auswählen, füllen, überarbeiten oder restaurieren, das Ergebnis kommt als Ebene zurück. Getestet mit PhotoCraft 0.23.1. Danke an die PhotoCraft-Entwickler für einen so gut steuerbaren Editor.
 - **iOS (geschlossene Beta):** ein 3D-Scanner, der aus Fotos echter Gegenstände Modelle macht. Schreibt mir gern in einem Issue, wenn ihr ihn nutzen würdet.
 
@@ -555,7 +557,7 @@ NVAI-open hat keinen eigenen Inhaltsfilter. Die Modellliste kennzeichnet jedes M
 | | Windows | macOS |
 |---|---|---|
 | System | Windows 10 (ab 2004) oder 11, 64 Bit | macOS 15 oder neuer, Apple Silicon |
-| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 5000 und RX 6000 experimentell): Treiber ab 26.2.2; ältere Radeons und Intel-Karten über Vulkan (experimentell) | empfohlen ab 16 GB RAM (8 GB reichen für kleine Bilder) |
+| Grafik / Speicher | empfohlen ab 12 GB VRAM (8 GB gehen mit den INT8-Modellen). NVIDIA: Treiber ab 580.88. AMD Radeon RX 7000/9000 (RX 5000 und RX 6000 experimentell): Treiber ab 26.2.2; ältere Radeons und Intel-Karten über Vulkan (experimentell) | empfohlen ab 16 GB RAM (8 GB reichen für Bilder und kurze Videos) |
 | Platte | rund 10 GB für das Programm, dazu 5 bis 40 GB pro Modell | rund 1 GB für die App, dazu etwa 10 GB für FLUX.2 Klein |
 | Internet | fürs Einrichten (rund 3 GB) und die Modelle | für die Modelle |
 
