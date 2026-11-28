@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 JobKind = Literal["txt2img", "img2img", "txt2audio", "txt2video", "img2video", "img23d", "download",
                   "expand_prompt", "restore", "studio_export", "vhs", "vhs_clean", "tts", "video_upscale",
+                  # Gesicht nachrechnen (seit 28.11.2026, face_fix.py)
+                  "face_fix",
                   # LoRA erstellen/Bearbeiten (seit 0.5.29, lora_train.py)
                   "lora_train", "lora_test", "lora_dataset", "lora_setup",
                   # Bereich „Audio“ (seit 17.11.2026, audio_lab.py)
@@ -328,6 +330,20 @@ class RestoreImageRequest(BaseModel):
     project_id: str | None = Field(
         None, description="Studio-Projekt (seit 0.5.15): Die Ergebnisse kommen gleich in seinen Ordner "
                           "(assets/Studio/<Name>) statt in den Verlauf, etwa Start- oder Referenzbilder fuer das Projekt")
+
+
+class FaceFixRequest(BaseModel):
+    """Gesicht nachrechnen (seit 28.11.2026, face_fix.py): das Gesicht einer Person in einem Bild oder Video aus einem
+    Originalfoto neu malen (FLUX 3), im Video in jedem Bild auf den laufenden Kopf gelegt. Für kleine Gesichter
+    (unter ~150 px: Pupillen fehlen) und Gesichter, die vom Original abweichen."""
+    asset_id: str = Field(..., description="Bild oder Video mit der Person")
+    reference_asset_id: str | None = Field(None, description="Originalfoto der Person (frontal, scharf); None = über die "
+                                           "Herkunft gesucht (Person aus einem Foto, Startbild, Standbild)")
+    face_index: int = Field(0, ge=0, description="Welches Gesicht (0 = das sicherste); vorerst eins je Auftrag")
+    key_seconds: float | None = Field(None, ge=0.0, description="Video: Zeit des Schlüsselbilds (Vorgabe 0,5 s)")
+    model_id: str | None = Field(None, description="Bearbeitungsmodell; None = FLUX 3")
+    seed: int | None = None
+    project_id: str | None = Field(None, description="Studio-Projekt: Das Ergebnis kommt in seinen Ordner")
 
 
 class UpscaleVideoRequest(BaseModel):

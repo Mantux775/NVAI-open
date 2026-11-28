@@ -88,8 +88,10 @@ export function wayNote(w: VideoWay, opts: { ltx: boolean; dfr: boolean }): stri
       return t('Die Referenzbilder geben Figur, Gesicht oder Stil vor; die Szene entsteht aus dem Text, ohne Startbild.',
         'The reference images set the character, face or style; the scene comes from the text, without a start image.')
     case 'start':
-      return t('Im Prompt nur die Bewegung beschreiben; das Format folgt dem Startbild.',
-        'Describe only the motion in the prompt; the format follows the start image.')
+      return t('Im Prompt nur die Bewegung beschreiben, auch die im Hintergrund (Wasser, Rauch, Lichter), sonst steht er '
+        + 'still; das Format folgt dem Startbild.',
+        'Describe only the motion in the prompt, including the background (water, smoke, lights), or it stands still; '
+          + 'the format follows the start image.')
     case 'ends':
       return t('Das Endbild hält Kamera und Gesicht. DFR entfällt bei diesem Weg.',
         'The end image holds camera and face. DFR is not available on this path.')

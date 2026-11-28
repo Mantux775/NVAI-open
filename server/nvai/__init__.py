@@ -2,7 +2,7 @@
 
 import os
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 # Downloads ueber klassisches HTTP statt Xet (huggingface_hub >= 1.0): Xet laedt in Rust und
 # meldet erst nach ~1 Minute und dann in 134-MB-Spruengen Fortschritt -- Fortschrittsbalken

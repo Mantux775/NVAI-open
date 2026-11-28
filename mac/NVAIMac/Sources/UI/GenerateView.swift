@@ -1268,6 +1268,7 @@ struct GenerateView: View {
         case "txt2audio": return await JobQueue.shared.submitAudio(try AudioJobRequest.parse(.object(body)))
         case "tts": return await JobQueue.shared.submitSpeech(try SpeechJobRequest.parse(.object(body)))
         case "restore": return await JobQueue.shared.submitRestore(try RestoreJobRequest.parse(.object(body)))
+        case "face_fix": return await JobQueue.shared.submitFaceFix(try FaceFixJobRequest.parse(.object(body)))
         default: return await JobQueue.shared.submit(try ImageJobRequest.parse(.object(body)))
         }
     }
@@ -1511,6 +1512,25 @@ struct GenerateView: View {
                                                "outpaint": .array(pad.map { .int($0) })])
             }
         }
+        // ⇧ Final (seit 1.1.0, wie unter Windows): ein Video im Entwurfsformat seines Modells noch einmal im Finalformat,
+        // mit demselben Seed
+        if a.kind == "video", job.kind == "txt2video" || job.kind == "img2video",
+           let mid = job.params["model_id"]?.stringValue, let df = VideoCatalog.draftFinal(mid),
+           let w = a.meta["width"]?.intValue, w < df.final.w {
+            var final = job.params.objectValue ?? [:]
+            final["width"] = .int(df.final.w)
+            final["height"] = .int(df.final.h)
+            final["seed"] = a.meta["seed"] ?? .null
+            out["final"] = ("txt2video", final)
+        }
+        // ☺ Gesicht nachrechnen (seit 1.1.0): Bild oder Video mit Person, das Gesicht neu aus dem Originalfoto (die
+        // letzte Referenz des Auftrags, sonst die gewählte Referenz im Formular)
+        if a.kind == "image" || a.kind == "video",
+           let ref = job.params["reference_asset_ids"]?.arrayValue?.compactMap(\.stringValue).last ?? referenceIDs.last,
+           ref != a.id {
+            out["face"] = ("face_fix", ["asset_id": .string(a.id), "reference_asset_id": .string(ref),
+                                        "model_id": .string(fluxID ?? ModelCatalog.recommended.id)])
+        }
         // ⟳ Varianten: derselbe Auftrag noch einmal mit neuem Seed (Bilder und Fotos zu viert, Ton und Stimme einmal)
         var again = job.params.objectValue ?? [:]
         again["seed"] = nil
@@ -1631,6 +1651,32 @@ struct GenerateView: View {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { promptFocused = true }
+            })
+        }
+        if let plan = plans["final"] {
+            let w = plan.body["width"]?.intValue ?? 0, h = plan.body["height"]?.intValue ?? 0
+            out.append(FlowNextStep(id: "final", icon: "⇧", label: t("Final rechnen", "Render final"),
+                                    small: join(t("\(w) × \(h), gleicher Seed", "\(w) × \(h), same seed"), eta("final")),
+                                    disabled: busyJob != nil) {
+                nextNeed = nil
+                Task {
+                    await launch(plan.kind, plan.body, title: t("Final rechnen", "Render final"),
+                                 modelID: plan.body["model_id"]?.stringValue ?? job.modelKey, estimate: nextEstimates["final"],
+                                 next: t("das nächste Video", "the next video"))
+                }
+            })
+        }
+        if let plan = plans["face"] {
+            out.append(FlowNextStep(id: "face", icon: "☺", label: t("Gesicht nachrechnen", "Recompute face"),
+                                    small: a.kind == "video" ? t("aus dem Originalfoto, nur für Clips ohne Sprechen", "from the original photo, only for clips without speech")
+                                        : t("aus dem Originalfoto, neues Ergebnis", "from the original photo, a new result"),
+                                    disabled: busyJob != nil || fluxID == nil) {
+                nextNeed = nil
+                Task {
+                    await launch(plan.kind, plan.body, title: t("Gesicht nachrechnen", "Recompute face"),
+                                 modelID: fluxID, estimate: nextEstimates["face"],
+                                 next: a.kind == "video" ? t("das nächste Video", "the next video") : t("das nächste Bild", "the next image"))
+                }
             })
         }
         if a.kind == "audio" && a.meta["speech"]?.boolValue == true {

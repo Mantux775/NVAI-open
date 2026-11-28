@@ -116,7 +116,10 @@ ist, mit Restzeit; „Zeigen“ springt zum Ergebnis.
    klicken) beendet alle laufenden und wartenden Aufträge des Projekts; fertige Takes bleiben. Um eine Szene neu zu
    erzeugen, sie auswählen: Der Knopf heißt dann „Gewählte erzeugen“, und die Eigenschaften der Szene bieten
    „Neu erzeugen“. Jeder Take bleibt unter „Takes“ in den Eigenschaften; ein Klick dort wählt den, den Übernehmen in
-   den Schnitt legt.
+   den Schnitt legt. Weicht das Gesicht einer Person vom Foto ab oder fehlen bei kleinen Gesichtern die Pupillen, malt
+   „☺ Gesicht nachrechnen“ unter den Takes das Gesicht aus dem Originalfoto neu, als neuer Take; das Foto findet das
+   Studio meist selbst ([AUGENKORREKTUR.md](AUGENKORREKTUR.md); nur für Clips ohne Sprechen, der Mund bewegt sich
+   danach nicht).
 5. **Übernehmen**, dann **schneiden:** Mit der Auswahl (V) Clips und ihre Ränder ziehen, mit dem Schneidewerkzeug (C)
    per Klick teilen; Strg+K schneidet am Abspielkopf. Ein Rechtsklick zeigt überall, was geht.
 6. **Exportieren:** Format wählen und „Exportieren“ klicken. Das Video steht danach auch im Verlauf.
@@ -211,7 +214,8 @@ Claude Code macht dasselbe per MCP (`character.add`, `params.characters`, `param
 
 Der **Rechtsklick** geht überall: auf Clips (ausschneiden, kopieren, Übergang, Geschwindigkeit, stumm, löschen …),
 Übergänge, freie Stellen, Spurnamen (Spur hinzufügen, ausblenden, stumm schalten, entfernen), Szenen, Marker und
-Material.
+Material. An einem Videoclip legt „Standbild hier ins Material“ das Bild unter der Maus als Bild ab, etwa als Start der
+nächsten Szene.
 
 ![Rechtsklick auf einen Clip, das Untermenü Geschwindigkeit ist offen](../images/studio-menu-de.jpg)
 
@@ -228,6 +232,12 @@ Clips nach hinten schieben oder sie überdecken.
 Vorschau und Export sehen gleich aus. Anlegen per Rechtsklick auf den Clip, mit Strg+D oder mit einem
 Übergang-Marker, die Länge an der Kante ziehen. Der vorige Clip läuft dafür über sein Ende hinaus weiter; reicht sein
 Material nicht, steht sein letztes Bild. Lass jedem Clip deshalb rund eine halbe Sekunde Material über sein Ende.
+
+**Doppelte Augen in der Überblendung:** Überblenden zwei Clips derselben Person und laufen die Köpfe dabei
+auseinander, sieht man die Augen doppelt. Rechtsklick auf den einlaufenden Clip (oder den Übergang) → „Köpfe in der
+Überblendung angleichen“: Das Studio misst die Augen in beiden Clips und zoomt den auslaufenden nur während der
+Überblendung, mit dem Anker am Bildrand, so dass sein Kopf mitwandert (im Test im Mittel 18,8 → 7,3 px auseinander).
+Strg+Z nimmt es zurück.
 
 <a name="skalieren-und-zoomen-mit-keyframes-seit-0516"></a>
 

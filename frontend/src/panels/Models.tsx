@@ -8,7 +8,7 @@ import { t } from '../i18n'
 import { GpuSettings } from '../components/GpuSettings'
 import { EstimateBadge, HardwareSection } from '../components/HardwareInfo'
 import { ContentBadge } from '../components/ContentBadge'
-import { LicenseBadge, licenseBlocked } from '../components/LicenseBadge'
+import { LICENSES_CHANGED, LicenseBadge, licenseBlocked } from '../components/LicenseBadge'
 import { AgentAccess } from '../components/AgentAccess'
 import { FolderSettings } from '../components/FolderSettings'
 import { HfSearch } from './HfSearch'
@@ -224,6 +224,7 @@ export function ModelsPanel({ event: _event, onChanged, downloads: dls, modelsVe
     mark(confirmed)
     try {
       await api.confirmLicense(m.id, confirmed)
+      window.dispatchEvent(new Event(LICENSES_CHANGED))  // Verlauf und Studio prüfen ihre Marken neu
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       mark(!confirmed)

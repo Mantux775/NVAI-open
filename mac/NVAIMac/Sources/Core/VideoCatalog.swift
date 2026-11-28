@@ -298,6 +298,9 @@ struct VideoModel: Identifiable, Hashable, Sendable {
         ]
         // Wie unter Windows: eine Zusatzfunktion, deren Dateien fehlen, steht unter "missing" mit ihrer Quelle.
         if ok && !encoderInstalled { features["missing"] = ["image_to_video": "https://huggingface.co/\(VideoCatalog.ltxRepo)"] }
+        if let df = VideoCatalog.draftFinal(id) {
+            features["draft_final"] = ["draft": ["w": df.draft.w, "h": df.draft.h], "final": ["w": df.final.w, "h": df.final.h]]
+        }
         let fit = MacFit.of(needGB: needGB)
         return [
             "id": id, "name": name, "kind": "video", "family": "ltxv", "workflow": "ltxv_distilled",
@@ -424,6 +427,14 @@ enum VideoCatalog {
 
     static let fps = 24
     static let frameChoices = [25, 49, 97, 121]
+
+    /// Entwurf und Final (seit 1.1.0, wie `features.draft_final` unter Windows; Nutzer 27.11.2026: „schnell 768, dann
+    /// 1080 final rechnen, als empfehlung“): klein prüfen, den passenden Take mit demselben Seed groß rechnen. Der finale
+    /// Take ähnelt dem Entwurf, ist aber nicht bildgleich (das Rauschen ändert sich mit der Größe).
+    static func draftFinal(_ id: String) -> (draft: (w: Int, h: Int), final: (w: Int, h: Int))? {
+        guard let m = models.first(where: { $0.id == id }) else { return nil }
+        return m.isLTX2 ? ((768, 512), (1024, 576)) : ((512, 320), (768, 512))
+    }
 
     /// Videomodelle zur Auswahl im Formular. `startImage`: nimmt das Modell ein Startbild (true), nicht (false) oder
     /// ist das ungeprüft (nil)? Die Oberfläche graut das Startbild bei false aus und zeigt bei nil einen Hinweis.

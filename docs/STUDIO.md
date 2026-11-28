@@ -116,7 +116,10 @@ time left; "Show" jumps to the result.
    its percentage and how many are done (for example "Far view 63 % · 2/5"). "✕ Cancel" (click twice) stops every
    running and queued job of the project; finished takes stay. To make a scene again, select it: the button then reads
    "Generate selected", and the scene's properties offer "Generate again". Every take stays under "Takes" in the
-   properties; a click there picks the one that Conform puts into the edit.
+   properties; a click there picks the one that Conform puts into the edit. For a person whose face drifted from the
+   photo or got eyes without pupils (small faces), "☺ Recompute face" under the takes redraws the face from the
+   original photo as a new take; the photo is usually found by itself ([EYE_CORRECTION.md](EYE_CORRECTION.md); for
+   clips without speech, the mouth no longer moves afterwards).
 5. **Conform**, then **edit:** with Selection (V) drag clips and their edges, with the Razor (C) click to cut; Ctrl+K
    cuts at the playhead. A right-click anywhere shows what you can do.
 6. **Export:** pick a format and click "Export". The video also lands in the History.
@@ -204,7 +207,8 @@ Claude Code does the same over MCP (`character.add`, `params.characters`, `param
 - **Magnet (S):** clips, scenes and markers dock to edges, markers and the playhead. When it is off, hold Shift to dock.
 
 **Right-click** works everywhere: on clips (cut, copy, transition, speed, mute, delete …), transitions, empty spots,
-track names (add, hide, mute or remove a track), scenes, markers and media.
+track names (add, hide, mute or remove a track), scenes, markers and media. On a video clip, "Still image here into the
+media" saves the frame under the mouse as an image, for example as the start of the next scene.
 
 ![Right-click on a clip, with the speed submenu open](images/studio-menu.jpg)
 
@@ -221,6 +225,11 @@ cover them.
 look the same. Add one with a right-click on the clip, with Ctrl+D or with a transition marker, and drag its edge to
 change the length. The previous clip runs on past its end; if its material runs out, its last frame holds. So leave
 every clip about half a second of spare material at its end.
+
+**Double eyes in a crossfade:** when two clips of the same person cross-dissolve and the heads drift apart, the eyes
+show twice. Right-click the incoming clip (or the transition) → "Align heads in the crossfade": the Studio measures the
+eyes in both clips and zooms the outgoing clip only during the crossfade, anchored at the frame edge, so that its head
+moves along (in the test 18.8 → 7.3 px apart on average). Ctrl+Z undoes it.
 
 <a name="scale-and-zoom-with-keyframes-since-0516"></a>
 

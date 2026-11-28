@@ -177,6 +177,11 @@ def plan(req: dict[str, Any]) -> dict[str, Any]:
         notes.append("unknown_gpu")
     if prof["vendor"] == "amd":
         notes.append("amd_rough")
+    # Entwurf und Final (Nutzer 27.11.2026: „so anpassen, dass es dem user vorgeschlagen wird“): Kennt das Videomodell
+    # beides, rät der Assistent, erst Entwürfe zu prüfen und die guten Szenen final zu rechnen (Studio „⇧ Final“)
+    entry_v = registry.get_entry(video["id"]) if video.get("id") else None
+    if entry_v and (registry.features_for(entry_v).get("draft_final")):
+        notes.append("draft_final")
 
     def est(ref_key: str, n: float, role: str, hist_kind: str | None = None, unit=None):
         """Sekunden, Quelle (history, estimate, rough = aus einem anderen Modell hochgerechnet, unknown), Läufe"""

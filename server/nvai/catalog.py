@@ -1646,6 +1646,10 @@ LTX25_FEATURES: dict[str, Any] = {
     "start_image": "optional", "end_image": True, "loop": True, "audio_input": True,
     "auto_duration": True, "dfr": True, "temporal_upscale": True, "motion_speed": True, "layout": True,
     "multishot": True, "fps": 24, "max_seconds": 20, "sizes": LTX25_SIZES,
+    # Entwurf und Final (27.11.2026): schnell im Standardweg prüfen (5 s 1280 × 704 ~93 s), den besten Take mit
+    # gleichem Seed final in 1080p DFR (5 s ~786 s auf 16 GB)
+    "draft_final": {"draft": {"w": 1280, "h": 704, "quality": "standard"},
+                    "final": {"w": 1920, "h": 1088, "quality": "dfr"}},
     "prompt_hint": (
         "Ein Absatz im Präsens, 4 bis 8 Sätze: Einstellung, Ort und Licht, die Handlung von Anfang "
         "bis Ende mit Verben, Figuren, die Kamerabewegung, zuletzt der Ton. Gesprochenes in "

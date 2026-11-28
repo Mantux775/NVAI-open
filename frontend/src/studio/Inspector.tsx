@@ -356,6 +356,19 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate, onShowModels,
     { command: 'scene.update', params: { id: s.id, params: { take_ok: id } } },
   ] })
   const setWay = (w: Way, chainTo: string | null) => update(wayChange(s, w, chainTo))
+  // ⇧ Final (Nutzer 27.11.2026: „schnell 768, dann 1080 final rechnen, als empfehlung“): Kennt das Modell Entwurf und
+  // Final und rechnet die Szene noch im Entwurf, dieselbe Szene im Finalformat mit dem Seed des gewählten Takes; der
+  // Entwurf bleibt als Take daneben
+  const df = video ? model?.features?.draft_final : undefined
+  const isFinal = !!df && Number(q.width) >= df.final.w
+  const renderFinal = df && s.take && !isFinal ? async () => {
+    const a = await api.asset(s.take!).catch(() => null)
+    const quality = df.final.quality === 'dfr' && !model?.features?.dfr ? 'standard' : df.final.quality
+    await onCommand('scene.update', { id: s.id, params: {
+      width: df.final.w, height: df.final.h, seed: a?.meta?.seed ?? q.seed ?? null, ...(quality ? { quality } : {}),
+    } })
+    generate()
+  } : undefined
   // Harte Lizenzgrenze des gewählten Modells: Warnung sichtbar, bis eine Genehmigung bestätigt ist
   const blocked = licenseBlocked(model) && model?.warning ? model.warning : null
   return (
@@ -403,6 +416,9 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate, onShowModels,
       <div ref={takesBox}>
         <SceneTakes p={p} s={s} attention={state.key === 'choose'} onPick={pickTake} />
       </div>
+      {s.lane === 'video' && s.take && (
+        <SceneFaceFix p={p} s={s} busy={state.key === 'running' || state.key === 'waiting'} update={update} />
+      )}
       <details ref={fine} className="sf-fine">
         <summary>{t('Feineinstellung', 'Advanced settings')}</summary>
         <div className="sf-stack">
@@ -460,7 +476,8 @@ function SceneProps({ p, s, models, active, onCommand, onGenerate, onShowModels,
         </div>
       </details>
       <SceneFoot p={p} s={s} state={state} eta={eta} missing={missing} lacks={lacks} also={alsoNames} spoken={spokenInVideo(c, s)} onGenerate={generate}
-        onConform={() => flow?.onConform([s.id])} />
+        onConform={() => flow?.onConform([s.id])}
+        final={renderFinal && df ? { run: renderFinal, label: `${df.final.w} × ${df.final.h}`, maxFrames: df.final_max_frames } : undefined} />
     </div>
   )
 }
@@ -557,7 +574,61 @@ function WaySlots({ p, s, way, model, models, active, update, flow, startEta, ea
       </>
     )
   }
+  if (way === 'start' && s.kind === 'video') {
+    // Nur Gesagtes bewegt sich (27.11.: Nachtstraße mit fester Kamera stand still, Nutzer: „die strasse … hat sich
+    // nicht bewegt“); Endbild und Schleife sagen es schon bei ihrem Weg
+    return (
+      <>
+        {start}
+        <p className="muted small">{t('Im Prompt die Bewegung beschreiben, auch die im Hintergrund (Wasser, Rauch, Lichter), sonst steht er still.',
+          'Describe the motion in the prompt, including the background (water, smoke, lights), or it stands still.')}</p>
+      </>
+    )
+  }
   return start
+}
+
+/** Gesicht nachrechnen (seit 28.11.2026, face_fix.py): ein Originalfoto der Person (gemerkt an der Szene, sonst die
+ *  erste Referenz), dann ein neuer Take, dessen Gesicht aus dem Foto kommt; im Video in jedem Bild auf den laufenden
+ *  Kopf gelegt. Vorgeschlagen bei kleinen oder abweichenden Gesichtern (unter ~150 px fehlten die Pupillen). */
+function SceneFaceFix({ p, s, busy, update }: {
+  p: StudioProject; s: StudioScene; busy: boolean; update: (fields: Record<string, unknown>) => void
+}) {
+  const q = s.params ?? {}
+  // Gemerkt, sonst was der Server über die Herkunft fand (Referenz, Startbild aus „Person aus einem Foto“, Anschluss)
+  const ref: string | null = q.face_ref_asset_id || s.face?.photo || null
+  const [error, setError] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+  const run = async () => {
+    setError(null)
+    setSending(true)
+    try {
+      // Der Server speichert den Auftrag an der Szene und meldet studio.changed: das Projekt lädt von selbst neu,
+      // der Fortschritt läuft auf der Karte
+      await api.studioFaceFix(p.id, s.id, ref)
+    } catch (e) {
+      setError(String((e as Error).message ?? e))
+    } finally {
+      setSending(false)
+    }
+  }
+  return (
+    <div className="sf-stack">
+      <AssetPicker p={p} media="image" ids={ref ? [ref] : []} max={1}
+        label={t('Gesicht nachrechnen: Originalfoto der Person', 'Recompute face: original photo of the person')}
+        empty={t('Foto aus dem Material hierher ziehen', 'Drag a photo from the media here')}
+        onChange={(ids) => update({ params: { face_ref_asset_id: ids[0] ?? null } })} />
+      <div className="flow-row">
+        <button type="button" className="btn small" disabled={busy || sending || !ref} onClick={run}
+          title={t('Das Gesicht im gewählten Take kommt neu aus dem Foto (FLUX 3), im Video auf jedes Bild gelegt. Für kleine Gesichter (Pupillen fehlen) und Gesichter, die vom Foto abweichen. Nur für Clips ohne Sprechen: Mund und Lider bewegen sich danach nicht. Neuer Take, der alte bleibt.',
+            'The face in the chosen take is redrawn from the photo (FLUX 3), in a video placed on every frame. For small faces (missing pupils) and faces that drift from the photo. Only for clips without speech: the mouth and eyelids no longer move afterwards. A new take; the old one stays.')}>
+          ☺ {t('Gesicht nachrechnen', 'Recompute face')}
+        </button>
+        <span className="muted small">{t('Bild rund 1 min, Video rund 2 min', 'Image about 1 min, video about 2 min')}</span>
+      </div>
+      {error && <p className="warn-text small">{error}</p>}
+    </div>
+  )
 }
 
 /** Referenzbilder, wenn das Modell welche nimmt (FLUX 3, MiniMax H3 Referenz …) oder schon welche gewählt sind */

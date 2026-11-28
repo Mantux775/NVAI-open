@@ -58,6 +58,7 @@ default `%LOCALAPPDATA%\NV-AI`; a source checkout can leave it out). If NVAI-ope
 | `image_to_3d` / `text_to_3d` | Image (or text → image) → GLB mesh |
 | `restore_image` | Old photo → repaired, colorized and/or sharpened |
 | `upscale_video` | Finished video → twice the width and height with RelayVSR (since 0.5.23) |
+| `recompute_face` | Image or video + the person's original photo → the face redrawn from the photo (FLUX 3), in a video tracked onto the head in every frame; for clips without speech |
 | `list_assets` / `delete_asset` / `clear_history` | History |
 | `copy_asset` | Copy an asset into a project, e.g. `Assets/Generated/` |
 | `studio_*` | Studio projects: scenes, generating, conforming, cutting, export ([Studio](#studio-whole-videos-from-scenes)) |
@@ -119,16 +120,27 @@ both in step when a new finding comes in.
 | Poster, sign, graphic with text, free to sell | `moss-image-sft-int8` (Apache-2.0), 50 steps; describe the finished image, text in quotation marks with position and typeface | letter-perfect in every test; ~51 s |
 | Best result without settings | leave size, length and quality empty: `features.recommended` fills them (Qwen-Image-2512 1328², FLUX 3 1440², Krea 2 and MOSS-Image 1408², LTX-2.5 1920 × 1088 for 5 s with `quality="dfr"`, Stable Audio 3 60 s) | Qwen native: finer detail at double the time; LTX-2.5 DFR keeps faces and fabric sharp (5 s: 786 instead of 241 s) |
 | Size | standing figure portrait (832 × 1216, Qwen 1056 × 1584), vehicle landscape (`features.sizes`) | in a square, figures lose their feet more often |
+| Small faces (a whole figure in 1080p) | frame people from the knees up or closer, or recompute the face with the original photo (`recompute_face`); check the eyes at full size | with the head about 100–120 px, FLUX 3 and LTX-2.5 drew uneven or crooked eyes, LTX-2.5 also in DFR |
+| Eyes of a walking person (face 140–220 px) | LTX-2.5 with DFR, render several seeds and keep the cleanest; MiniMax H3 at 768p kept them clean over 5 s (mind its license) | the eyes varied strongly from seed to seed; the dev model with CFG and a single full-resolution stage, also with 20 steps, did not help |
+| Distance in a still | extend the image to move a figure away, crop to move it closer | "fills about half of the frame height" was ignored: 12 of 12 whole figures came out the same size |
+| Editing with FLUX 3 without changing the framing | the image itself as the only reference, the framing named ("framed from the knees up, exactly as large as in the image"), nothing outside the frame mentioned | "black boots" made FLUX zoom out to the whole body (2 of 2); a second reference image imposed its own framing |
+| Backlight in haze | the light low behind the legs ("the floodlight is low, close to the ground …; the haze around his head stays dark") | a light at head height glowed through hair and helmet |
+| Text in an image | check every letter, even with Qwen-Image-2512 | one billboard of four read "NVAI,open", two added a full stop |
+| Animating a sign | start image only, a locked-off camera | the lettering stayed sharp over 4 s; a cinemagraph loop barely moved the rain |
 | Choosing | `batch_size=4`, compare at full resolution | one model load instead of four; anatomy errors are a failure rate |
 | Video | LTX-2.5, one present-tense paragraph of 4–8 sentences, loud sound sources named | sounds described as soft came out at −41 to −52 LUFS |
 | Long video render | `generate_video(wait=False)`, then `job_status(job_id, wait_s=600)` | 1080p DFR: 5 s ~13 min; a blocking call returns `pending`, never resubmit |
 | Fixed framing | "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame."; if it must hold, an end image too | "stays still" pushed in to an extreme close-up; the prompt alone pushed in 3 of 3 times |
 | Loop or end image | only with a still camera, and only if the background may stand still | water and smoke stood as still as the shore, even when the prompt asked them to move |
-| Moving background (water, smoke, wind) | only a start image, describe the motion | water and smoke kept moving; the camera of a medium-wide side view stayed put in 14 of 18 clips |
+| Moving background (water, smoke, wind, rain, lights) | only a start image, and name what moves (on a camera move, the street too) | water and smoke kept moving; the camera of a medium-wide side view stayed put in 14 of 18 clips; a night street with a locked-off camera and nothing named stood still (MiniMax H3) |
 | Two clips without a seam | `chain_asset_id=<clip 1>` (or `extend_asset_id` for one file, or a `chain` marker in the Studio), joined with a 25-frame crossfade | the last 25 frames carry the motion over; at a hard cut the frame step stood out 1.9–2.5×, with the chain at most 1.6× |
+| Same person in a new outfit per clip (a morph) | chain the clips: frame of clip N at the cut (walking toward the camera: about 1.25 s), change only the outfit with FLUX 3 (one reference, name the framing, no shoes), start image of clip N+1; start clip N+1 after its slow start (MiniMax H3: about 7 frames); short crossfade | end images built from the next clip's start image changed helmet, clothing and street in the middle of each clip; starting the next MiniMax clip at frame 0 doubled the eyes in the crossfade |
 | A person who should stay still | a short prompt (4–8 sentences), the stillness in one positive sentence ("sits perfectly still like a statue …"), the small reaction named exactly; rewrite instead of appending | 8 instead of 14 sentences: 38–49 % less motion with the same seeds |
 | A small reaction (a start, a glance) | small and physical, say what does not move; avoid "fright", "flinch", "jerk" | "flinches briefly … jerk back" looked like a sneeze |
 | A recognizable person in video | start image with FLUX 3 from a frontal, sharp reference, face 250 px or more, few extras, an end image or `loop=True`, no extending; most faithful: the real photo outpainted to the video size | face similarity 0.80–1.0 over 5 s with start = end image, 0.29–0.44 with the start image only |
+| A small face in video (under ~150 px) | closer framing; or a draft, then the final size with the same seed (MiniMax H3 1920 × 1088, LTX-2.5 1080p DFR); or `recompute_face` with the original photo, for clips without speech ([EYE_CORRECTION.md](EYE_CORRECTION.md)) | at 1344 × 768 a 105 px face lost its pupils from the first frame on with every seed (32 px per token); at 1920 × 1088 they stayed; recomputed, the pupils were clean in every frame (3 s in 75 s); upscaling only sharpened the holes |
+| Rain, snow or smoke from the very first frame | put it into the start image first (FLUX 3 edit, quote the sign's text in the prompt), then animate without a loop; name it "from the first moment to the last" | LTX-2.5 keeps frame 0 exactly: with a dry start image the rain only built up after the first frames, and a loop ended on the dry image again; with rain in the start image it fell for all 5 s (2 of 2 seeds), the text stayed letter-perfect (4 of 4 edits) and sharp while the camera pushed in |
+| Double eyes in a crossfade between two clips of the same person | Studio: right-click the incoming clip → "Align heads in the crossfade" (`clip.align_faces`); by hand: scale only the outgoing clip's tail (`scale_keys` after its end, 1.00 → ~1.03) with the anchor at the frame edge at eye height | the heads drifted apart in the 0.4 s dissolve (one +15 px right, the other −25 px left) while the size differed only ~4 %; eye centres 22 → 3 px apart. Measure sizes by the eye distance: face boxes said 26 % because of the caps |
 | A face from a photo in a new scene on the Mac | FLUX.2 Klein 4B with the photo in `reference_asset_ids` (not `image_asset_id`); name gender, age and hair, describe the new scene, no "keep … exactly" | a woman as ship captain: a man in 2 of 2 without the description, herself in 12 of 12 with it |
 | Video from several shots | Studio: one scene per shot, `chain` marker where shots must join, conform, export `youtube-1080p` | the chained clip went on with the same knight in the same pose |
 | Camera and motion from a rough 3D layout | LTX-2.5 with `guide_asset_id` (grey layout video, 24 fps) and as `image_asset_id` a picture FLUX 3 painted from its first frame (the grey frame as reference, `upsample_prompt=False`) | 57 frames at 1280 × 704 in 101 s; the red ball rolled where the grey sphere rolled, the look of the start image held |
@@ -432,6 +444,20 @@ sentence asking them to move. With only a start image they kept moving (water 1�
 medium-wide side view stayed put in 14 of 18 clips. So: end image or loop to hold a face or the framing, only a start
 image for a moving background. Say this before rendering.
 
+**Changing roles across clips (a morph):** to show the same person in a new outfit in each clip, do not build end
+images from the next clip's start image: helmet, clothing and street then change in the middle of a clip. Chain the
+clips instead: generate clip N from its start image only, take its last frame, change only the outfit with FLUX 3 (one
+reference image, name the framing such as "framed from the knees up, exactly as large as in the image", do not mention
+shoes or anything outside the frame), and use that as the start image of clip N+1. A short crossfade (4 to 8 frames)
+then looks like a morph. With the outfit model as a second reference image, FLUX 3 took over the framing of that image.
+If the person walks toward the camera, every role starts where the previous one was cut, so the figure comes closer
+with each role: in a MiniMax H3 clip the face grew from 145 to 174 px in 2.5 s. Take about 1.25 s per role (the frame at
+1.25 s becomes the next start), otherwise headgear and props leave the frame by the third role. A MiniMax H3 clip
+barely moves in its first ~6 frames while the previous clip walks on: in a 0.4 s crossfade the heads drifted up to
+21 px apart and the eyes doubled. Start the incoming clip after this slow start (find the face in every frame of both
+clips and pick the in point where the head tracks overlap during the crossfade: 7 frames brought the gap from 17.5 to
+3.7 px) and give the time this costs to the last role.
+
 **Prompt traps:** "shouts" gives grimaces ("says firmly in a rough, deep voice" is calmer); a gesture that "may rise
 out of the frame" makes the camera follow it; "The camera holds a medium close-up" pushed in to an extreme close-up,
 while "Static camera, a locked-off medium shot; the framing stays exactly as in the first frame." held; "proud, calm
@@ -465,6 +491,17 @@ from a photo"; for pictures alone, without a video, the same section is in the I
 
 With a real photo, the photo itself is the most faithful start image: outpaint it to the video size with FLUX 3, the
 face stays pixel for pixel. The voice is generated, never the person's real one.
+
+**Recompute the face** when a face drifted from the photo or is too small for clean eyes (video models work in units
+of about 32 × 32 px; under ~150 px the pupils went missing): `recompute_face(asset_id, reference_asset_id)` (REST
+`POST /api/generate/face-fix`; in the Studio `POST /api/studio/projects/{id}/face-fix` with `scene_id`, the result
+becomes a new, chosen take of the scene). One frame (video: at 0.5 s) is redrawn with FLUX 3 from [blurred crop of the
+face, original photo]: blurring the clip's features first made the face come from the photo; without it, the face of
+a later clip had drifted away from the photo. Head pose, headgear, light and background stay; in a video the redrawn
+face is tracked onto the head in every frame (OpenCV ECC, light matched per frame). Measured on an RTX 5060 Ti: image
+54 s, a 3 s video 75 s, 0 tracking misses. Limits: mouth and eyelids come from the one frame, so only for clips without
+speech; one face per call (`face_index`). Without `reference_asset_id` the server follows the asset's origin back to
+the photo (Person from a photo, start image, Studio still); `GET /api/assets/{id}/face-photo` tells which one.
 
 On the Mac (FLUX.2 Klein 4B, no prompt expander) the photo goes in `reference_asset_ids`, never as `image_asset_id`
 with `denoise`: that keeps the photo's layout. Name gender, age and hair ("The person from the first image, a woman in
@@ -511,14 +548,22 @@ Measured with one character over many comedy clips and an explainer video:
 > generated videos included (sections I.3, I.5, V.4). Without a separate license from MiniMax
 > (<https://platform.minimax.io/h3-license>) it must not be used there, and nothing made with it may be published,
 > stills and screenshots included. The web interface marks the model and every result in red until the user ticks "I
-> have obtained permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Tell the user
+> have obtained permission" under Models; `list_models` shows `license_badge` and `license_confirmed`. Whatever is
+> made from a result carries the mark too (upscaled clips, exports, last frames, edits with it as a reference:
+> `meta.badge_model`), and the interface checks it against the current tick every time it shows it. The tick is stored
+> per data folder, so a second server with its own data folder shows the marks until it is ticked there. Tell the user
 > before using it unless `license_confirmed` is true. Anyone offering third parties a tool for generating with it must
 > prevent prohibited content (section V.5); NVAI-open filters nothing.
 
 - **Versions:** `minimax-h3-fl2va-int8` (text and an optional start image), `minimax-h3-ref2va-int8` (up to 9
   `reference_asset_ids`, in the prompt `<Picture 1>`, `<Picture 2>` … in their order), `minimax-h3-fasth3-8step-int8`
-  (fixed 8 steps). Picture and stereo sound, 24 fps, frames on the 17k+5 grid (124 = 5.2 s, up to 362 = 15 s), up to
-  768p.
+  (fixed 8 steps). Picture and stereo sound, 24 fps, frames on the 17k+5 grid (124 = 5.2 s, up to 362 = 15 s), natively
+  768p, final 1080p.
+- **Draft, then final:** check takes at 1344 × 768 (5.2 s in about 11 minutes without the turbo LoRA), render the best
+  one again with the same seed at 1920 × 1088 (`features.draft_final`; on 16 GB measured for 73 frames = 3 s in 1090 s,
+  15.3 GB; cards with more memory should carry longer clips, not measured). The final take is similar, not identical.
+  The model works in units of 32 × 32 pixels: a face of about 105 px (from the knees up at 768p) lost its pupils from
+  the first frame on with every seed; at 1080p they stayed. See [EYE_CORRECTION.md](EYE_CORRECTION.md).
 - **Preselection:** turbo LoRA 8 steps v1.1, `sparse_attention="sol-attn"` and `int8_attention=True`: 9.4 s at
   1344 × 576 in 6.6–6.9 instead of 37 minutes. `recommended=True` (default) fills what a call leaves open,
   `recommended=False` takes the call literally. Fastest: turbo 4 + sol-attn (4.5–4.8 min).
@@ -653,6 +698,9 @@ without asking.
 **Times** are seconds with the suffix `_s` (`start_s`, `duration_s`, `at_s`, `in_s`) or ticks (254 016 000 000 per
 second). Set clip starts in ticks when they follow other clips: rounded seconds (4.7917 + 4.5) left a 0.03 ms gap and a
 black frame in the export.
+
+**Music:** generate the track a few seconds longer than the video (24 s for a 20 s video) and move only its in point
+until the track's own ending falls on the end of the video and its full entry on the key moment; no fade-out needed.
 
 **Editing commands:**
 

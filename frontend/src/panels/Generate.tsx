@@ -38,7 +38,7 @@ import { ModelNeed } from '../flow/ModelNeed'
 import { fmtClock, fmtEta } from '../flow/time'
 import { MODE_FAMILIES, MODE_OF_KIND, fitsMode, missingChoices, pickMissing, pickRunnable, type GenMode } from '../flow/generate/models'
 import { ChipNumber, ChipSelect, NextSteps, RunningEta, SeedCopy, Slot, type NextStep, type SlotAsset } from '../flow/generate/parts'
-import { estimateItem, rerunPlan, sendPlan, type Plan } from '../flow/generate/plan'
+import { estimateItem, finalPlan, rerunPlan, sendPlan, type Plan } from '../flow/generate/plan'
 import {
   aspectDiffers, closestSize, ltxFramesFor, padToAspect, videoWays, wayDetail, wayLabel, wayNote, wayRules,
   type VideoWay,
@@ -2142,6 +2142,18 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps -- je Ergebnis einmal
   }, [picked?.id])
   const dims = picked && pickedDims?.id === picked.id ? pickedDims : null
+  // Originalfoto über die Herkunft des Ergebnisses (Person aus einem Foto, Startbild, Standbild) für „☺ Gesicht
+  // nachrechnen“: je Ergebnis einmal gefragt
+  const [lineagePhoto, setLineagePhoto] = useState<{ id: string; photo: string | null } | null>(null)
+  useEffect(() => {
+    if (!picked || (picked.kind !== 'image' && picked.kind !== 'video')) return
+    let alive = true
+    api.facePhoto(picked.id).then((r) => { if (alive) setLineagePhoto({ id: picked.id, photo: r.photo }) }).catch(() => {})
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- je Ergebnis einmal
+  }, [picked?.id])
   // Ein fertig geladenes Modell für einen Schritt: Der Hinweis darunter erledigt sich
   useEffect(() => {
     if (nextNeed && models.some((m) => m.id === nextNeed.model.id && m.runnable)) setNextNeed(null)
@@ -2264,7 +2276,25 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
   const upscalePlan: Plan | null = upscalable && picked && (vupModel ?? vupNeed)
     ? { kind: 'video_upscale', params: { asset_id: picked.id, model_id: (vupModel ?? vupNeed)!.id, project_id: projectId || null } }
     : null
-  const nextPlans = [videoFromPlan, meshNextPlan, outPlan, variantPlan, editPlan, extendPlan, upscalePlan]
+  // ⇧ Final: derselbe Auftrag im Finalformat, gleicher Seed (erst Entwurf, dann Final; Nutzer 27.11.2026)
+  const finalModel = picked?.kind === 'video' ? models.find((m) => m.id === picked.model_id) : undefined
+  const final = viewJob?.status === 'done' && picked?.kind === 'video'
+    ? finalPlan(viewJob, picked, finalModel, health?.gpu?.vram_total_mb ?? 0) : null
+  // ☺ Gesicht nachrechnen (Nutzer 28.11.2026): Bild oder Video mit Person, das Gesicht neu aus dem Originalfoto
+  // (Referenz des Auftrags, sonst das Foto unter „Person aus einem Foto“)
+  // Vorrang hat die Herkunft des Ergebnisses (der Server folgt Startbild und Standbild bis zum Foto), dann die
+  // Referenzen des Auftrags (außer Stilvorlagen; das Gesicht steht zuletzt), dann das Foto unter „Person aus einem Foto“
+  const jobModel = models.find((m) => m.id === viewJob?.params?.model_id)
+  const jobRefs = jobModel?.features?.reference_kind === 'style'
+    ? [] : (viewJob?.params?.reference_asset_ids ?? []) as string[]
+  const fromLineage = picked && lineagePhoto?.id === picked.id ? lineagePhoto.photo : null
+  const faceRef = fromLineage || jobRefs[jobRefs.length - 1] || personPhotoId || ''
+  const faceRefName = sourceImages.find((a) => a.id === faceRef)?.filename.split('/').pop()
+  const facePlan: Plan | null = picked && (picked.kind === 'image' || picked.kind === 'video') && faceRef && faceRef !== picked.id
+    ? { kind: 'face_fix', params: { asset_id: picked.id, reference_asset_id: faceRef, project_id: projectId || null } }
+    : null
+  const nextPlans = [videoFromPlan, meshNextPlan, outPlan, variantPlan, editPlan, extendPlan, upscalePlan,
+    final?.plan ?? null, facePlan]
   const nextItems = results.length ? nextPlans.map(estimateItem) : null
   const nextEsts = useEstimates(nextItems, JSON.stringify(nextItems))
   const nextEta = (i: number) => fmtEta(totalSeconds(fitEst(nextEsts?.[i], nextPlans[i])))
@@ -2472,6 +2502,34 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
           }
           setFocusPrompt((n) => n + 1)
         }),
+      })
+    }
+    if (final) {
+      const fp = final.plan.params as { width?: number; height?: number }
+      nextSteps.push({
+        key: 'final', icon: '⇧', label: t('Final rechnen', 'Render final'), primary: true,
+        small: [`${fp.width} × ${fp.height}`, t('gleicher Seed', 'same seed'),
+          final.capped ? t(`${(final.capped / 24).toFixed(1)} s (mehr ist auf dieser Karte nicht gemessen)`,
+            `${(final.capped / 24).toFixed(1)} s (more is not measured on this card)`) : '',
+          nextEta(7)].filter(Boolean).join(', '),
+        title: t('Erst schnell als Entwurf prüfen, dann den besten Take final rechnen. Kleine Gesichter brauchen das '
+          + 'Finalformat: in 768p fehlten die Pupillen schon im ersten Bild. Das Ergebnis ist ähnlich, nicht bildgleich.',
+        'Check quickly as a draft first, then render the best take as final. Small faces need the final size: at 768p '
+          + 'the pupils were missing from the first frame. The result is similar, not identical.'),
+        disabled: busy,
+        onClick: () => runNext(final.plan, 'video', t('Final rechnen', 'Render final'), finalModel, 7),
+      })
+    }
+    // Nur, wenn ein Foto der Person bekannt ist: sonst stünde der Schritt unter jedem Bild ohne Person
+    if (facePlan) {
+      nextSteps.push({
+        key: 'face', icon: '☺', label: t('Gesicht nachrechnen', 'Recompute face'),
+        small: faceRefName ? t(`aus ${faceRefName}, neues Ergebnis`, `from ${faceRefName}, a new result`)
+          : t('aus dem Originalfoto, neues Ergebnis', 'from the original photo, a new result'),
+        title: t('Das Gesicht kommt neu aus dem Originalfoto (FLUX 3), im Video auf jedes Bild gelegt. Für kleine Gesichter (unter rund 150 px fehlen die Pupillen) und Gesichter, die vom Foto abweichen. Im Video nur für Clips ohne Sprechen: Mund und Lider bewegen sich danach nicht.',
+          'The face is redrawn from the original photo (FLUX 3), in a video placed on every frame. For small faces (under about 150 px the pupils go missing) and faces that drift from the photo. In a video only for clips without speech: the mouth and eyelids no longer move afterwards.'),
+        disabled: busy,
+        onClick: () => runNext(facePlan, picked.kind === 'video' ? 'video' : 'image', t('Gesicht nachrechnen', 'Recompute face'), undefined, 8),
       })
     }
     if (upscalePlan) {
@@ -4168,7 +4226,8 @@ export function GeneratePanel({ health, event, downloads, modelsVersion = 0, onS
                       <AssetView asset={a} />
                     )}
                     <figcaption className="muted small">
-                      <OutputBadge model={models.find((m) => m.id === a.model_id)} />{' '}
+                      <OutputBadge model={models.find((m) => m.id === a.model_id && m.output_badge)
+                        ?? models.find((m) => m.id === a.meta?.badge_model)} />{' '}
                       {resultSeeds.length > 1 && a.meta.seed != null && <><SeedCopy seed={a.meta.seed} />{' · '}</>}
                       <a href={a.url} download>{t('Download', 'Download')}</a>
                       {/* Mehrere Bilder: Mit welchem es weitergeht, wählt man hier (Vorgabe das erste) */}

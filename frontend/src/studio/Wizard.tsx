@@ -1171,6 +1171,7 @@ export function Wizard({ project, onClose, onOpenProject, onDone }: {
                   {plan.notes.includes('vram_video') && <p className="warn-text small">{t('Das Videomodell passt nicht ganz in den Grafikspeicher und wird je Schritt nachgeladen; das kostet Zeit.', 'The video model does not quite fit into the graphics memory and is reloaded for each step; that costs time.')}</p>}
                   {plan.notes.includes('unknown_gpu') && <p className="muted small">{t('Deine Karte steht noch nicht im Hardware-Katalog; die Zeiten gelten für eine RTX 5060 Ti.', 'Your card is not in the hardware catalog yet; the times are for an RTX 5060 Ti.')}</p>}
                   {plan.notes.includes('amd_rough') && <p className="muted small">{t('Radeon: grobe Schätzung, gemessen ist bisher nur NVIDIA.', 'Radeon: rough estimate, so far only NVIDIA has been measured.')}</p>}
+                  {plan.notes.includes('draft_final') && <p className="muted small">{t('Tipp: Szenen erst als Entwurf rechnen und prüfen, die guten dann im Studio mit „⇧ Final“ in 1080p (gleicher Seed). Kleine Gesichter brauchen das Finalformat.', 'Tip: render scenes as drafts first and check them, then render the good ones with "⇧ Final" in the Studio at 1080p (same seed). Small faces need the final size.')}</p>}
                   <p className="muted small">{t('Die Zeiten sind Schätzungen; nach den ersten Läufen rechnet der Assistent mit deinen echten Zeiten.', 'The times are estimates; after your first runs the assistant uses your real times.')}</p>
                 </>
               ) : (

@@ -2,7 +2,7 @@
  "openapi": "3.1.0",
  "info": {
   "title": "NVAI-open",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "x-api-version": 1
  },
  "paths": {
@@ -4778,6 +4778,87 @@
     }
    }
   },
+  "/api/assets/{asset_id}/face-photo": {
+   "get": {
+    "summary": "Asset Face Photo",
+    "description": "Originalfoto, aus dem ein Bild oder Video entstand (für „Gesicht nachrechnen“, seit 28.11.2026), rückwärts über\ndie Herkunft: Person aus einem Foto, Startbild, Standbild, schon einmal nachgerechnet. photo None = unbekannt (auch,\nwenn das Asset selbst das Foto ist).",
+    "operationId": "asset_face_photo_api_assets__asset_id__face_photo_get",
+    "parameters": [
+     {
+      "name": "asset_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Asset Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Asset Face Photo Api Assets  Asset Id  Face Photo Get"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/generate/face-fix": {
+   "post": {
+    "summary": "Face Fix Job",
+    "description": "Gesicht nachrechnen (seit 28.11.2026, face_fix.py): Bild oder Video, Originalfoto als Vorlage. Ohne Foto sucht\nder Server es über die Herkunft (studio._photo_of_asset: Person aus einem Foto, Startbild, Standbild).",
+    "operationId": "face_fix_job_api_generate_face_fix_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/FaceFixRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Job"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/vhs/analyze": {
    "post": {
     "summary": "Vhs Analyze",
@@ -6345,6 +6426,112 @@
     }
    }
   },
+  "/api/studio/projects/{pid}/face-fix": {
+   "post": {
+    "summary": "Studio Face Fix",
+    "description": "Gesicht nachrechnen am Take einer Szene (seit 28.11.2026): scene_id, reference_asset_id (sonst das gemerkte\nFoto der Szene bzw. ihre erste Referenz). Das Ergebnis wird ein neuer Take.",
+    "operationId": "studio_face_fix_api_studio_projects__pid__face_fix_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "object",
+         "additionalProperties": true,
+         "title": "Response Studio Face Fix Api Studio Projects  Pid  Face Fix Post"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/api/studio/projects/{pid}/still": {
+   "post": {
+    "summary": "Studio Still",
+    "description": "Standbild eines Videoclips an einer Stelle der Zeitleiste ins Material (seit 27.11.2026): clip_id, at (Ticks).\nFür den Rollenwechsel von Hand: das Bild am Schnittpunkt wird mit „Überarbeiten“ zur nächsten Rolle.",
+    "operationId": "studio_still_api_studio_projects__pid__still_post",
+    "parameters": [
+     {
+      "name": "pid",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "title": "Pid"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Asset"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/studio/projects/{pid}/export": {
    "post": {
     "summary": "Studio Export",
@@ -7553,6 +7740,88 @@
     ],
     "title": "ExportRequest"
    },
+   "FaceFixRequest": {
+    "properties": {
+     "asset_id": {
+      "type": "string",
+      "title": "Asset Id",
+      "description": "Bild oder Video mit der Person"
+     },
+     "reference_asset_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reference Asset Id",
+      "description": "Originalfoto der Person (frontal, scharf); None = über die Herkunft gesucht (Person aus einem Foto, Startbild, Standbild)"
+     },
+     "face_index": {
+      "type": "integer",
+      "minimum": 0.0,
+      "title": "Face Index",
+      "description": "Welches Gesicht (0 = das sicherste); vorerst eins je Auftrag",
+      "default": 0
+     },
+     "key_seconds": {
+      "anyOf": [
+       {
+        "type": "number",
+        "minimum": 0.0
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Key Seconds",
+      "description": "Video: Zeit des Schlüsselbilds (Vorgabe 0,5 s)"
+     },
+     "model_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model Id",
+      "description": "Bearbeitungsmodell; None = FLUX 3"
+     },
+     "seed": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Seed"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id",
+      "description": "Studio-Projekt: Das Ergebnis kommt in seinen Ordner"
+     }
+    },
+    "type": "object",
+    "required": [
+     "asset_id"
+    ],
+    "title": "FaceFixRequest",
+    "description": "Gesicht nachrechnen (seit 28.11.2026, face_fix.py): das Gesicht einer Person in einem Bild oder Video aus einem\nOriginalfoto neu malen (FLUX 3), im Video in jedem Bild auf den laufenden Kopf gelegt. Für kleine Gesichter\n(unter ~150 px: Pupillen fehlen) und Gesichter, die vom Original abweichen."
+   },
    "FolderAdd": {
     "properties": {
      "path": {
@@ -8644,6 +8913,7 @@
        "vhs_clean",
        "tts",
        "video_upscale",
+       "face_fix",
        "lora_train",
        "lora_test",
        "lora_dataset",

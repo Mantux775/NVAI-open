@@ -1514,6 +1514,99 @@ def _clip_key(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
     return {"keys": len(c["scale_keys"]), "at": media}
 
 
+# ------------------------------------------------------- Köpfe in der Überblendung angleichen (seit 1.1.0)
+
+def _fit_point(x: float, y: float, vw: int, vh: int, width: int, height: int) -> tuple[float, float]:
+    """Punkt im Video (Pixel) ins Projektbild, wie studio_render.fit: füllend bei fast gleichem Seitenverhältnis
+    (5 %), sonst einpassend, mittig."""
+    cover = abs((vw / vh) / (width / height) - 1.0) <= 0.05
+    s = (max if cover else min)(width / vw, height / vh)
+    return x * s + (width - round(vw * s)) / 2, y * s + (height - round(vh * s)) / 2
+
+
+def _align_plan(rows: list[tuple[int, tuple[float, float], tuple[float, float]]], n: int, width: int,
+                height: int) -> dict[str, Any]:
+    """Verschiebung des auslaufenden Kopfes (Augenmitte) über die Überblendung, kleinste Zoom-Rampe dafür.
+    Befund: Die doppelten Augen kamen vom Auseinanderlaufen (ein Kopf +15 px nach rechts, der andere −25 px nach
+    links), nicht von der Größe (~4 %). Gewicht je Bild: wie sichtbar der Doppel ist (Mitte am
+    stärksten). Der Anker liegt vom Kopf aus entgegen der Verschiebung am Bildrand: längster Hebel, kleinster Zoom; ein
+    Bildpunkt X landet bei A + s (X − A), s wächst linear von 1 auf 1 + c."""
+    wts = [min(k / n, 1 - k / n) + 0.05 for k, _, _ in rows]
+    fk = [k / n for k, _, _ in rows]
+    den = sum(w * f * f for w, f in zip(wts, fk))
+    if den <= 0:
+        raise StudioError(t("Zu wenige Bilder mit Augen in beiden Clips.", "Too few frames with eyes in both clips."))
+    vx = sum(w * f * (pb[0] - pa[0]) for w, f, (_, pa, pb) in zip(wts, fk, rows)) / den
+    vy = sum(w * f * (pb[1] - pa[1]) for w, f, (_, pa, pb) in zip(wts, fk, rows)) / den
+    sw = sum(wts)
+    px = sum(w * pa[0] for w, (_, pa, _) in zip(wts, rows)) / sw
+    py = sum(w * pa[1] for w, (_, pa, _) in zip(wts, rows)) / sw
+    before = sum(w * math.hypot(pb[0] - pa[0], pb[1] - pa[1]) for w, (_, pa, pb) in zip(wts, rows)) / sw
+    mag = math.hypot(vx, vy)
+    if mag < 2.0:
+        raise StudioError(t(f"Die Köpfe liegen in der Überblendung schon übereinander (im Mittel {before:.0f} px).",
+                            f"The heads already line up in the crossfade ({before:.0f} px on average)."))
+    ux, uy = -vx / mag, -vy / mag
+    reach = [(width - px) / ux if ux > 1e-9 else -px / ux if ux < -1e-9 else math.inf,
+             (height - py) / uy if uy > 1e-9 else -py / uy if uy < -1e-9 else math.inf]
+    dist = max(1.0, min(reach))
+    c = min(0.2, mag / dist)  # (s − 1) · Abstand = Verschiebung; über 20 % Zoom nur teilweise
+    ax, ay = px + ux * dist, py + uy * dist
+    after = 0.0
+    for w, f, (_, pa, pb) in zip(wts, fk, rows):
+        s = 1 + c * f
+        after += w * math.hypot(pb[0] - (ax + s * (pa[0] - ax)), pb[1] - (ay + s * (pa[1] - ay)))
+    return {"anchor": [round(min(1.0, max(0.0, ax / width)), 4), round(min(1.0, max(0.0, ay / height)), 4)],
+            "scale": round(1 + c, 4), "before_px": round(before, 1), "after_px": round(after / sw, 1),
+            "frames": len(rows)}
+
+
+@command("clip.align_faces", "Köpfe in der Überblendung angleichen (seit 1.1.0): id des einlaufenden Clips mit "
+         "Überblendung am Anfang. Misst die Augen beider Clips über die Überblendung und setzt am auslaufenden Clip "
+         "anchor (am Bildrand) und scale_keys hinter seinem Ende (1,0 → 1 + c), so dass sein Kopf mitwandert. Nicht "
+         "für schon skalierte Clips")
+def _clip_align_faces(p: dict[str, Any], a: dict[str, Any]) -> dict[str, Any]:
+    c = _find(p["clips"], a.get("id", ""), t("Clip", "clip"))
+    tr = c.get("transition") or {}
+    if tr.get("kind") != "dissolve" or not tr.get("duration"):
+        raise StudioError(t("Der Clip hat am Anfang keine Überblendung.", "The clip has no crossfade at its start."))
+    if _track(p, c["track"])["kind"] != "video":
+        raise StudioError(t("Nur auf Videospuren.", "Only on video tracks."))
+    half = frame_ticks(p) // 2
+    prev = next((x for x in p["clips"] if x is not c and x["track"] == c["track"]
+                 and abs(clip_end(x) - c["start"]) <= half), None)
+    if prev is None:
+        raise StudioError(t("Direkt vor dem Clip liegt keiner, aus dem er überblendet.",
+                            "No clip ends right where this one starts."))
+    if prev.get("scale_keys") or float(prev.get("scale") or 1.0) != 1.0:  # ein Anker allein wirkt nicht
+        raise StudioError(t("Der auslaufende Clip ist schon skaliert: erst seine Skalierung zurücksetzen.",
+                            "The outgoing clip is already scaled: reset its scaling first."))
+    width, height = int(p["settings"]["width"]), int(p["settings"]["height"])
+    num, den = p["settings"]["fps"]
+    dur = int(tr["duration"])
+    n = max(4, round(dur / TICKS_PER_SECOND * num / den))
+    sa, sb = clip_speed(prev), clip_speed(c)
+    ta = [(prev["out"] + dur * sa * k / n) / TICKS_PER_SECOND for k in range(n + 1)]
+    tb = [(c["in"] + dur * sb * k / n) / TICKS_PER_SECOND for k in range(n + 1)]
+    from .face_fix import measure_eyes  # erst hier: face_fix zieht jobs und comfy nach
+    try:
+        ma, mb = measure_eyes(_source_path(prev["asset_id"]), ta), measure_eyes(_source_path(c["asset_id"]), tb)
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        raise StudioError(str(exc)) from None
+    rows = []
+    for k, (fa, fb) in enumerate(zip(ma["frames"], mb["frames"])):
+        if fa.get("eyes") and fb.get("eyes"):
+            rows.append((k, _fit_point(fa["eyes"][0], fa["eyes"][1], ma["width"], ma["height"], width, height),
+                         _fit_point(fb["eyes"][0], fb["eyes"][1], mb["width"], mb["height"], width, height)))
+    if len(rows) < 3:
+        raise StudioError(t("Zu wenige Bilder, in denen beide Clips ein Gesicht mit Augen zeigen.",
+                            "Too few frames in which both clips show a face with eyes."))
+    plan = _align_plan(rows, n, width, height)
+    _apply_scale(p, prev, {"anchor": plan["anchor"], "scale_keys": [
+        {"at": prev["out"], "value": 1.0}, {"at": prev["out"] + round(dur * sa), "value": plan["scale"]}]})
+    return {"clip": prev["id"], **plan}
+
+
 # ---------------------------------------------------------------------------------------- Übernehmen
 
 def _conform_targets(p: dict[str, Any]) -> dict[str, tuple[int, str]]:
@@ -1854,8 +1947,12 @@ def _video_size(model_id: str | None, p: dict[str, Any], params: dict[str, Any])
     entry = registry.get_entry(model_id) if model_id else None
     feats = registry.features_for(entry) if entry else {}
     if feats.get("frame_rule") and feats.get("sizes"):
-        long_side = max(max(s["w"], s["h"]) for s in feats["sizes"])
-        cap = max(min(s["w"], s["h"]) for s in feats["sizes"])
+        # Vorgabe ist der Entwurf (features.draft_final, seit 27.11.2026); das Finalformat (MiniMax 1920 × 1088)
+        # rechnet erst „Final“ (params width/height)
+        draft = (feats.get("draft_final") or {}).get("draft")
+        base = [draft] if draft else feats["sizes"]
+        long_side = max(max(s["w"], s["h"]) for s in base)
+        cap = max(min(s["w"], s["h"]) for s in base)
         short_side = max(256, min(cap, round(long_side * min(w, h) / max(w, h) / 32) * 32))
         return {"width": long_side, "height": short_side} if w >= h else {"width": short_side, "height": long_side}
     big = max(w, h) >= 1900
@@ -1891,20 +1988,47 @@ def _last_frame_asset(asset_id: str, title: str = "", folder: str = "") -> str:
     if proc.returncode != 0:
         raise StudioError(t("Letztes Bild nicht lesbar.", "Cannot read the last frame."))
     label = t(f"Letztes Bild von „{title}“", f'Last frame of "{title}"') if title else t("Letztes Bild", "Last frame")
-    return db.create_asset(kind="upload", filename=name, prompt=label, model_id=_publish_badge_model([asset_id]),
-                           meta={"studio_last_frame_of": asset_id}).id
+    badge = _publish_badge_model([asset_id])
+    meta = {"studio_last_frame_of": asset_id, **({"badge_model": badge} if badge else {})}
+    return db.create_asset(kind="upload", filename=name, prompt=label, model_id=badge, meta=meta).id
+
+
+def still_at(pid: str, clip_id: str, at: int) -> str:
+    """„Standbild hier ins Material“ (seit 27.11.2026): das Bild eines Videoclips an der Stelle `at` (Zeitleiste, Ticks)
+    als Bild im Projektordner, beschriftet mit Zeit und Clip. Für den Rollenwechsel von Hand: das Bild am Schnittpunkt
+    wird mit „✎ Überarbeiten“ zur nächsten Rolle und dann Startbild des nächsten Clips. Erbt die Veröffentlichungs-Marke."""
+    p = load(pid)
+    c = _find(p["clips"], clip_id, t("Clip", "clip"))
+    if _media(p, c["asset_id"])["kind"] != "video":
+        raise StudioError(t("Ein Standbild geht nur aus einem Videoclip.", "A still only comes from a video clip."))
+    at = max(c["start"], min(int(at), c["start"] + clip_length(c) - frame_ticks(p)))
+    media_s = _media_at(c, at - c["start"]) / TICKS_PER_SECOND
+    folder = project_folder(p)
+    name = f"{folder}/{db.new_id('upl')}.png" if folder else f"{db.new_id('upl')}.png"
+    script = Path(__file__).with_name("video_tools.py")
+    proc = subprocess.run([str(comfy.comfy_python()), "-I", str(script), "frame-at", str(_source_path(c["asset_id"])),
+                           str(config.ASSET_DIR / name), f"{media_s:.4f}"], capture_output=True, text=True,
+                          timeout=300, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if proc.returncode != 0:
+        raise StudioError(t("Standbild nicht lesbar.", "Cannot read the still."))
+    src = db.get_asset(c["asset_id"])
+    title = (src.prompt[:40] if src is not None and src.prompt else "") or c["asset_id"]
+    sec = f"{media_s:.2f}"
+    label = t(f"Bild bei {sec.replace('.', ',')} s von „{title}“", f'Frame at {sec} s of "{title}"')
+    badge = _publish_badge_model([c["asset_id"]])
+    meta = {"studio_still_of": c["asset_id"], "media_s": round(media_s, 4), **({"badge_model": badge} if badge else {})}
+    return db.create_asset(kind="upload", filename=name, prompt=label, model_id=badge, meta=meta).id
 
 
 def _publish_badge_model(asset_ids: list[str]) -> str:
-    """model_id eines verwendeten Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3, solange
-    seine Lizenz nicht bestätigt ist), sonst "". Export und letztes Bild tragen sie weiter: Verlauf und Material zeigen
-    die rote Marke anhand der model_id."""
-    confirmed = registry.get_licenses()
+    """model_id eines verwendeten Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3), auch über
+    Abgeleitetes (hochgerechnete Clips: meta.badge_model), sonst "". Export und letztes Bild tragen sie weiter.
+    Unabhängig vom Lizenzhaken: Verlauf und Material prüfen ihn bei jeder Anzeige (vorher wurde er beim Anlegen
+    geprüft, ein später widerrufener Haken blieb dann unsichtbar)."""
     for aid in asset_ids:
-        a = db.get_asset(aid)
-        entry = registry.get_entry(a.model_id) if a is not None and a.model_id else None
-        if entry and entry.get("output_badge") and entry.get("license", "") not in confirmed:
-            return a.model_id
+        badge = registry.badge_model_of(db.get_asset(aid))
+        if badge:
+            return badge
     return ""
 
 
@@ -2218,6 +2342,113 @@ async def generate(pid: str, scene_ids: list[str] | None = None) -> dict[str, An
     return {"jobs": submitted, "waiting": waiting, "errors": errors}
 
 
+def _person_refs(params: dict[str, Any], model_id: str | None) -> list[str]:
+    """Referenzbilder eines Auftrags, die eine Person zeigen können: nicht die Stilvorlagen (Krea 2 mit Stil-LoRA)."""
+    entry = registry.get_entry(model_id) if model_id else None
+    # Aufgelöst: reference_kind steht bei Krea 2 unter with_optional und gilt erst mit der Stil-Referenz-Datei
+    if entry is not None and registry.features_for(entry).get("reference_kind") == "style":
+        return []
+    return [a for a in params.get("reference_asset_ids") or [] if a and db.get_asset(a) is not None]
+
+
+# Herkunft eines abgeleiteten Assets: Standbild aus dem Schnitt, letztes Bild (Anschluss), hochgerechnet oder
+# nachgerechnet (source_asset_id), Video aus einem Startbild (image_asset_id)
+_PHOTO_TRAIL = ("studio_still_of", "studio_last_frame_of", "source_asset_id", "image_asset_id")
+
+
+def _photo_of_asset(asset_id: str | None, depth: int = 0) -> str | None:
+    """Das Originalfoto, aus dem ein Bild oder Take entstand, rückwärts über die Herkunft: schon einmal nachgerechnet
+    (meta.reference_asset_id), ein Bildauftrag mit Personen-Referenz (Person aus einem Foto: FLUX 3 mit dem Foto;
+    Überarbeiten eines Standbilds), Standbild und letztes Bild zu ihrem Clip, ein Video zu seinem Startbild. Ein
+    hochgeladenes Bild ohne Herkunft ist das Foto (auch der Zuschnitt aus „Person aus einem Foto“); ein Standbild ist
+    keines, es zeigt nur das Gesicht des vorigen Clips."""
+    asset = db.get_asset(asset_id) if asset_id else None
+    if asset is None or depth > 30:
+        return None
+    meta = asset.meta or {}
+    if meta.get("face_fix") and meta.get("reference_asset_id") and db.get_asset(meta["reference_asset_id"]):
+        return str(meta["reference_asset_id"])
+    trail = [meta[k] for k in _PHOTO_TRAIL if meta.get(k)]
+    if asset.kind == "upload" and not trail and Path(asset.filename).suffix.lower() in IMAGE_SUFFIXES:
+        return asset.id
+    job = db.get_job(asset.job_id) if asset.job_id else None
+    if job is not None and job.kind == "txt2img":
+        refs = _person_refs(job.params or {}, (job.params or {}).get("model_id"))
+        if refs:
+            # Gesicht zuletzt („Ergebnisbild zuerst, Gesicht danach“); ein erzeugtes Porträt ohne eigene Herkunft ist
+            # selbst die Vorlage
+            return _photo_of_asset(refs[-1], depth + 1) or refs[-1]
+    if job is not None and job.kind == "txt2video" and (job.params or {}).get("image_asset_id"):
+        trail.append(job.params["image_asset_id"])
+    for source in trail:
+        found = _photo_of_asset(str(source), depth + 1)
+        if found:
+            return found
+    return None
+
+
+def _face_photo(p: dict[str, Any], s: dict[str, Any], depth: int = 0) -> str | None:
+    """Originalfoto der Person einer Szene für „Gesicht nachrechnen“: gemerkt (params.face_ref_asset_id), sonst über die
+    Herkunft des gewählten Takes (_photo_of_asset), sonst die Referenzen der Szene außer Stilvorlagen, sonst die
+    Herkunft ihres Startbilds, sonst das der Szene, an die sie anschließt (dieselbe Person)."""
+    q = s.get("params") or {}
+    ref = q.get("face_ref_asset_id")
+    if ref and db.get_asset(ref) is not None:
+        return str(ref)
+    found = _photo_of_asset(s.get("take"))
+    if found:
+        return found
+    own = _person_refs(q, _model_of(s))
+    if own:
+        return _photo_of_asset(own[-1]) or own[-1]
+    found = _photo_of_asset(q.get("image_asset_id"))
+    if found:
+        return found
+    if s.get("chain_from") and depth < 20:
+        src = next((x for x in p["scenes"] if x["id"] == s["chain_from"]), None)
+        if src is not None:
+            return _face_photo(p, src, depth + 1)
+    return None
+
+
+def scene_face(p: dict[str, Any], s: dict[str, Any]) -> dict[str, Any] | None:
+    """Für den Vorschlag „Gesicht nachrechnen“ (seit 28.11.2026), nur abgeleitet: photo = Originalfoto der Person
+    (_face_photo, None = unbekannt), done = der gewählte Take ist schon nachgerechnet. None ohne Bild- oder Video-Take."""
+    if s.get("lane") != "video" or not s.get("take"):
+        return None
+    take = db.get_asset(s["take"])
+    if take is None:
+        return None
+    return {"photo": _face_photo(p, s), "done": bool((take.meta or {}).get("face_fix"))}
+
+
+async def face_fix(pid: str, scene_id: str, reference_asset_id: str | None = None) -> dict[str, Any]:
+    """Gesicht nachrechnen am gewählten Take einer Szene (seit 28.11.2026, face_fix.py): Auftrag face_fix mit dem
+    Originalfoto (angegeben, sonst _face_photo: gemerkt, Referenz, Herkunft des Startbilds, Anschluss); der Auftrag
+    hängt an der Szene, das Ergebnis wird beim Abgleich ein neuer, gewählter Take (der alte bleibt). Das Foto merkt
+    sich die Szene für das nächste Mal."""
+    p = await asyncio.to_thread(refresh, pid)
+    s = _find(p["scenes"], scene_id, t("Szene", "scene"))
+    if s.get("jobs"):
+        raise StudioError(t("Die Szene rechnet gerade.", "The scene is computing right now."))
+    if not s.get("take"):
+        raise StudioError(t("Die Szene hat noch keinen Take.", "The scene has no take yet."))
+    ref = reference_asset_id or await asyncio.to_thread(_face_photo, p, s)
+    if not ref or db.get_asset(ref) is None:
+        raise StudioError(t("Erst ein Originalfoto der Person wählen.", "Choose an original photo of the person first."))
+    job = await jobs.submit("face_fix", {"asset_id": s["take"], "reference_asset_id": ref, "studio_project": pid,
+                                         "prompt": s.get("prompt") or "", "face_index": 0})
+    with _lock:
+        p = load(pid)
+        s = _find(p["scenes"], scene_id, t("Szene", "scene"))
+        s.setdefault("jobs", []).append(job.id)
+        s.setdefault("params", {})["face_ref_asset_id"] = ref
+        s["error"] = None
+        p["updated_at"] = time.time()
+        _save(p)
+    return {"job": job.id, "reference_asset_id": ref}
+
+
 async def cancel(pid: str) -> dict[str, Any]:
     """Erzeugen abbrechen (Knopf neben „Übernehmen“, Nutzer 31.10.2026: „neben dem Übernehmen button soll es den
     forschritt anzeigen und dor kann ich es auch abrechen“): alle wartenden und laufenden Aufträge der Szenen, dazu die
@@ -2471,10 +2702,12 @@ async def _export(job: Job, ctx: jobs.JobContext) -> list[str]:
     meta = {"studio_project": pid, "preset": preset, **result}
     if preview is not None and preview.exists():
         meta["preview"] = preview.name
-    # Enthält der Schnitt Material eines Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3), trägt
-    # auch der Export dessen rote Marke
-    asset = db.create_asset(kind="video", filename=name, job_id=job.id, prompt=p["name"],
-                            model_id=_publish_badge_model([c["asset_id"] for c in p["clips"]]), meta=meta)
+    # Enthält der Schnitt Material eines Modells, dessen Ergebnisse nicht veröffentlicht werden dürfen (MiniMax H3, auch
+    # hochgerechnet), trägt auch der Export dessen rote Marke
+    badge = _publish_badge_model([c["asset_id"] for c in p["clips"]])
+    if badge:
+        meta["badge_model"] = badge
+    asset = db.create_asset(kind="video", filename=name, job_id=job.id, prompt=p["name"], model_id=badge, meta=meta)
     return [asset.id]
 
 
@@ -2832,6 +3065,10 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
         carry = scene_carry(out, s)  # wessen Ende der Take fortsetzt (seit 0.5.42), nur abgeleitet
         if carry:
             s["carry_from"] = carry
+        face = scene_face(out, s)  # Foto der Person, Take schon nachgerechnet (seit 28.11.2026), nur abgeleitet
+        if face:
+            s["face"] = face
+    faces = {s["face"]["photo"] for s in out["scenes"] if (s.get("face") or {}).get("photo")}
     out["tps"] = TICKS_PER_SECOND
     out["edit_duration"] = edit_duration(p)
     out["composition_duration"] = composition_duration(p)
@@ -2843,7 +3080,8 @@ def view(p: dict[str, Any]) -> dict[str, Any]:
             | {c["voice_asset_id"] for c in p.get("characters") or [] if c.get("voice_asset_id")}
             | {(s.get("params") or {})[k] for s in p["scenes"]
                for k in ("image_asset_id", "end_image_asset_id", "guide_asset_id") if (s.get("params") or {}).get(k)}
-            | {a for s in p["scenes"] for a in (s.get("params") or {}).get("reference_asset_ids") or [] if a})
+            | {a for s in p["scenes"] for a in (s.get("params") or {}).get("reference_asset_ids") or [] if a}
+            | faces)  # Fotos für „Gesicht nachrechnen“ (Vorschau im Feld „Originalfoto“)
     assets = {}
     for asset_id in used:
         asset = db.get_asset(asset_id)

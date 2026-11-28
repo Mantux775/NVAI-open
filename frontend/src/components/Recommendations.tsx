@@ -65,6 +65,35 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Kleine Gesichter: Augen prüfen', 'Small faces: check the eyes'),
+      text: t(
+        'Bei ganzen Figuren in 1920 × 1088 ist der Kopf rund 100 px groß; FLUX 3 malte die Augen dann schief oder '
+          + 'ungleich (alle Kandidaten zweier Reihen). Ab den Knien oder näher zeigen und die Augen in voller Größe prüfen.',
+        'With whole figures in 1920 × 1088 the head is about 100 px; FLUX 3 then drew uneven or crooked eyes (every '
+          + 'candidate in two batches). Show people from the knees up or closer and check the eyes at full size.',
+      ),
+    },
+    {
+      head: t('FLUX 3 bearbeiten: Ausschnitt halten', 'FLUX 3 edits: keep the framing'),
+      text: t(
+        'Nur das Bild selbst als Referenz, den Ausschnitt nennen („framed from the knees up, exactly as large as in the '
+          + 'image“) und nichts außerhalb erwähnen: Mit „black boots“ zoomte FLUX auf den ganzen Körper heraus (2 von 2), '
+          + 'ein zweites Referenzbild gab seinen eigenen Ausschnitt vor.',
+        'Only the image itself as reference, name the framing (“framed from the knees up, exactly as large as in the '
+          + 'image”) and mention nothing outside it: with “black boots” FLUX zoomed out to the whole body (2 of 2), a '
+          + 'second reference image imposed its own framing.',
+      ),
+    },
+    {
+      head: t('Gegenlicht tief setzen', 'Put the backlight low'),
+      text: t(
+        'Ein Licht auf Kopfhöhe im Dunst hinter der Person leuchtete durch Haar und Helm. „the floodlight is low, close '
+          + 'to the ground behind him … the haze around his head stays dark“ hielt den Kopf klar (4 von 4).',
+        'A light at head height in haze behind the person glowed through hair and helmet. “the floodlight is low, '
+          + 'close to the ground behind him … the haze around his head stays dark” kept the head clear (4 of 4).',
+      ),
+    },
+    {
       head: t('Mehrere Kandidaten', 'Several candidates'),
       text: t(
         'Zum Auswählen 4 Bilder in einem Auftrag statt vier einzeln (einmal Modell laden) und in voller Größe '
@@ -155,6 +184,18 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
       ),
     },
     {
+      head: t('Bewegung im Hintergrund nennen', 'Name the motion in the background'),
+      text: t(
+        'Es bewegt sich, was der Prompt nennt. Nur mit Startbild und beschriebener Bewegung zogen Wasser und Rauch; '
+          + 'eine Nachtstraße mit fester Kamera und ohne einen solchen Satz stand still. Dunst, Regen, Lichter in '
+          + 'Pfützen oder eine langsame Kamerafahrt ausdrücklich beschreiben. Endbild und Schleife halten den '
+          + 'Hintergrund trotzdem fest.',
+        'Only what the prompt names moves. With just a start image and the motion described, water and smoke moved; '
+          + 'a night street with a locked-off camera and no such sentence stood still. Describe haze, rain, lights in '
+          + 'puddles or a slow camera move explicitly. An end image or a loop still freezes the background.',
+      ),
+    },
+    {
       head: t('Feste Einstellung', 'Fixed framing'),
       text: t(
         '„Static camera, a locked-off medium shot; the framing stays exactly as in the first frame.“ hielt den '
@@ -207,6 +248,62 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
           + 'Augen).',
         'LTX works in cells of 32 px: faces under about 200 px and running extras melted. Medium shot or closer; '
           + 'start image from FLUX 3 with a frontal, sharpened reference (a sideways glance gave crooked eyes).',
+      ),
+    },
+    {
+      head: t('Augen bei kleinen Gesichtern', 'Eyes in small faces'),
+      text: t(
+        'Videomodelle rechnen das Bild in Einheiten von rund 32 × 32 Pixeln. Ein Gesicht unter ~150 px (ab den Knien in '
+          + '768p rund 105 px) bekam defekte Augen, die Pupillen fehlten schon ab dem ersten Bild, mit jedem Seed. Näher '
+          + 'heran zeigen oder erst als Entwurf prüfen und dann „⇧ Final“ in 1920 × 1088 rechnen: Dort blieben die '
+          + 'Pupillen. Schneller: „☺ Gesicht nachrechnen“ mit dem Originalfoto, saubere Pupillen in jedem Bild (3 s in '
+          + 'rund 75 s), nur für Clips ohne Sprechen. Hochskalieren hilft nicht.',
+        'Video models compute the picture in units of about 32 × 32 pixels. A face under ~150 px (from the knees up at '
+          + '768p about 105 px) got defective eyes, the pupils were missing from the first frame on, with every seed. '
+          + 'Show people closer, or check a draft first and then render “⇧ Final” at 1920 × 1088: there the pupils '
+          + 'stayed. Faster: “☺ Recompute face” with the original photo, clean pupils in every frame (3 s in about '
+          + '75 s), only for clips without speech. Upscaling does not help.',
+      ),
+    },
+    {
+      head: t('Rollenwechsel als Morph: eine Kette', 'Changing roles as a morph: a chain'),
+      text: t(
+        'Keine Endbilder aus dem nächsten Startbild bauen (Helm, Kleidung und Straße wechseln dann mitten im Clip). '
+          + 'Besser: das Bild am Schnitt von Clip 1 nehmen, nur die Kleidung mit FLUX 3 tauschen, als Startbild von '
+          + 'Clip 2 setzen und kurz überblenden. Geht die Person auf die Kamera zu, je Rolle nur etwa 1,25 s nehmen '
+          + '(sonst ist sie bei der fünften zu nah) und Clip 2 erst nach seinem Anlauf einsetzen (MiniMax: etwa 7 '
+          + 'Bilder), sonst laufen die Köpfe in der Überblendung auseinander und die Augen doppeln sich.',
+        'Do not build end images from the next start image (helmet, clothing and street then change mid-clip). '
+          + 'Instead take the frame of clip 1 at the cut, change only the outfit with FLUX 3, use it as the start '
+          + 'image of clip 2 and crossfade briefly. If the person walks toward the camera, take only about 1.25 s per '
+          + 'role (or they are too close by the fifth) and start clip 2 after its slow start (MiniMax: about 7 '
+          + 'frames), or the heads drift apart in the crossfade and the eyes double.',
+      ),
+    },
+    {
+      head: t('Schild animieren', 'Animating a sign'),
+      text: t(
+        'Nur Startbild: Die Schrift einer Werbetafel blieb scharf, auch beim Heranfahren über 5 s. Regen oder Schnee '
+          + 'ab dem ersten Bild gehören schon ins Startbild (das Video übernimmt das erste Bild genau; ohne Regen darin '
+          + 'kam er erst nach einigen Bildern, und eine Schleife endete wieder trocken): mit FLUX 3 hineinsetzen, die '
+          + 'Schrift wörtlich im Prompt nennen (4 von 4 buchstabengenau), dann ohne Schleife animieren.',
+        'Start image only: the lettering of a billboard stayed sharp, even while the camera pushed in for 5 s. Rain or '
+          + 'snow from the first frame belongs in the start image (the video keeps the first frame exactly; without '
+          + 'rain in it, the rain only came after a few frames, and a loop ended dry again): add it with FLUX 3, quote '
+          + 'the lettering in the prompt (4 of 4 letter-perfect), then animate without a loop.',
+      ),
+    },
+    {
+      head: t('Doppelte Augen in der Überblendung', 'Double eyes in a crossfade'),
+      text: t(
+        'Laufen die Köpfe zweier Clips derselben Person in der Überblendung auseinander, doppeln sich die Augen, auch '
+          + 'bei gleicher Größe. Im Studio: Rechtsklick auf den einlaufenden Clip → „Köpfe in der Überblendung '
+          + 'angleichen“. Das misst die Augen beider Clips und zoomt den auslaufenden nur während der Überblendung so, '
+          + 'dass sein Kopf mitwandert. Gemessen: Augenmitten 22 → 3 px auseinander.',
+        'If the heads of two clips of the same person drift apart in the crossfade, the eyes double, even at the same '
+          + 'size. In the Studio: right-click the incoming clip → “Align heads in the crossfade”. It measures the eyes '
+          + 'in both clips and zooms the outgoing one only during the crossfade so that its head moves along. '
+          + 'Measured: eye centres 22 → 3 px apart.',
       ),
     },
     {
@@ -367,11 +464,13 @@ const TIPS: Record<RecommendationMode, Tip[]> = {
         'In EU, UK, Südkorea und USA ohne eigene Lizenz verboten, Ergebnisse nicht veröffentlichen. Vorgewählt ist der '
           + 'schnellste gemessene Weg: Turbo-LoRA 8 Schritte v1.1 + sol-attn + INT8-Attention, 9,4 s in 1344 × 576 in '
           + '6,6–6,9 statt 37 min. Es neigt zu Zeitlupe (24 fps, aber halb so viel Bewegung wie LTX-2.5): Tempo in den '
-          + 'Prompt hob die Explosion um 30–55 %; FastH3 bewegt sich fast wie LTX.',
+          + 'Prompt hob die Explosion um 30–55 %; FastH3 bewegt sich fast wie LTX. Entwurf in 1344 × 768, Final in '
+          + '1920 × 1088 (16 GB: 3 s in rund 18 min; mehr Grafikspeicher trägt längere Clips).',
         'Prohibited in the EU, UK, South Korea and USA without a separate license; do not publish results. The fastest '
           + 'measured way is preselected: turbo LoRA 8 steps v1.1 + sol-attn + INT8 attention, 9.4 s at 1344 × 576 in '
           + '6.6–6.9 instead of 37 min. It tends to slow motion (24 fps, but half the motion of LTX-2.5): pace in the '
-          + 'prompt raised the explosion by 30–55 %; FastH3 moves almost like LTX.',
+          + 'prompt raised the explosion by 30–55 %; FastH3 moves almost like LTX. Draft at 1344 × 768, final at '
+          + '1920 × 1088 (16 GB: 3 s in about 18 min; more video memory carries longer clips).',
       ),
     },
     {

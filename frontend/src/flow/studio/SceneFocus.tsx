@@ -253,6 +253,26 @@ export function StateNote({ p, s, state, model, models, eta, startEta, expected,
         </div>
       )
     }
+    case 'done': {
+      // Entwurf und Final (Nutzer 27.11.2026: „so anpassen, dass es dem user vorgeschlagen wird“): Ein Take im
+      // Entwurfsformat bekommt den Vorschlag, ihn final zu rechnen (Knopf „⇧ Final“ unten)
+      const df = s.kind === 'video' ? model?.features?.draft_final : undefined
+      const draft = !!df && !!s.take && Number(s.params?.width) < df.final.w
+      // Gesicht nachrechnen als vorgeschlagene Routine (Nutzer 28.11.2026): Szenen, zu denen ein Foto der Person
+      // bekannt ist (studio.scene_face: gemerkt, Referenz, Herkunft des Startbilds, Anschluss) und deren Take noch
+      // nicht nachgerechnet ist. Nicht bei Sprache im Video: Das Gesicht kommt aus einem Bild, der Mund stünde still.
+      const speaks = s.kind === 'video' && (!!s.params?.audio_from || /["„“”«»]/.test(s.prompt ?? ''))
+      const person = !!s.face?.photo && !s.face.done && !speaks
+      if (!draft && !person) return null
+      return (
+        <div className="flow-note small">
+          {draft && df && <p>{t(`Entwurf. Passt der Take, unten „⇧ Final“ rechnen: ${df.final.w} × ${df.final.h}, gleicher Seed. Kleine Gesichter brauchen das Finalformat (im Entwurf fehlen ihnen die Pupillen).`,
+            `Draft. If the take fits, render "⇧ Final" below: ${df.final.w} × ${df.final.h}, same seed. Small faces need the final size (in the draft their pupils are missing).`)}</p>}
+          {person && <p>{t('Weicht das Gesicht vom Foto ab oder fehlen Pupillen: unten „☺ Gesicht nachrechnen“ (neuer Take, das Gesicht aus dem Originalfoto). Nur für Clips ohne Sprechen: Mund und Lider bewegen sich danach nicht.',
+            'If the face drifts from the photo or pupils are missing: "☺ Recompute face" below (a new take, the face from the original photo). Only for clips without speech: the mouth and eyelids no longer move afterwards.')}</p>}
+        </div>
+      )
+    }
     case 'end_missing':
       return <p className="flow-note warn small">{t('Endbild fehlt: unten ein Bild wählen.', 'The end image is missing: choose an image below.')}</p>
     case 'layout_missing':
@@ -460,7 +480,7 @@ export function SceneTakes({ p, s, attention, onPick }: {
 
 // ---------------------------------------------------------------------------------------- Fester Fuß
 
-export function SceneFoot({ p, s, state, eta, missing, lacks, also, spoken, onGenerate, onConform }: {
+export function SceneFoot({ p, s, state, eta, missing, lacks, also, spoken, onGenerate, onConform, final }: {
   p: StudioProject
   s: StudioScene
   state: SceneState
@@ -475,6 +495,8 @@ export function SceneFoot({ p, s, state, eta, missing, lacks, also, spoken, onGe
   spoken?: boolean
   onGenerate: () => void
   onConform: () => void
+  /** Entwurf und Final (seit 27.11.2026): dieselbe Szene im Finalformat des Modells, gleicher Seed */
+  final?: { run: () => void; label: string; maxFrames?: number }
 }) {
   const busy = state.key === 'running' || state.key === 'waiting'
   const linked = p.clips.filter((c) => c.scene_id === s.id)
@@ -497,6 +519,13 @@ export function SceneFoot({ p, s, state, eta, missing, lacks, also, spoken, onGe
             : t('Diese Szene in den Schnitt legen', 'Put this scene into the edit')}>
         {inEditNow ? t('Im Schnitt', 'In the edit') : t('In den Schnitt', 'Into the edit')}
       </button>
+      {final && (
+        <button type="button" className="btn small" disabled={busy || !!why} onClick={final.run}
+          title={t(`Erst als Entwurf prüfen, dann den gewählten Take final rechnen: ${final.label}, gleicher Seed; der Entwurf bleibt als Take. Kleine Gesichter brauchen das Finalformat (im Entwurf fehlten die Pupillen schon im ersten Bild). Ähnlich, nicht bildgleich.${final.maxFrames ? ` Auf 16 GB gemessen bis ${(final.maxFrames / 24).toFixed(1)} s; mehr Grafikspeicher trägt längere Szenen.` : ''}`,
+            `Check as a draft first, then render the chosen take as final: ${final.label}, same seed; the draft stays as a take. Small faces need the final size (in the draft the pupils were missing from the first frame). Similar, not identical.${final.maxFrames ? ` Measured on 16 GB up to ${(final.maxFrames / 24).toFixed(1)} s; more video memory carries longer scenes.` : ''}`)}>
+          ⇧ {t('Final', 'Final')} {final.label}
+        </button>
+      )}
     </div>
   )
 }

@@ -24,6 +24,10 @@ uv pip install --python $py torch torchvision --index-url https://download.pytor
 Write-Host "== ComfyUI-Requirements ==" -ForegroundColor Cyan
 uv pip install --python $py -r (Join-Path $comfy "requirements.txt")
 
+# Gesicht nachrechnen (seit 28.11.2026, server/nvai/face_tools.py): Haar-Kaskaden und ECC-Verfolgung; OpenCV 5 hat
+# keine Haar-Kaskaden mehr. Ohne Abhängigkeiten, damit numpy bleibt, wie ComfyUI es braucht.
+uv pip install --python $py --no-deps "opencv-python-headless>=4.10,<5"
+
 Write-Host "== Check ==" -ForegroundColor Cyan
 & $py -c "import torch; print('torch', torch.__version__); print('cuda', torch.cuda.is_available()); print('device', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'n/a'); print('capability', torch.cuda.get_device_capability(0) if torch.cuda.is_available() else 'n/a')"
 

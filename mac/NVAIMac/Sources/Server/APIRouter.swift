@@ -17,7 +17,7 @@ enum APIRouter {
     static var features: [String] {
         ["model_features", "mask", "references", "upload", "model_search", "expand_prompt",
          "cancel_job", "outpaint", "restore", "restore_gentle", "loras", "recommended_loras", "video", "studio_cancel",
-         "speech", "lora_upload", "studio_characters", "estimate"]
+         "speech", "lora_upload", "studio_characters", "estimate", "face_fix", "studio_still", "draft_final"]
             + (HelperModel.vision.installed ? ["restore_auto"] : [])
     }
 
@@ -111,6 +111,17 @@ enum APIRouter {
                 }
                 try await checkProject(req.json)
                 return .json(await JobQueue.shared.submitRestore(request).json)
+            }
+            if route("POST", "/api/generate/face-fix") != nil {
+                // Gesicht nachrechnen (seit 1.1.0): Bild oder Video, Originalfoto als Vorlage
+                let request = try FaceFixJobRequest.parse(req.json)
+                for asset in [request.assetID, request.referenceAssetID] {
+                    if await AssetStore.shared.get(asset) == nil {
+                        throw APIError(404, t("Unbekanntes Asset: \(asset)", "Unknown asset: \(asset)"))
+                    }
+                }
+                try await checkProject(req.json)
+                return .json(await JobQueue.shared.submitFaceFix(request).json)
             }
             if route("POST", "/api/prompt/expand") != nil {
                 let prompt = (req.json?["prompt"]?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

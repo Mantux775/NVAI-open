@@ -339,6 +339,18 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
     [pid],
   )
 
+  // Köpfe in der Überblendung angleichen (seit 1.1.0, Befehl clip.align_faces): misst die Augen beider Clips und
+  // zoomt den auslaufenden nur während der Überblendung; dauert einige Sekunden
+  const alignFaces = useCallback(async (clipId: string) => {
+    setNotice(t('Misst die Augen in der Überblendung …', 'Measuring the eyes in the crossfade …'))
+    const r = await run('clip.align_faces', { id: clipId }) as { before_px?: number; after_px?: number; scale?: number } | undefined
+    if (r?.after_px != null) {
+      const zoom = Math.round(((r.scale ?? 1) - 1) * 1000) / 10
+      setNotice(t(`Köpfe angeglichen: im Mittel ${r.before_px} → ${r.after_px} px auseinander (Zoom ${zoom} % nur in der Überblendung). Strg+Z nimmt es zurück.`,
+        `Heads aligned: ${r.before_px} → ${r.after_px} px apart on average (zoom ${zoom} % only in the crossfade). Ctrl+Z undoes it.`))
+    }
+  }, [run])
+
   // Von außen (seit 0.5.42): Projekt öffnen und Szene wählen, aus der Auftragsleiste („Zeigen“) oder nach „Ins Studio“
   // im Reiter Generieren. n zählt je Klick hoch, derselbe Wunsch kommt also nur einmal an.
   const focusScene = useRef<string | null>(null)
@@ -1029,6 +1041,21 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
             onClick: () => multi ? run('batch', { commands: selIds(sel, 'clip').map((id) => ({ command: 'clip.update', params: { id, muted: !c.muted } })) }) : run('clip.update', { id: c.id, muted: !c.muted }),
           },
           { label: t('Marker hier', 'Marker here'), hint: 'M', onClick: () => addMarkerAt(target.at, 'note') },
+          {
+            // Rollenwechsel von Hand (27.11.2026): das Bild am Schnittpunkt ins Material, dann „✎ Überarbeiten“
+            label: t('Standbild hier ins Material', 'Still image here into the media'),
+            disabled: image || p.media[c.asset_id]?.kind !== 'video',
+            onClick: () => {
+              api.studioStill(p.id, c.id, target.at)
+                .then((a) => { setBinKey((k) => k + 1); setNotice(t(`Im Material: ${a.prompt}`, `In the media: ${a.prompt}`)) })
+                .catch((e) => setNotice(String((e as Error).message ?? e)))
+            },
+          },
+          {
+            label: t('Köpfe in der Überblendung angleichen', 'Align heads in the crossfade'),
+            disabled: image || multi || c.transition?.kind !== 'dissolve',
+            onClick: () => { void alignFaces(c.id) },
+          },
           { label: t('Speicherort öffnen', 'Show in folder'), separator: true, onClick: () => reveal(c.asset_id) },
           { label: t('Löschen', 'Delete'), hint: t('Entf', 'Del'), danger: true, separator: true, onClick: () => removeSelection(sel) },
           { label: t('Löschen, Lücke schließen', 'Delete, close gap'), hint: t('Umschalt+Entf', 'Shift+Del'), danger: true, onClick: () => removeSelection(sel, true) },
@@ -1040,6 +1067,12 @@ export function StudioPanel({ event, studioEvent, assetsVersion, modelsVersion =
         if (!c || !tr) return []
         return [
           ...transitionKinds((k) => setTransition(c, k), tr.kind),
+          {
+            label: t('Köpfe in der Überblendung angleichen', 'Align heads in the crossfade'),
+            separator: true,
+            disabled: tr.kind !== 'dissolve',
+            onClick: () => { void alignFaces(c.id) },
+          },
           {
             label: t('Dauer', 'Duration'),
             separator: true,

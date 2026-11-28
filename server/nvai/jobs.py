@@ -606,11 +606,62 @@ async def _tts_vulkan(job: Job, ctx: JobContext, entry: dict[str, Any]) -> list[
     return [asset.id]
 
 
+def _badge_meta(p: dict[str, Any]) -> dict[str, str]:
+    """Herkunft mit Veröffentlichungs-Marke aus den Eingangs-Assets eines Auftrags (Startbild, Endbild, Referenzen,
+    Quelle beim Hochrechnen, Verlängern …): Abgeleitetes erbt sie als meta.badge_model (Nutzer 27.11.: hochgerechnete
+    MiniMax-Clips trugen keine Marke). Ob sie gezeigt wird, prüft die Anzeige mit dem aktuellen Lizenzhaken."""
+    ids: list[str] = []
+    for key, value in p.items():
+        if key.endswith("asset_id") and isinstance(value, str) and value:
+            ids.append(value)
+        elif key.endswith("asset_ids") and isinstance(value, list):
+            ids += [x for x in value if isinstance(x, str) and x]
+    for aid in ids:
+        badge = registry.badge_model_of(db.get_asset(aid))
+        if badge:
+            return {"badge_model": badge}
+    return {}
+
+
+# Verweise in meta, über die Abgeleitetes auf seine Quelle zeigt (Hochrechnen, Verlängern, letztes Bild im Studio)
+_SOURCE_LINKS = ("source_asset_id", "extended_from", "studio_last_frame_of")
+
+
+def backfill_badges() -> int:
+    """Beim Start: Abgeleitetes, das vor dem 27.11.2026 entstand (etwa hochgerechnete MiniMax-Clips), bekommt die
+    Herkunft mit Veröffentlichungs-Marke nachgetragen (meta.badge_model), wenn seine Quelle sie hat. Mehrere Runden
+    für Ketten (verlängert, dann hochgerechnet). Gibt die Zahl der nachgetragenen Assets zurück."""
+    found = 0
+    candidates: dict[str, Any] = {}
+    for key in _SOURCE_LINKS:
+        for a in db.list_assets(limit=1_000_000, query=key):
+            if (a.meta or {}).get(key):
+                candidates[a.id] = a
+    for _ in range(4):
+        changed = 0
+        for aid, a in list(candidates.items()):
+            if registry.badge_model_of(a):
+                candidates.pop(aid)
+                continue
+            for key in _SOURCE_LINKS:
+                src = db.get_asset(str((a.meta or {}).get(key) or ""))
+                badge = registry.badge_model_of(src)
+                if badge:
+                    candidates[aid] = db.update_asset_meta(aid, {"badge_model": badge}) or a
+                    changed += 1
+                    break
+        found += changed
+        if not changed:
+            break
+    return found
+
+
 def _store_assets(job: Job, entry: dict[str, Any], paths: list[Path], seed: int, masters: list[Path],
                   extra_meta: dict[str, Any]) -> list[str]:
     """Ergebnisse als Assets eintragen (ComfyUI- und Vulkan-Weg)."""
     p = job.params
     d = workflows.defaults_for(entry["workflow"])
+    badge = _badge_meta(p)
     asset_ids = []
     for i, path in enumerate(paths):
         meta = {
@@ -620,6 +671,7 @@ def _store_assets(job: Job, entry: dict[str, Any], paths: list[Path], seed: int,
             "negative_prompt": p.get("negative_prompt", ""),
             "model_name": _name(entry),
             **extra_meta,
+            **badge,
         }
         if i < len(masters) and comfy.kind_for(path) == "video":
             meta["master"] = masters[i].name  # verlustfreie Fassung (FFV1/MKV) neben dem MP4
@@ -1587,7 +1639,7 @@ async def _restore(job: Job, ctx: JobContext) -> list[str]:
             meta={**meta, "seed": seed, "model_name": _name(model),
                   "upscale_model_name": _name(sharp) if sharp else None, "notes": notes,
                   "width": size[0] if size else None, "height": size[1] if size else None,
-                  "variant": k + 1, "seconds": timings})
+                  "variant": k + 1, "seconds": timings, **_badge_meta(p)})
         asset_ids.append(asset.id)
     return asset_ids
 
@@ -1956,7 +2008,7 @@ async def _txt2video(job: Job, ctx: JobContext) -> list[str]:
     meta = {"model_name": _name(entry), "extended_from": source.id, "segment_asset": segment.id,
             "seconds": joined["seconds"], "frames": joined["frames"], "fps": joined["fps"],
             "width": joined["width"], "height": joined["height"], "audio": joined["audio"],
-            "duration_s": joined["seconds"], "carry_frames": carry or None}
+            "duration_s": joined["seconds"], "carry_frames": carry or None, **_badge_meta(p)}
     first_master, second_master = master_path(source), master_path(segment)
     if first_master and second_master:
         master_name = f"{Path(segment.filename).stem}_extended_master.mkv"
@@ -2038,6 +2090,7 @@ async def _video_upscale(job: Job, ctx: JobContext) -> list[str]:
                     "seconds": round(time.time() - t0, 1)},
         "width": w * scale, "height": h * scale, "frames": frames, "fps": fps,
         "duration_s": info.get("seconds"), "audio": info.get("audio"),
+        **_badge_meta(p),  # MiniMax hochgerechnet bleibt MiniMax: rote Marke erben
     }
     if masters:
         meta["master"] = masters[0].name

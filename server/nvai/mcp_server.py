@@ -127,7 +127,10 @@ server = MCPServer(
         "person from the first image, with exactly the same face, eyes, nose, mouth and hair "
         "color: <role>. Medium shot from the waist up, the face clearly visible.'; pick the most "
         "similar face at full resolution, then generate_video with image_asset_id. Keep the "
-        "person facing the camera; turned away, the face is redrawn and looks less alike.\n"
+        "person facing the camera; turned away, the face is redrawn and looks less alike. If the "
+        "face drifted from the photo or the eyes lost their pupils (small faces), recompute_face "
+        "with the original photo redraws it in every frame (not for clips with speech: the mouth "
+        "stays still).\n"
         "Prefer the higher quality and say so: final videos at 1920x1088 (5 s in ~251 s, about "
         "2.7 times 720p), start images in that size too, and quality='dfr' when the model's "
         "features.dfr is true (detail stays sharp over the whole clip, about 3 times the time; not "
@@ -941,6 +944,41 @@ async def upscale_video(
 
 
 @server.tool()
+async def recompute_face(
+    ctx: Context,
+    asset_id: str,
+    reference_asset_id: str | None = None,
+    face_index: int = 0,
+    project_id: str | None = None,
+    seed: int | None = None,
+    wait: bool = True,
+) -> dict[str, Any]:
+    """Redraws the face of a person in an image or video from an original photo (FLUX 3), in a video placed onto the
+    moving head in every frame. A new result; the source stays.
+
+    Use it when a face is small (video models work in units of about 32 x 32 px: under ~150 px the pupils went
+    missing from the first frame, with every seed) or drifts from the person's photo. The face features of the source
+    are blurred before FLUX sees them, so the face comes from the photo; head position, headgear, light and background
+    stay. Video: one key frame at 0.5 s (videos narrower than 1920 are enlarged to 1920), that face is placed onto the
+    head in every frame (tracked with ECC): it follows the head, but eyes and mouth stay as in the key frame, no
+    blinking, no speaking. So in a video only for clips without speech or changing expression (walking, looking,
+    turning). Measured on an RTX 5060 Ti: image 54 s, a 3 s video 75 s (warm). Needs FLUX 3 Image Klein; OpenCV is
+    set up on first use (about 40 MB). One face per call (the most certain one, or face_index).
+
+    Args:
+        asset_id: The image or video with the person (a result, a Studio take, an upload).
+        reference_asset_id: A frontal, sharp photo of the person (list_assets / upload). None = found from the origin
+            of the asset (the photo behind "Person from a photo", a start image, a Studio still); error if none.
+        face_index: Which detected face (0 = the most certain).
+        project_id: A Studio project: the result goes into its folder.
+        wait: False returns the job_id at once; then job_status(job_id, wait_s=600).
+    """
+    payload = {"asset_id": asset_id, "reference_asset_id": reference_asset_id, "face_index": face_index,
+               "project_id": project_id, "seed": seed}
+    return await _generate("/api/generate/face-fix", payload, ctx, wait=wait)
+
+
+@server.tool()
 async def expand_prompt(
     prompt: str,
     width: int = 1024,
@@ -1184,7 +1222,9 @@ async def generate_video(
 
     Args:
         prompt: What should be visible -- describe it in detail, including motion.
-            For image-to-video, describe only the motion; don't retell the image.
+            For image-to-video, describe only the motion; don't retell the image. Name what moves
+            in the background too (water, smoke, rain, haze, lights; the street on a camera move):
+            only what the prompt names moves, a night street with a locked-off camera stood still.
             LTX-2.5: one present-tense paragraph of 4-8 sentences (see the instructions:
             longer prompts about a person made him move more) -- shot, setting and light, the action with
             verbs, camera movement, last the sound; dialogue in quotation marks. Several
@@ -1192,7 +1232,11 @@ async def generate_video(
             ..."), 2-4 shots; expand_prompt(target='video_multishot') writes that form.
         width, height: Resolution. Empty = the model's preselection for the best result (LTX-2.5: 1920x1088;
             MiniMax H3: its first size), otherwise 832x480, the cheapest Wan default. For image-to-video, match
-            the start image's aspect ratio where possible.
+            the start image's aspect ratio where possible. Draft, then final (features.draft_final): check a take
+            at the draft size and render the best one again with the same seed at the final size (MiniMax H3
+            1344x768 -> 1920x1088, on 16 GB measured for 73 frames in ~18 min; LTX-2.5 1280x704 standard ->
+            1920x1088 dfr). Faces under ~150 px lose their pupils at 768p (32 px per token); the final size keeps them,
+            or recompute_face with the original photo (3 s in ~75 s; clips without speech only).
         frames: Number of frames. Empty = the model's preselection (LTX-2.5: 121 = 5 s; MiniMax H3: 124),
             otherwise 49 (at 16 fps just over 3 seconds).
         fps: Frame rate of the output file. Empty = the model's own (LTX-2.5 and MiniMax H3: 24), otherwise 16.
@@ -1654,6 +1698,10 @@ async def studio_command(project_id: str, command: str, params: dict[str, Any] |
       clip.key      scale keyframe: id + at_s (timeline position) + value sets or replaces it, + delete=true
                     removes it, clear=true removes all; linear in between, below 1.0 the track below shows
                     (picture in picture). Keyframes stick to media time, so cuts and speed keep them in place
+      clip.align_faces  id of the incoming clip with a dissolve: measures the eyes of both clips across the
+                    crossfade and gives the outgoing clip an anchor at the frame edge plus scale_keys after its
+                    end (1.0 -> ~1.03), so its head moves along; fixes double eyes when two clips of the same
+                    person drift apart (measured 18.8 -> 7.3 px). Refuses already scaled clips; one undo step
       track.add     kind (video: new top track, audio: new bottom track); track.delete id (not V1/A1);
                     voice lines get their own audio track (lane "voice", named Voice/Stimme), added by the
                     first edit.conform and again after it was deleted

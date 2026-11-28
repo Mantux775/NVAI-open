@@ -4,6 +4,36 @@ import Foundation
 /// REST des Studios (`/api/studio/*`), Pfade und Antworten wie im Windows-Server (main.py), damit Claude und
 /// eigene Skripte auf beiden Systemen dasselbe schicken. Fehler der Befehle: 422, Unbekanntes: 404.
 enum StudioRoutes {
+    /// Gesicht nachrechnen am gewählten Take einer Szene (seit 1.1.0, wie unter Windows `studio.face_fix`): Auftrag
+    /// face_fix mit dem Originalfoto (angegeben, sonst das gemerkte der Szene, sonst ihre letzte Referenz); der Auftrag
+    /// hängt an der Szene, sein Ergebnis wird beim Abgleich ein neuer, gewählter Take (der alte bleibt).
+    static func faceFix(_ store: StudioStore, _ pid: String, sceneID: String, reference: String?) async throws
+        -> (job: String, reference: String) {
+        let p = try await StudioGenerator.shared.refresh(store, pid)
+        guard let scene = p.scenes.first(where: { $0.id == sceneID }) else {
+            throw APIError(404, t("Szene nicht gefunden: \(sceneID)", "Scene not found: \(sceneID)"))
+        }
+        guard scene.jobs.isEmpty else { throw APIError(422, t("Die Szene rechnet gerade.", "The scene is computing right now.")) }
+        guard let take = scene.take else { throw APIError(422, t("Die Szene hat noch keinen Take.", "The scene has no take yet.")) }
+        let ref = reference ?? scene.params["face_ref_asset_id"]?.stringValue
+            ?? scene.params["reference_asset_ids"]?.arrayValue?.compactMap(\.stringValue).last
+        guard let ref, await AssetStore.shared.get(ref) != nil else {
+            throw APIError(422, t("Erst ein Originalfoto der Person wählen (Referenzbild der Szene).",
+                                  "Choose an original photo of the person first (reference image of the scene)."))
+        }
+        let request = try FaceFixJobRequest.parse(.object(["asset_id": .string(take), "reference_asset_id": .string(ref),
+                                                           "project_id": .string(pid)]))
+        let job = await JobQueue.shared.submitFaceFix(request)
+        _ = try await store.update(pid) { p in
+            guard let i = p.scenes.firstIndex(where: { $0.id == sceneID }) else { return false }
+            p.scenes[i].jobs.append(job.id)
+            p.scenes[i].params["face_ref_asset_id"] = .string(ref)
+            p.scenes[i].error = nil
+            return true
+        }
+        return (job.id, ref)
+    }
+
     static func handle(_ req: HTTPRequest, _ parts: [String]) async throws -> HTTPResponse? {
         let store = StudioStore.shared
         let path = Array(parts.dropFirst(2))  // nach "api", "studio"
@@ -76,6 +106,31 @@ enum StudioRoutes {
             // Eine leere Liste heißt wie unter Windows „alle Szenen ohne Take“ (seit 0.5.9; vorher erzeugte der Mac nichts)
             let ids = req.json?["scene_ids"]?.arrayValue?.compactMap(\.stringValue)
             return .json(try await StudioGenerator.shared.generate(store, id, sceneIDs: ids?.isEmpty == true ? nil : ids).any)
+        case ("POST", "face-fix"):
+            let body = req.json?.objectValue ?? [:]
+            let r = try await faceFix(store, id, sceneID: body["scene_id"]?.stringValue ?? "",
+                                      reference: body["reference_asset_id"]?.stringValue)
+            return .json(["job": r.job, "reference_asset_id": r.reference])
+        case ("POST", "still"):
+            // Standbild eines Clips an der Stelle `at` (Ticks) ins Material (seit 1.1.0, wie unter Windows)
+            let body = req.json?.objectValue ?? [:]
+            let clipID = body["clip_id"]?.stringValue ?? ""
+            let p = try await store.load(id)
+            guard let clip = p.clips.first(where: { $0.id == clipID }),
+                  let asset = await AssetStore.shared.get(clip.assetID) else {
+                return .error(404, t("Clip nicht gefunden: \(clipID)", "Clip not found: \(clipID)"))
+            }
+            let at = body["at"]?.intValue ?? clip.start
+            let seconds = (Double(clip.inPoint) + Double(max(0, at - clip.start)) * clip.speed) / Double(Studio.ticksPerSecond)
+            let image = try await FaceFix.frame(AssetStore.shared.fileURL(asset.filename), seconds: seconds)
+            let name = asset.prompt.isEmpty ? asset.filename : String(asset.prompt.prefix(40))
+            let still = try await AssetStore.shared.addStudioImage(
+                png: try ImageFiles.pngData(image),
+                label: t("Bild bei \(String(format: "%.2f", seconds)) s von \(name)",
+                         "Frame at \(String(format: "%.2f", seconds)) s of \(name)"),
+                meta: ["studio_still_of": .string(clip.assetID), "media_s": .double((seconds * 10000).rounded() / 10000),
+                       "studio_project": .string(id)])
+            return .json(still.json)
         case ("POST", "cancel"):
             return .json(try await StudioGenerator.shared.cancel(store, id).any)
         case ("POST", "estimate"):

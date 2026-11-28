@@ -75,6 +75,24 @@ def last_frame(path: str, out: str) -> dict[str, Any]:
         return {"frames": n, "width": last.width, "height": last.height}
 
 
+def frame_at(path: str, out: str, seconds: float) -> dict[str, Any]:
+    """Das Bild zur Medienzeit `seconds` (das erste, das dort beginnt; sonst das letzte) als PNG: „Standbild hier“ im
+    Studio, etwa das Bild am Schnittpunkt als Vorlage für den nächsten Clip (Rollenwechsel, seit 27.11.2026)."""
+    with av.open(path) as c:
+        stream = c.streams.video[0]
+        fps = float(stream.average_rate or 24)
+        pick, n = None, 0
+        for frame in c.decode(video=0):
+            pick = frame
+            if frame.time is not None and frame.time >= seconds - 0.5 / fps:
+                break
+            n += 1
+        if pick is None:
+            raise SystemExit("Video ohne Bild")
+        pick.to_image().save(out)
+        return {"frame": n, "time": pick.time, "width": pick.width, "height": pick.height}
+
+
 def concat(first: str, second: str, out: str, crf: float, skip: int = 1) -> dict[str, Any]:
     a, b = info(first), info(second)
     fps = Fraction(a["fps"]).limit_denominator(1001)
@@ -503,6 +521,8 @@ def main(argv: list[str]) -> None:
         result = probe(argv[1])
     elif cmd == "last-frame" and len(argv) == 3:
         result = last_frame(argv[1], argv[2])
+    elif cmd == "frame-at" and len(argv) == 4:
+        result = frame_at(argv[1], argv[2], float(argv[3]))
     elif cmd == "concat" and len(argv) in (5, 6):
         result = concat(argv[1], argv[2], argv[3], float(argv[4]), int(argv[5]) if len(argv) == 6 else 1)
     elif cmd == "preview" and len(argv) == 3:

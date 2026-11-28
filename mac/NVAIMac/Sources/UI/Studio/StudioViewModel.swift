@@ -791,6 +791,42 @@ final class StudioModel: ObservableObject {
         }
     }
 
+    /// „Standbild hier ins Material“ (seit 1.1.0, wie unter Windows; Rollenwechsel von Hand: das Bild am Schnittpunkt
+    /// als Vorlage für „Überarbeiten“): das Bild des Clips an der Stelle `at` als Bild ins Material des Projekts.
+    func stillHere(_ clipID: String, at: Int) async {
+        guard let p = project, let clip = p.clips.first(where: { $0.id == clipID }),
+              let asset = AssetSnapshot.shared.get(clip.assetID) else { return }
+        let seconds = (Double(clip.inPoint) + Double(max(0, at - clip.start)) * clip.speed) / Double(Studio.ticksPerSecond)
+        do {
+            let image = try await FaceFix.frame(AssetStore.shared.fileURL(asset.filename), seconds: seconds)
+            let name = asset.prompt.isEmpty ? asset.filename : String(asset.prompt.prefix(40))
+            let still = try await AssetStore.shared.addStudioImage(
+                png: try ImageFiles.pngData(image),
+                label: t("Bild bei \(String(format: "%.2f", seconds)) s von \(name)",
+                         "Frame at \(String(format: "%.2f", seconds)) s of \(name)"),
+                meta: ["studio_still_of": .string(clip.assetID), "media_s": .double((seconds * 10000).rounded() / 10000),
+                       "studio_project": .string(p.id)])
+            await AppState.shared.refresh()
+            notice = t("Im Material: \(still.prompt)", "In the media: \(still.prompt)")
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
+    /// „Gesicht nachrechnen“ am gewählten Take einer Szene (seit 1.1.0): über die Studio-Route, damit der Auftrag an
+    /// der Szene hängt und sein Ergebnis beim Abgleich ein neuer Take wird.
+    func faceFix(_ sceneID: String, reference: String? = nil) async {
+        guard let id = project?.id else { return }
+        do {
+            _ = try await StudioRoutes.faceFix(store, id, sceneID: sceneID, reference: reference)
+            project = try await StudioGenerator.shared.refresh(store, id)
+            notice = t("Gesicht wird nachgerechnet; der neue Take erscheint an der Szene.",
+                       "Recomputing the face; the new take appears at the scene.")
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        }
+    }
+
     func addMarker(_ kind: String, at: Int? = nil) async {
         if let r = await run("marker.add", ["at": .int(at ?? playhead), "kind": .string(kind)]), let id = r["id"]?.stringValue {
             select(.marker, id)

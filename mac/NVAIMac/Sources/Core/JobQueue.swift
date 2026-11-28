@@ -19,6 +19,8 @@ struct JobRecord: Sendable, Identifiable {
     var request: ImageJobRequest?
     /// Foto restaurieren (seit 0.4.6, `POST /api/image/restore`).
     var restore: RestoreJobRequest?
+    /// Gesicht nachrechnen (seit 1.1.0, `POST /api/generate/face-fix`).
+    var faceFix: FaceFixJobRequest?
     /// Musik oder Klang (seit 0.4.7, `POST /api/generate/audio`).
     var audio: AudioJobRequest?
     /// Sprecherstimme (seit 0.5.3, `POST /api/generate/speech`).
@@ -87,6 +89,7 @@ struct JobRecord: Sendable, Identifiable {
         case "txt2img", "img2img": return request?.modelID ?? params["model_id"]?.stringValue
         case "txt2video", "img2video": return video?.model.id ?? params["model_id"]?.stringValue
         case "restore": return restore?.modelID
+        case "face_fix": return faceFix?.modelID
         default: return nil
         }
     }
@@ -300,6 +303,15 @@ actor JobQueue {
         let job = JobRecord(id: AssetStore.newID("job"), kind: "download", status: "queued", stage: t("wartet", "queued"),
                             params: .object(["model_id": .string(SpeechCatalog.id)]),
                             createdAt: Date().timeIntervalSince1970, downloadModelID: SpeechCatalog.id, lang: Lang.current)
+        add(job)
+        return job
+    }
+
+    func submitFaceFix(_ request: FaceFixJobRequest) -> JobRecord {
+        var job = JobRecord(id: AssetStore.newID("job"), kind: "face_fix", status: "queued",
+                            stage: t("wartet", "queued"), params: request.params, createdAt: Date().timeIntervalSince1970,
+                            lang: request.lang)
+        job.faceFix = request
         add(job)
         return job
     }
@@ -554,6 +566,9 @@ actor JobQueue {
             } else if let forensic = job.forensic {
                 AppLog.info("Job \(id) started: forensic case from \(forensic.files.count) file(s)")
                 try await runForensicCase(id, forensic)
+            } else if let faceFix = job.faceFix {
+                AppLog.info("Job \(id) started: face fix of \(faceFix.assetID) from \(faceFix.referenceAssetID), \(faceFix.modelID)")
+                try await runFaceFix(id, faceFix)
             } else if let restore = job.restore {
                 AppLog.info("Job \(id) started: restore, \(restore.modelID), repair \(restore.repair), colorize \(restore.colorize), \(restore.batch) variant(s)")
                 try await runRestore(id, restore)
@@ -1793,5 +1808,139 @@ actor JobQueue {
                                                              modelID: fluxModel?.id ?? HelperModel.sharpen.id, meta: meta)
             update(id) { $0.assetIDs.append(asset.id) }
         }
+    }
+
+    private func faceVideoProgress(_ id: String, _ fraction: Double) {
+        guard jobs[id]?.status == "running" else { return }
+        update(id) {
+            $0.progress = min(0.99, 0.6 + 0.39 * fraction)
+            $0.stage = t("Gesicht nachrechnen · legt das Gesicht auf jedes Bild", "Recomputing the face · placing the face on every frame")
+            $0.phase = "run"
+        }
+    }
+
+    /// „Gesicht nachrechnen“ (seit 1.1.0, wie `face_fix` unter Windows): Gesicht im Bild bzw. im Schlüsselbild bei
+    /// 0,5 s finden (Apple Vision), Kopfausschnitt mit weichgezeichneten Gesichtszügen und das Originalfoto als
+    /// Referenzen für FLUX.2 Klein, Ergebnis ausgerichtet zurück; im Video danach in jedes Bild (`FaceFix.video`).
+    /// Ein neues Ergebnis, die Quelle bleibt.
+    private func runFaceFix(_ id: String, _ req: FaceFixJobRequest) async throws {
+        guard case .flux(let model)? = Models.find(req.modelID) else {
+            throw APIError(404, t("„Gesicht nachrechnen“ braucht FLUX.2 Klein (unter „Modelle“).",
+                                  "“Recompute face” needs FLUX.2 Klein (under “Models”)."))
+        }
+        guard let src = await AssetStore.shared.get(req.assetID) else {
+            throw APIError(404, t("Bild oder Video nicht gefunden: \(req.assetID)", "Image or video not found: \(req.assetID)"))
+        }
+        let url = AssetStore.shared.fileURL(src.filename)
+        let isVideo = AssetStore.mediaSuffixes.contains((src.filename as NSString).pathExtension.lowercased())
+            && src.kind != "audio"
+        let photo = try await loadImage(req.referenceAssetID, t("Foto", "Photo"))
+        update(id) { $0.stage = t("sucht das Gesicht", "finding the face"); $0.phase = "prepare" }
+        let image = isVideo ? try await FaceFix.frame(url, seconds: FaceFix.keySeconds) : try ImageFiles.load(url)
+        guard let face = FaceFix.detect(image).first else {
+            throw APIError(422, t("Kein Gesicht gefunden.", "No face found."))
+        }
+        let side = FaceFix.side
+        guard let prep = FaceFix.prepare(image, face: face, size: side) else {
+            throw APIError(500, t("Der Kopfausschnitt ließ sich nicht anlegen.", "Could not cut out the head."))
+        }
+        await CoreMLEngine.shared.unload()
+        if SystemInfo.oneModelAtATime {
+            await AudioEngine.shared.unload()
+            await SpeechEngine.shared.unload()
+            await ZImageEngine.shared.unload()
+            await VideoEngine.shared.unload()
+            await SeedVR2Engine.shared.unload()
+        }
+        let loadStart = Date()
+        let alreadyLoaded = await Flux2Engine.shared.currentModelID() == model.id
+        update(id) {
+            $0.stage = t("lädt \(model.name)", "loading \(model.name)")
+            if !alreadyLoaded { $0.phase = "load" }
+        }
+        try await Flux2Engine.shared.load(model) { fraction, message in
+            Task { await JobQueue.shared.loadProgress(id, fraction: fraction, message: message, isDownload: false) }
+        }
+        let loadSeconds = alreadyLoaded ? 0 : Date().timeIntervalSince(loadStart)
+        let features = AnyModel.flux(model).features
+        let steps = features["steps"] as? Int ?? 4
+        let guidance = Float(features["cfg"] as? Double ?? 1.0)
+        let seed = req.seed ?? UInt64.random(in: 0..<4_294_967_296)
+        // Foto mit seinem Seitenverhältnis, längste Seite wie der Ausschnitt
+        let scale = Double(side) / Double(max(photo.width, photo.height))
+        let reference = ImageFiles.resized(photo, width: max(16, Int((Double(photo.width) * scale / 16).rounded()) * 16),
+                                           height: max(16, Int((Double(photo.height) * scale / 16).rounded()) * 16))
+        let started = Date()
+        let label = t("Gesicht nachrechnen", "Recomputing the face")
+        let job = EngineJob(mode: .references([prep.soft, reference]), prompt: FaceFix.prompt, width: side, height: side,
+                            steps: steps, guidance: guidance, seed: seed)
+        let work = Task {
+            try await Flux2Engine.shared.generate(job) { step, total in
+                Task { await JobQueue.shared.restoreProgress(id, run: 0, of: isVideo ? 2 : 1, label: label, step: step, total: total) }
+            }
+        }
+        imageTask = work
+        let raw: CGImage
+        do {
+            if jobs[id]?.cancelRequested == true { work.cancel() }
+            raw = try await work.value
+            imageTask = nil
+        } catch {
+            imageTask = nil
+            throw error
+        }
+        if jobs[id]?.cancelRequested == true { return }
+        let fluxSeconds = (Date().timeIntervalSince(started) * 10).rounded() / 10
+        guard let placed = await Task.detached(operation: {
+            FaceFix.composite(image, result: raw, crop: prep.crop, face: face, box: prep.box)
+        }).value else {
+            throw APIError(500, t("Das Gesicht ließ sich nicht einsetzen.", "Could not place the face."))
+        }
+        let fixedImage = placed.0, alignment = placed.1
+        var info: [String: JSONValue] = ["face": face.json, "align": alignment, "side": .int(side),
+                                         "seconds": .object(["flux": .double(fluxSeconds)])]
+        var meta: [String: JSONValue] = [
+            "source_asset_id": .string(src.id), "reference_asset_id": .string(req.referenceAssetID),
+            "model_name": .string(model.name), "workflow": .string(model.workflow), "seed": .int(Int(seed)),
+            "engine": .string("mlx"), "chip": .string(SystemInfo.chip), "ram_gb": .int(SystemInfo.memoryGB),
+        ]
+        if loadSeconds >= 0.1 { meta["load_s"] = .double((loadSeconds * 10).rounded() / 10) }
+        if !isVideo {
+            setPhase(id, "save", stage: t("speichert", "saving"))
+            meta["face_fix"] = .object(info)
+            meta["width"] = .int(fixedImage.width)
+            meta["height"] = .int(fixedImage.height)
+            let asset = try await AssetStore.shared.addImage(png: try ImageFiles.pngData(fixedImage), jobID: id,
+                                                             prompt: src.prompt, modelID: model.id, meta: meta)
+            update(id) { $0.assetIDs.append(asset.id) }
+            return
+        }
+        // Video: der fertige Kopfausschnitt des Schlüsselbilds in jedes Bild
+        if SystemInfo.oneModelAtATime { await Flux2Engine.shared.unload() }
+        guard let fixedCrop = fixedImage.cropping(to: CGRect(x: prep.box.x, y: prep.box.y, width: prep.box.side,
+                                                             height: prep.box.side)) else {
+            throw APIError(500, t("Der Kopfausschnitt ließ sich nicht anlegen.", "Could not cut out the head."))
+        }
+        update(id) { $0.progress = 0.6 }
+        let videoStart = Date()
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("nvai_face_\(id).mp4")
+        let result = try await Task.detached(operation: {
+            try await FaceFix.video(source: url, key: image, fixed: fixedCrop, keyFace: face, box: prep.box, to: tmp) { f in
+                Task { await JobQueue.shared.faceVideoProgress(id, f) }
+            }
+        }).value
+        info["seconds"] = .object(["flux": .double(fluxSeconds),
+                                    "video": .double((Date().timeIntervalSince(videoStart) * 10).rounded() / 10)])
+        info["key_seconds"] = .double(FaceFix.keySeconds)
+        info["track_misses"] = .int(result.misses)
+        meta["face_fix"] = .object(info)
+        meta["width"] = .int(result.width)
+        meta["height"] = .int(result.height)
+        meta["fps"] = .double(result.fps)
+        meta["frames"] = .int(result.frames)
+        meta["seconds"] = .double(result.fps > 0 ? (Double(result.frames) / result.fps * 1000).rounded() / 1000 : 0)
+        setPhase(id, "save", stage: t("speichert", "saving"))
+        let asset = try await AssetStore.shared.addVideo(mp4: tmp, jobID: id, prompt: src.prompt, modelID: model.id, meta: meta)
+        update(id) { $0.assetIDs.append(asset.id) }
     }
 }

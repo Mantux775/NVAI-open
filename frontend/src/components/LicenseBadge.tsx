@@ -31,25 +31,48 @@ export function OutputBadge({ model }: { model?: Pick<ModelInfo, 'output_badge' 
   )
 }
 
+/** Ereignis nach einer Änderung am Lizenzhaken (Modelle): alle Marken neu prüfen */
+export const LICENSES_CHANGED = 'nvai-licenses-changed'
+
 /**
- * Modelle, deren Ergebnisse markiert werden (output_badge), nach id. Verlauf und Studio kennen am Asset nur die
- * model_id; einmal laden genügt, ein Fehler lässt die Marken weg.
+ * Modelle, deren Ergebnisse markiert werden (output_badge, Lizenz nicht bestätigt), nach id. Wird bei jeder Änderung
+ * am Lizenzhaken und beim Zurückkehren ins Fenster neu geladen (Nutzer 27.11.: „es sollte immer wieder überprüft
+ * werden“; vorher einmal je Ansicht, die Marken blieben nach dem Haken bis zum Neuladen). Ein Fehler lässt die
+ * Marken, wie sie sind.
  */
 export function useOutputBadges(): Record<string, ModelInfo> {
   const [byId, setById] = useState<Record<string, ModelInfo>>({})
   useEffect(() => {
     let alive = true
-    api
-      .models()
-      .then((ms) => {
-        if (alive) {
-          setById(Object.fromEntries(ms.filter((m) => m.output_badge && !m.license_confirmed).map((m) => [m.id, m])))
-        }
-      })
-      .catch(() => {})
+    const load = () => {
+      api
+        .models()
+        .then((ms) => {
+          if (alive) {
+            setById(Object.fromEntries(ms.filter((m) => m.output_badge && !m.license_confirmed).map((m) => [m.id, m])))
+          }
+        })
+        .catch(() => {})
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    load()
+    window.addEventListener(LICENSES_CHANGED, load)
+    window.addEventListener('focus', load)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
       alive = false
+      window.removeEventListener(LICENSES_CHANGED, load)
+      window.removeEventListener('focus', load)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
   return byId
+}
+
+/** Marke eines Assets: das eigene Modell oder die Herkunft (meta.badge_model: hochgerechnet, exportiert, bearbeitet) */
+export function badgeOf(byId: Record<string, ModelInfo>, a?: { model_id?: string; meta?: Record<string, any> } | null) {
+  if (!a) return undefined
+  return byId[a.model_id ?? ''] ?? (a.meta?.badge_model ? byId[a.meta.badge_model] : undefined)
 }

@@ -52,11 +52,13 @@ from .schemas import (
     ModelInfo,
     RestoreImageRequest,
     UpscaleVideoRequest,
+    FaceFixRequest,
     VersionInfo,
     VhsAnalyzeRequest,
     VhsRequest,
 )
 from . import vhs  # noqa: E402  (registriert die Auftraege vhs und vhs_clean)
+from . import face_fix  # noqa: E402,F401  (Auftrag face_fix: Gesicht nachrechnen, seit 28.11.2026)
 from . import lora_train  # noqa: E402  (Bereich „LoRA erstellen/Bearbeiten“, Auftraege lora_*)
 from . import audio_lab  # noqa: E402  (Bereich „Audio“, Auftraege audio_*)
 from . import audio_forensic  # noqa: E402  (Ton-Forensik: Spektrogramm, Sprachaktivitaet, Transkript)
@@ -76,6 +78,11 @@ async def lifespan(app: FastAPI):
     try:
         await asyncio.to_thread(studio.migrate_folders)
     except Exception:  # noqa: BLE001 - der Server soll trotzdem starten; was nicht wanderte, bleibt im Verlauf
+        traceback.print_exc()
+    # Abgeleitetes von vor dem 27.11.2026 (hochgerechnete MiniMax-Clips …) erbt die rote Marke seiner Quelle
+    try:
+        await asyncio.to_thread(jobs.backfill_badges)
+    except Exception:  # noqa: BLE001 - der Server soll trotzdem starten
         traceback.print_exc()
     await jobs.start()
     lora_train.start_scheduler()  # vorgemerkte LoRA-Trainings zur Startzeit einreihen
@@ -170,6 +177,9 @@ API_FEATURES = [
     "mcp_http",        # /mcp: dieselben MCP-Werkzeuge über HTTP (Streamable HTTP); GET /api/mcp: Adresse und
                        # stdio-Befehl für Agenten (seit 0.5.39)
     "lang_zh_fr",      # Accept-Language zh und fr: Meldungen und Modellkatalog über Sprachpakete (seit 0.5.39)
+    "face_fix",        # POST /api/generate/face-fix und /api/studio/projects/{pid}/face-fix: Gesicht nachrechnen
+                       # aus einem Originalfoto, Bild und Video (Auftrag face_fix, seit 28.11.2026)
+    "studio_still",    # POST /api/studio/projects/{pid}/still: Standbild eines Clips ins Material (seit 27.11.2026)
 ]
 
 
@@ -1094,6 +1104,34 @@ async def upscale_video(req: UpscaleVideoRequest) -> Job:
     return await jobs.submit("video_upscale", {**_job_params(req), "prompt": asset.prompt or ""})
 
 
+@app.get("/api/assets/{asset_id}/face-photo")
+async def asset_face_photo(asset_id: str) -> dict[str, Any]:
+    """Originalfoto, aus dem ein Bild oder Video entstand (für „Gesicht nachrechnen“, seit 28.11.2026), rückwärts über
+    die Herkunft: Person aus einem Foto, Startbild, Standbild, schon einmal nachgerechnet. photo None = unbekannt (auch,
+    wenn das Asset selbst das Foto ist)."""
+    if db.get_asset(asset_id) is None:
+        raise HTTPException(404, t(f"Asset nicht gefunden: {asset_id}", f"Asset not found: {asset_id}"))
+    photo = await asyncio.to_thread(studio._photo_of_asset, asset_id)
+    return {"photo": photo if photo != asset_id else None}
+
+
+@app.post("/api/generate/face-fix", response_model=Job)
+async def face_fix_job(req: FaceFixRequest) -> Job:
+    """Gesicht nachrechnen (seit 28.11.2026, face_fix.py): Bild oder Video, Originalfoto als Vorlage. Ohne Foto sucht
+    der Server es über die Herkunft (studio._photo_of_asset: Person aus einem Foto, Startbild, Standbild)."""
+    asset = db.get_asset(req.asset_id)
+    if asset is None:
+        raise HTTPException(404, t(f"Bild oder Video nicht gefunden: {req.asset_id}",
+                                   f"Image or video not found: {req.asset_id}"))
+    ref_id = req.reference_asset_id or await asyncio.to_thread(studio._photo_of_asset, req.asset_id)
+    ref = db.get_asset(ref_id) if ref_id and ref_id != req.asset_id else None
+    if ref is None or comfy.kind_for(Path(ref.filename)) != "image":
+        raise HTTPException(422, t("Als Vorlage ein Foto der Person wählen (unter „Person aus einem Foto“).",
+                                   "Choose a photo of the person as the reference (under “Person from a photo”)."))
+    return await jobs.submit("face_fix", {**_job_params(req), "reference_asset_id": ref.id,
+                                          "prompt": asset.prompt or ""})
+
+
 @app.post("/api/vhs/analyze")
 async def vhs_analyze(req: VhsAnalyzeRequest) -> dict[str, Any]:
     """Format, Verflechtung, Halbbild-Reihenfolge und Raender eines digitalisierten Videos, dazu Vorgaben und eine
@@ -1519,6 +1557,24 @@ async def studio_start_image(pid: str, sid: str) -> Job:
 async def studio_cancel(pid: str) -> dict[str, Any]:
     """Erzeugen abbrechen: laufende und wartende Auftraege der Szenen, wartende Anschluss-Szenen (seit 0.5.19)."""
     return await studio.cancel(pid)
+
+
+@app.post("/api/studio/projects/{pid}/face-fix")
+async def studio_face_fix(pid: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Gesicht nachrechnen am Take einer Szene (seit 28.11.2026): scene_id, reference_asset_id (sonst das gemerkte
+    Foto der Szene bzw. ihre erste Referenz). Das Ergebnis wird ein neuer Take."""
+    return await studio.face_fix(pid, str(body.get("scene_id", "")), body.get("reference_asset_id") or None)
+
+
+@app.post("/api/studio/projects/{pid}/still", response_model=Asset)
+async def studio_still(pid: str, body: dict[str, Any]) -> Asset:
+    """Standbild eines Videoclips an einer Stelle der Zeitleiste ins Material (seit 27.11.2026): clip_id, at (Ticks).
+    Für den Rollenwechsel von Hand: das Bild am Schnittpunkt wird mit „Überarbeiten“ zur nächsten Rolle."""
+    asset_id = await asyncio.to_thread(studio.still_at, pid, str(body.get("clip_id", "")), int(body.get("at") or 0))
+    asset = db.get_asset(asset_id)
+    if asset is None:
+        raise HTTPException(500, t("Standbild nicht gespeichert.", "Still not saved."))
+    return asset
 
 
 @app.post("/api/studio/projects/{pid}/export", response_model=Job)

@@ -196,8 +196,57 @@ struct SceneStateNote: View {
                     }
                 }
             }
+        case "done", "in_edit":
+            SceneDoneNote(model: model, s: s)
         default:
             EmptyView()
+        }
+    }
+}
+
+/// Vorschläge an einer fertigen Szene (seit 1.1.0, wie unter Windows): ein Video-Take im Entwurfsformat seines Modells
+/// bekommt „⇧ Final“ (dasselbe groß, gleicher Seed); eine Szene mit einem Foto der Person „☺ Gesicht nachrechnen“
+/// (neuer Take, das Gesicht aus dem Foto; nicht bei Sprache, der Mund stünde still).
+struct SceneDoneNote: View {
+    @ObservedObject var model: StudioModel
+    let s: StudioScene
+
+    var body: some View {
+        let take = s.take.flatMap { AssetSnapshot.shared.get($0) }
+        let df = s.kind == "video" ? s.modelID.flatMap { VideoCatalog.draftFinal($0) } : nil
+        let width = take?.meta["width"]?.intValue ?? s.params["width"]?.intValue ?? 0
+        let draft = df != nil && width > 0 && width < df!.final.w
+        let photo = s.params["face_ref_asset_id"]?.stringValue
+            ?? s.params["reference_asset_ids"]?.arrayValue?.compactMap(\.stringValue).last
+        let speaks = s.kind == "video" && (s.params["audio_from"]?.stringValue != nil
+            || s.prompt.contains("\"") || s.prompt.contains("„") || s.prompt.contains("“"))
+        let face = photo != nil && take?.meta["face_fix"] == nil && !speaks
+        if draft || face {
+            VStack(alignment: .leading, spacing: 6) {
+                if draft, let df {
+                    SceneNote(text: t("Entwurf. Passt der Take, „⇧ Final“ rechnen: \(df.final.w) × \(df.final.h), gleicher Seed.",
+                                      "Draft. If the take fits, render \"⇧ Final\": \(df.final.w) × \(df.final.h), same seed."),
+                              tone: .info) {
+                        Button("⇧ " + t("Final", "Final")) {
+                            Task {
+                                var params: [String: JSONValue] = ["width": .int(df.final.w), "height": .int(df.final.h)]
+                                if let seed = take?.meta["seed"] { params["seed"] = seed }
+                                _ = await model.run("scene.update", ["id": .string(s.id), "params": .object(params)])
+                                await model.generate([s.id])
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                }
+                if face {
+                    SceneNote(text: t("Weicht das Gesicht vom Foto ab oder fehlen Pupillen: das Gesicht aus dem Originalfoto nachrechnen (neuer Take). Nur für Clips ohne Sprechen: Mund und Lider bewegen sich danach nicht.",
+                                      "If the face drifts from the photo or pupils are missing: recompute the face from the original photo (a new take). Only for clips without speech: the mouth and eyelids no longer move afterwards."),
+                              tone: .plain) {
+                        Button("☺ " + t("Gesicht nachrechnen", "Recompute face")) { Task { await model.faceFix(s.id) } }
+                            .controlSize(.small)
+                    }
+                }
+            }
         }
     }
 }

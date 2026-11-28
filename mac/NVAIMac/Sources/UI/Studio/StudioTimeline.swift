@@ -907,6 +907,9 @@ struct ClipBlock: View {
         }
         .disabled(isImage)
         Button(t("Marker hier", "Marker here")) { Task { await model.addMarker("note", at: at) } }.keyboardShortcut("m", modifiers: [])
+        // Rollenwechsel von Hand (seit 1.1.0): das Bild an dieser Stelle ins Material, dann „Überarbeiten“
+        Button(t("Standbild hier ins Material", "Still image here into the media")) { Task { await model.stillHere(clip.id, at: at) } }
+            .disabled(isImage || ids.count > 1)
         if let r = AssetSnapshot.shared.get(clip.assetID) {
             Button(t("Im Finder zeigen", "Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([AssetStore.shared.fileURL(r.filename)]) }
         }

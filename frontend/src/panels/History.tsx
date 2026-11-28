@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Asset, type AssetFolder, type Job, type ModelInfo, type ServerEvent } from '../api'
 import { AssetView } from '../components/AssetView'
 import { FolderIcon } from '../components/FolderIcon'
-import { OutputBadge, useOutputBadges } from '../components/LicenseBadge'
+import { OutputBadge, badgeOf, useOutputBadges } from '../components/LicenseBadge'
 import { locale, t } from '../i18n'
 
 interface Props {
@@ -347,14 +347,14 @@ export function HistoryPanel({ event }: Props) {
                       title={a.prompt}
                     >
                       <img src={a.url} alt="" loading="lazy" />
-                      <OutputBadge model={badges[a.model_id]} />
+                      <OutputBadge model={badgeOf(badges, a)} />
                     </button>
                   ) : (
                     <div key={a.id} className="card result wide">
                       <AssetView asset={a} compact />
                       <div className="muted small pad row-between">
                         <span>
-                          <OutputBadge model={badges[a.model_id]} />{' '}
+                          <OutputBadge model={badgeOf(badges, a)} />{' '}
                           {a.model_id}
                           {a.meta.seed != null && ` · seed ${a.meta.seed}`} ·{' '}
                           <a href={a.url} download>
@@ -410,7 +410,7 @@ export function HistoryPanel({ event }: Props) {
           <div className="lightbox-meta" onClick={(e) => e.stopPropagation()}>
             <p>{selected.prompt}</p>
             <p className="muted small">
-              <OutputBadge model={badges[selected.model_id]} />{' '}
+              <OutputBadge model={badgeOf(badges, selected)} />{' '}
               {selected.model_id} · seed {String(selected.meta.seed ?? '?')} · {selected.filename}
             </p>
             <div className="lightbox-actions">

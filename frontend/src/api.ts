@@ -664,6 +664,14 @@ export interface ModelFeatures {
   }
   /** Turbo-LoRAs (MiniMax H3): Schritte, Shift, Sampler; immer nur eine aktiv */
   turbo: { steps: number; shift?: number[]; sampler?: string; scheduler?: string; ref_image_size?: string }
+  /** Entwurf und Final (seit 27.11.2026): erst schnell im Entwurfsformat, den besten Take dann mit gleichem Seed im
+   *  Finalformat (MiniMax H3: 1344 × 768 → 1920 × 1088, auf 16 GB gemessen bis final_max_frames; LTX-2.5: 1280 × 704
+   *  Standard → 1920 × 1088 DFR). Kleine Gesichter brauchen das Finalformat (in 768p fehlten die Pupillen). */
+  draft_final?: {
+    draft: { w: number; h: number; quality?: 'standard' | 'dfr' }
+    final: { w: number; h: number; quality?: 'standard' | 'dfr' }
+    final_max_frames?: number
+  }
 }
 
 export type SparseAttention = 'sol-attn' | 'veda'
@@ -1487,6 +1495,19 @@ export const api = {
   /** Erzeugen abbrechen: laufende und wartende Aufträge der Szenen, wartende Anschlüsse (seit 0.5.19) */
   studioCancel: (id: string) =>
     req<{ cancelled: string[] }>(`/api/studio/projects/${id}/cancel`, { method: 'POST' }),
+  /** Gesicht nachrechnen am Take einer Szene (seit 28.11.2026): neuer Take; Foto sonst das gemerkte der Szene */
+  studioFaceFix: (id: string, sceneId: string, referenceAssetId?: string | null) =>
+    req<{ job: string; reference_asset_id: string }>(`/api/studio/projects/${id}/face-fix`, {
+      method: 'POST', body: JSON.stringify({ scene_id: sceneId, reference_asset_id: referenceAssetId ?? null }),
+    }),
+  /** Gesicht nachrechnen an einem Bild oder Video (seit 28.11.2026, Auftrag face_fix); ohne Foto sucht der Server es */
+  faceFix: (body: { asset_id: string; reference_asset_id?: string | null; project_id?: string | null; seed?: number | null }) =>
+    req<Job>('/api/generate/face-fix', { method: 'POST', body: JSON.stringify(body) }),
+  /** Originalfoto, aus dem ein Bild oder Video entstand (Herkunft: Person aus einem Foto, Startbild, Standbild) */
+  facePhoto: (assetId: string) => req<{ photo: string | null }>(`/api/assets/${assetId}/face-photo`),
+  /** Standbild eines Videoclips an der Stelle `at` (Ticks) ins Material (seit 27.11.2026) */
+  studioStill: (id: string, clipId: string, at: number) =>
+    req<Asset>(`/api/studio/projects/${id}/still`, { method: 'POST', body: JSON.stringify({ clip_id: clipId, at }) }),
   studioExport: (id: string, preset: string) =>
     req<Job>(`/api/studio/projects/${id}/export`, { method: 'POST', body: JSON.stringify({ preset }) }),
   studioPresets: () => req<{ id: string; label: string; codec: string; ext: string }[]>('/api/studio/presets'),
@@ -1643,6 +1664,9 @@ export interface StudioScene {
   /** Szene, deren Ende der gewählte Take fortsetzt (Anschluss, auch aus einem Marker; seit 0.5.42, studio.scene_carry):
    *  Liegt sie nach dem Umordnen nicht mehr direkt davor, warnt die Kartenreihe */
   carry_from?: string
+  /** Gesicht nachrechnen (seit 28.11.2026, studio.scene_face): photo = Originalfoto der Person (gemerkt, Referenz,
+   *  Herkunft des Startbilds, Anschluss; null = unbekannt), done = der gewählte Take ist schon nachgerechnet */
+  face?: { photo: string | null; done: boolean }
 }
 
 export interface StudioMarker {

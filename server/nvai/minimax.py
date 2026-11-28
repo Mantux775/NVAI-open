@@ -46,17 +46,25 @@ MIN_COMPUTE = {"sol-attn": 8.0, "veda": 8.0, "int8_attention": 7.5}
 SIZES = [
     {"label": "864 × 480 — 16:9, am schnellsten (fremd gemessen: 5 s in rund 10,5 min)", "w": 864, "h": 480},
     {"label": "960 × 544 — 16:9 (fremd gemessen: 5 s in rund 13,5 min)", "w": 960, "h": 544},
-    {"label": "1344 × 768 — 16:9, natives 768p, am langsamsten (nicht gemessen)", "w": 1344, "h": 768},
+    {"label": "1344 × 768 — 16:9, natives 768p, Entwurf (gemessen: 5,2 s in rund 11 min)", "w": 1344, "h": 768},
+    # Final: je 32 x 32 Pixel ein Token; ein Gesicht ab den Knien (~105 px in 768p) verlor die Pupillen
+    # schon in Bild 0, in 1080p blieben sie (RTX 5060 Ti: 73 Bilder in 1090 s, 15,3 GB von 16 GB)
+    {"label": "1920 × 1088 — 16:9, final 1080p (gemessen: 3 s in rund 18 min, 15,3 GB)", "w": 1920, "h": 1088},
     {"label": "480 × 864 — 9:16, hochkant, am schnellsten", "w": 480, "h": 864},
     {"label": "768 × 1344 — 9:16, hochkant, natives 768p (nicht gemessen)", "w": 768, "h": 1344},
 ]
 SIZE_LABELS = {
     SIZES[0]["label"]: "864 × 480 — 16:9, fastest (measured by others: 5 s in about 10.5 min)",
     SIZES[1]["label"]: "960 × 544 — 16:9 (measured by others: 5 s in about 13.5 min)",
-    SIZES[2]["label"]: "1344 × 768 — 16:9, native 768p, slowest (not measured)",
-    SIZES[3]["label"]: "480 × 864 — 9:16, portrait, fastest",
-    SIZES[4]["label"]: "768 × 1344 — 9:16, portrait, native 768p (not measured)",
+    SIZES[2]["label"]: "1344 × 768 — 16:9, native 768p, draft (measured: 5.2 s in about 11 min)",
+    SIZES[3]["label"]: "1920 × 1088 — 16:9, final 1080p (measured: 3 s in about 18 min, 15.3 GB)",
+    SIZES[4]["label"]: "480 × 864 — 9:16, portrait, fastest",
+    SIZES[5]["label"]: "768 × 1344 — 9:16, portrait, native 768p (not measured)",
 }
+# Entwurf und Final (seit 1.1.0): erst im Entwurf rechnen, den besten Take mit gleichem Seed final; länger als 73
+# Bilder in 1080p ist auf 16 GB
+# nicht gemessen
+DRAFT_FINAL = {"draft": {"w": 1344, "h": 768}, "final": {"w": 1920, "h": 1088}, "final_max_frames": 73}
 
 # Lizenz I.3/I.5 und V.4 sichtbar machen; das Antragsformular gilt laut MiniMax' Modellkarte "only for USA/EU/UK/South
 # Korea". Die Warnung verschwindet erst, wenn der Nutzer unter "Modelle" eine eigene Genehmigung bestaetigt.
@@ -92,7 +100,7 @@ FEATURES: dict[str, Any] = {
     "default_frames": DEFAULT_FRAMES, "min_frames": FRAME_REST, "max_frames": MAX_FRAMES,
     "frame_step": FRAME_STEP, "frame_rule": "17k+5",
     "sparse_attention": SPARSE_METHODS, "int8_attention": True, "min_compute": MIN_COMPUTE,
-    "sizes": SIZES,
+    "sizes": SIZES, "draft_final": DRAFT_FINAL,
     "prompt_hint": (
         "Ein Block in ganzen englischen Sätzen: zuerst Stil und Look, dann die Szene; mehrere Einstellungen als "
         "Zeitleiste („[0s-2s] Shot 1: …“) mit der Kamera; zuletzt der Ton: Dialog in Anführungszeichen mit "
@@ -168,7 +176,7 @@ FEATURES_REF: dict[str, Any] = {
     "default_frames": DEFAULT_FRAMES, "min_frames": FRAME_REST, "max_frames": MAX_FRAMES,
     "frame_step": FRAME_STEP, "frame_rule": "17k+5",
     "sparse_attention": SPARSE_METHODS, "int8_attention": True, "min_compute": MIN_COMPUTE,
-    "sizes": SIZES,
+    "sizes": SIZES, "draft_final": DRAFT_FINAL,
     "prompt_hint": (
         "Referenzen im Prompt als <Picture 1>, <Picture 2> … in der Reihenfolge der Bilder ansprechen und sagen, was "
         "jede vorgibt („the man from <Picture 1>, with exactly his face“); dann Szene, Handlung, Kamera und Ton wie "

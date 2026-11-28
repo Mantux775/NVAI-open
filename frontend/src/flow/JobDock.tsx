@@ -22,7 +22,7 @@ export function originTab(j: { kind: string; params: Record<string, any> }): Job
 
 /** Rechnen auf der Grafikkarte (für „GPU frei in …“); Export und Ton-Forensik laufen in eigenen Schlangen */
 const GPU_KINDS = new Set(['txt2img', 'txt2video', 'txt2audio', 'tts', 'img23d', 'restore', 'video_upscale',
-  'expand_prompt', 'vhs', 'lora_train', 'lora_test', 'lora_dataset'])
+  'expand_prompt', 'vhs', 'lora_train', 'lora_test', 'lora_dataset', 'face_fix'])
 
 const KIND_LABEL: Record<string, [string, string]> = {
   txt2img: ['Bild', 'Image'],
@@ -32,6 +32,7 @@ const KIND_LABEL: Record<string, [string, string]> = {
   img23d: ['3D-Modell', '3D model'],
   restore: ['Foto restaurieren', 'Restore photo'],
   video_upscale: ['Video hochskalieren', 'Upscale video'],
+  face_fix: ['Gesicht nachrechnen', 'Recompute face'],
   expand_prompt: ['Prompt ausbauen', 'Expand prompt'],
   studio_export: ['Export', 'Export'],
   vhs: ['VHS', 'VHS'],

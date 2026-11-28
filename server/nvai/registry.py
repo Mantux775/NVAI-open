@@ -87,6 +87,19 @@ def set_license(license_name: str, value: bool) -> bool:
         return value
 
 
+def badge_model_of(asset: Any) -> str:
+    """Modell mit Veröffentlichungs-Marke (output_badge, etwa MiniMax H3), aus dem ein Asset stammt: das eigene Modell
+    oder die weitergereichte Herkunft (meta.badge_model: Hochrechnen, Export, letztes Bild, Bearbeiten …), sonst "".
+    Gilt unabhängig vom Lizenzhaken: Ob die Marke gezeigt wird, prüft die Anzeige jedes Mal mit license_confirmed
+    (Nutzer 27.11.: „es sollte immer wieder überprüft werden“; hochgerechnete MiniMax-Clips trugen bis dahin keine)."""
+    if asset is None:
+        return ""
+    entry = get_entry(asset.model_id) if asset.model_id else None
+    if entry and entry.get("output_badge"):
+        return str(asset.model_id)
+    return str((asset.meta or {}).get("badge_model") or "")
+
+
 # ------------------------------------------------------------- Katalog
 
 def _load_user_catalog() -> list[dict[str, Any]]:
